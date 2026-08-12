@@ -2,8 +2,9 @@
   "name": "tutor-management-system",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server/index.js",
   "scripts": {
+    "start": "node server/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -16,6 +17,7 @@
   "type": "commonjs",
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1"
   }
 }
