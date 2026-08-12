@@ -21,6 +21,41 @@ app.get('/api/health/supabase', async (req, res) => {
   res.json({ connected: true });
 });
 
+app.get('/api/tutors', async (req, res) => {
+  const { data, error } = await supabase.from('tutors').select('*').order('name');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/tutors', async (req, res) => {
+  const { student_number, email, name, hourly_rate, academic_level } = req.body;
+  const { data, error } = await supabase
+    .from('tutors')
+    .insert({ student_number, email, name, hourly_rate, academic_level })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+app.put('/api/tutors/:id', async (req, res) => {
+  const { student_number, email, name, hourly_rate, academic_level } = req.body;
+  const { data, error } = await supabase
+    .from('tutors')
+    .update({ student_number, email, name, hourly_rate, academic_level })
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/tutors/:id', async (req, res) => {
+  const { error } = await supabase.from('tutors').delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tutors | Tutor Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/global.css">
+</head>
+<body>
+
+<header class="board-header">
+  <hgroup class="header-left">
+    <p class="eyebrow">School of Computer Science &amp; Applied Mathematics</p>
+    <h1>Tutors</h1>
+  </hgroup>
+  <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+</header>
+
+<main class="tutors-layout">
+
+  <section class="card tutor-form-card" aria-labelledby="formHeading">
+    <h2 id="formHeading">Add a tutor</h2>
+    <form id="tutorForm">
+      <input type="hidden" id="tutorId">
+      <div class="form-field">
+        <label for="name">Name</label>
+        <input type="text" id="name" required>
+      </div>
+      <div class="form-field">
+        <label for="studentNumber">Student number</label>
+        <input type="text" id="studentNumber" required>
+      </div>
+      <div class="form-field">
+        <label for="email">Email</label>
+        <input type="email" id="email">
+      </div>
+      <div class="form-field">
+        <label for="academicLevel">Academic level</label>
+        <select id="academicLevel">
+          <option value="">—</option>
+          <option value="third_year">3rd year</option>
+          <option value="honours">Honours</option>
+          <option value="masters">Masters</option>
+          <option value="phd">PhD</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="hourlyRate">Hourly rate</label>
+        <input type="number" id="hourlyRate" step="0.01" min="0">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="submitBtn">Add tutor</button>
+        <button type="button" class="btn btn-ghost" id="cancelEditBtn" hidden>Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card tutor-table-card" aria-labelledby="listHeading">
+    <h2 id="listHeading">All tutors</h2>
+    <table class="tutors-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Student #</th>
+          <th>Email</th>
+          <th>Level</th>
+          <th>Rate</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tutorsTableBody"></tbody>
+    </table>
+    <p class="empty-copy" id="emptyCopy" hidden>No tutors yet — add one on the left.</p>
+  </section>
+
+</main>
+
+<output class="toast" id="toast" role="status" aria-live="polite"></output>
+
+<script src="../js/tutors.js"></script>
+</body>
+</html>
