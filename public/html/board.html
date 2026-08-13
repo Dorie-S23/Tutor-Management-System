@@ -34,6 +34,7 @@
         <input type="search" id="courseSearch" placeholder="Find a course…" aria-label="Search courses">
       </search>
     </header>
+    <button class="btn btn-primary btn-full" id="addCourseBtn" type="button">+ Add course</button>
     <nav aria-label="Course list">
       <ul class="course-list" id="courseList"><!-- injected --></ul>
     </nav>
@@ -93,6 +94,42 @@
 </main>
 
 <output class="toast" id="toast" role="status" aria-live="polite"></output>
+
+<dialog class="modal" id="addCourseModal" aria-labelledby="addCourseHeading">
+  <form method="dialog" class="modal-form" id="addCourseForm">
+    <header class="modal-head">
+      <h2 id="addCourseHeading">Add a course</h2>
+      <button class="modal-close" id="addCourseCloseBtn" type="button" aria-label="Close">&times;</button>
+    </header>
+
+    <p class="field-error" id="addCourseError" hidden></p>
+
+    <label class="field">
+      <span class="field-label">Course code</span>
+      <input type="text" id="courseCodeInput" name="course_code" placeholder="e.g. COMS2011" required>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Course name</span>
+      <input type="text" id="courseNameInput" name="course_name" placeholder="e.g. Data Structures &amp; Algorithms" required>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Minimum mark</span>
+      <input type="number" id="minMarkInput" name="min_mark" min="0" max="100" step="1" placeholder="e.g. 65" required>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Department</span>
+      <input type="text" id="departmentInput" name="department" placeholder="e.g. Computer Science" required>
+    </label>
+
+    <menu class="modal-actions">
+      <li><button class="btn btn-ghost" id="addCourseCancelBtn" type="button">Cancel</button></li>
+      <li><button class="btn btn-primary" id="addCourseSubmitBtn" type="submit">Add course</button></li>
+    </menu>
+  </form>
+</dialog>
 
 <script src="../js/board.js"></script>
 </body>

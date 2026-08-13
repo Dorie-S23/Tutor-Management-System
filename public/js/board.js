@@ -4,82 +4,52 @@
    with live checks on marks / timetable clash / hours remaining.
    ============================================================ */
 
-// ---------- sample data (stand-in for a real API / database) ----------
+// ---------- data (courses come from Supabase via /api/courses) ----------
 
-const COURSES = [
-  {
-    id: "c1", code: "COMS1000", name: "Introduction to Computer Science",
-    hoursNeeded: 10, minMark: 65,
-    session: { day: "Mon", start: "09:00", end: "11:00" },
-  },
-  {
-    id: "c2", code: "COMS2011", name: "Data Structures & Algorithms",
-    hoursNeeded: 8, minMark: 70,
-    session: { day: "Tue", start: "13:00", end: "15:00" },
-  },
-  {
-    id: "c3", code: "COMS3011", name: "Advanced Algorithms",
-    hoursNeeded: 6, minMark: 75,
-    session: { day: "Wed", start: "10:00", end: "12:00" },
-  },
-  {
-    id: "c4", code: "MATH1014", name: "Calculus for Computer Science",
-    hoursNeeded: 12, minMark: 60,
-    session: { day: "Mon", start: "14:00", end: "16:00" },
-  },
-  {
-    id: "c5", code: "COMS2012", name: "Software Design",
-    hoursNeeded: 8, minMark: 65,
-    session: { day: "Thu", start: "11:00", end: "13:00" },
-  },
-];
+const COURSES = [];
 
-const TUTORS = [
-  {
-    id: "t1", name: "Naledi Mokoena", weeklyHours: 15,
-    marks: { c1: 78, c2: 82, c5: 71 },
-    busy: [{ day: "Tue", start: "12:00", end: "14:00" }],
-  },
-  {
-    id: "t2", name: "Sipho Dlamini", weeklyHours: 10,
-    marks: { c1: 68, c3: 80, c4: 74 },
-    busy: [{ day: "Mon", start: "09:00", end: "10:00" }],
-  },
-  {
-    id: "t3", name: "Amy van der Merwe", weeklyHours: 12,
-    marks: { c2: 91, c3: 88, c5: 85 },
-    busy: [{ day: "Wed", start: "09:00", end: "13:00" }],
-  },
-  {
-    id: "t4", name: "Thabo Nkosi", weeklyHours: 8,
-    marks: { c1: 59, c4: 66 },
-    busy: [],
-  },
-  {
-    id: "t5", name: "Priya Naidoo", weeklyHours: 14,
-    marks: { c2: 73, c4: 91, c5: 69 },
-    busy: [{ day: "Thu", start: "10:00", end: "12:00" }],
-  },
-  {
-    id: "t6", name: "Kagiso Motaung", weeklyHours: 6,
-    marks: { c1: 84, c3: 77 },
-    busy: [],
-  },
-  {
-    id: "t7", name: "Lerato Sithole", weeklyHours: 10,
-    marks: { c1: 72, c2: 64, c5: 90 },
-    busy: [{ day: "Mon", start: "13:00", end: "15:00" }],
-  },
-];
+const TUTORS = [];
 
 // ---------- state ----------
 
 // assignments: courseId -> tutorId | null
 const assignments = {};
-COURSES.forEach(c => assignments[c.id] = null);
 
 let activeCourseId = null;
 let pendingTutorId = null; // tutor picked but not yet confirmed
+
+// ---------- data loading ----------
+
+function mapCourseRow(row){
+  return {
+    id: row.id,
+    code: row.course_code,
+    name: row.course_name,
+    minMark: row.min_mark,
+    department: row.department,
+    // not tracked in the courses table yet — assignment features stay dormant until they are
+    hoursNeeded: null,
+    session: null,
+  };
+}
+
+async function fetchCourses(){
+  try {
+    const res = await fetch("/api/courses");
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load courses");
+
+    COURSES.length = 0;
+    rows.forEach(row => {
+      COURSES.push(mapCourseRow(row));
+      if (!(row.id in assignments)) assignments[row.id] = null;
+    });
+  } catch (err) {
+    showToast("Couldn't load courses from the database.");
+  }
+  renderCourseList();
+  renderDetail();
+}
 
 // ---------- helpers ----------
 
@@ -203,9 +173,10 @@ function renderDetail(){
 
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
-  document.getElementById("dSession").textContent =
-    `${course.session.day} · ${course.session.start}–${course.session.end}  ·  requires a mark of ${course.minMark}+`;
-  document.getElementById("dHours").textContent = course.hoursNeeded;
+  document.getElementById("dSession").textContent = course.session
+    ? `${course.session.day} · ${course.session.start}–${course.session.end}  ·  requires a mark of ${course.minMark}+`
+    : `${course.department}  ·  requires a mark of ${course.minMark}+  ·  not yet scheduled`;
+  document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
 
   renderAssignmentCard(course);
   renderTutorList(course);
@@ -340,6 +311,73 @@ document.getElementById("cancelBtn").addEventListener("click", () => {
   renderDetail();
 });
 
+// ---------- add course modal ----------
+
+const addCourseBtn = document.getElementById("addCourseBtn");
+const addCourseModal = document.getElementById("addCourseModal");
+const addCourseForm = document.getElementById("addCourseForm");
+const addCourseError = document.getElementById("addCourseError");
+const addCourseSubmitBtn = document.getElementById("addCourseSubmitBtn");
+
+function openAddCourseModal(){
+  addCourseForm.reset();
+  addCourseError.hidden = true;
+  addCourseModal.showModal();
+  document.getElementById("courseCodeInput").focus();
+}
+
+function closeAddCourseModal(){
+  addCourseModal.close();
+}
+
+addCourseBtn.addEventListener("click", openAddCourseModal);
+document.getElementById("addCourseCloseBtn").addEventListener("click", closeAddCourseModal);
+document.getElementById("addCourseCancelBtn").addEventListener("click", closeAddCourseModal);
+
+addCourseModal.addEventListener("click", (e) => {
+  if (e.target === addCourseModal) closeAddCourseModal();
+});
+
+addCourseForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  addCourseError.hidden = true;
+
+  const payload = {
+    course_code: document.getElementById("courseCodeInput").value.trim(),
+    course_name: document.getElementById("courseNameInput").value.trim(),
+    min_mark: Number(document.getElementById("minMarkInput").value),
+    department: document.getElementById("departmentInput").value.trim(),
+  };
+
+  addCourseSubmitBtn.disabled = true;
+  addCourseSubmitBtn.textContent = "Adding…";
+
+  try {
+    const res = await fetch("/api/courses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      addCourseError.textContent = body.error || "Couldn't add that course.";
+      addCourseError.hidden = false;
+      return;
+    }
+
+    closeAddCourseModal();
+    showToast(`${body.course_code} added to the course register.`);
+    await fetchCourses();
+  } catch (err) {
+    addCourseError.textContent = "Network error — couldn't reach the server.";
+    addCourseError.hidden = false;
+  } finally {
+    addCourseSubmitBtn.disabled = false;
+    addCourseSubmitBtn.textContent = "Add course";
+  }
+});
+
 // ---------- toast ----------
 
 let toastTimer = null;
@@ -361,5 +399,4 @@ tutorSearchEl.addEventListener("input", () => {
 
 // ---------- init ----------
 
-renderCourseList();
-renderDetail();
+fetchCourses();
