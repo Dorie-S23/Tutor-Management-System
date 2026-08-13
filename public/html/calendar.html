@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyConnect | Calendar</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <header>
+
+        <nav aria-label="Main navigation">
+            <a href="StudentView.html">Dashboard</a>
+            <a href="my-sessions.html">My Sessions</a>
+            <a href="log-hours.html">Log Hours</a>
+            <a href="calendar.html" aria-current="page">Calendar</a>
+            <a href="#">Find Students</a>
+            <a href="#">Messages</a>
+            <a href="profile.html">Profile</a>
+        </nav>
+    </header>
+
+  <main>
+    <div class="card">
+      <div class="calendar-nav">
+        <button type="button" id="prev-month-btn" class="btn-secondary">&larr; Prev</button>
+        <h2 id="calendar-month-label"></h2>
+        <button type="button" id="next-month-btn" class="btn-secondary">Next &rarr;</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+  </main>
+
+  <script type="module" src="../js/calendar.js"></script>
+</body>
+</html>

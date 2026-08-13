@@ -254,19 +254,25 @@ body > footer p {
     transform: translate(-50%, 0);
 }
 
-/* Card (My Sessions / Profile) */
+/* Card (My Sessions / Profile / Log Hours / Calendar) */
 
 .card {
     background: white;
     border: 1px solid #e5e5e5;
     border-radius: 12px;
     padding: 25px;
+    margin-bottom: 25px;
 }
 
 .card > header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.card h2 {
+    font-size: 20px;
+    margin-bottom: 15px;
 }
 
 .session-list article {
@@ -320,7 +326,7 @@ body > footer p {
     color: #d33;
 }
 
-/* Forms (Profile) */
+/* Forms (Profile / Log Hours) */
 
 .form-grid {
     display: grid;
@@ -345,12 +351,14 @@ body > footer p {
 }
 
 .form-field input,
+.form-field select,
 .form-field textarea {
     padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 7px;
     font-size: 14px;
     font-family: inherit;
+    background: white;
 }
 
 .checkbox-row {
@@ -368,9 +376,207 @@ body > footer p {
     color: #222;
 }
 
+.form-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
 .form-actions button {
     width: auto;
     padding: 10px 20px;
+}
+
+.form-error {
+    grid-column: 1 / -1;
+    color: #d33;
+    font-size: 13px;
+    margin: -8px 0 0;
+}
+
+.btn-primary {
+    background: #2563eb;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+}
+
+.btn-secondary {
+    width: auto;
+    background: white;
+    color: #222;
+    border: 1px solid #ddd;
+}
+
+.btn-secondary:hover {
+    background: #f4f6f8;
+}
+
+.btn-link {
+    width: auto;
+    background: none;
+    color: #2563eb;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.btn-link:hover {
+    background: #eaf1ff;
+}
+
+.btn-danger {
+    width: auto;
+    background: white;
+    color: #d33;
+    border: 1px solid #d33;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.btn-danger:hover {
+    background: #d33;
+    color: white;
+}
+
+/* Week navigation + entries table (Log Hours) */
+
+.week-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.week-nav button {
+    width: auto;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.week-nav .week-label {
+    font-weight: 600;
+}
+
+.week-total {
+    color: #777;
+    margin-bottom: 15px;
+}
+
+.week-total strong {
+    display: inline;
+    background: none;
+    padding: 0;
+    color: #2563eb;
+    font-size: 16px;
+}
+
+.card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+
+.card th,
+.card td {
+    text-align: left;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.card th {
+    color: #999;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.card td.actions {
+    display: flex;
+    gap: 8px;
+    border-bottom: none;
+    white-space: nowrap;
+}
+
+/* Calendar */
+
+.calendar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.calendar-nav h2 {
+    font-size: 18px;
+    margin-bottom: 0;
+}
+
+.calendar-nav button {
+    width: auto;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.calendar-weekdays span {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #999;
+    text-transform: uppercase;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+}
+
+.calendar-day {
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.calendar-day.other-month {
+    background: #fafafa;
+    color: #bbb;
+}
+
+.calendar-day.today {
+    border-color: #2563eb;
+    border-width: 2px;
+}
+
+.calendar-day-number {
+    font-size: 13px;
+    font-weight: 600;
+    color: inherit;
+}
+
+.calendar-session-pill {
+    background: #2563eb;
+    color: white;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Responsive */
@@ -392,6 +598,12 @@ body > footer p {
 
     .form-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .calendar-day {
+        min-height: 56px;
     }
 }
 

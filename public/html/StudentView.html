@@ -14,6 +14,8 @@
         <nav aria-label="Main navigation">
             <a href="StudentView.html" aria-current="page">Dashboard</a>
             <a href="my-sessions.html">My Sessions</a>
+            <a href="log-hours.html">Log Hours</a>
+            <a href="calendar.html">Calendar</a>
             <a href="#">Find Students</a>
             <a href="#">Messages</a>
             <a href="profile.html">Profile</a>
@@ -34,7 +36,7 @@
             </article>
 
             <article>
-                <h3>18</h3>
+                <h3 id="stat-hours-volunteered">0</h3>
                 <p>Hours Volunteered</p>
             </article>
 
@@ -70,5 +72,10 @@
 
     <script src="../js/session-data.js"></script>
     <script src="../js/studentview.js"></script>
+    <script type="module">
+        import { getEntries } from '../js/storage.js';
+        const totalHours = getEntries().reduce((sum, entry) => sum + Number(entry.hours), 0);
+        document.getElementById('stat-hours-volunteered').textContent = totalHours;
+    </script>
 </body>
 </html>
