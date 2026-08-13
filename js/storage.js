@@ -23,14 +23,21 @@ export function getEntries() {
   return readAll().sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function addEntry({ date, hours, studentName, subject, notes }) {
+export function getEntriesForDate(dateStr) {
+  return readAll().filter((e) => e.date === dateStr);
+}
+
+export function addEntry({ date, hours, subject, taskType, supervisorName, startTime, endTime, notes }) {
   const now = new Date().toISOString();
   const entry = {
     id: crypto.randomUUID(),
     date,
     hours,
-    studentName: studentName || '',
     subject: subject || '',
+    taskType: taskType || '',
+    supervisorName: supervisorName || '',
+    startTime: startTime || '',
+    endTime: endTime || '',
     notes: notes || '',
     createdAt: now,
     updatedAt: now,
@@ -53,6 +60,26 @@ export function updateEntry(id, changes) {
 export function deleteEntry(id) {
   const entries = readAll().filter((e) => e.id !== id);
   writeAll(entries);
+}
+
+// Finds an existing entry with the same date, hours, subject and task type
+// (case-insensitive), so the UI can block accidental duplicate logging.
+// Pass excludeId when checking an in-progress edit so it doesn't match itself.
+export function findDuplicateEntry({ date, hours, subject, taskType }, excludeId = null) {
+  const normalizedSubject = (subject || '').trim().toLowerCase();
+  const normalizedTaskType = (taskType || '').trim().toLowerCase();
+
+  return (
+    readAll().find((e) => {
+      if (e.id === excludeId) return false;
+      return (
+        e.date === date &&
+        Number(e.hours) === Number(hours) &&
+        (e.subject || '').trim().toLowerCase() === normalizedSubject &&
+        (e.taskType || '').trim().toLowerCase() === normalizedTaskType
+      );
+    }) || null
+  );
 }
 
 // Monday-based week start for a given 'YYYY-MM-DD' date string.
@@ -90,4 +117,22 @@ function toDateStr(date) {
 
 export function todayStr() {
   return toDateStr(new Date());
+}
+
+// ---------- tutor profile (used to fill in the printable timesheet) ----------
+
+const PROFILE_KEY = 'tutorHours.profile';
+
+export function getProfile() {
+  const raw = localStorage.getItem(PROFILE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function saveProfile(profile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
 }

@@ -93,6 +93,7 @@ main {
 }
 
 .form-field input,
+.form-field select,
 .form-field textarea {
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--color-border);
@@ -208,6 +209,12 @@ td.actions {
   color: var(--color-text-muted);
   font-style: italic;
   padding: 1rem 0;
+}
+
+.form-error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  margin: -0.25rem 0 0.75rem;
 }
 
 .stat-grid {
@@ -362,4 +369,94 @@ td.actions {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- timesheet claim form ---------- */
+
+.card-hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: -0.5rem 0 1rem;
+}
+
+.claim-preview[hidden] {
+  display: none;
+}
+
+.claim-form {
+  font-size: 0.85rem;
+  color: #000;
+}
+
+.claim-form table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75rem;
+}
+
+.claim-form th,
+.claim-form td {
+  border: 1px solid #333;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+  vertical-align: top;
+  text-align: left;
+}
+
+.claim-title-table td {
+  text-align: center;
+  border: 2px solid #333;
+  padding: 0.75rem;
+  line-height: 1.4;
+}
+
+.claim-title-table strong {
+  font-size: 1.05rem;
+}
+
+.claim-info-table th {
+  width: 160px;
+  background: #f5f6f8;
+  font-weight: 600;
+}
+
+.claim-tasks-table th {
+  background: #f5f6f8;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.claim-footer-table th {
+  width: 200px;
+  background: #f5f6f8;
+  font-weight: 600;
+}
+
+.claim-hos-table th {
+  background: #f5f6f8;
+  font-weight: 600;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .claim-preview {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+  }
 }

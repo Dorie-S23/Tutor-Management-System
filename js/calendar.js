@@ -1,6 +1,5 @@
 import { highlightActiveTab } from './nav.js';
-import { getSessionsForDate } from './sessions.js';
-import { todayStr } from './storage.js';
+import { getEntriesForDate, todayStr } from './storage.js';
 
 highlightActiveTab();
 
@@ -64,12 +63,12 @@ function render() {
     dayNumber.textContent = cellDay;
     cell.appendChild(dayNumber);
 
-    const sessions = getSessionsForDate(cellDateStr);
-    for (const session of sessions) {
+    const entries = getEntriesForDate(cellDateStr);
+    for (const entry of entries) {
       const pill = document.createElement('div');
       pill.className = 'calendar-session-pill';
-      const label = [session.time, session.studentName].filter(Boolean).join(' ');
-      pill.textContent = label || 'Session';
+      const label = [`${entry.hours}h`, entry.subject].filter(Boolean).join(' · ');
+      pill.textContent = label;
       cell.appendChild(pill);
     }
 

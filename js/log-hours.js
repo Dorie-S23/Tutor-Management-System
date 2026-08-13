@@ -3,6 +3,7 @@ import {
   addEntry,
   updateEntry,
   deleteEntry,
+  findDuplicateEntry,
   getWeekStart,
   addDays,
   getEntriesForWeek,
@@ -16,8 +17,11 @@ const form = document.getElementById('entry-form');
 const entryIdField = document.getElementById('entry-id');
 const dateField = document.getElementById('date');
 const hoursField = document.getElementById('hours');
-const studentField = document.getElementById('studentName');
+const startTimeField = document.getElementById('startTime');
+const endTimeField = document.getElementById('endTime');
+const taskTypeField = document.getElementById('taskType');
 const subjectField = document.getElementById('subject');
+const supervisorField = document.getElementById('supervisorName');
 const notesField = document.getElementById('notes');
 const formTitle = document.getElementById('form-title');
 const submitBtn = document.getElementById('submit-btn');
@@ -28,6 +32,7 @@ const weekLabel = document.getElementById('week-label');
 const weekTotalEl = document.getElementById('week-total');
 const entriesBody = document.getElementById('entries-body');
 const emptyState = document.getElementById('empty-state');
+const formError = document.getElementById('form-error');
 
 let currentWeekStart = getWeekStart(todayStr());
 
@@ -49,18 +54,23 @@ function exitEditMode() {
   formTitle.textContent = 'Log hours';
   submitBtn.textContent = 'Add entry';
   cancelEditBtn.hidden = true;
+  formError.hidden = true;
 }
 
 function enterEditMode(entry) {
   entryIdField.value = entry.id;
   dateField.value = entry.date;
   hoursField.value = entry.hours;
-  studentField.value = entry.studentName;
+  startTimeField.value = entry.startTime || '';
+  endTimeField.value = entry.endTime || '';
+  taskTypeField.value = entry.taskType || 'Tutoring';
   subjectField.value = entry.subject;
+  supervisorField.value = entry.supervisorName || '';
   notesField.value = entry.notes;
   formTitle.textContent = 'Edit entry';
   submitBtn.textContent = 'Save changes';
   cancelEditBtn.hidden = false;
+  formError.hidden = true;
 }
 
 function render() {
@@ -74,7 +84,7 @@ function render() {
   for (const entry of entries) {
     const row = document.createElement('tr');
 
-    const cells = [entry.date, entry.hours, entry.studentName, entry.subject, entry.notes];
+    const cells = [entry.date, entry.hours, entry.taskType, entry.subject, entry.notes];
     for (const value of cells) {
       const td = document.createElement('td');
       td.textContent = value || '';
@@ -113,10 +123,21 @@ form.addEventListener('submit', (event) => {
   const payload = {
     date: dateField.value,
     hours: Number(hoursField.value),
-    studentName: studentField.value.trim(),
+    startTime: startTimeField.value,
+    endTime: endTimeField.value,
+    taskType: taskTypeField.value,
     subject: subjectField.value.trim(),
+    supervisorName: supervisorField.value.trim(),
     notes: notesField.value.trim(),
   };
+
+  const duplicate = findDuplicateEntry(payload, entryIdField.value || null);
+  if (duplicate) {
+    formError.textContent = 'An identical entry (same date, hours, task type and course code) is already logged.';
+    formError.hidden = false;
+    return;
+  }
+  formError.hidden = true;
 
   if (entryIdField.value) {
     updateEntry(entryIdField.value, payload);
