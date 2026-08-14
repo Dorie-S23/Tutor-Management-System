@@ -55,10 +55,13 @@
           <h2 id="dName"></h2>
           <p class="detail-sub" id="dSession"></p>
         </hgroup>
-        <dl class="hours-need">
-          <dt class="stat-label">hours / week needed</dt>
-          <dd class="stat-value" id="dHours"></dd>
-        </dl>
+        <div class="detail-head-right">
+          <dl class="hours-need">
+            <dt class="stat-label">hours / week needed</dt>
+            <dd class="stat-value" id="dHours"></dd>
+          </dl>
+          <button class="btn btn-ghost btn-small-pad" id="editCourseBtn" type="button">Edit course</button>
+        </div>
       </header>
 
       <section class="assignment-card" id="assignmentCard">
@@ -122,6 +125,11 @@
     <label class="field">
       <span class="field-label">Department</span>
       <input type="text" id="departmentInput" name="department" placeholder="e.g. Computer Science" required>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Hours per week</span>
+      <input type="number" id="hoursPerWeekInput" name="hours_per_week" min="0" max="168" step="1" placeholder="e.g. 8" required>
     </label>
 
     <menu class="modal-actions">

@@ -27,8 +27,8 @@ function mapCourseRow(row){
     name: row.course_name,
     minMark: row.min_mark,
     department: row.department,
-    // not tracked in the courses table yet — assignment features stay dormant until they are
-    hoursNeeded: null,
+    hoursNeeded: row.hours_per_week,
+    // no timetable field in the courses table yet — assignment clash checks stay dormant until there is one
     session: null,
   };
 }
@@ -311,70 +311,94 @@ document.getElementById("cancelBtn").addEventListener("click", () => {
   renderDetail();
 });
 
-// ---------- add course modal ----------
+// ---------- add / edit course modal ----------
 
 const addCourseBtn = document.getElementById("addCourseBtn");
+const editCourseBtn = document.getElementById("editCourseBtn");
 const addCourseModal = document.getElementById("addCourseModal");
 const addCourseForm = document.getElementById("addCourseForm");
 const addCourseError = document.getElementById("addCourseError");
 const addCourseSubmitBtn = document.getElementById("addCourseSubmitBtn");
+const addCourseHeading = document.getElementById("addCourseHeading");
 
-function openAddCourseModal(){
+let editingCourseId = null; // null = adding a new course, otherwise id of course being edited
+
+function openCourseModal(course = null){
+  editingCourseId = course ? course.id : null;
   addCourseForm.reset();
   addCourseError.hidden = true;
+
+  addCourseHeading.textContent = course ? "Edit course" : "Add a course";
+  addCourseSubmitBtn.textContent = course ? "Save changes" : "Add course";
+
+  if (course){
+    document.getElementById("courseCodeInput").value = course.code;
+    document.getElementById("courseNameInput").value = course.name;
+    document.getElementById("minMarkInput").value = course.minMark;
+    document.getElementById("departmentInput").value = course.department ?? "";
+    document.getElementById("hoursPerWeekInput").value = course.hoursNeeded ?? "";
+  }
+
   addCourseModal.showModal();
   document.getElementById("courseCodeInput").focus();
 }
 
-function closeAddCourseModal(){
+function closeCourseModal(){
   addCourseModal.close();
 }
 
-addCourseBtn.addEventListener("click", openAddCourseModal);
-document.getElementById("addCourseCloseBtn").addEventListener("click", closeAddCourseModal);
-document.getElementById("addCourseCancelBtn").addEventListener("click", closeAddCourseModal);
+addCourseBtn.addEventListener("click", () => openCourseModal());
+editCourseBtn.addEventListener("click", () => {
+  const course = COURSES.find(c => c.id === activeCourseId);
+  if (course) openCourseModal(course);
+});
+document.getElementById("addCourseCloseBtn").addEventListener("click", closeCourseModal);
+document.getElementById("addCourseCancelBtn").addEventListener("click", closeCourseModal);
 
 addCourseModal.addEventListener("click", (e) => {
-  if (e.target === addCourseModal) closeAddCourseModal();
+  if (e.target === addCourseModal) closeCourseModal();
 });
 
 addCourseForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   addCourseError.hidden = true;
 
+  const hoursValue = document.getElementById("hoursPerWeekInput").value;
   const payload = {
     course_code: document.getElementById("courseCodeInput").value.trim(),
     course_name: document.getElementById("courseNameInput").value.trim(),
     min_mark: Number(document.getElementById("minMarkInput").value),
     department: document.getElementById("departmentInput").value.trim(),
+    hours_per_week: hoursValue === "" ? null : Number(hoursValue),
   };
 
+  const isEditing = editingCourseId !== null;
   addCourseSubmitBtn.disabled = true;
-  addCourseSubmitBtn.textContent = "Adding…";
+  addCourseSubmitBtn.textContent = isEditing ? "Saving…" : "Adding…";
 
   try {
-    const res = await fetch("/api/courses", {
-      method: "POST",
+    const res = await fetch(isEditing ? `/api/courses/${editingCourseId}` : "/api/courses", {
+      method: isEditing ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const body = await res.json();
 
     if (!res.ok) {
-      addCourseError.textContent = body.error || "Couldn't add that course.";
+      addCourseError.textContent = body.error || "Couldn't save that course.";
       addCourseError.hidden = false;
       return;
     }
 
-    closeAddCourseModal();
-    showToast(`${body.course_code} added to the course register.`);
+    closeCourseModal();
+    showToast(isEditing ? `${body.course_code} updated.` : `${body.course_code} added to the course register.`);
     await fetchCourses();
   } catch (err) {
     addCourseError.textContent = "Network error — couldn't reach the server.";
     addCourseError.hidden = false;
   } finally {
     addCourseSubmitBtn.disabled = false;
-    addCourseSubmitBtn.textContent = "Add course";
+    addCourseSubmitBtn.textContent = isEditing ? "Save changes" : "Add course";
   }
 });
 
@@ -395,6 +419,13 @@ courseSearchEl.addEventListener("input", renderCourseList);
 tutorSearchEl.addEventListener("input", () => {
   const course = COURSES.find(c => c.id === activeCourseId);
   if (course) renderTutorList(course);
+});
+
+// ---------- misc ----------
+
+// prevent accidental scroll-to-change on number fields (min mark / hours per week)
+document.querySelectorAll('input[type="number"]').forEach(el => {
+  el.addEventListener("wheel", () => el.blur(), { passive: true });
 });
 
 // ---------- init ----------
