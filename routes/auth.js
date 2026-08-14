@@ -80,4 +80,55 @@ router.post("/register", async (req, res) => {
     }
 });
 
+
+// POST /api/auth/login
+router.post("/login", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Validate required fields
+        if (!email || !password) {
+            return res.status(400).json({
+                error: "Email and password are required"
+            });
+        }
+
+        // Authenticate user with Supabase
+        const { data, error } = await req.supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (error) {
+            return res.status(401).json({
+                error: error.message
+            });
+        }
+
+        // Make sure a user was returned
+        if (!data.user) {
+            return res.status(401).json({
+                error: "Login failed"
+            });
+        }
+
+        // Return successful login
+        res.status(200).json({
+            message: "Login successful",
+            user: {
+                id: data.user.id,
+                email: data.user.email
+            },
+            session: data.session
+        });
+
+    } catch (error) {
+        console.error("Login error:", error);
+
+        res.status(500).json({
+            error: "Internal server error"
+        });
+    }
+});
+
 module.exports = router;

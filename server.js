@@ -6,15 +6,8 @@ const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 const authRoutes = require("./routes/auth");
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use((req,res,next) =>{
-    req.supabase = supabase;
-    next();
-})
 
 // Supabase client
 const supabase = createClient(
@@ -29,19 +22,25 @@ const supabase = createClient(
     }
 );
 
-
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static("pages"));
+app.use((req, res, next) => {
+    req.supabase = supabase;
+    next();
+});
 
 // Test route
 app.get("/", (req, res) => {
-    res.json({
-        message: "Tutor Management System API is running"
-    });
+    res.redirect("/login.html");
 });
 
 // Test Supabase connection
 app.get("/api/test", async (req, res) => {
     const { data, error } = await supabase
-        .from("profiles")
+        .from("users")
         .select("*")
         .limit(1);
 
@@ -57,11 +56,10 @@ app.get("/api/test", async (req, res) => {
     });
 });
 
-
+// Authentication routes
 app.use("/api/auth", authRoutes);
 
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
-
