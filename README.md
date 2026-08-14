@@ -1,0 +1,64 @@
+# Tutor Management System
+
+A web app for organising tutor allocations to courses — tracking which courses need tutors, matching tutors against courses, and flagging clashes (marks, timetable, hours remaining).
+
+## Tech Stack
+
+### Backend
+- **[Node.js](https://nodejs.org/)** — JavaScript runtime the server runs on.
+- **[Express 5](https://expressjs.com/)** — web framework that handles HTTP routing and serves the frontend as static files.
+- **[Supabase](https://supabase.com/)** (`@supabase/supabase-js`) — hosted Postgres database, used here for data storage and auth session checks.
+- **[dotenv](https://www.npmjs.com/package/dotenv)** — loads environment variables (`SUPABASE_URL`, `SUPABASE_KEY`, `PORT`) from a local `.env` file.
+
+### Frontend
+- **Vanilla HTML/CSS/JS** — no framework. Pages live in `public/html`, styling in `public/css`, and browser logic in `public/js`. Express serves this folder directly (`express.static`).
+- **Google Fonts** (Fraunces, Space Grotesk, Inter, IBM Plex Mono) loaded via `<link>` tags.
+
+### Documentation
+- **[Docusaurus](https://docusaurus.io/)** — separate static site generator (React-based) for project documentation, self-contained in `my-docs/` with its own `package.json`.
+
+## Project Structure
+
+```
+Tutor-Management-System/
+├── server/
+│   ├── index.js            # Express app entry point
+│   ├── supabaseClient.js   # Supabase client setup
+│   └── routes/
+│       └── courses.js      # /api/courses endpoints
+├── public/
+│   ├── html/board.html     # main page (tutor allocation board)
+│   ├── css/global.css
+│   └── js/board.js         # frontend logic, fetches data from the API
+├── my-docs/                 # Docusaurus documentation site (independent app)
+├── package.json
+└── .env                     # SUPABASE_URL, SUPABASE_KEY, PORT (not committed)
+```
+
+## How It Fits Together
+
+1. `server/index.js` starts an Express server and serves everything in `public/` as static files.
+2. The browser loads `public/html/board.html`, which pulls in `global.css` and `board.js`.
+3. `board.js` calls the REST API (e.g. `/api/courses`) to fetch live data.
+4. `server/routes/courses.js` handles those API requests and talks to Supabase via `server/supabaseClient.js`.
+5. `/api/health/supabase` is a simple endpoint to check the Supabase connection is alive.
+
+## Running Locally
+
+```bash
+npm install
+# create a .env file with SUPABASE_URL and SUPABASE_KEY
+npm start
+```
+
+The server runs at `http://localhost:3000` by default (override with `PORT` in `.env`).
+
+## Documentation Site
+
+Project documentation is written separately using Docusaurus, in [`my-docs/`](my-docs/):
+
+```bash
+cd my-docs
+npm install
+npm start
+```

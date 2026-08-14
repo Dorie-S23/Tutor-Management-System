@@ -1,0 +1,15 @@
+pages:
+  stage: deploy
+  image: node:20
+  script:
+    - cd my-docs
+    - npm ci
+    - npm run build
+    - cd ..
+    - rm -rf public
+    - mv my-docs/build public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
