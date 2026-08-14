@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Login | Tutor Management System</title>
+
+    <!-- Your existing stylesheet -->
+    <link rel="stylesheet" href="global.css">
+
+    <!-- Fonts used by your stylesheet -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+
+    <main class="auth-page">
+
+        <section class="auth-card">
+
+            <header class="auth-header">
+                <span class="eyebrow">Tutor Management System</span>
+
+                <h1>Welcome back</h1>
+
+                <p>
+                    Sign in to access your account.
+                </p>
+            </header>
+
+
+            <form id="login-form">
+
+                <div class="form-group">
+
+                    <label for="email">
+                        Email
+                    </label>
+
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="you@example.com"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="password">
+                        Password
+                    </label>
+
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Enter your password"
+                        required
+                    >
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-primary auth-button"
+                >
+                    Login
+                </button>
+
+            </form>
+
+
+            <p
+                id="login-message"
+                class="form-message"
+                aria-live="polite"
+            ></p>
+
+
+            <div class="auth-divider">
+                <span>Don't have an account?</span>
+            </div>
+
+
+            <a
+                href="register.html"
+                class="btn btn-ghost auth-button"
+            >
+                Create an account
+            </a>
+
+        </section>
+
+    </main>
+
+
+    <script src="auth.js"></script>
+
+</body>
+
+</html>

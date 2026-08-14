@@ -1,0 +1,213 @@
+/* ---------- authentication ---------- */
+
+.auth-page {
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 40px 20px;
+
+    background: var(--paper);
+}
+
+
+/* ---------- auth card ---------- */
+
+.auth-card {
+    width: 100%;
+    max-width: 460px;
+
+    background: var(--panel);
+
+    border: 1px solid var(--line);
+    border-radius: 14px;
+
+    padding: 40px;
+
+    box-shadow:
+        0 2px 4px rgba(30, 42, 46, 0.04),
+        0 8px 24px rgba(30, 42, 46, 0.08);
+}
+
+
+/* ---------- header ---------- */
+
+.auth-header {
+    text-align: center;
+
+    margin-bottom: 32px;
+}
+
+.auth-header .eyebrow {
+    margin-bottom: 10px;
+}
+
+.auth-header h1 {
+    font-family: 'Fraunces', Georgia, serif;
+
+    font-size: 32px;
+    line-height: 1.2;
+
+    margin-bottom: 10px;
+
+    color: var(--ink);
+}
+
+.auth-header p {
+    margin: 0;
+
+    color: var(--ink-soft);
+
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+
+/* ---------- form ---------- */
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+
+    margin-bottom: 7px;
+
+    font-family: 'Space Grotesk', sans-serif;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    color: var(--ink);
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+
+    padding: 12px 13px;
+
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+
+    background: var(--panel);
+    color: var(--ink);
+
+    font-family: inherit;
+    font-size: 14px;
+
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.15s ease;
+}
+
+.form-group input::placeholder {
+    color: var(--ink-faint);
+}
+
+.form-group input:hover,
+.form-group select:hover {
+    border-color: var(--ink-faint);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+
+    border-color: var(--navy);
+
+    box-shadow:
+        0 0 0 3px rgba(38, 66, 75, 0.10);
+}
+
+
+/* ---------- primary button ---------- */
+
+.auth-button {
+    width: 100%;
+
+    min-height: 44px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+    text-decoration: none;
+
+    font-size: 14px;
+}
+
+.auth-button.btn-primary {
+    margin-top: 6px;
+}
+
+
+/* ---------- divider ---------- */
+
+.auth-divider {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin: 28px 0 18px;
+
+    color: var(--ink-faint);
+
+    font-size: 12px;
+
+    text-align: center;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+
+    flex: 1;
+
+    height: 1px;
+
+    background: var(--line-soft);
+}
+
+
+/* ---------- messages ---------- */
+
+.form-message {
+    min-height: 18px;
+
+    margin: 12px 0 0;
+
+    text-align: center;
+
+    font-size: 13px;
+
+    color: var(--ink-soft);
+}
+
+
+/* ---------- mobile ---------- */
+
+@media (max-width: 500px) {
+
+    .auth-page {
+        padding: 24px 16px;
+    }
+
+    .auth-card {
+        padding: 30px 24px;
+
+        border-radius: 12px;
+    }
+
+    .auth-header h1 {
+        font-size: 27px;
+    }
+
+}
