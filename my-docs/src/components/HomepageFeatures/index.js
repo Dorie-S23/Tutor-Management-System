@@ -4,32 +4,33 @@ import styles from './styles.module.css';
 
 const FeatureList = [
   {
-    title: 'Easy to Use',
+    title: 'Allocation Board',
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        Track which courses need tutors and match tutors against courses from
+        a single board, with clashes in marks, timetable, and hours remaining
+        flagged automatically.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
+    title: 'Express + Supabase',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        An Express 5 server serves the frontend and exposes a REST API backed
+        by a hosted Supabase Postgres database.
       </>
     ),
   },
   {
-    title: 'Powered by React',
+    title: 'No Framework Frontend',
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        The board UI is vanilla HTML, CSS, and JS, served directly by
+        Express — no build step required.
       </>
     ),
   },

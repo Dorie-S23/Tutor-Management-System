@@ -2,46 +2,67 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# Introduction
 
-Let's discover **Docusaurus in less than 5 minutes**.
+A web app for organising tutor allocations to courses — tracking which courses need tutors, matching tutors against courses, and flagging clashes (marks, timetable, hours remaining).
 
-## Getting Started
+## Tech Stack
 
-Get started by **creating a new site**.
+### Backend
+- **[Node.js](https://nodejs.org/)** — JavaScript runtime the server runs on.
+- **[Express 5](https://expressjs.com/)** — web framework that handles HTTP routing and serves the frontend as static files.
+- **[Supabase](https://supabase.com/)** (`@supabase/supabase-js`) — hosted Postgres database, used here for data storage and auth session checks.
+- **[dotenv](https://www.npmjs.com/package/dotenv)** — loads environment variables (`SUPABASE_URL`, `SUPABASE_KEY`, `PORT`) from a local `.env` file.
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+### Frontend
+- **Vanilla HTML/CSS/JS** — no framework. Pages live in `public/html`, styling in `public/css`, and browser logic in `public/js`. Express serves this folder directly (`express.static`).
+- **Google Fonts** (Fraunces, Space Grotesk, Inter, IBM Plex Mono) loaded via `<link>` tags.
 
-### What you'll need
+### Documentation
+- **[Docusaurus](https://docusaurus.io/)** — this site. A separate static site generator (React-based) for project documentation, self-contained in `my-docs/` with its own `package.json`.
 
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
+## Project Structure
 
-## Generate a new site
-
-Generate a new Docusaurus site using the **classic template**.
-
-The classic template will automatically be added to your project after you run the command:
-
-```bash
-npm init docusaurus@latest my-website classic
+```
+Tutor-Management-System/
+├── server/
+│   ├── index.js            # Express app entry point
+│   ├── supabaseClient.js   # Supabase client setup
+│   └── routes/
+│       └── courses.js      # /api/courses endpoints
+├── public/
+│   ├── html/board.html     # main page (tutor allocation board)
+│   ├── css/global.css
+│   └── js/board.js         # frontend logic, fetches data from the API
+├── my-docs/                 # Docusaurus documentation site (independent app)
+├── package.json
+└── .env                     # SUPABASE_URL, SUPABASE_KEY, PORT (not committed)
 ```
 
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
+## How It Fits Together
 
-The command also installs all necessary dependencies you need to run Docusaurus.
+1. `server/index.js` starts an Express server and serves everything in `public/` as static files.
+2. The browser loads `public/html/board.html`, which pulls in `global.css` and `board.js`.
+3. `board.js` calls the REST API (e.g. `/api/courses`) to fetch live data.
+4. `server/routes/courses.js` handles those API requests and talks to Supabase via `server/supabaseClient.js`.
+5. `/api/health/supabase` is a simple endpoint to check the Supabase connection is alive.
 
-## Start your site
-
-Run the development server:
+## Running Locally
 
 ```bash
-cd my-website
-npm run start
+npm install
+# create a .env file with SUPABASE_URL and SUPABASE_KEY
+npm start
 ```
 
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
+The server runs at `http://localhost:3000` by default (override with `PORT` in `.env`).
 
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
+## Running the Documentation Site
 
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+This site is built separately with Docusaurus, from `my-docs/`:
+
+```bash
+cd my-docs
+npm install
+npm start
+```
