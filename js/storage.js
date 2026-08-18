@@ -136,3 +136,47 @@ export function getProfile() {
 export function saveProfile(profile) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
 }
+
+// ---------- recurring class schedule (imported from a timetable PDF) ----------
+// Each class recurs weekly on the same weekday from firstDate through endDate,
+// separate from logged hours so it never affects hours-worked totals.
+
+const SCHEDULE_KEY = 'tutorHours.schedule';
+
+function readSchedule() {
+  const raw = localStorage.getItem(SCHEDULE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSchedule(classes) {
+  localStorage.setItem(SCHEDULE_KEY, JSON.stringify(classes));
+}
+
+export function getSchedule() {
+  return readSchedule();
+}
+
+export function addScheduleClasses(classes) {
+  const now = new Date().toISOString();
+  const withIds = classes.map((c) => ({ id: crypto.randomUUID(), createdAt: now, ...c }));
+  writeSchedule([...readSchedule(), ...withIds]);
+  return withIds;
+}
+
+export function deleteScheduleClass(id) {
+  writeSchedule(readSchedule().filter((c) => c.id !== id));
+}
+
+export function getScheduleForDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const weekday = new Date(y, m - 1, d).getDay();
+  return readSchedule().filter(
+    (c) => c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate
+  );
+}

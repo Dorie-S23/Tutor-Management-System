@@ -371,6 +371,61 @@ td.actions {
   white-space: nowrap;
 }
 
+.calendar-class-pill {
+  background: #fff;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paste-fallback {
+  margin: 0.75rem 0;
+}
+
+.paste-fallback summary + p.card-hint {
+  margin-top: 0.5rem;
+}
+
+.paste-fallback summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-primary);
+}
+
+.paste-fallback .form-field {
+  margin-top: 0.75rem;
+}
+
+#timetable-json {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+}
+
+#timetable-debug-text {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  resize: vertical;
+}
+
+#timetable-review table input[type="text"] {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
 /* ---------- timesheet claim form ---------- */
 
 .card-hint {

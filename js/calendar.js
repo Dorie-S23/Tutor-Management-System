@@ -1,5 +1,5 @@
 import { highlightActiveTab } from './nav.js';
-import { getEntriesForDate, todayStr } from './storage.js';
+import { getEntriesForDate, getScheduleForDate, todayStr } from './storage.js';
 
 highlightActiveTab();
 
@@ -63,6 +63,17 @@ function render() {
     dayNumber.textContent = cellDay;
     cell.appendChild(dayNumber);
 
+    const classes = getScheduleForDate(cellDateStr);
+    for (const cls of classes) {
+      const pill = document.createElement('div');
+      pill.className = 'calendar-class-pill';
+      // Day cells are narrow, so show just the course code — full title is in the tooltip.
+      const courseCode = (cls.title.match(/^[A-Z]{2,6}\s?\d{3,4}[A-Z]?/) || [cls.title])[0];
+      pill.textContent = `${cls.startTime} ${courseCode}`;
+      pill.title = `${cls.title} · ${cls.startTime}-${cls.endTime} · ${cls.venue}`;
+      cell.appendChild(pill);
+    }
+
     const entries = getEntriesForDate(cellDateStr);
     for (const entry of entries) {
       const pill = document.createElement('div');
@@ -93,5 +104,14 @@ nextMonthBtn.addEventListener('click', () => {
   }
   render();
 });
+
+window.renderCalendar = render;
+
+window.jumpToCalendarDate = (dateStr) => {
+  const [y, m] = dateStr.split('-').map(Number);
+  viewYear = y;
+  viewMonth = m - 1;
+  render();
+};
 
 render();
