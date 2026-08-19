@@ -41,13 +41,13 @@
 
         </section>
 
-        <section aria-labelledby="volunteer-heading">
+        <section aria-labelledby="courses-heading">
             <header>
-                <h2 id="volunteer-heading">Open Sessions</h2>
-                <p>Sessions nobody has picked up yet. Volunteer for one that works for you.</p>
+                <h2 id="courses-heading">Modules You Can Tutor</h2>
+                <p>Courses currently looking for student volunteers.</p>
             </header>
 
-            <section aria-label="Open sessions" id="openSessionsList">
+            <section aria-label="Available courses" id="courseList">
                 <!-- rendered by studentview.js -->
             </section>
         </section>
@@ -73,7 +73,8 @@
     <script src="../js/studentview.js"></script>
     <script type="module">
         import { getEntries } from '../js/storage.js';
-        const totalHours = getEntries().reduce((sum, entry) => sum + Number(entry.hours), 0);
+        const entries = await getEntries();
+        const totalHours = entries.reduce((sum, entry) => sum + Number(entry.hours), 0);
         document.getElementById('stat-hours-volunteered').textContent = totalHours;
     </script>
 </body>

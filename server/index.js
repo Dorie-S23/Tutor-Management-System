@@ -5,6 +5,7 @@ const supabase = require('./supabaseClient');
 const authRoutes = require('./routes/auth');
 const hourEntriesRoutes = require('./routes/hourEntries');
 const timesheetsRoutes = require('./routes/timesheets');
+const coursesRoutes = require('./routes/courses');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -19,6 +20,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/hour-entries', hourEntriesRoutes);
 app.use('/api/timesheets', timesheetsRoutes);
+app.use('/api/courses', coursesRoutes);
 
 app.get('/api/health/supabase', async (req, res) => {
   const { error } = await supabase.auth.getSession();

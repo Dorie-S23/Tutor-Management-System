@@ -1,37 +1,39 @@
 /* ============================================================
    Student Dashboard
-   Open Sessions (volunteer for unfilled work) + Upcoming Sessions
-   (cancel one you can't make). Shared state lives in session-data.js.
+   Modules You Can Tutor (real courses from Supabase, display-only)
+   + Upcoming Sessions (cancel one you can't make, still fake data
+   from session-data.js until real scheduling exists).
    ============================================================ */
 
-const openSessionsListEl = document.getElementById("openSessionsList");
+const courseListEl = document.getElementById("courseList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
 
-function renderOpenSessions() {
-  const available = StudentData.getOpenSessions();
+async function renderCourses() {
+  courseListEl.innerHTML = "";
 
-  openSessionsListEl.innerHTML = "";
-
-  if (available.length === 0) {
-    openSessionsListEl.innerHTML = `<p class="empty-state">No open sessions right now — check back soon.</p>`;
+  let courses;
+  try {
+    const res = await fetch("/api/courses");
+    if (!res.ok) throw new Error("Failed to load courses");
+    courses = await res.json();
+  } catch (err) {
+    courseListEl.innerHTML = `<p class="empty-state">Couldn't load courses right now.</p>`;
     return;
   }
 
-  available.forEach((session) => {
+  if (courses.length === 0) {
+    courseListEl.innerHTML = `<p class="empty-state">No courses need tutors right now — check back soon.</p>`;
+    return;
+  }
+
+  courses.forEach((course) => {
     const article = document.createElement("article");
     article.innerHTML = `
-      <h3>${session.emoji} ${session.subject}</h3>
-      <p class="session-meta">${session.topic} · ${session.day}, ${session.time}</p>
-      <p class="session-note">${session.student}${session.note ? " — " + session.note : ""}</p>
-      <button type="button">Volunteer</button>
+      <h3>${course.course_code}</h3>
+      <p class="session-meta">${course.course_name}</p>
+      <p class="session-note">${course.department}</p>
     `;
-    article.querySelector("button").addEventListener("click", () => {
-      StudentData.claimSession(session.id);
-      renderOpenSessions();
-      renderUpcomingSessions();
-      showToast(`You volunteered for ${session.subject} with ${session.student}`);
-    });
-    openSessionsListEl.appendChild(article);
+    courseListEl.appendChild(article);
   });
 }
 
@@ -41,7 +43,7 @@ function renderUpcomingSessions() {
   upcomingSessionsListEl.innerHTML = "";
 
   if (sessions.length === 0) {
-    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions. Volunteer for one above.</p>`;
+    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions.</p>`;
     return;
   }
 
@@ -55,7 +57,6 @@ function renderUpcomingSessions() {
     `;
     article.querySelector(".btn-cancel").addEventListener("click", () => {
       StudentData.cancelUpcomingSession(session.id);
-      renderOpenSessions();
       renderUpcomingSessions();
       showToast(`Cancelled ${session.subject} with ${session.withWho}`);
     });
@@ -76,5 +77,5 @@ function showToast(message) {
 
 // ---------- init ----------
 
-renderOpenSessions();
+renderCourses();
 renderUpcomingSessions();
