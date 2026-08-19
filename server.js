@@ -8,6 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const authRoutes = require("./routes/auth");
+const coursesRoutes = require("./server/routes/courses");
 
 // Supabase client
 const supabase = createClient(
@@ -26,7 +27,7 @@ const supabase = createClient(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static("pages"));
+app.use(express.static("public"));
 app.use((req, res, next) => {
     req.supabase = supabase;
     next();
@@ -34,7 +35,7 @@ app.use((req, res, next) => {
 
 // Test route
 app.get("/", (req, res) => {
-    res.redirect("/login.html");
+    res.redirect("/html/login.html");
 });
 
 // Test Supabase connection
@@ -58,6 +59,9 @@ app.get("/api/test", async (req, res) => {
 
 // Authentication routes
 app.use("/api/auth", authRoutes);
+
+// Course management routes
+app.use("/api/courses", coursesRoutes);
 
 // Start server
 app.listen(PORT, () => {

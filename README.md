@@ -37,11 +37,11 @@ Tutor-Management-System/
 
 ## How It Fits Together
 
-1. `server/index.js` starts an Express server and serves everything in `public/` as static files.
+1. `server.js` starts an Express server and serves `pages/` (auth) and `public/` (app) as static files.
 2. The browser loads `public/html/board.html`, which pulls in `global.css` and `board.js`.
 3. `board.js` calls the REST API (e.g. `/api/courses`) to fetch live data.
 4. `server/routes/courses.js` handles those API requests and talks to Supabase via `server/supabaseClient.js`.
-5. `/api/health/supabase` is a simple endpoint to check the Supabase connection is alive.
+5. `routes/auth.js` handles `/api/auth/register` and `/api/auth/login` for all four roles (student, tutor, organiser, educator).
 
 ## Running Locally
 

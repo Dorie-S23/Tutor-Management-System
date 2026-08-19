@@ -1,11 +1,3 @@
-/* ============================================================
-   Tutor Allocation Board — organiser view (Basic tier)
-   Covers: hold courses/tutors data, single-board assignment
-   with live checks on marks / timetable clash / hours remaining.
-   ============================================================ */
-
-// ---------- data (courses come from Supabase via /api/courses) ----------
-
 const COURSES = [];
 
 const TUTORS = [];

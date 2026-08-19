@@ -112,12 +112,28 @@ router.post("/login", async (req, res) => {
             });
         }
 
+        // Look up the user's role
+        const { data: userRow, error: userError } = await req.supabase
+            .from("users")
+            .select("role")
+            .eq("id", data.user.id)
+            .single();
+
+        if (userError) {
+            console.error("Database error:", userError);
+
+            return res.status(500).json({
+                error: "Logged in, but could not load user role"
+            });
+        }
+
         // Return successful login
         res.status(200).json({
             message: "Login successful",
             user: {
                 id: data.user.id,
-                email: data.user.email
+                email: data.user.email,
+                role: userRow.role
             },
             session: data.session
         });

@@ -182,7 +182,11 @@ if (loginForm) {
 
             // Redirect after successful login
             setTimeout(() => {
-                window.location.href = "index.html";
+                if (data.user.role === "organiser") {
+                    window.location.href = "board.html";
+                } else {
+                    window.location.href = "index.html";
+                }
             }, 1000);
 
 
