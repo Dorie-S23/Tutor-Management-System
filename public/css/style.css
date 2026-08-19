@@ -27,6 +27,59 @@ body > header h1 {
     font-size: 24px;
 }
 
+.brand {
+    color: #2563eb;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+/* Auth pages (Login / Register) */
+
+.auth-main {
+    max-width: 420px;
+    margin: 60px auto;
+    padding: 0 25px;
+}
+
+.auth-card h2 {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
+
+.auth-card .card-hint {
+    margin-bottom: 20px;
+}
+
+.auth-card form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.auth-card .form-actions {
+    margin-top: 4px;
+}
+
+.auth-card .form-actions button {
+    width: 100%;
+}
+
+.auth-switch {
+    margin-top: 18px;
+    text-align: center;
+    color: #777;
+    font-size: 14px;
+}
+
+.auth-switch a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
 nav {
     display: flex;
     gap: 10px;
@@ -316,14 +369,29 @@ body > footer p {
     font-size: 13px;
 }
 
+.status-pill[hidden] {
+    display: none;
+}
+
 .status-pill.completed {
     background: #e8f7ed;
     color: #22863a;
 }
 
-.status-pill.missed {
+.status-pill.missed,
+.status-pill.rejected {
     background: #fdecea;
     color: #d33;
+}
+
+.status-pill.approved {
+    background: #e8f7ed;
+    color: #22863a;
+}
+
+.status-pill.pending {
+    background: #fdf3e3;
+    color: #a6690f;
 }
 
 /* Forms (Profile / Log Hours) */
@@ -460,6 +528,17 @@ body > footer p {
     font-weight: 600;
 }
 
+.week-status-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.week-status-row .week-total {
+    margin-bottom: 0;
+}
+
 .week-total {
     color: #777;
     margin-bottom: 15px;
@@ -471,6 +550,39 @@ body > footer p {
     padding: 0;
     color: #2563eb;
     font-size: 16px;
+}
+
+#week-status {
+    margin-top: 0;
+}
+
+.card-hint {
+    color: #777;
+    font-size: 13px;
+    margin-bottom: 15px;
+}
+
+.reviewer-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid #eee;
+}
+
+.reviewer-row:first-child {
+    border-top: none;
+}
+
+.reviewer-row span {
+    flex: 1;
+    font-size: 14px;
+}
+
+.reviewer-row button {
+    width: auto;
+    padding: 6px 14px;
+    font-size: 13px;
 }
 
 .card table {

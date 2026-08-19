@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const supabase = require('./supabaseClient');
+const authRoutes = require('./routes/auth');
+const hourEntriesRoutes = require('./routes/hourEntries');
+const timesheetsRoutes = require('./routes/timesheets');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -12,6 +15,10 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'html', 'board.html'));
 });
+
+app.use('/api/auth', authRoutes);
+app.use('/api/hour-entries', hourEntriesRoutes);
+app.use('/api/timesheets', timesheetsRoutes);
 
 app.get('/api/health/supabase', async (req, res) => {
   const { error } = await supabase.auth.getSession();

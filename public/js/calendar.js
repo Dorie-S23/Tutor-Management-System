@@ -1,5 +1,11 @@
 import { highlightActiveTab } from './nav.js';
-import { getEntriesForDate, todayStr } from './storage.js';
+import { getCurrentUser, getEntriesForDate, todayStr } from './storage.js';
+
+const currentUser = getCurrentUser();
+if (!currentUser) {
+  window.location.href = 'login.html';
+  throw new Error('Not logged in');
+}
 
 highlightActiveTab();
 
@@ -7,6 +13,7 @@ const monthLabelEl = document.getElementById('calendar-month-label');
 const gridEl = document.getElementById('calendar-grid');
 const prevMonthBtn = document.getElementById('prev-month-btn');
 const nextMonthBtn = document.getElementById('next-month-btn');
+const logoutLink = document.getElementById('logout-link');
 
 const today = new Date();
 let viewYear = today.getFullYear();
@@ -19,7 +26,7 @@ function toDateStr(year, month, day) {
   return `${y}-${m}-${d}`;
 }
 
-function render() {
+async function render() {
   const monthStart = new Date(viewYear, viewMonth, 1);
   monthLabelEl.textContent = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
@@ -63,7 +70,7 @@ function render() {
     dayNumber.textContent = cellDay;
     cell.appendChild(dayNumber);
 
-    const entries = getEntriesForDate(cellDateStr);
+    const entries = await getEntriesForDate(cellDateStr);
     for (const entry of entries) {
       const pill = document.createElement('div');
       pill.className = 'calendar-session-pill';
@@ -76,22 +83,31 @@ function render() {
   }
 }
 
-prevMonthBtn.addEventListener('click', () => {
+prevMonthBtn.addEventListener('click', async () => {
   viewMonth -= 1;
   if (viewMonth < 0) {
     viewMonth = 11;
     viewYear -= 1;
   }
-  render();
+  await render();
 });
 
-nextMonthBtn.addEventListener('click', () => {
+nextMonthBtn.addEventListener('click', async () => {
   viewMonth += 1;
   if (viewMonth > 11) {
     viewMonth = 0;
     viewYear += 1;
   }
-  render();
+  await render();
 });
 
-render();
+if (logoutLink) {
+  logoutLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('access_token');
+    window.location.href = 'login.html';
+  });
+}
+
+await render();

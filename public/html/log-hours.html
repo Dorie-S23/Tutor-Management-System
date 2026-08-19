@@ -16,9 +16,9 @@
             <a href="my-sessions.html">My Sessions</a>
             <a href="log-hours.html" aria-current="page">Log Hours</a>
             <a href="calendar.html">Calendar</a>
-            <a href="#">Find Students</a>
             <a href="#">Messages</a>
             <a href="profile.html">Profile</a>
+            <a href="#" id="logout-link">Logout</a>
         </nav>
     </header>
 
@@ -76,7 +76,11 @@
         <span class="week-label" id="week-label"></span>
         <button type="button" id="next-week-btn" class="btn-secondary">Next week &rarr;</button>
       </div>
-      <p class="week-total">Total this week: <strong id="week-total">0</strong> hours</p>
+      <div class="week-status-row">
+        <p class="week-total">Total this week: <strong id="week-total">0</strong> hours</p>
+        <span id="week-status" class="status-pill" hidden></span>
+      </div>
+      <p id="week-reviewer-note" class="form-error" hidden></p>
       <table>
         <thead>
           <tr>
@@ -91,6 +95,16 @@
         <tbody id="entries-body"></tbody>
       </table>
       <p id="empty-state" class="empty-state" hidden>No entries logged for this week yet.</p>
+      <div class="form-actions">
+        <button type="button" id="submit-week-btn" class="btn-primary">Submit week</button>
+      </div>
+    </div>
+
+    <div class="card" id="reviewer-panel" hidden>
+      <h2>Reviewer (temp)</h2>
+      <p class="card-hint">Stand-in for the organiser's approval screen, until that page exists. Approve or reject any pending timesheet here.</p>
+      <div id="reviewer-list"></div>
+      <p id="reviewer-empty" class="empty-state" hidden>No timesheets waiting for review.</p>
     </div>
   </main>
 
