@@ -27,6 +27,10 @@
           <input type="file" id="timetable-file" accept="application/pdf" />
         </div>
         <div class="form-field">
+          <label for="semester-start">Classes start on</label>
+          <input type="date" id="semester-start" />
+        </div>
+        <div class="form-field">
           <label for="semester-end">Repeat weekly until</label>
           <input type="date" id="semester-end" />
         </div>
@@ -47,11 +51,6 @@
       </details>
 
       <p id="timetable-status" class="card-hint" hidden></p>
-
-      <div id="timetable-debug" hidden>
-        <p class="card-hint">Couldn't make sense of the PDF's layout. Copy the text below and share it so the parser can be fixed.</p>
-        <textarea id="timetable-debug-text" rows="10" readonly></textarea>
-      </div>
 
       <div id="timetable-review" hidden>
         <table>
@@ -78,6 +77,9 @@
         <button type="button" id="prev-month-btn" class="btn-secondary">&larr; Prev</button>
         <h2 id="calendar-month-label"></h2>
         <button type="button" id="next-month-btn" class="btn-secondary">Next &rarr;</button>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="clear-classes-btn" class="btn-danger">Clear class times</button>
       </div>
       <div class="calendar-weekdays">
         <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>

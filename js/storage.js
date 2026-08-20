@@ -173,6 +173,10 @@ export function deleteScheduleClass(id) {
   writeSchedule(readSchedule().filter((c) => c.id !== id));
 }
 
+export function clearSchedule() {
+  writeSchedule([]);
+}
+
 export function getScheduleForDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const weekday = new Date(y, m - 1, d).getDay();

@@ -1,5 +1,5 @@
 import { highlightActiveTab } from './nav.js';
-import { getEntriesForDate, getScheduleForDate, todayStr } from './storage.js';
+import { getEntriesForDate, getScheduleForDate, todayStr, clearSchedule } from './storage.js';
 
 highlightActiveTab();
 
@@ -7,6 +7,7 @@ const monthLabelEl = document.getElementById('calendar-month-label');
 const gridEl = document.getElementById('calendar-grid');
 const prevMonthBtn = document.getElementById('prev-month-btn');
 const nextMonthBtn = document.getElementById('next-month-btn');
+const clearClassesBtn = document.getElementById('clear-classes-btn');
 
 const today = new Date();
 let viewYear = today.getFullYear();
@@ -102,6 +103,12 @@ nextMonthBtn.addEventListener('click', () => {
     viewMonth = 0;
     viewYear += 1;
   }
+  render();
+});
+
+clearClassesBtn.addEventListener('click', () => {
+  if (!confirm('Remove all imported class times from the calendar?')) return;
+  clearSchedule();
   render();
 });
 

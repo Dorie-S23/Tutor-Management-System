@@ -1,7 +1,8 @@
 import { addScheduleClasses } from './storage.js';
-import { parseTimetablePdf, parseTimetableJson } from './timetable-parser.js';
+import { parseTimetableViaApi, parseTimetableJson, firstOccurrenceOnOrAfter } from './timetable-parser.js';
 
 const fileInput = document.getElementById('timetable-file');
+const semesterStartInput = document.getElementById('semester-start');
 const semesterEndInput = document.getElementById('semester-end');
 const parseBtn = document.getElementById('parse-timetable-btn');
 const jsonInput = document.getElementById('timetable-json');
@@ -11,8 +12,6 @@ const reviewSection = document.getElementById('timetable-review');
 const reviewBody = document.getElementById('timetable-review-body');
 const saveBtn = document.getElementById('save-timetable-btn');
 const cancelBtn = document.getElementById('cancel-timetable-btn');
-const debugSection = document.getElementById('timetable-debug');
-const debugText = document.getElementById('timetable-debug-text');
 
 let parsedClasses = [];
 
@@ -70,13 +69,20 @@ parseBtn.addEventListener('click', async () => {
     setStatus('Choose a PDF file first.', true);
     return;
   }
+  if (!semesterStartInput.value) {
+    setStatus('Pick a "classes start on" date first — the PDF has no calendar dates of its own.', true);
+    return;
+  }
 
   reviewSection.hidden = true;
-  debugSection.hidden = true;
   setStatus('Reading PDF…');
 
   try {
-    parsedClasses = await parseTimetablePdf(file);
+    const classes = await parseTimetableViaApi(file);
+    parsedClasses = classes.map((cls) => ({
+      ...cls,
+      firstDate: firstOccurrenceOnOrAfter(semesterStartInput.value, cls.dayOfWeek),
+    }));
     if (parsedClasses.length === 0) {
       setStatus('No classes could be recognised in this PDF — you may need to add them manually.', true);
       return;
@@ -85,16 +91,11 @@ parseBtn.addEventListener('click', async () => {
     setStatus(`Found ${parsedClasses.length} class${parsedClasses.length === 1 ? '' : 'es'} — check them below before adding.`);
   } catch (err) {
     setStatus(err.message || 'Could not read that PDF.', true);
-    if (err.debugItems) {
-      debugText.value = err.debugItems.map((it) => `[${Math.round(it.x)}, ${Math.round(it.y)}] ${it.str}`).join('\n');
-      debugSection.hidden = false;
-    }
   }
 });
 
 parseJsonBtn.addEventListener('click', () => {
   reviewSection.hidden = true;
-  debugSection.hidden = true;
 
   if (!jsonInput.value.trim()) {
     setStatus('Paste some timetable JSON first.', true);

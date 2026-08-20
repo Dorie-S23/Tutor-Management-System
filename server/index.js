@@ -2,16 +2,22 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const supabase = require('./supabaseClient');
+const timetableRoutes = require('./timetableRoutes');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/html', express.static(path.join(__dirname, '..', 'html')));
+app.use('/js', express.static(path.join(__dirname, '..', 'js')));
+app.use('/css', express.static(path.join(__dirname, '..', 'css')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'html', 'board.html'));
 });
+
+app.use('/api', timetableRoutes);
 
 app.get('/api/health/supabase', async (req, res) => {
   const { error } = await supabase.auth.getSession();
