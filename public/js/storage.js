@@ -1,7 +1,7 @@
-// Supabase-backed data layer for logged tutoring hours and their
-// timesheets. Every read/write goes through the functions below and the
-// /api/hour-entries and /api/timesheets routes (server/routes/), scoped to
-// whichever user is signed in (see getCurrentUser).
+// Supabase-backed data layer for logged tutoring hours. Every read/write
+// goes through the functions below and the /api/hour-entries routes
+// (server/routes/), scoped to whichever user is signed in (see
+// getCurrentUser).
 
 export function getCurrentUser() {
   const raw = sessionStorage.getItem('user');
@@ -23,18 +23,6 @@ function fromApiEntry(row) {
     taskType: row.task_type || 'Tutoring',
     subject: row.subject || '',
     notes: row.notes || '',
-  };
-}
-
-function fromApiTimesheet(row) {
-  return {
-    userId: row.user_id,
-    userName: row.users ? row.users.name : undefined,
-    weekStart: row.week_start,
-    status: row.status,
-    submittedAt: row.submitted_at,
-    reviewedAt: row.reviewed_at,
-    reviewerNote: row.reviewer_note,
   };
 }
 
@@ -125,62 +113,6 @@ export async function getWeekTotal(weekStart) {
 export async function getEntriesForDate(dateStr) {
   const entries = await getEntries();
   return entries.filter((e) => e.date === dateStr);
-}
-
-// --- Timesheets ------------------------------------------------------------
-// A timesheet is a submission wrapper around one user's week of entries.
-// Entries themselves are never modified; a week is just "locked" for
-// editing while its timesheet is pending or approved.
-
-let timesheetsCache = null;
-
-async function fetchTimesheets() {
-  const user = getCurrentUser();
-  if (!user) return [];
-  const res = await fetch(`/api/timesheets?userId=${encodeURIComponent(user.id)}`);
-  const data = await readJson(res, 'Failed to load timesheets');
-  return data.map(fromApiTimesheet);
-}
-
-export async function getTimesheet(weekStart) {
-  if (!timesheetsCache) timesheetsCache = await fetchTimesheets();
-  return timesheetsCache.find((t) => t.weekStart === weekStart) || null;
-}
-
-export async function submitTimesheet(weekStart) {
-  const user = getCurrentUser();
-  const res = await fetch('/api/timesheets', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: user.id, weekStart }),
-  });
-  const row = await readJson(res, 'Failed to submit timesheet');
-  timesheetsCache = null;
-  return fromApiTimesheet(row);
-}
-
-export async function reviewTimesheet(userId, weekStart, status, note = '') {
-  const res = await fetch(`/api/timesheets/${userId}/${weekStart}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status, note }),
-  });
-  const row = await readJson(res, 'Failed to review timesheet');
-  timesheetsCache = null;
-  return fromApiTimesheet(row);
-}
-
-// Every user's pending timesheets - used by the (temporary) reviewer panel,
-// not scoped to the current user like the functions above.
-export async function getPendingTimesheets() {
-  const res = await fetch('/api/timesheets?status=pending');
-  const data = await readJson(res, 'Failed to load pending timesheets');
-  return data.map(fromApiTimesheet).sort((a, b) => a.weekStart.localeCompare(b.weekStart));
-}
-
-export async function isWeekLocked(weekStart) {
-  const timesheet = await getTimesheet(weekStart);
-  return !!timesheet && (timesheet.status === 'pending' || timesheet.status === 'approved');
 }
 
 // --- Date helpers (pure, no network) ----------------------------------

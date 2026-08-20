@@ -378,20 +378,9 @@ body > footer p {
     color: #22863a;
 }
 
-.status-pill.missed,
-.status-pill.rejected {
+.status-pill.missed {
     background: #fdecea;
     color: #d33;
-}
-
-.status-pill.approved {
-    background: #e8f7ed;
-    color: #22863a;
-}
-
-.status-pill.pending {
-    background: #fdf3e3;
-    color: #a6690f;
 }
 
 /* Forms (Profile / Log Hours) */
@@ -528,17 +517,6 @@ body > footer p {
     font-weight: 600;
 }
 
-.week-status-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 15px;
-}
-
-.week-status-row .week-total {
-    margin-bottom: 0;
-}
-
 .week-total {
     color: #777;
     margin-bottom: 15px;
@@ -552,37 +530,10 @@ body > footer p {
     font-size: 16px;
 }
 
-#week-status {
-    margin-top: 0;
-}
-
 .card-hint {
     color: #777;
     font-size: 13px;
     margin-bottom: 15px;
-}
-
-.reviewer-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 0;
-    border-top: 1px solid #eee;
-}
-
-.reviewer-row:first-child {
-    border-top: none;
-}
-
-.reviewer-row span {
-    flex: 1;
-    font-size: 14px;
-}
-
-.reviewer-row button {
-    width: auto;
-    padding: 6px 14px;
-    font-size: 13px;
 }
 
 .card table {
