@@ -20,8 +20,14 @@ function mapCourseRow(row){
     minMark: row.min_mark,
     department: row.department,
     hoursNeeded: row.hours_per_week,
-    // no timetable field in the courses table yet — assignment clash checks stay dormant until there is one
-    session: null,
+    tutorsNeeded: row.tutors_needed,
+    tutorsAssigned: row.no_of_tutors_assigned ?? 0,
+    dayOfTut: row.Day_of_tut,
+    startTime: row.tutor_start_time,
+    endTime: row.tutor_end_time,
+    session: (row.Day_of_tut && row.tutor_start_time && row.tutor_end_time)
+      ? { day: row.Day_of_tut, start: row.tutor_start_time.slice(0, 5), end: row.tutor_end_time.slice(0, 5) }
+      : null,
   };
 }
 
@@ -165,14 +171,39 @@ function renderDetail(){
 
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
+  const timeRange = (course.startTime && course.endTime)
+    ? `${course.startTime.slice(0, 5)}–${course.endTime.slice(0, 5)}`
+    : null;
   document.getElementById("dSession").textContent = course.session
     ? `${course.session.day} · ${course.session.start}–${course.session.end}  ·  requires a mark of ${course.minMark}+`
-    : `${course.department}  ·  requires a mark of ${course.minMark}+  ·  not yet scheduled`;
+    : `${course.department}  ·  requires a mark of ${course.minMark}+  ·  ${timeRange ? timeRange : "not yet scheduled"}`;
   document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
+  document.getElementById("dTutorsAssigned").textContent = `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
 
   renderAssignmentCard(course);
   renderTutorList(course);
   renderConfirmBar(course);
+}
+
+// bumps the persisted no_of_tutors_assigned counter by +1/-1; returns true on success
+async function bumpTutorsAssigned(course, delta){
+  try {
+    const res = await fetch(`/api/courses/${course.id}/tutors-assigned`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't update the tutor count.");
+      return false;
+    }
+    course.tutorsAssigned = body.no_of_tutors_assigned ?? 0;
+    return true;
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    return false;
+  }
 }
 
 function renderAssignmentCard(course){
@@ -198,9 +229,10 @@ function renderAssignmentCard(course){
       <button class="btn-small" id="unassignBtn" type="button">Remove</button>
     </div>
   `;
-  document.getElementById("unassignBtn").addEventListener("click", () => {
+  document.getElementById("unassignBtn").addEventListener("click", async () => {
     assignments[course.id] = null;
     pendingTutorId = null;
+    await bumpTutorsAssigned(course, -1);
     showToast(`Removed ${tutor.name} from ${course.code}`);
     renderCourseList();
     renderDetail();
@@ -289,7 +321,9 @@ function renderConfirmBar(course){
 
   const confirmBtn = document.getElementById("confirmBtn");
   confirmBtn.textContent = status.eligible ? "Confirm assignment" : "Assign anyway (override)";
-  confirmBtn.onclick = () => {
+  confirmBtn.onclick = async () => {
+    const ok = await bumpTutorsAssigned(course, 1);
+    if (!ok) return;
     assignments[course.id] = tutor.id;
     pendingTutorId = null;
     showToast(`${tutor.name} assigned to ${course.code}${status.eligible ? "" : " — with an override"}`);
@@ -329,6 +363,10 @@ function openCourseModal(course = null){
     document.getElementById("minMarkInput").value = course.minMark;
     document.getElementById("departmentInput").value = course.department ?? "";
     document.getElementById("hoursPerWeekInput").value = course.hoursNeeded ?? "";
+    document.getElementById("TutorsNeededInput").value = course.tutorsNeeded ?? "";
+    document.getElementById("dayOfTutInput").value = course.dayOfTut ?? "";
+    document.getElementById("tutorStartTimeInput").value = course.startTime ? course.startTime.slice(0, 5) : "";
+    document.getElementById("tutorEndTimeInput").value = course.endTime ? course.endTime.slice(0, 5) : "";
   }
 
   addCourseModal.showModal();
@@ -356,12 +394,20 @@ addCourseForm.addEventListener("submit", async (e) => {
   addCourseError.hidden = true;
 
   const hoursValue = document.getElementById("hoursPerWeekInput").value;
+  const tutorsNeededValue = document.getElementById("TutorsNeededInput").value;
+  const dayOfTutValue = document.getElementById("dayOfTutInput").value.trim();
+  const startTimeValue = document.getElementById("tutorStartTimeInput").value;
+  const endTimeValue = document.getElementById("tutorEndTimeInput").value;
   const payload = {
     course_code: document.getElementById("courseCodeInput").value.trim(),
     course_name: document.getElementById("courseNameInput").value.trim(),
     min_mark: Number(document.getElementById("minMarkInput").value),
     department: document.getElementById("departmentInput").value.trim(),
     hours_per_week: hoursValue === "" ? null : Number(hoursValue),
+    tutors_needed: tutorsNeededValue === "" ? null : Number(tutorsNeededValue),
+    day_of_tut: dayOfTutValue === "" ? null : dayOfTutValue,
+    tutor_start_time: startTimeValue === "" ? null : startTimeValue,
+    tutor_end_time: endTimeValue === "" ? null : endTimeValue,
   };
 
   const isEditing = editingCourseId !== null;

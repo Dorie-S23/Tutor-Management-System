@@ -60,6 +60,10 @@
             <dt class="stat-label">hours / week needed</dt>
             <dd class="stat-value" id="dHours"></dd>
           </dl>
+          <dl class="hours-need">
+            <dt class="stat-label">tutors assigned</dt>
+            <dd class="stat-value" id="dTutorsAssigned"></dd>
+          </dl>
           <button class="btn btn-ghost btn-small-pad" id="editCourseBtn" type="button">Edit course</button>
         </div>
       </header>
@@ -130,6 +134,26 @@
     <label class="field">
       <span class="field-label">Hours per week</span>
       <input type="number" id="hoursPerWeekInput" name="hours_per_week" min="0" max="168" step="1" placeholder="e.g. 8" required>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Tutors Needed</span>
+      <input type="number" id="TutorsNeededInput" name="tutors_needed" min="0" max="20" step="1" placeholder="e.g. 8" required>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Day of tutoring</span>
+      <input type="text" id="dayOfTutInput" name="day_of_tut" placeholder="e.g. Monday">
+    </label>
+
+    <label class="field">
+      <span class="field-label">Tutor session start time</span>
+      <input type="time" id="tutorStartTimeInput" name="tutor_start_time">
+    </label>
+
+    <label class="field">
+      <span class="field-label">Tutor session end time</span>
+      <input type="time" id="tutorEndTimeInput" name="tutor_end_time">
     </label>
 
     <menu class="modal-actions">
