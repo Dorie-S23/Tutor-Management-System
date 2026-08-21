@@ -18,13 +18,14 @@
             <a href="calendar.html">Calendar</a>
             <a href="#">Messages</a>
             <a href="profile.html">Profile</a>
+            <a href="#" id="logout-link">Logout</a>
         </nav>
     </header>
 
     <main>
 
         <section aria-labelledby="welcome-heading">
-            <h2 id="welcome-heading">Welcome, [Name of Student]!</h2>
+            <h2 id="welcome-heading">Welcome!</h2>
         </section>
 
         <section aria-labelledby="stats-heading">
@@ -70,12 +71,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/session-data.js"></script>
-    <script src="../js/studentview.js"></script>
-    <script type="module">
-        import { getEntries } from '../js/storage.js';
-        const entries = await getEntries();
-        const totalHours = entries.reduce((sum, entry) => sum + Number(entry.hours), 0);
-        document.getElementById('stat-hours-volunteered').textContent = totalHours;
-    </script>
+    <script type="module" src="../js/studentview.js"></script>
 </body>
 </html>

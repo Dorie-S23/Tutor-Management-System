@@ -5,8 +5,26 @@
    from session-data.js until real scheduling exists).
    ============================================================ */
 
+import { getCurrentUser, getEntries } from './storage.js';
+
+const currentUser = getCurrentUser();
+if (!currentUser) {
+  window.location.href = 'login.html';
+  throw new Error('Not logged in');
+}
+
+const welcomeHeadingEl = document.getElementById("welcome-heading");
+const hoursVolunteeredEl = document.getElementById("stat-hours-volunteered");
 const courseListEl = document.getElementById("courseList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
+const logoutLink = document.getElementById("logout-link");
+
+welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
+
+async function renderHoursVolunteered() {
+  const entries = await getEntries();
+  hoursVolunteeredEl.textContent = entries.reduce((sum, entry) => sum + Number(entry.hours), 0);
+}
 
 async function renderCourses() {
   courseListEl.innerHTML = "";
@@ -75,7 +93,19 @@ function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+// ---------- logout ----------
+
+if (logoutLink) {
+  logoutLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("access_token");
+    window.location.href = "login.html";
+  });
+}
+
 // ---------- init ----------
 
+renderHoursVolunteered();
 renderCourses();
 renderUpcomingSessions();
