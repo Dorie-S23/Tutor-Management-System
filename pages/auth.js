@@ -1,5 +1,6 @@
 const API_URL = "http://localhost:3000";
 
+
 /* =========================
    REGISTER
    ========================= */
@@ -12,28 +13,58 @@ if (registerForm) {
 
         event.preventDefault();
 
-        const name = document.getElementById("name").value.trim();
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value;
+        const name =
+            document.getElementById("name").value.trim();
+
+        const email =
+            document.getElementById("email").value.trim();
+
+        const password =
+            document.getElementById("password").value;
+
         const confirmPassword =
             document.getElementById("confirm-password").value;
-        const role = document.getElementById("role").value;
+
+        const role =
+            document.getElementById("role").value;
 
         const message =
             document.getElementById("register-message");
 
 
-        // Check passwords
-        if (password !== confirmPassword) {
+        /* -------------------------
+           Validate Wits email
+           ------------------------- */
 
-            message.textContent = "Passwords do not match.";
+        if (!email.toLowerCase().endsWith("@wits.ac.za")) {
+
+            message.textContent =
+                "Please use a Wits email address.";
+
             message.style.color = "red";
 
             return;
         }
 
 
-        message.textContent = "Creating your account...";
+        /* -------------------------
+           Check passwords
+           ------------------------- */
+
+        if (password !== confirmPassword) {
+
+            message.textContent =
+                "Passwords do not match.";
+
+            message.style.color = "red";
+
+            return;
+        }
+
+
+        message.textContent =
+            "Creating your account...";
+
         message.style.color = "";
 
 
@@ -61,6 +92,10 @@ if (registerForm) {
             const data = await response.json();
 
 
+            /* -------------------------
+               Handle registration error
+               ------------------------- */
+
             if (!response.ok) {
 
                 message.textContent =
@@ -72,21 +107,29 @@ if (registerForm) {
             }
 
 
+            /* -------------------------
+               Registration successful
+               ------------------------- */
+
             message.textContent =
                 "Registration successful! Redirecting to login...";
 
             message.style.color = "green";
 
 
-            // Give the user a moment to see the message
             setTimeout(() => {
+
                 window.location.href = "login.html";
+
             }, 1500);
 
 
         } catch (error) {
 
-            console.error("Registration error:", error);
+            console.error(
+                "Registration error:",
+                error
+            );
 
             message.textContent =
                 "Unable to connect to the server.";
@@ -102,13 +145,15 @@ if (registerForm) {
    LOGIN
    ========================= */
 
-const loginForm = document.getElementById("login-form");
+const loginForm =
+    document.getElementById("login-form");
 
 if (loginForm) {
 
     loginForm.addEventListener("submit", async (event) => {
 
         event.preventDefault();
+
 
         const email =
             document.getElementById("email").value.trim();
@@ -120,7 +165,9 @@ if (loginForm) {
             document.getElementById("login-message");
 
 
-        message.textContent = "Logging in...";
+        message.textContent =
+            "Logging in...";
+
         message.style.color = "";
 
 
@@ -146,6 +193,10 @@ if (loginForm) {
             const data = await response.json();
 
 
+            /* -------------------------
+               Handle login error
+               ------------------------- */
+
             if (!response.ok) {
 
                 message.textContent =
@@ -157,6 +208,10 @@ if (loginForm) {
             }
 
 
+            /* -------------------------
+               Login successful
+               ------------------------- */
+
             message.textContent =
                 "Login successful!";
 
@@ -164,15 +219,24 @@ if (loginForm) {
 
 
             /*
-             * Store the session temporarily.
+             * Store the Supabase access token
+             * temporarily.
              *
-             * We will improve this when we implement
-             * proper authentication/session handling.
+             * We can improve session handling
+             * later when authentication
+             * middleware is implemented.
              */
+
             sessionStorage.setItem(
                 "access_token",
                 data.session.access_token
             );
+
+
+            /*
+             * Store the logged-in user's
+             * information.
+             */
 
             sessionStorage.setItem(
                 "user",
@@ -180,15 +244,24 @@ if (loginForm) {
             );
 
 
-            // Redirect after successful login
+            /* -------------------------
+               Redirect to main page
+               ------------------------- */
+
             setTimeout(() => {
-                window.location.href = "index.html";
+
+                window.location.href =
+                    "index.html";
+
             }, 1000);
 
 
         } catch (error) {
 
-            console.error("Login error:", error);
+            console.error(
+                "Login error:",
+                error
+            );
 
             message.textContent =
                 "Unable to connect to the server.";
