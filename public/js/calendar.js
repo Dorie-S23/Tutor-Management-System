@@ -1,5 +1,10 @@
 import { highlightActiveTab } from './nav.js';
-import { getEntriesForDate, getScheduleForDate, todayStr, clearSchedule } from './storage.js';
+import { getCurrentUser, getEntriesForDate, getScheduleForDate, todayStr, clearSchedule } from './storage.js';
+
+if (!getCurrentUser()) {
+  window.location.href = 'login.html';
+  throw new Error('Not logged in');
+}
 
 highlightActiveTab();
 
@@ -20,7 +25,7 @@ function toDateStr(year, month, day) {
   return `${y}-${m}-${d}`;
 }
 
-function render() {
+async function render() {
   const monthStart = new Date(viewYear, viewMonth, 1);
   monthLabelEl.textContent = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
@@ -75,7 +80,7 @@ function render() {
       cell.appendChild(pill);
     }
 
-    const entries = getEntriesForDate(cellDateStr);
+    const entries = await getEntriesForDate(cellDateStr);
     for (const entry of entries) {
       const pill = document.createElement('div');
       pill.className = 'calendar-session-pill';

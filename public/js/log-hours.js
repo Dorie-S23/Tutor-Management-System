@@ -1,5 +1,6 @@
 import { highlightActiveTab } from './nav.js';
 import {
+  getCurrentUser,
   addEntry,
   updateEntry,
   deleteEntry,
@@ -7,9 +8,14 @@ import {
   getWeekStart,
   addDays,
   getEntriesForWeek,
-  getWeekTotal,
   todayStr,
 } from './storage.js';
+
+const currentUser = getCurrentUser();
+if (!currentUser) {
+  window.location.href = 'login.html';
+  throw new Error('Not logged in');
+}
 
 highlightActiveTab();
 
@@ -21,7 +27,6 @@ const startTimeField = document.getElementById('startTime');
 const endTimeField = document.getElementById('endTime');
 const taskTypeField = document.getElementById('taskType');
 const subjectField = document.getElementById('subject');
-const supervisorField = document.getElementById('supervisorName');
 const notesField = document.getElementById('notes');
 const formTitle = document.getElementById('form-title');
 const submitBtn = document.getElementById('submit-btn');
@@ -65,7 +70,6 @@ function enterEditMode(entry) {
   endTimeField.value = entry.endTime || '';
   taskTypeField.value = entry.taskType || 'Tutoring';
   subjectField.value = entry.subject;
-  supervisorField.value = entry.supervisorName || '';
   notesField.value = entry.notes;
   formTitle.textContent = 'Edit entry';
   submitBtn.textContent = 'Save changes';
@@ -73,11 +77,11 @@ function enterEditMode(entry) {
   formError.hidden = true;
 }
 
-function render() {
+async function render() {
   weekLabel.textContent = formatWeekLabel(currentWeekStart);
-  weekTotalEl.textContent = getWeekTotal(currentWeekStart);
 
-  const entries = getEntriesForWeek(currentWeekStart);
+  const entries = await getEntriesForWeek(currentWeekStart);
+  weekTotalEl.textContent = entries.reduce((sum, e) => sum + Number(e.hours), 0);
   entriesBody.innerHTML = '';
   emptyState.hidden = entries.length > 0;
 
@@ -104,11 +108,11 @@ function render() {
     deleteBtn.type = 'button';
     deleteBtn.className = 'btn-danger';
     deleteBtn.textContent = 'Delete';
-    deleteBtn.addEventListener('click', () => {
+    deleteBtn.addEventListener('click', async () => {
       if (!confirm('Delete this entry?')) return;
-      deleteEntry(entry.id);
+      await deleteEntry(entry.id);
       if (entryIdField.value === entry.id) exitEditMode();
-      render();
+      await render();
     });
 
     actionsTd.append(editBtn, deleteBtn);
@@ -117,7 +121,7 @@ function render() {
   }
 }
 
-form.addEventListener('submit', (event) => {
+form.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const payload = {
@@ -127,11 +131,10 @@ form.addEventListener('submit', (event) => {
     endTime: endTimeField.value,
     taskType: taskTypeField.value,
     subject: subjectField.value.trim(),
-    supervisorName: supervisorField.value.trim(),
     notes: notesField.value.trim(),
   };
 
-  const duplicate = findDuplicateEntry(payload, entryIdField.value || null);
+  const duplicate = await findDuplicateEntry(payload, entryIdField.value || null);
   if (duplicate) {
     formError.textContent = 'An identical entry (same date, hours, task type and course code) is already logged.';
     formError.hidden = false;
@@ -140,26 +143,26 @@ form.addEventListener('submit', (event) => {
   formError.hidden = true;
 
   if (entryIdField.value) {
-    updateEntry(entryIdField.value, payload);
+    await updateEntry(entryIdField.value, payload);
   } else {
-    addEntry(payload);
+    await addEntry(payload);
   }
 
   currentWeekStart = getWeekStart(payload.date);
   exitEditMode();
-  render();
+  await render();
 });
 
 cancelEditBtn.addEventListener('click', exitEditMode);
 
-prevWeekBtn.addEventListener('click', () => {
+prevWeekBtn.addEventListener('click', async () => {
   currentWeekStart = addDays(currentWeekStart, -7);
-  render();
+  await render();
 });
 
-nextWeekBtn.addEventListener('click', () => {
+nextWeekBtn.addEventListener('click', async () => {
   currentWeekStart = addDays(currentWeekStart, 7);
-  render();
+  await render();
 });
 
-render();
+await render();
