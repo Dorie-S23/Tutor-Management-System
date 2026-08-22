@@ -31,7 +31,7 @@ async function renderCourses() {
 
   let courses;
   try {
-    const res = await fetch("/api/courses");
+    const res = await fetch(`/api/courses?userId=${encodeURIComponent(currentUser.id)}`);
     if (!res.ok) throw new Error("Failed to load courses");
     courses = await res.json();
   } catch (err) {
@@ -50,7 +50,34 @@ async function renderCourses() {
       <h3>${course.course_code}</h3>
       <p class="session-meta">${course.course_name}</p>
       <p class="session-note">${course.department}</p>
+      <button type="button" class="${course.volunteered ? "btn-cancel" : ""}">
+        ${course.volunteered ? "Volunteering ✓" : "Volunteer"}
+      </button>
     `;
+
+    const btn = article.querySelector("button");
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        if (course.volunteered) {
+          await fetch(`/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}&courseId=${course.id}`, {
+            method: "DELETE",
+          });
+          showToast(`Withdrew from ${course.course_code}`);
+        } else {
+          await fetch("/api/course-volunteers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: currentUser.id, courseId: course.id }),
+          });
+          showToast(`You volunteered for ${course.course_code}`);
+        }
+      } catch (err) {
+        showToast("Something went wrong, try again");
+      }
+      await renderCourses();
+    });
+
     courseListEl.appendChild(article);
   });
 }
