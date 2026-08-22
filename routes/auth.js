@@ -2,149 +2,571 @@ const express = require("express");
 
 const router = express.Router();
 
-// POST /api/auth/register
-router.post("/register", async (req, res) => {
-    try {
-        const { email, password, name, role } = req.body;
 
-        // Validate required fields
+/* =========================================================
+   REGISTER
+   POST /api/auth/register
+   ========================================================= */
+
+router.post("/register", async (req, res) => {
+
+    try {
+
+        const {
+            email,
+            password,
+            name,
+            role,
+            studentNumber,
+            staffId
+        } = req.body;
+
+
+        /* =====================================================
+           Validate required fields
+           ===================================================== */
+
         if (!email || !password || !name || !role) {
+
             return res.status(400).json({
-                error: "Email, password, name and role are required"
+                error:
+                    "Email, password, name and role are required"
             });
         }
 
-        // Validate role
-        const validRoles = ["student", "tutor", "organiser"];
 
-        if (!validRoles.includes(role.toLowerCase())) {
+        /* =====================================================
+           Validate Wits email
+           ===================================================== */
+
+        if (!email.toLowerCase().endsWith("@wits.ac.za")) {
+
+            return res.status(400).json({
+                error:
+                    "You must use a Wits email address"
+            });
+        }
+
+
+        /* =====================================================
+           Validate role
+           ===================================================== */
+
+        const validRoles = [
+            "student",
+            "tutor",
+            "educator",
+            "organiser"
+        ];
+
+        const userRole = role.toLowerCase();
+
+
+        if (!validRoles.includes(userRole)) {
+
             return res.status(400).json({
                 error: "Invalid role"
             });
         }
 
-        // Create authentication user
-        const { data, error } = await req.supabase.auth.signUp({
+
+        /* =====================================================
+           Validate student number
+           
+           Students and tutors require a student number
+           ===================================================== */
+
+        if (
+            (userRole === "student" ||
+             userRole === "tutor") &&
+            !studentNumber
+        ) {
+
+            return res.status(400).json({
+                error:
+                    "Student number is required for students and tutors"
+            });
+        }
+
+
+        /* =====================================================
+           Validate organiser staff ID
+           ===================================================== */
+
+        if (userRole === "organiser" && !staffId) {
+
+            return res.status(400).json({
+                error:
+                    "Staff ID is required for organisers"
+            });
+        }
+
+
+        /* =====================================================
+           Create Supabase authentication user
+           ===================================================== */
+
+        const {
+            data,
+            error
+        } = await req.supabase.auth.signUp({
             email,
             password
         });
 
+
         if (error) {
+
+            console.error(
+                "Supabase authentication error:",
+                error
+            );
+
             return res.status(400).json({
                 error: error.message
             });
         }
 
-        // Make sure Supabase returned a user
+
+        /* =====================================================
+           Make sure authentication user was created
+           ===================================================== */
+
         if (!data.user) {
+
             return res.status(400).json({
                 error: "User was not created"
             });
         }
 
-        // Add user to public.users
-        const { error: userError } = await req.supabase
+
+        const userId = data.user.id;
+
+
+        /* =====================================================
+           Add user to users table
+           
+           Matches:
+           
+           users
+           ----------------
+           id
+           email
+           name
+           role
+           ===================================================== */
+
+        const {
+            error: userError
+        } = await req.supabase
             .from("users")
             .insert({
-                id: data.user.id,
+                id: userId,
                 email: email,
                 name: name,
-                role: role.toLowerCase()
+                role: userRole
             });
 
+
         if (userError) {
-            console.error("Database error:", userError);
+
+            console.error(
+                "Users table error:",
+                userError
+            );
 
             return res.status(500).json({
-                error: "User was created in authentication, but could not be added to the database"
+                error:
+                    "User was created in authentication, but could not be added to the users table",
+
+                details: userError.message,
+                hint: userError.hint
             });
         }
 
-        // Successful registration
-        res.status(201).json({
-            message: "Registration successful",
-            user: {
-                id: data.user.id,
-                email: email,
-                name: name,
-                role: role.toLowerCase()
+
+        /* =====================================================
+           STUDENT
+           
+           students
+           ----------------
+           id
+           name
+           email
+           student_no
+           degree
+           ===================================================== */
+
+        if (userRole === "student") {
+
+            const {
+                error: studentError
+            } = await req.supabase
+                .from("students")
+                .insert({
+                    id: userId,
+                    name: name,
+                    email: email,
+                    student_no: studentNumber
+                });
+
+
+            if (studentError) {
+
+                console.error(
+                    "Students table error:",
+                    studentError
+                );
+
+                return res.status(500).json({
+                    error:
+                        "User was created, but could not be added to the students table",
+
+                    details: studentError.message,
+                    hint: studentError.hint
+                });
             }
+        }
+
+
+        /* =====================================================
+           TUTOR
+           
+           tutors
+           ----------------
+           id
+           student_number
+           email
+           name
+           hourly_rate
+           academic_level
+           ===================================================== */
+
+        else if (userRole === "tutor") {
+
+            const {
+                error: tutorError
+            } = await req.supabase
+                .from("tutors")
+                .insert({
+                    id: userId,
+                    student_number: studentNumber,
+                    email: email,
+                    name: name
+                });
+
+
+            if (tutorError) {
+
+                console.error(
+                    "Tutors table error:",
+                    tutorError
+                );
+
+                return res.status(500).json({
+                    error:
+                        "User was created, but could not be added to the tutors table",
+
+                    details: tutorError.message,
+                    hint: tutorError.hint
+                });
+            }
+        }
+
+
+        /* =====================================================
+           EDUCATOR
+           
+           educators
+           ----------------
+           id
+           ===================================================== */
+
+        else if (userRole === "educator") {
+
+            const {
+                error: educatorError
+            } = await req.supabase
+                .from("educators")
+                .insert({
+                    id: userId
+                });
+
+
+            if (educatorError) {
+
+                console.error(
+                    "Educators table error:",
+                    educatorError
+                );
+
+                return res.status(500).json({
+                    error:
+                        "User was created, but could not be added to the educators table",
+
+                    details: educatorError.message,
+                    hint: educatorError.hint
+                });
+            }
+        }
+
+
+        /* =====================================================
+           ORGANISER
+           
+           organisers
+           ----------------
+           id
+           staff_id
+           full_name
+           email
+           ===================================================== */
+
+        else if (userRole === "organiser") {
+
+            const {
+                error: organiserError
+            } = await req.supabase
+                .from("organisers")
+                .insert({
+                    id: userId,
+                    staff_id: staffId,
+                    full_name: name,
+                    email: email
+                });
+
+
+            if (organiserError) {
+
+                console.error(
+                    "Organisers table error:",
+                    organiserError
+                );
+
+                return res.status(500).json({
+                    error:
+                        "User was created, but could not be added to the organisers table",
+
+                    details: organiserError.message,
+                    hint: organiserError.hint
+                });
+            }
+        }
+
+
+        /* =====================================================
+           Successful registration
+           ===================================================== */
+
+        return res.status(201).json({
+
+            message:
+                "Registration successful",
+
+            user: {
+
+                id: userId,
+
+                email: email,
+
+                name: name,
+
+                role: userRole
+
+            }
+
         });
 
-    } catch (error) {
-        console.error("Registration error:", error);
+    }
 
-        res.status(500).json({
+
+    catch (error) {
+
+        console.error(
+            "Registration error:",
+            error
+        );
+
+        return res.status(500).json({
             error: "Internal server error"
         });
     }
 });
 
 
-// POST /api/auth/login
-router.post("/login", async (req, res) => {
-    try {
-        const { email, password } = req.body;
 
-        // Validate required fields
+/* =========================================================
+   LOGIN
+   POST /api/auth/login
+   ========================================================= */
+
+router.post("/login", async (req, res) => {
+
+    try {
+
+        const {
+            email,
+            password
+        } = req.body;
+
+
+        /* =====================================================
+           Validate required fields
+           ===================================================== */
+
         if (!email || !password) {
+
             return res.status(400).json({
-                error: "Email and password are required"
+                error:
+                    "Email and password are required"
             });
         }
 
-        // Authenticate user with Supabase
-        const { data, error } = await req.supabase.auth.signInWithPassword({
+
+        /* =====================================================
+           Authenticate with Supabase
+           ===================================================== */
+
+        const {
+            data,
+            error
+        } = await req.supabase.auth.signInWithPassword({
+
             email,
+
             password
+
         });
 
+
         if (error) {
+
+            console.error(
+                "Supabase login error:",
+                error
+            );
+
             return res.status(401).json({
                 error: error.message
             });
         }
 
-        // Make sure a user was returned
+
+        /* =====================================================
+           Make sure user exists
+           ===================================================== */
+
         if (!data.user) {
+
             return res.status(401).json({
-                error: "Login failed"
+                error:
+                    "Login failed"
             });
         }
 
-        // Look up the user's role
-        const { data: userRow, error: userError } = await req.supabase
+
+        /* =====================================================
+           Get user's role from users table
+
+           users
+           ----------------
+           id
+           email
+           name
+           role
+           ===================================================== */
+
+        const {
+            data: profile,
+            error: profileError
+        } = await req.supabase
             .from("users")
             .select("role")
             .eq("id", data.user.id)
             .single();
 
-        if (userError) {
-            console.error("Database error:", userError);
+
+        if (profileError) {
+
+            console.error(
+                "Error retrieving user profile:",
+                profileError
+            );
 
             return res.status(500).json({
-                error: "Logged in, but could not load user role"
+                error:
+                    "Could not retrieve user role",
+
+                details:
+                    profileError.message,
+
+                hint:
+                    profileError.hint
             });
         }
 
-        // Return successful login
-        res.status(200).json({
-            message: "Login successful",
+
+        /* =====================================================
+           Make sure role exists
+           ===================================================== */
+
+        if (!profile || !profile.role) {
+
+            return res.status(500).json({
+                error:
+                    "User does not have a role"
+            });
+        }
+
+
+        /* =====================================================
+           Successful login
+           ===================================================== */
+
+        return res.status(200).json({
+
+            message:
+                "Login successful",
+
             user: {
-                id: data.user.id,
-                email: data.user.email,
-                role: userRow.role
+
+                id:
+                    data.user.id,
+
+                email:
+                    data.user.email,
+
+                role:
+                    profile.role
+
             },
-            session: data.session
+
+            session:
+                data.session
+
         });
 
-    } catch (error) {
-        console.error("Login error:", error);
+    }
 
-        res.status(500).json({
-            error: "Internal server error"
+
+    catch (error) {
+
+        console.error(
+            "Login error:",
+            error
+        );
+
+        return res.status(500).json({
+            error:
+                "Internal server error"
         });
     }
 });
+
+
+
+/* =========================================================
+   EXPORT ROUTER
+   ========================================================= */
 
 module.exports = router;
