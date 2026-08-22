@@ -481,7 +481,7 @@ router.post("/login", async (req, res) => {
             error: profileError
         } = await req.supabase
             .from("users")
-            .select("role")
+            .select("name, role")
             .eq("id", data.user.id)
             .single();
 
@@ -535,6 +535,9 @@ router.post("/login", async (req, res) => {
 
                 email:
                     data.user.email,
+
+                name:
+                    profile.name,
 
                 role:
                     profile.role
