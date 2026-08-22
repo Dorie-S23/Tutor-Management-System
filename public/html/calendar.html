@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendar | Tutor Management System</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Tutor Dashboard</h1>
+    <nav class="tab-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="log-hours.html">Log Hours</a>
+      <a href="calendar.html">Calendar</a>
+      <a href="timesheets.html">Timesheets</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>Import timetable</h2>
+      <p class="card-hint">Upload your Wits "My Class Schedule" PDF export to add your classes to the calendar. They'll repeat weekly until the date you choose below.</p>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="timetable-file">Timetable PDF</label>
+          <input type="file" id="timetable-file" accept="application/pdf" />
+        </div>
+        <div class="form-field">
+          <label for="semester-start">Classes start on</label>
+          <input type="date" id="semester-start" />
+        </div>
+        <div class="form-field">
+          <label for="semester-end">Repeat weekly until</label>
+          <input type="date" id="semester-end" />
+        </div>
+        <div class="form-actions">
+          <button type="button" id="parse-timetable-btn" class="btn-primary">Parse PDF</button>
+        </div>
+      </div>
+      <details class="paste-fallback">
+        <summary>Or paste timetable data instead</summary>
+        <p class="card-hint">For PDFs with no extractable text (image/scanned exports), paste a JSON array of classes here.</p>
+        <div class="form-field full-width">
+          <label for="timetable-json">Timetable JSON</label>
+          <textarea id="timetable-json" rows="8" placeholder='[{"title":"MATH 2016A - E Lecture","dayName":"Monday","firstDate":"2026-08-10","startTime":"10:15","endTime":"12:00","venue":"OS1/U1/OS4"}]'></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="parse-json-btn" class="btn-secondary">Use pasted data</button>
+        </div>
+      </details>
+
+      <p id="timetable-status" class="card-hint" hidden></p>
+
+      <div id="timetable-review" hidden>
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Day</th>
+              <th>Time</th>
+              <th>Class</th>
+              <th>Venue</th>
+            </tr>
+          </thead>
+          <tbody id="timetable-review-body"></tbody>
+        </table>
+        <div class="form-actions">
+          <button type="button" id="save-timetable-btn" class="btn-primary">Add selected to calendar</button>
+          <button type="button" id="cancel-timetable-btn" class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="calendar-nav">
+        <button type="button" id="prev-month-btn" class="btn-secondary">&larr; Prev</button>
+        <h2 id="calendar-month-label"></h2>
+        <button type="button" id="next-month-btn" class="btn-secondary">Next &rarr;</button>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="clear-classes-btn" class="btn-danger">Clear class times</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+  </main>
+
+  <script type="module" src="../js/calendar.js"></script>
+  <script type="module" src="../js/timetable-import.js"></script>
+</body>
+</html>

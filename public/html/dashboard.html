@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard | Tutor Management System</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Tutor Dashboard</h1>
+    <nav class="tab-nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="log-hours.html">Log Hours</a>
+      <a href="calendar.html">Calendar</a>
+      <a href="timesheets.html">Timesheets</a>
+      
+    </nav>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>Welcome</h2>
+      <p>Use the sections below to log your tutoring hours for the week or review your timesheets.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-tile">
+        <span class="stat-label">Hours worked this week</span>
+        <span class="stat-value" id="stat-hours-worked">0</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Hours remaining</span>
+        <span class="stat-value" id="stat-hours-remaining">0</span>
+        <span class="stat-sublabel" id="stat-hours-sublabel"></span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-label">Upcoming session</span>
+        <p class="upcoming-empty">Coming soon.</p>
+      </div>
+    </div>
+
+    <div class="tile-grid">
+      <a class="tile" href="log-hours.html">
+        <h3>Log Hours</h3>
+        <p>Record the hours you've tutored this week.</p>
+      </a>
+      <a class="tile" href="timesheets.html">
+        <h3>Timesheets</h3>
+        <p>Review your submitted timesheets.</p>
+      </a>
+      <a class="tile" href="calendar.html">
+        <h3>Calendar</h3>
+        <p>See your tutoring sessions laid out by month.</p>
+      </a>
+    </div>
+  </main>
+
+  <script type="module" src="../js/dashboard.js"></script>
+</body>
+</html>

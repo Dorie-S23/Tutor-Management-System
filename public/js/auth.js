@@ -339,7 +339,7 @@ if (loginForm) {
 
                     case "tutor":
                         window.location.href =
-                            "tutor.html";
+                            "dashboard.html";
                         break;
 
 

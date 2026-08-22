@@ -9,6 +9,8 @@ const PORT = process.env.PORT || 3000;
 
 const authRoutes = require("./routes/auth");
 const coursesRoutes = require("./server/routes/courses");
+const tutorsRoutes = require("./server/routes/tutors");
+const timetableRoutes = require("./server/timetableRoutes");
 
 // Supabase client
 const supabase = createClient(
@@ -62,6 +64,12 @@ app.use("/api/auth", authRoutes);
 
 // Course management routes
 app.use("/api/courses", coursesRoutes);
+
+// Tutor management routes
+app.use("/api/tutors", tutorsRoutes);
+
+// Timetable parsing routes
+app.use("/api", timetableRoutes);
 
 // Start server
 app.listen(PORT, () => {

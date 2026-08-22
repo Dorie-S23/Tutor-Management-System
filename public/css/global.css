@@ -644,6 +644,112 @@ input[type="search"]:focus-visible{
   transform: translate(-50%, 0);
 }
 
+/* ---------- tutors page ---------- */
+
+.header-left{ flex: 1; }
+
+.tutors-layout{
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  padding: 28px clamp(20px, 4vw, 48px);
+  align-items: start;
+}
+
+@media (max-width: 860px){
+  .tutors-layout{ grid-template-columns: 1fr; }
+}
+
+.card{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 20px 22px;
+}
+
+.card h2{
+  font-size: 15px;
+  font-family: 'Space Grotesk', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.form-field{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.form-field label{
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.form-field input,
+.form-field select{
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--ink);
+}
+
+.form-field input:focus-visible,
+.form-field select:focus-visible{
+  outline: 2px solid var(--navy);
+  outline-offset: 1px;
+}
+
+.form-actions{
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.tutors-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.tutors-table th{
+  text-align: left;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tutors-table td{
+  padding: 10px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink);
+}
+
+.row-actions{
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-small-neutral{
+  color: var(--ink-soft);
+  border-color: var(--line);
+}
+.btn-small-neutral:hover{ background: var(--line-soft); }
+
 /* ---------- accessibility ---------- */
 
 :focus-visible{
