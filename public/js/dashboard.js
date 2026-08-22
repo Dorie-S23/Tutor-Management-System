@@ -8,6 +8,18 @@ highlightActiveTab();
 const hoursWorkedEl = document.getElementById('stat-hours-worked');
 const hoursRemainingEl = document.getElementById('stat-hours-remaining');
 const hoursSublabelEl = document.getElementById('stat-hours-sublabel');
+const welcomeHeadingEl = document.getElementById('welcome-heading');
+
+function renderWelcome() {
+  const raw = sessionStorage.getItem('user');
+  if (!raw) return;
+  try {
+    const user = JSON.parse(raw);
+    if (user.name) welcomeHeadingEl.textContent = `Welcome, ${user.name}`;
+  } catch {
+    // sessionStorage.user wasn't valid JSON — leave the default heading.
+  }
+}
 
 function renderHoursStats() {
   const weekStart = getWeekStart(todayStr());
@@ -28,3 +40,4 @@ function renderHoursStats() {
 }
 
 renderHoursStats();
+renderWelcome();
