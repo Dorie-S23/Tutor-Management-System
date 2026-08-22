@@ -1,86 +1,121 @@
-// localStorage-backed data layer for logged tutoring hours.
-// Every read/write to persisted data goes through the functions below, so
-// swapping localStorage for real API calls later only means editing this file.
+// Supabase-backed data layer for logged tutoring hours. Every read/write
+// goes through the functions below and the /api/hour-entries routes
+// (server/routes/), scoped to whichever user is signed in (see
+// getCurrentUser).
 
-const STORAGE_KEY = 'tutorHours.entries';
-
-function readAll() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
+export function getCurrentUser() {
+  const raw = sessionStorage.getItem('user');
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return JSON.parse(raw);
   } catch {
-    return [];
+    return null;
   }
 }
 
-function writeAll(entries) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-}
-
-export function getEntries() {
-  return readAll().sort((a, b) => a.date.localeCompare(b.date));
-}
-
-export function getEntriesForDate(dateStr) {
-  return readAll().filter((e) => e.date === dateStr);
-}
-
-export function addEntry({ date, hours, subject, taskType, supervisorName, startTime, endTime, notes }) {
-  const now = new Date().toISOString();
-  const entry = {
-    id: crypto.randomUUID(),
-    date,
-    hours,
-    subject: subject || '',
-    taskType: taskType || '',
-    supervisorName: supervisorName || '',
-    startTime: startTime || '',
-    endTime: endTime || '',
-    notes: notes || '',
-    createdAt: now,
-    updatedAt: now,
+function fromApiEntry(row) {
+  return {
+    id: row.id,
+    date: row.date,
+    hours: Number(row.hours),
+    startTime: row.start_time || '',
+    endTime: row.end_time || '',
+    taskType: row.task_type || 'Tutoring',
+    subject: row.subject || '',
+    notes: row.notes || '',
   };
-  const entries = readAll();
-  entries.push(entry);
-  writeAll(entries);
-  return entry;
 }
 
-export function updateEntry(id, changes) {
-  const entries = readAll();
-  const index = entries.findIndex((e) => e.id === id);
-  if (index === -1) return null;
-  entries[index] = { ...entries[index], ...changes, updatedAt: new Date().toISOString() };
-  writeAll(entries);
-  return entries[index];
+async function readJson(response, failureMessage) {
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || failureMessage);
+  }
+  return response.json();
 }
 
-export function deleteEntry(id) {
-  const entries = readAll().filter((e) => e.id !== id);
-  writeAll(entries);
+// --- Entries -------------------------------------------------------------
+
+let entriesCache = null;
+
+async function fetchEntries() {
+  const user = getCurrentUser();
+  if (!user) return [];
+  const res = await fetch(`/api/hour-entries?userId=${encodeURIComponent(user.id)}`);
+  const data = await readJson(res, 'Failed to load hours');
+  return data.map(fromApiEntry);
 }
 
-// Finds an existing entry with the same date, hours, subject and task type
-// (case-insensitive), so the UI can block accidental duplicate logging.
-// Pass excludeId when checking an in-progress edit so it doesn't match itself.
-export function findDuplicateEntry({ date, hours, subject, taskType }, excludeId = null) {
-  const normalizedSubject = (subject || '').trim().toLowerCase();
-  const normalizedTaskType = (taskType || '').trim().toLowerCase();
+export async function getEntries() {
+  if (!entriesCache) entriesCache = await fetchEntries();
+  return [...entriesCache].sort((a, b) => a.date.localeCompare(b.date));
+}
 
+export async function addEntry(entry) {
+  const user = getCurrentUser();
+  const res = await fetch('/api/hour-entries', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: user.id, ...entry }),
+  });
+  const row = await readJson(res, 'Failed to add entry');
+  entriesCache = null;
+  return fromApiEntry(row);
+}
+
+export async function updateEntry(id, changes) {
+  const res = await fetch(`/api/hour-entries/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+  });
+  const row = await readJson(res, 'Failed to update entry');
+  entriesCache = null;
+  return fromApiEntry(row);
+}
+
+export async function deleteEntry(id) {
+  const res = await fetch(`/api/hour-entries/${id}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to delete entry');
+  }
+  entriesCache = null;
+}
+
+// Flags an entry with the same date, hours, task type and course code as an
+// existing one (ignoring the entry currently being edited, if any).
+export async function findDuplicateEntry({ date, hours, taskType, subject }, excludeId = null) {
+  const entries = await getEntries();
   return (
-    readAll().find((e) => {
-      if (e.id === excludeId) return false;
-      return (
+    entries.find(
+      (e) =>
+        e.id !== excludeId &&
         e.date === date &&
         Number(e.hours) === Number(hours) &&
-        (e.subject || '').trim().toLowerCase() === normalizedSubject &&
-        (e.taskType || '').trim().toLowerCase() === normalizedTaskType
-      );
-    }) || null
+        (e.taskType || 'Tutoring') === (taskType || 'Tutoring') &&
+        (e.subject || '') === (subject || '')
+    ) || null
   );
 }
+
+export async function getEntriesForWeek(weekStart) {
+  const weekEnd = addDays(weekStart, 6);
+  const entries = await getEntries();
+  return entries.filter((e) => e.date >= weekStart && e.date <= weekEnd);
+}
+
+export async function getWeekTotal(weekStart) {
+  const entries = await getEntriesForWeek(weekStart);
+  return entries.reduce((sum, e) => sum + Number(e.hours), 0);
+}
+
+export async function getEntriesForDate(dateStr) {
+  const entries = await getEntries();
+  return entries.filter((e) => e.date === dateStr);
+}
+
+// --- Date helpers (pure, no network) ----------------------------------
 
 // Monday-based week start for a given 'YYYY-MM-DD' date string.
 export function getWeekStart(dateStr) {
@@ -97,15 +132,6 @@ export function addDays(dateStr, days) {
   const date = new Date(y, m - 1, d);
   date.setDate(date.getDate() + days);
   return toDateStr(date);
-}
-
-export function getEntriesForWeek(weekStart) {
-  const weekEnd = addDays(weekStart, 6);
-  return getEntries().filter((e) => e.date >= weekStart && e.date <= weekEnd);
-}
-
-export function getWeekTotal(weekStart) {
-  return getEntriesForWeek(weekStart).reduce((sum, e) => sum + Number(e.hours), 0);
 }
 
 function toDateStr(date) {
