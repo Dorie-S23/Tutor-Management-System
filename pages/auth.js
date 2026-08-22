@@ -2,16 +2,75 @@ const API_URL = "http://localhost:3000";
 
 
 /* =========================
+   STUDENT NUMBER FIELD
+   ========================= */
+
+const roleSelect =
+    document.getElementById("role");
+
+const studentNumberGroup =
+    document.getElementById("student-number-group");
+
+const studentNumberInput =
+    document.getElementById("student-number");
+
+const staffIdGroup =
+    document.getElementById("staff-id-group");
+
+const staffIdInput =
+    document.getElementById("staff-id");
+
+if (roleSelect) {
+
+    roleSelect.addEventListener("change", () => {
+
+        if (roleSelect.value === "student" || roleSelect.value === "tutor") {
+
+            // Show student number field
+            studentNumberGroup.style.display = "block";
+
+            // Make student number required
+            studentNumberInput.required = true;
+
+        }
+        if(roleSelect.value === "organiser"){
+            staffIdGroup.style.display = "block";
+
+            staffIdInput.required = true;
+        } 
+        
+        
+        else {
+
+            // Hide student number field
+            studentNumberGroup.style.display = "none";
+
+            // Clear student number
+            studentNumberInput.value = "";
+
+            // No longer required
+            studentNumberInput.required = false;
+        }
+
+    });
+}
+
+
+
+/* =========================
    REGISTER
    ========================= */
 
-const registerForm = document.getElementById("register-form");
+const registerForm =
+    document.getElementById("register-form");
+
 
 if (registerForm) {
 
     registerForm.addEventListener("submit", async (event) => {
 
         event.preventDefault();
+
 
         const name =
             document.getElementById("name").value.trim();
@@ -27,6 +86,9 @@ if (registerForm) {
 
         const role =
             document.getElementById("role").value;
+
+        const studentNumber =
+            document.getElementById("student-number").value.trim();
 
         const message =
             document.getElementById("register-message");
@@ -62,6 +124,21 @@ if (registerForm) {
         }
 
 
+        /* -------------------------
+           Check student number
+           ------------------------- */
+
+        if (role === "student" && !studentNumber) {
+
+            message.textContent =
+                "Student number is required for students.";
+
+            message.style.color = "red";
+
+            return;
+        }
+
+
         message.textContent =
             "Creating your account...";
 
@@ -83,13 +160,15 @@ if (registerForm) {
                         name,
                         email,
                         password,
-                        role
+                        role,
+                        studentNumber
                     })
                 }
             );
 
 
-            const data = await response.json();
+            const data =
+                await response.json();
 
 
             /* -------------------------
@@ -119,7 +198,8 @@ if (registerForm) {
 
             setTimeout(() => {
 
-                window.location.href = "login.html";
+                window.location.href =
+                    "login.html";
 
             }, 1500);
 
@@ -141,12 +221,14 @@ if (registerForm) {
 }
 
 
+
 /* =========================
    LOGIN
    ========================= */
 
 const loginForm =
     document.getElementById("login-form");
+
 
 if (loginForm) {
 
@@ -190,7 +272,8 @@ if (loginForm) {
             );
 
 
-            const data = await response.json();
+            const data =
+                await response.json();
 
 
             /* -------------------------
@@ -221,10 +304,6 @@ if (loginForm) {
             /*
              * Store the Supabase access token
              * temporarily.
-             *
-             * We can improve session handling
-             * later when authentication
-             * middleware is implemented.
              */
 
             sessionStorage.setItem(
@@ -245,13 +324,42 @@ if (loginForm) {
 
 
             /* -------------------------
-               Redirect to main page
+               Redirect based on role
                ------------------------- */
 
             setTimeout(() => {
 
-                window.location.href =
-                    "index.html";
+                switch (data.user.role) {
+
+                    case "student":
+                        window.location.href =
+                            "student.html";
+                        break;
+
+
+                    case "tutor":
+                        window.location.href =
+                            "tutor.html";
+                        break;
+
+
+                    case "educator":
+                        window.location.href =
+                            "educator.html";
+                        break;
+
+
+                    case "organiser":
+                        window.location.href =
+                            "organiser.html";
+                        break;
+
+
+                    default:
+                        window.location.href =
+                            "index.html";
+                        break;
+                }
 
             }, 1000);
 
