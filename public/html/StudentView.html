@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyConnect | Student Volunteer</title>
+    <link rel="stylesheet" href="../css/global.css">
+</head>
+
+<body class="student-app">
+
+    <header>
+
+        <nav aria-label="Main navigation">
+            <a href="StudentView.html" aria-current="page">Dashboard</a>
+            <a href="my-sessions.html">My Sessions</a>
+            <a href="#">Find Students</a>
+            <a href="#">Messages</a>
+            <a href="profile.html">Profile</a>
+            <a href="#" id="logout-button">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+
+        <section aria-labelledby="welcome-heading">
+            <h2 id="welcome-heading">Welcome, Dorsa!</h2>
+        </section>
+
+        <section aria-labelledby="stats-heading">
+
+            <article>
+                <h3 id="stat-students-helped">12</h3>
+                <p>Students Helped</p>
+            </article>
+
+            <article>
+                <h3>18</h3>
+                <p>Hours Volunteered</p>
+            </article>
+
+        </section>
+
+        <section aria-labelledby="volunteer-heading">
+            <header>
+                <h2 id="volunteer-heading">Open Sessions</h2>
+                <p>Sessions nobody has picked up yet. Volunteer for one that works for you.</p>
+            </header>
+
+            <section aria-label="Open sessions" id="openSessionsList">
+                <!-- rendered by studentview.js -->
+            </section>
+        </section>
+
+        <section aria-labelledby="sessions-heading">
+
+            <header>
+                <h2 id="sessions-heading">Upcoming Sessions</h2>
+                <a href="#">View all</a>
+            </header>
+
+            <div id="upcomingSessionsList">
+                <!-- rendered by studentview.js -->
+            </div>
+
+        </section>
+
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="../js/session-data.js"></script>
+    <script src="../js/studentview.js"></script>
+    <script src="../js/logout.js"></script>
+</body>
+</html>

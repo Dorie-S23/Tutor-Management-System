@@ -333,7 +333,7 @@ if (loginForm) {
 
                     case "student":
                         window.location.href =
-                            "student.html";
+                            "StudentView.html";
                         break;
 
 
