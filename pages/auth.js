@@ -33,7 +33,7 @@ if (roleSelect) {
             studentNumberInput.required = true;
 
         }
-        if(roleSelect.value === "organiser"){
+        else if(roleSelect.value === "organiser"){
             staffIdGroup.style.display = "block";
 
             staffIdInput.required = true;
