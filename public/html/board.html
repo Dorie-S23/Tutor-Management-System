@@ -75,27 +75,15 @@
         <!-- injected: filled or empty assignment -->
       </section>
 
-      <section class="assign-panel" aria-labelledby="assignHeading">
+      <section class="assign-panel" aria-labelledby="applicantsHeading">
         <header class="assign-panel-head">
-          <h3 id="assignHeading">Assign a tutor</h3>
-          <search>
-            <input type="search" id="tutorSearch" placeholder="Find a tutor…" aria-label="Search tutors">
-          </search>
+          <h3 id="applicantsHeading">Applications</h3>
         </header>
 
-        <p class="hint">Marks, timetable and hours are checked as you look — nothing is validated only after you save.</p>
+        <p class="hint">Approve fills an open tutor spot on this course; reject frees it up for someone else.</p>
 
-        <ul class="tutor-list" id="tutorList"><!-- injected --></ul>
-
-        <footer class="confirm-bar" id="confirmBar" hidden>
-          <p class="confirm-info">
-            Assigning <strong id="confirmName"></strong> to <strong id="confirmCourse"></strong>
-          </p>
-          <menu class="confirm-actions">
-            <li><button class="btn btn-ghost" id="cancelBtn" type="button">Cancel</button></li>
-            <li><button class="btn btn-primary" id="confirmBtn" type="button">Confirm assignment</button></li>
-          </menu>
-        </footer>
+        <ul class="tutor-list" id="applicantList"><!-- injected --></ul>
+        <p class="empty-copy" id="applicantsEmpty" hidden>No tutors have applied for this course yet.</p>
       </section>
 
     </article>
