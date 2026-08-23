@@ -14,6 +14,21 @@ router.get('/', async (req, res) => {
   res.json(data);
 });
 
+// GET /api/tutors/:id — a single tutor
+router.get('/:id', async (req, res) => {
+  const { data, error } = await supabase
+    .from('tutors')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return res.status(404).json({ error: 'Tutor not found' });
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
+});
+
 // POST /api/tutors — add a new tutor
 router.post('/', async (req, res) => {
   const { student_number, email, name, hourly_rate, academic_level } = req.body;

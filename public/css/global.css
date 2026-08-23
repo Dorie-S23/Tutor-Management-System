@@ -229,6 +229,9 @@ input[type="search"]:focus-visible{
 
 .status-pill.filled{ background: var(--green-bg); color: var(--green); border-color: var(--green-line); }
 .status-pill.open{ background: var(--amber-bg); color: var(--amber); border-color: var(--amber-line); }
+.status-pill.pending{ background: var(--amber-bg); color: var(--amber); border-color: var(--amber-line); }
+.status-pill.approved{ background: var(--green-bg); color: var(--green); border-color: var(--green-line); }
+.status-pill.rejected{ background: var(--red-bg); color: var(--red); border-color: var(--red-line); }
 
 /* ---------- detail pane ---------- */
 
@@ -516,6 +519,17 @@ input[type="search"]:focus-visible{
   cursor: pointer;
 }
 .btn-small:hover{ background: var(--red-bg); }
+
+.btn-small.approve{ color: var(--green); border-color: var(--green-line); }
+.btn-small.approve:hover{ background: var(--green-bg); }
+.btn-small:disabled{ opacity: 0.5; cursor: not-allowed; }
+.btn-small:disabled:hover{ background: transparent; }
+
+.applicant-actions{
+  display: flex;
+  gap: 6px;
+  margin-left: 8px;
+}
 
 /* ---------- add course ---------- */
 
@@ -1452,6 +1466,48 @@ body.tutor-app{
 .tutor-app .tile p{
   margin: 0;
   color: var(--ta-text-muted);
+  font-size: 0.9rem;
+}
+
+.tutor-app .course-meta{
+  margin: -0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ta-text-muted);
+  background: var(--ta-bg);
+  border: 1px solid var(--ta-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+}
+
+.tutor-app .applications-list{
+  margin-top: 1.25rem;
+}
+
+.tutor-app .applications-list h3{
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ta-text-muted);
+  margin: 0 0 0.6rem;
+}
+
+.tutor-app .applications-list ul{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tutor-app .application-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ta-border);
+  border-radius: 6px;
   font-size: 0.9rem;
 }
 
