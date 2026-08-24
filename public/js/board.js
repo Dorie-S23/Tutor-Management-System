@@ -1,14 +1,9 @@
 const COURSES = [];
 
-const TUTORS = [];
-
 // ---------- state ----------
 
-// assignments: courseId -> tutorId | null
-const assignments = {};
-
 let activeCourseId = null;
-let pendingTutorId = null; // tutor picked but not yet confirmed
+let tutorCount = 0; // total tutors in the system, for the header stat
 
 // ---------- data loading ----------
 
@@ -38,10 +33,7 @@ async function fetchCourses(){
     if (!res.ok) throw new Error(rows.error || "Failed to load courses");
 
     COURSES.length = 0;
-    rows.forEach(row => {
-      COURSES.push(mapCourseRow(row));
-      if (!(row.id in assignments)) assignments[row.id] = null;
-    });
+    rows.forEach(row => COURSES.push(mapCourseRow(row)));
   } catch (err) {
     showToast("Couldn't load courses from the database.");
   }
@@ -49,57 +41,22 @@ async function fetchCourses(){
   renderDetail();
 }
 
+async function fetchTutorCount(){
+  try {
+    const res = await fetch("/api/tutors");
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load tutors");
+    tutorCount = rows.length;
+  } catch (err) {
+    tutorCount = 0;
+  }
+  statTutorsEl.textContent = tutorCount;
+}
+
 // ---------- helpers ----------
 
 function initials(name){
   return name.split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function timeToMinutes(t){
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function overlaps(a, b){
-  if (a.day !== b.day) return false;
-  return timeToMinutes(a.start) < timeToMinutes(b.end) &&
-         timeToMinutes(b.start) < timeToMinutes(a.end);
-}
-
-// hours a tutor already carries across CONFIRMED assignments, excluding one course
-function hoursAssigned(tutorId, excludeCourseId = null){
-  return COURSES.reduce((sum, course) => {
-    if (course.id === excludeCourseId) return sum;
-    return assignments[course.id] === tutorId ? sum + course.hoursNeeded : sum;
-  }, 0);
-}
-
-// sessions a tutor is already committed to via confirmed assignments
-function committedSessions(tutorId, excludeCourseId = null){
-  return COURSES
-    .filter(c => c.id !== excludeCourseId && assignments[c.id] === tutorId)
-    .map(c => ({ ...c.session, sourceCourse: c }));
-}
-
-// core validation: given a tutor and the course being staffed, work out status
-function evaluate(tutor, course){
-  // 1. marks
-  const mark = tutor.marks[course.id];
-  const marksOk = typeof mark === "number" && mark >= course.minMark;
-
-  // 2. timetable clash — personal busy times + other confirmed teaching sessions
-  const allBusy = [...tutor.busy, ...committedSessions(tutor.id, course.id)];
-  const clash = allBusy.find(b => overlaps(b, course.session));
-  const clashOk = !clash;
-
-  // 3. hours remaining this week
-  const already = hoursAssigned(tutor.id, course.id);
-  const remaining = tutor.weeklyHours - already;
-  const hoursOk = remaining >= course.hoursNeeded;
-
-  const eligible = marksOk && clashOk && hoursOk;
-
-  return { mark, marksOk, clash, clashOk, remaining, hoursOk, eligible };
 }
 
 // ---------- rendering: course rail ----------
@@ -111,9 +68,8 @@ const statTutorsEl = document.getElementById("statTutors");
 
 function renderCourseList(){
   const query = courseSearchEl.value.trim().toLowerCase();
-  const filled = COURSES.filter(c => assignments[c.id]).length;
+  const filled = COURSES.filter(c => c.tutorsNeeded && c.tutorsAssigned >= c.tutorsNeeded).length;
   statFilledEl.textContent = `${filled} / ${COURSES.length}`;
-  statTutorsEl.textContent = TUTORS.length;
 
   courseListEl.innerHTML = "";
 
@@ -121,8 +77,7 @@ function renderCourseList(){
     .filter(c => !query || c.code.toLowerCase().includes(query) || c.name.toLowerCase().includes(query))
     .forEach(course => {
       const li = document.createElement("li");
-      const isFilled = !!assignments[course.id];
-      const tutorName = isFilled ? TUTORS.find(t => t.id === assignments[course.id]).name : null;
+      const isFull = !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
 
       const btn = document.createElement("button");
       btn.type = "button";
@@ -132,8 +87,8 @@ function renderCourseList(){
         <span class="course-code">${course.code}</span>
         <span class="course-name">${course.name}</span>
         <div class="card-foot">
-          <span>${isFilled ? tutorName : "Unassigned"}</span>
-          <span class="status-pill ${isFilled ? "filled" : "open"}">${isFilled ? "Staffed" : "Open"}</span>
+          <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned</span>
+          <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : "Open"}</span>
         </div>
       `;
       btn.addEventListener("click", () => selectCourse(course.id));
@@ -146,14 +101,10 @@ function renderCourseList(){
 
 const emptyStateEl = document.getElementById("emptyState");
 const courseDetailEl = document.getElementById("courseDetail");
-const tutorSearchEl = document.getElementById("tutorSearch");
-const tutorListEl = document.getElementById("tutorList");
 const assignmentCardEl = document.getElementById("assignmentCard");
-const confirmBarEl = document.getElementById("confirmBar");
 
 function selectCourse(courseId){
   activeCourseId = courseId;
-  pendingTutorId = null;
   renderCourseList();
   renderDetail();
 }
@@ -181,161 +132,139 @@ function renderDetail(){
   document.getElementById("dTutorsAssigned").textContent = `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
 
   renderAssignmentCard(course);
-  renderTutorList(course);
-  renderConfirmBar(course);
+  renderApplicants(course);
 }
 
-// bumps the persisted no_of_tutors_assigned counter by +1/-1; returns true on success
-async function bumpTutorsAssigned(course, delta){
+// ---------- applications ----------
+
+const LEVEL_LABELS = {
+  second_year: "2nd year",
+  third_year: "3rd year",
+  honours: "Honours",
+  masters: "Masters",
+  phd: "PhD",
+};
+
+const applicantListEl = document.getElementById("applicantList");
+const applicantsEmptyEl = document.getElementById("applicantsEmpty");
+
+let applicantsRequestId = 0;
+
+async function renderApplicants(course){
+  const requestId = ++applicantsRequestId;
+  applicantListEl.innerHTML = "";
+  applicantsEmptyEl.hidden = true;
+
+  let rows = [];
   try {
-    const res = await fetch(`/api/courses/${course.id}/tutors-assigned`, {
+    const res = await fetch(`/api/tutor-applications?courseId=${course.id}`);
+    rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load applications");
+  } catch (err) {
+    if (requestId === applicantsRequestId) showToast("Couldn't load applications for this course.");
+    return;
+  }
+
+  // the active course may have changed while this request was in flight
+  if (requestId !== applicantsRequestId) return;
+
+  if (rows.length === 0){
+    applicantsEmptyEl.hidden = false;
+    return;
+  }
+
+  rows.forEach(app => {
+    const tutor = app.tutors;
+    const name = app.Tutor_name || tutor?.name || "Unknown";
+    const status = (app.status || "pending").toLowerCase();
+    const levelLabel = LEVEL_LABELS[tutor?.academic_level] || "Year not set";
+    const markStamp = typeof app.tutor_mark === "number" && app.tutor_mark >= course.minMark
+      ? `<span class="stamp ok">Mark ${app.tutor_mark}</span>`
+      : `<span class="stamp blocked">Mark ${app.tutor_mark} · below ${course.minMark}</span>`;
+    const availabilityStamp = app.Availability
+      ? `<span class="stamp ok">Free at tutorial time</span>`
+      : `<span class="stamp blocked">Not free at tutorial time</span>`;
+
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "tutor-row";
+    row.style.cursor = "default";
+    row.innerHTML = `
+      <span class="avatar">${initials(name)}</span>
+      <span class="name-block">
+        <span class="name">${name}</span>
+        <span class="role">${levelLabel}</span>
+      </span>
+      <span class="stamp-row">
+        ${markStamp}
+        ${availabilityStamp}
+      </span>
+      <span class="status-pill ${status}">${status}</span>
+      <span class="applicant-actions"></span>
+    `;
+
+    const actionsEl = row.querySelector(".applicant-actions");
+    const isFull = !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
+
+    if (status === "pending"){
+      actionsEl.appendChild(makeApplicantActionBtn("Approve", "approve", () => setApplicationStatus(course, app, "approved", name), isFull && "This course already has all the tutors it needs"));
+      actionsEl.appendChild(makeApplicantActionBtn("Reject", "", () => setApplicationStatus(course, app, "rejected", name)));
+    } else if (status === "approved"){
+      actionsEl.appendChild(makeApplicantActionBtn("Unassign", "", () => setApplicationStatus(course, app, "pending", name)));
+    } else {
+      actionsEl.appendChild(makeApplicantActionBtn("Reconsider", "", () => setApplicationStatus(course, app, "pending", name)));
+    }
+
+    li.appendChild(row);
+    applicantListEl.appendChild(li);
+  });
+}
+
+function makeApplicantActionBtn(label, variant, onClick, disabledTitle){
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn-small" + (variant ? ` ${variant}` : "");
+  btn.textContent = label;
+  if (disabledTitle){
+    btn.disabled = true;
+    btn.title = disabledTitle;
+  } else {
+    btn.addEventListener("click", onClick);
+  }
+  return btn;
+}
+
+async function setApplicationStatus(course, app, status, name){
+  try {
+    const res = await fetch(`/api/tutor-applications/${app.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ delta }),
+      body: JSON.stringify({ status }),
     });
     const body = await res.json();
     if (!res.ok) {
-      showToast(body.error || "Couldn't update the tutor count.");
-      return false;
+      showToast(body.error || "Couldn't update that application.");
+      return;
     }
-    course.tutorsAssigned = body.no_of_tutors_assigned ?? 0;
-    return true;
+    const messages = {
+      approved: `${name} assigned to ${course.code}`,
+      rejected: `${name}'s application rejected`,
+      pending: `${name} moved back to pending`,
+    };
+    showToast(messages[status] || "Application updated.");
+    await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
-    return false;
   }
 }
 
 function renderAssignmentCard(course){
-  const tutorId = assignments[course.id];
-
-  if (!tutorId){
-    assignmentCardEl.className = "assignment-card empty";
-    assignmentCardEl.innerHTML = `<p class="empty-copy">Nobody is assigned to this course yet. Pick a tutor below — you'll see why they do or don't qualify before anything is saved.</p>`;
-    return;
-  }
-
-  const tutor = TUTORS.find(t => t.id === tutorId);
-  assignmentCardEl.className = "assignment-card filled";
-  assignmentCardEl.innerHTML = `
-    <div class="assignment-row">
-      <div class="assigned-tutor">
-        <span class="avatar">${initials(tutor.name)}</span>
-        <div>
-          <div class="name">${tutor.name}</div>
-          <div class="meta">${course.hoursNeeded} hrs/week on this course · ${tutor.weeklyHours - hoursAssigned(tutor.id)} hrs left overall</div>
-        </div>
-      </div>
-      <button class="btn-small" id="unassignBtn" type="button">Remove</button>
-    </div>
-  `;
-  document.getElementById("unassignBtn").addEventListener("click", async () => {
-    assignments[course.id] = null;
-    pendingTutorId = null;
-    await bumpTutorsAssigned(course, -1);
-    showToast(`Removed ${tutor.name} from ${course.code}`);
-    renderCourseList();
-    renderDetail();
-  });
+  const isFull = !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
+  assignmentCardEl.className = "assignment-card " + (course.tutorsAssigned > 0 ? "filled" : "empty");
+  assignmentCardEl.innerHTML = isFull
+    ? `<p class="empty-copy">This course is fully staffed — ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
+    : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "—"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
 }
-
-function renderTutorList(course){
-  const query = tutorSearchEl.value.trim().toLowerCase();
-  const currentTutorId = assignments[course.id];
-
-  const rows = TUTORS
-    .filter(t => !query || t.name.toLowerCase().includes(query))
-    .map(t => ({ tutor: t, status: evaluate(t, course) }))
-    .sort((a, b) => {
-      // eligible first, then by mark descending
-      if (a.status.eligible !== b.status.eligible) return a.status.eligible ? -1 : 1;
-      return (b.status.mark || 0) - (a.status.mark || 0);
-    });
-
-  tutorListEl.innerHTML = "";
-
-  rows.forEach(({ tutor, status }) => {
-    const li = document.createElement("li");
-    const isSelected = tutor.id === pendingTutorId;
-    const isCurrent = tutor.id === currentTutorId;
-
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "tutor-row" + (isSelected ? " selected" : "") + (!status.eligible ? " blocked" : "");
-    btn.disabled = isCurrent;
-    if (isCurrent) btn.title = "Already assigned to this course";
-
-    const marksStamp = status.mark === undefined
-      ? `<span class="stamp blocked">No mark on record</span>`
-      : status.marksOk
-        ? `<span class="stamp ok">Mark ${status.mark}</span>`
-        : `<span class="stamp blocked">Mark ${status.mark} · below ${course.minMark}</span>`;
-
-    const clashStamp = status.clashOk
-      ? `<span class="stamp ok">Free at this time</span>`
-      : `<span class="stamp blocked">Clashes ${status.clash.day} ${status.clash.start}–${status.clash.end}${status.clash.sourceCourse ? " · " + status.clash.sourceCourse.code : ""}</span>`;
-
-    const hoursStamp = status.hoursOk
-      ? `<span class="stamp ok">${status.remaining} hrs free</span>`
-      : `<span class="stamp warn">Only ${Math.max(status.remaining,0)} hrs free · needs ${course.hoursNeeded}</span>`;
-
-    btn.innerHTML = `
-      <span class="avatar">${initials(tutor.name)}</span>
-      <span class="name-block">
-        <span class="name">${tutor.name}</span>
-        <span class="role">${isCurrent ? "Currently assigned" : status.eligible ? "Qualifies" : "Doesn't qualify"}</span>
-      </span>
-      <span class="stamp-row">
-        ${marksStamp}
-        ${clashStamp}
-        ${hoursStamp}
-      </span>
-    `;
-
-    btn.addEventListener("click", () => {
-      pendingTutorId = pendingTutorId === tutor.id ? null : tutor.id;
-      renderTutorList(course);
-      renderConfirmBar(course);
-    });
-
-    li.appendChild(btn);
-    tutorListEl.appendChild(li);
-  });
-
-  if (rows.length === 0){
-    tutorListEl.innerHTML = `<li class="empty-copy" style="padding:12px;">No tutors match "${tutorSearchEl.value}".</li>`;
-  }
-}
-
-function renderConfirmBar(course){
-  if (!pendingTutorId){
-    confirmBarEl.hidden = true;
-    return;
-  }
-  const tutor = TUTORS.find(t => t.id === pendingTutorId);
-  const status = evaluate(tutor, course);
-
-  confirmBarEl.hidden = false;
-  document.getElementById("confirmName").textContent = tutor.name;
-  document.getElementById("confirmCourse").textContent = course.code;
-
-  const confirmBtn = document.getElementById("confirmBtn");
-  confirmBtn.textContent = status.eligible ? "Confirm assignment" : "Assign anyway (override)";
-  confirmBtn.onclick = async () => {
-    const ok = await bumpTutorsAssigned(course, 1);
-    if (!ok) return;
-    assignments[course.id] = tutor.id;
-    pendingTutorId = null;
-    showToast(`${tutor.name} assigned to ${course.code}${status.eligible ? "" : " — with an override"}`);
-    renderCourseList();
-    renderDetail();
-  };
-}
-
-document.getElementById("cancelBtn").addEventListener("click", () => {
-  pendingTutorId = null;
-  renderDetail();
-});
 
 // ---------- add / edit course modal ----------
 
@@ -454,10 +383,6 @@ function showToast(message){
 // ---------- search wiring ----------
 
 courseSearchEl.addEventListener("input", renderCourseList);
-tutorSearchEl.addEventListener("input", () => {
-  const course = COURSES.find(c => c.id === activeCourseId);
-  if (course) renderTutorList(course);
-});
 
 // ---------- misc ----------
 
@@ -469,3 +394,4 @@ document.querySelectorAll('input[type="number"]').forEach(el => {
 // ---------- init ----------
 
 fetchCourses();
+fetchTutorCount();
