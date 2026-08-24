@@ -1,8 +1,8 @@
 /* ============================================================
    Student Dashboard
-   Modules You Can Tutor (real courses from Supabase, display-only)
-   + Upcoming Sessions (cancel one you can't make, still fake data
-   from session-data.js until real scheduling exists).
+   Modules You Can Tutor (real courses from Supabase) + a mark-based
+   volunteer application. No real backing data for upcoming sessions
+   yet, so that list just says so.
    ============================================================ */
 
 import { getCurrentUser, getEntries } from './storage.js';
@@ -52,21 +52,49 @@ async function renderCourses() {
       <h3>${course.course_code}</h3>
       <p class="session-meta">${course.course_name}</p>
       <p class="session-note">${course.department}</p>
-      <button type="button">Volunteer</button>
+      <button type="button" class="volunteer-btn">Volunteer</button>
+      <div class="mark-form" hidden>
+        <div class="form-field">
+          <label>Your mark for this module</label>
+          <input type="number" class="mark-input" min="0" max="100" placeholder="0-100" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="submit-mark-btn btn-primary">Submit</button>
+          <button type="button" class="cancel-mark-btn btn-secondary">Cancel</button>
+        </div>
+      </div>
     `;
 
-    const btn = article.querySelector("button");
-    btn.addEventListener("click", async () => {
-      const markInput = prompt(`Enter your mark for ${course.course_code}:`);
-      if (markInput === null) return;
+    const volunteerBtn = article.querySelector(".volunteer-btn");
+    const markForm = article.querySelector(".mark-form");
+    const markInput = article.querySelector(".mark-input");
+    const submitMarkBtn = article.querySelector(".submit-mark-btn");
+    const cancelMarkBtn = article.querySelector(".cancel-mark-btn");
 
-      const mark = Number(markInput);
+    volunteerBtn.addEventListener("click", () => {
+      volunteerBtn.hidden = true;
+      markForm.hidden = false;
+      markInput.value = "";
+      markInput.focus();
+    });
+
+    cancelMarkBtn.addEventListener("click", () => {
+      markForm.hidden = true;
+      volunteerBtn.hidden = false;
+    });
+
+    markInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") submitMarkBtn.click();
+    });
+
+    submitMarkBtn.addEventListener("click", async () => {
+      const mark = Number(markInput.value);
       if (!Number.isInteger(mark) || mark < 0 || mark > 100) {
         showToast("Enter a valid mark between 0 and 100");
         return;
       }
 
-      btn.disabled = true;
+      submitMarkBtn.disabled = true;
       try {
         const res = await fetch("/api/course-volunteers", {
           method: "POST",
@@ -77,46 +105,22 @@ async function renderCourses() {
 
         if (!res.ok) {
           showToast(data.error || "Could not submit your application");
-          btn.disabled = false;
+          submitMarkBtn.disabled = false;
           return;
         }
 
-        btn.textContent = "Pending approval";
+        markForm.hidden = true;
+        volunteerBtn.hidden = false;
+        volunteerBtn.textContent = "Pending approval";
+        volunteerBtn.disabled = true;
         showToast(`Applied for ${course.course_code} — waiting for organiser approval`);
       } catch (err) {
         showToast("Something went wrong, try again");
-        btn.disabled = false;
+        submitMarkBtn.disabled = false;
       }
     });
 
     courseListEl.appendChild(article);
-  });
-}
-
-function renderUpcomingSessions() {
-  const sessions = StudentData.getUpcomingSessions();
-
-  upcomingSessionsListEl.innerHTML = "";
-
-  if (sessions.length === 0) {
-    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions.</p>`;
-    return;
-  }
-
-  sessions.forEach((session) => {
-    const article = document.createElement("article");
-    article.innerHTML = `
-      <h3>${session.subject}</h3>
-      <p>With ${session.withWho} • ${session.when}</p>
-      <strong>Confirmed</strong>
-      <button type="button" class="btn-cancel">Can't make it</button>
-    `;
-    article.querySelector(".btn-cancel").addEventListener("click", () => {
-      StudentData.cancelUpcomingSession(session.id);
-      renderUpcomingSessions();
-      showToast(`Cancelled ${session.subject} with ${session.withWho}`);
-    });
-    upcomingSessionsListEl.appendChild(article);
   });
 }
 
@@ -133,6 +137,6 @@ function showToast(message) {
 
 // ---------- init ----------
 
+upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
 renderHoursVolunteered();
 renderCourses();
-renderUpcomingSessions();

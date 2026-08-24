@@ -440,6 +440,14 @@ body > footer p {
     margin-top: 4px;
 }
 
+.mark-form {
+    margin-top: 10px;
+}
+
+.mark-form .form-field {
+    margin-bottom: 10px;
+}
+
 .form-actions button {
     width: auto;
     padding: 10px 20px;
