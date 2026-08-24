@@ -48,19 +48,7 @@ const config = {
           editUrl:
             "https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/-/tree/main/my-docs/",
         },
-        blog: {
-          showReadingTime: true,
-          feedOptions: {
-            type: ["rss", "atom"],
-            xslt: true,
-          },
-          editUrl:
-            "https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/-/tree/main/my-docs/",
-          // Useful options to enforce blogging best practices
-          onInlineTags: "warn",
-          onInlineAuthors: "warn",
-          onUntruncatedBlogPosts: "warn",
-        },
+        blog: false,
         theme: {
           customCss: "./src/css/custom.css",
         },
@@ -89,7 +77,6 @@ const config = {
             position: "left",
             label: "Docs",
           },
-          { to: "/blog", label: "Blog", position: "left" },
           {
             href: "https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System",
             label: "Repository",
@@ -104,18 +91,22 @@ const config = {
             title: "Docs",
             items: [
               {
-                label: "Getting Started",
+                label: "Introduction",
                 to: "/docs/intro",
+              },
+              {
+                label: "Getting Started",
+                to: "/docs/getting-started",
+              },
+              {
+                label: "Dev Plan",
+                to: "/docs/dev-plan",
               },
             ],
           },
           {
             title: "More",
             items: [
-              {
-                label: "Blog",
-                to: "/blog",
-              },
               {
                 label: "Repository",
                 href: "https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System",
