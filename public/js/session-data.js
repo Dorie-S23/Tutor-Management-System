@@ -9,12 +9,6 @@ const SEED_UPCOMING = [
   { id: "u2", subject: "Science Help", withWho: "Sam", when: "Tomorrow, 3:30 PM" },
 ];
 
-const PAST_SESSIONS = [
-  { id: "p1", subject: "Math Tutoring", withWho: "Ayanda", when: "Last Mon, 2:00 PM", status: "Completed" },
-  { id: "p2", subject: "English Help", withWho: "Naledi", when: "Last Wed, 10:00 AM", status: "Completed" },
-  { id: "p3", subject: "Computer Science Tutoring", withWho: "Karabo", when: "2 weeks ago", status: "Missed" },
-];
-
 const CANCELLED_SEED_KEY = "studentVolunteer.cancelledSeedIds";
 
 function readIds(key) {
@@ -45,16 +39,11 @@ function getUpcomingSessions() {
   return SEED_UPCOMING.filter((s) => !cancelledSeed.includes(s.id));
 }
 
-function getPastSessions() {
-  return PAST_SESSIONS;
-}
-
 function cancelUpcomingSession(sessionId) {
   addId(CANCELLED_SEED_KEY, sessionId);
 }
 
 window.StudentData = {
   getUpcomingSessions,
-  getPastSessions,
   cancelUpcomingSession,
 };

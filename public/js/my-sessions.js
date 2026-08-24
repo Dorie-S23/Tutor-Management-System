@@ -35,25 +35,9 @@ function renderUpcoming() {
 }
 
 function renderPast() {
-  const sessions = StudentData.getPastSessions();
-
-  pastListEl.innerHTML = "";
-
-  if (sessions.length === 0) {
-    pastListEl.innerHTML = `<p class="empty-state">No past sessions yet.</p>`;
-    return;
-  }
-
-  sessions.forEach((session) => {
-    const article = document.createElement("article");
-    const statusClass = session.status === "Completed" ? "completed" : "missed";
-    article.innerHTML = `
-      <h3>${session.subject}</h3>
-      <p>With ${session.withWho} • ${session.when}</p>
-      <span class="status-pill ${statusClass}">${session.status}</span>
-    `;
-    pastListEl.appendChild(article);
-  });
+  // No real backing data for past sessions yet (nothing in Supabase for
+  // this), so just say so rather than showing fake local data.
+  pastListEl.innerHTML = `<p class="empty-state">No past sessions</p>`;
 }
 
 // ---------- toast ----------
