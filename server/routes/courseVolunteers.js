@@ -3,22 +3,46 @@ const supabase = require('../supabaseClient');
 
 const router = express.Router();
 
-// POST /api/course-volunteers - claim a course
+// POST /api/course-volunteers - volunteer for a course, self-reporting a mark.
+// Below the course's min_mark is rejected outright (nothing recorded); at or
+// above it goes in as 'pending' for an organiser to review later.
 router.post('/', async (req, res) => {
-  const { userId, courseId } = req.body;
+  const { userId, courseId, mark } = req.body ?? {};
+
   if (!userId || !courseId) {
     return res.status(400).json({ error: 'userId and courseId are required' });
   }
 
+  const markNum = Number(mark);
+  if (!Number.isInteger(markNum) || markNum < 0 || markNum > 100) {
+    return res.status(400).json({ error: 'mark must be an integer between 0 and 100' });
+  }
+
+  const { data: course, error: courseError } = await supabase
+    .from('courses')
+    .select('course_code, min_mark')
+    .eq('id', courseId)
+    .single();
+
+  if (courseError || !course) {
+    return res.status(404).json({ error: 'Course not found' });
+  }
+
+  if (Number.isInteger(course.min_mark) && markNum < course.min_mark) {
+    return res.status(403).json({
+      error: `You need at least ${course.min_mark} for ${course.course_code} to volunteer — you entered ${markNum}.`,
+    });
+  }
+
   const { data, error } = await supabase
     .from('course_volunteers')
-    .insert({ user_id: userId, course_id: courseId })
+    .insert({ user_id: userId, course_id: courseId, mark: markNum, status: 'pending' })
     .select()
     .single();
 
   if (error) {
     if (error.code === '23505') {
-      return res.status(409).json({ error: 'Already volunteering for this course' });
+      return res.status(409).json({ error: `You've already volunteered for ${course.course_code}.` });
     }
     return res.status(500).json({ error: error.message });
   }

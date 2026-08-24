@@ -38,12 +38,15 @@ async function renderCourses() {
     return;
   }
 
-  if (courses.length === 0) {
+  // Only show courses that still need tutors - hide ones already fully staffed.
+  const openCourses = courses.filter((course) => (course.no_of_tutors_assigned || 0) < course.tutors_needed);
+
+  if (openCourses.length === 0) {
     courseListEl.innerHTML = `<p class="empty-state">No courses need tutors right now — check back soon.</p>`;
     return;
   }
 
-  courses.forEach((course) => {
+  openCourses.forEach((course) => {
     const article = document.createElement("article");
     article.innerHTML = `
       <h3>${course.course_code}</h3>
@@ -51,6 +54,41 @@ async function renderCourses() {
       <p class="session-note">${course.department}</p>
       <button type="button">Volunteer</button>
     `;
+
+    const btn = article.querySelector("button");
+    btn.addEventListener("click", async () => {
+      const markInput = prompt(`Enter your mark for ${course.course_code}:`);
+      if (markInput === null) return;
+
+      const mark = Number(markInput);
+      if (!Number.isInteger(mark) || mark < 0 || mark > 100) {
+        showToast("Enter a valid mark between 0 and 100");
+        return;
+      }
+
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/course-volunteers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: currentUser.id, courseId: course.id, mark }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast(data.error || "Could not submit your application");
+          btn.disabled = false;
+          return;
+        }
+
+        btn.textContent = "Pending approval";
+        showToast(`Applied for ${course.course_code} — waiting for organiser approval`);
+      } catch (err) {
+        showToast("Something went wrong, try again");
+        btn.disabled = false;
+      }
+    });
+
     courseListEl.appendChild(article);
   });
 }
