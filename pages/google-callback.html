@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Signing in...</title>
+
+    <link rel="stylesheet" href="/css/style.css">
+
+</head>
+
+
+<body>
+
+    <div class="auth-container">
+
+        <div class="auth-card">
+
+            <h1>Signing you in...</h1>
+
+            <p id="status">
+                Please wait while we complete your Google login.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <!-- Supabase JavaScript -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+    <script>
+
+        const SUPABASE_URL =
+            "https://bdwyjepbxwoitdwbdlir.supabase.co";
+;
+
+        const SUPABASE_ANON_KEY =
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkd3lqZXBieHdvaXRkd2JkbGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4OTUxNDQsImV4cCI6MjEwMTQ3MTE0NH0.xCpleg_YveDZf-ilAcudkuf0vsvOROFfQUQHpMssmzc";
+
+
+        const supabaseClient =
+            supabase.createClient(
+                SUPABASE_URL,
+                SUPABASE_ANON_KEY
+            );
+
+
+        async function handleGoogleCallback() {
+
+            const status =
+                document.getElementById("status");
+
+
+            try {
+
+                /*
+                 * =================================================
+                 * STEP 1
+                 * Check whether Supabase gave us an OAuth code
+                 * =================================================
+                 */
+
+                const params =
+                    new URLSearchParams(
+                        window.location.search
+                    );
+
+                const code =
+                    params.get("code");
+
+
+                /*
+                 * =================================================
+                 * STEP 2
+                 * Exchange the OAuth code for a Supabase session
+                 * =================================================
+                 */
+
+                if (code) {
+
+                    status.textContent =
+                        "Completing Google sign-in...";
+
+
+                    const {
+                        error
+                    } =
+                        await supabaseClient.auth
+                            .exchangeCodeForSession(code);
+
+
+                    if (error) {
+
+                        console.error(
+                            "Code exchange error:",
+                            error
+                        );
+
+                        status.textContent =
+                            "Could not complete Google sign-in.";
+
+                        return;
+
+                    }
+
+                }
+
+
+                /*
+                 * =================================================
+                 * STEP 3
+                 * Get the newly-created session
+                 * =================================================
+                 */
+
+                const {
+                    data,
+                    error
+                } =
+                    await supabaseClient.auth.getSession();
+
+
+                if (error) {
+
+                    console.error(
+                        "Session error:",
+                        error
+                    );
+
+                    status.textContent =
+                        "Could not retrieve your login session.";
+
+                    return;
+
+                }
+
+
+                const session =
+                    data.session;
+
+
+                /*
+                 * =================================================
+                 * STEP 4
+                 * Make sure we actually have a user
+                 * =================================================
+                 */
+
+                if (!session || !session.user) {
+
+                    console.error(
+                        "No Supabase session found."
+                    );
+
+                    status.textContent =
+                        "No authenticated user was found.";
+
+                    return;
+
+                }
+
+
+                const user =
+                    session.user;
+
+
+                console.log(
+                    "Authenticated Google user:",
+                    user
+                );
+
+
+                /*
+                 * =================================================
+                 * STEP 5
+                 * Check whether user already exists in users table
+                 * =================================================
+                 */
+
+                const {
+                    data: profile,
+                    error: profileError
+                } =
+                    await supabaseClient
+                        .from("users")
+                        .select("id, name, role")
+                        .eq("id", user.id)
+                        .maybeSingle();
+
+
+                if (profileError) {
+
+                    console.error(
+                        "Profile lookup error:",
+                        profileError
+                    );
+
+                    status.textContent =
+                        "Could not check your account.";
+
+                    return;
+
+                }
+
+
+                /*
+                 * =================================================
+                 * STEP 6
+                 * NEW USER
+                 *
+                 * Google authentication succeeded, but the user
+                 * isn't in our users table.
+                 * =================================================
+                 */
+
+                if (!profile) {
+
+                    console.log(
+                        "New Google user detected."
+                    );
+
+
+                    status.textContent =
+                        "Setting up your account...";
+
+
+                    /*
+                     * Store information needed by
+                     * google-register.html
+                     */
+
+                    sessionStorage.setItem(
+                        "googleUserId",
+                        user.id
+                    );
+
+
+                    sessionStorage.setItem(
+                        "googleEmail",
+                        user.email
+                    );
+
+
+                    sessionStorage.setItem(
+                        "googleName",
+                        user.user_metadata?.full_name ||
+                        user.user_metadata?.name ||
+                        ""
+                    );
+
+
+                    /*
+                     * IMPORTANT:
+                     * Store the access token so that
+                     * google-register.html can send it
+                     * to your backend.
+                     */
+
+                    sessionStorage.setItem(
+                        "googleAccessToken",
+                        session.access_token
+                    );
+
+
+                    /*
+                     * Go to Google account setup.
+                     */
+
+                    window.location.href =
+                        "/google-register.html";
+
+                    return;
+
+                }
+
+
+                /*
+                 * =================================================
+                 * STEP 7
+                 * EXISTING USER
+                 * =================================================
+                 */
+
+                console.log(
+                    "Existing user detected:",
+                    profile
+                );
+
+
+                status.textContent =
+                    "Login successful. Redirecting...";
+
+
+                /*
+                 * Existing users go straight to dashboard.
+                 */
+
+                window.location.href =
+                    "/dashboard.html";
+
+
+            }
+
+
+            catch (error) {
+
+                console.error(
+                    "Google callback error:",
+                    error
+                );
+
+                status.textContent =
+                    "An unexpected error occurred.";
+
+            }
+
+        }
+
+
+        /*
+         * Start processing callback
+         */
+
+        handleGoogleCallback();
+
+    </script>
+
+</body>
+
+</html>

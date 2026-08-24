@@ -20,6 +20,33 @@ const staffIdGroup =
 const staffIdInput =
     document.getElementById("staff-id");
 
+const googleRegisterButton =
+    document.getElementById("google-register-button");
+
+if (googleRegisterButton) {
+
+    googleRegisterButton.addEventListener("click", async () => {
+
+        try {
+
+            window.location.href =
+                "/api/auth/google";
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "Google registration error:",
+                error
+            );
+
+        }
+
+    });
+
+}
+
 if (roleSelect) {
 
     roleSelect.addEventListener("change", () => {

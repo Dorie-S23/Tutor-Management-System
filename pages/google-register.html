@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Complete Registration | Tutor Management System</title>
+
+    <link rel="stylesheet" href="global.css">
+
+    <!-- Fonts used by your stylesheet -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap"
+        rel="stylesheet"
+    >
+
+</head>
+
+
+<body>
+
+
+    <main class="auth-page">
+
+
+        <section class="auth-card">
+
+
+            <header class="auth-header">
+
+                <span class="eyebrow">
+                    Tutor Management System
+                </span>
+
+                <h1>Complete your account</h1>
+
+                <p>
+                    Just a few more details are needed to finish your registration.
+                </p>
+
+            </header>
+
+
+            <form id="google-register-form">
+
+
+                <!-- =========================
+                     NAME
+                     ========================= -->
+
+                <div class="form-group">
+
+                    <label for="name">
+                        Full name
+                    </label>
+
+                    <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        readonly
+                    >
+
+                </div>
+
+
+                <!-- =========================
+                     EMAIL
+                     ========================= -->
+
+                <div class="form-group">
+
+                    <label for="email">
+                        Email
+                    </label>
+
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        readonly
+                    >
+
+                </div>
+
+
+                <!-- =========================
+                     ROLE
+                     ========================= -->
+
+                <div class="form-group">
+
+                    <label for="role">
+                        Account type
+                    </label>
+
+                    <select
+                        id="role"
+                        name="role"
+                        required
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            selected
+                        >
+                            Select your role
+                        </option>
+
+                        <option value="student">
+                            Student
+                        </option>
+
+                        <option value="tutor">
+                            Tutor
+                        </option>
+
+                        <option value="organiser">
+                            Organiser
+                        </option>
+
+                        <option value="educator">
+                            Educator
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- =========================
+                     STUDENT NUMBER
+                     
+                     Shown for:
+                     - Student
+                     - Tutor
+                     ========================= -->
+
+                <div
+                    class="form-group"
+                    id="student-number-group"
+                    style="display: none;"
+                >
+
+                    <label for="student-number">
+                        Student number
+                    </label>
+
+                    <input
+                        type="text"
+                        id="student-number"
+                        name="student-number"
+                        placeholder="e.g. 1234567"
+                    >
+
+                </div>
+
+
+                <!-- =========================
+                     STAFF ID
+                     
+                     Shown for:
+                     - Organiser
+                     ========================= -->
+
+                <div
+                    class="form-group"
+                    id="staff-id-group"
+                    style="display: none;"
+                >
+
+                    <label for="staff-id">
+                        Staff ID
+                    </label>
+
+                    <input
+                        type="text"
+                        id="staff-id"
+                        name="staff-id"
+                        placeholder="Enter your staff ID"
+                    >
+
+                </div>
+
+
+                <!-- =========================
+                     SUBMIT
+                     ========================= -->
+
+                <button
+                    type="submit"
+                    class="btn btn-primary auth-button"
+                >
+                    Complete registration
+                </button>
+
+
+            </form>
+
+
+            <!-- =========================
+                 MESSAGE
+                 ========================= -->
+
+            <p
+                id="google-register-message"
+                class="form-message"
+                aria-live="polite"
+            ></p>
+
+
+        </section>
+
+
+    </main>
+
+
+    <script>
+
+
+        /*
+         * ================================================
+         * GET GOOGLE USER INFORMATION
+         * ================================================
+         */
+
+        const googleUserId =
+            sessionStorage.getItem("googleUserId");
+
+        const googleEmail =
+            sessionStorage.getItem("googleEmail");
+
+        const googleName =
+            sessionStorage.getItem("googleName");
+
+
+        /*
+         * ================================================
+         * MAKE SURE GOOGLE USER INFORMATION EXISTS
+         * ================================================
+         */
+
+        if (!googleUserId || !googleEmail) {
+
+            document.getElementById(
+                "google-register-message"
+            ).textContent =
+                "Google account information could not be found. Please try signing in again.";
+
+        }
+
+
+        /*
+         * ================================================
+         * FILL IN GOOGLE INFORMATION
+         * ================================================
+         */
+
+        document.getElementById("name").value =
+            googleName || "";
+
+        document.getElementById("email").value =
+            googleEmail || "";
+
+
+        /*
+         * ================================================
+         * GET FORM ELEMENTS
+         * ================================================
+         */
+
+        const roleSelect =
+            document.getElementById("role");
+
+        const studentNumberGroup =
+            document.getElementById(
+                "student-number-group"
+            );
+
+        const studentNumberInput =
+            document.getElementById(
+                "student-number"
+            );
+
+        const staffIdGroup =
+            document.getElementById(
+                "staff-id-group"
+            );
+
+        const staffIdInput =
+            document.getElementById(
+                "staff-id"
+            );
+
+
+        /*
+         * ================================================
+         * ROLE CHANGE
+         * ================================================
+         */
+
+        roleSelect.addEventListener(
+            "change",
+            () => {
+
+                /*
+                 * Hide both optional fields
+                 */
+
+                studentNumberGroup.style.display =
+                    "none";
+
+                staffIdGroup.style.display =
+                    "none";
+
+
+                /*
+                 * Remove required status
+                 */
+
+                studentNumberInput.required =
+                    false;
+
+                staffIdInput.required =
+                    false;
+
+
+                /*
+                 * Student or Tutor
+                 */
+
+                if (
+                    roleSelect.value === "student" ||
+                    roleSelect.value === "tutor"
+                ) {
+
+                    studentNumberGroup.style.display =
+                        "block";
+
+                    studentNumberInput.required =
+                        true;
+
+                }
+
+
+                /*
+                 * Organiser
+                 */
+
+                else if (
+                    roleSelect.value === "organiser"
+                ) {
+
+                    staffIdGroup.style.display =
+                        "block";
+
+                    staffIdInput.required =
+                        true;
+
+                }
+
+            }
+        );
+
+
+        /*
+         * ================================================
+         * FORM SUBMISSION
+         * ================================================
+         */
+
+        const form =
+            document.getElementById(
+                "google-register-form"
+            );
+
+        const message =
+            document.getElementById(
+                "google-register-message"
+            );
+
+
+        form.addEventListener(
+            "submit",
+            async (event) => {
+
+                event.preventDefault();
+
+
+                /*
+                 * Make sure we have a Google user
+                 */
+
+                if (!googleUserId || !googleEmail) {
+
+                    message.textContent =
+                        "Your Google session has expired. Please sign in again.";
+
+                    return;
+
+                }
+
+
+                /*
+                 * Get selected values
+                 */
+
+                const role =
+                    roleSelect.value;
+
+                const studentNumber =
+                    studentNumberInput.value.trim();
+
+                const staffId =
+                    staffIdInput.value.trim();
+
+
+                /*
+                 * Build request
+                 */
+                const googleAccessToken = sessionStorage.getItem("googleAccessToken");
+
+                
+                
+                const requestBody = {
+
+                    googleUserId:
+                        googleUserId,
+
+                    email:
+                        googleEmail,
+
+                    name:
+                        googleName,
+
+                    role:
+                        role,
+
+                    studentNumber:
+                        studentNumber,
+
+                    staffId:
+                        staffId,
+                    
+                    accessToken:
+                        googleAccessToken
+
+                };
+
+
+                try {
+
+                    message.textContent =
+                        "Creating your account...";
+
+
+                    const response =
+                        await fetch(
+                            "/api/auth/google/register",
+                            {
+
+                                method: "POST",
+
+                                headers: {
+                                    "Content-Type":
+                                        "application/json"
+                                },
+
+                                body:
+                                    JSON.stringify(
+                                        requestBody
+                                    )
+
+                            }
+                        );
+
+
+                    const result =
+                        await response.json();
+
+
+                    /*
+                     * Backend returned an error
+                     */
+
+                    if (!response.ok) {
+
+                        message.textContent =
+                            result.error ||
+                            "Registration failed.";
+
+                        console.error(
+                            "Google registration error:",
+                            result
+                        );
+
+                        return;
+
+                    }
+
+
+                    /*
+                     * Registration successful
+                     */
+
+                    message.textContent =
+                        "Registration successful! Redirecting...";
+
+
+                    /*
+                     * Remove temporary Google
+                     * information
+                     */
+
+                    sessionStorage.removeItem(
+                        "googleUserId"
+                    );
+
+                    sessionStorage.removeItem(
+                        "googleEmail"
+                    );
+
+                    sessionStorage.removeItem(
+                        "googleName"
+                    );
+
+                    sessionStorage.removeItem(
+                        "googleAccessToken"
+                    );
+
+
+                    /*
+                     * Redirect according to role
+                     */
+
+                    switch (result.user.role) {
+
+                        case "student":
+
+                            window.location.href =
+                                "/student.html";
+
+                            break;
+
+
+                        case "tutor":
+
+                            window.location.href =
+                                "/tutor.html";
+
+                            break;
+
+
+                        case "educator":
+
+                            window.location.href =
+                                "/educator.html";
+
+                            break;
+
+
+                        case "organiser":
+
+                            window.location.href =
+                                "/organiser.html";
+
+                            break;
+
+
+                        default:
+
+                            window.location.href =
+                                "/login.html";
+
+                    }
+
+                }
+
+                catch (error) {
+
+                    console.error(
+                        "Google registration error:",
+                        error
+                    );
+
+                    message.textContent =
+                        "Could not connect to the server. Please try again.";
+
+                }
+
+            }
+        );
+
+    </script>
+
+
+</body>
+
+</html>
+
