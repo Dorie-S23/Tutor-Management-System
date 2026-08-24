@@ -1,78 +1,72 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StudyConnect | Student Volunteer</title>
-    <link rel="stylesheet" href="../css/style.css">
-</head>
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
 
-<body>
-
+  <body>
     <header>
-
-        <nav aria-label="Main navigation">
-            <a href="StudentView.html" aria-current="page">Dashboard</a>
-            <a href="my-sessions.html">My Sessions</a>
-            <a href="log-hours.html">Log Hours</a>
-            <a href="calendar.html">Calendar</a>
-            <a href="#" id="logout-button">Logout</a>
-        </nav>
+      <nav aria-label="Main navigation">
+        <a href="StudentView.html" aria-current="page">Dashboard</a>
+        <a href="my-sessions.html">My Sessions</a>
+        <a href="log-hours.html">Log Hours</a>
+        <a href="calendar.html">Calendar</a>
+        <a href="#" id="logout-button">Logout</a>
+      </nav>
     </header>
 
     <main>
+      <section aria-labelledby="welcome-heading">
+        <h2 id="welcome-heading">Welcome!</h2>
+      </section>
 
-        <section aria-labelledby="welcome-heading">
-            <h2 id="welcome-heading">Welcome!</h2>
+      <section aria-labelledby="stats-heading">
+        <article>
+          <h3 id="stat-hours-volunteered">0</h3>
+          <p>Hours Volunteered</p>
+        </article>
+      </section>
+
+      <section aria-labelledby="courses-heading">
+        <header>
+          <h2 id="courses-heading">Modules You Can Tutor</h2>
+          <p>Courses currently looking for student volunteers.</p>
+        </header>
+
+        <section aria-label="Available courses" id="courseList">
+          <!-- rendered by studentview.js -->
         </section>
+      </section>
 
-        <section aria-labelledby="stats-heading">
+      <section class="card" aria-labelledby="pending-heading">
+        <h2 id="pending-heading">Awaiting Approval</h2>
+        <p class="card-hint">
+          Modules you've volunteered for that are still waiting on an organiser.
+        </p>
 
-            <article>
-                <h3 id="stat-hours-volunteered">0</h3>
-                <p>Hours Volunteered</p>
-            </article>
+        <div class="session-list" id="pendingList">
+          <!-- rendered by studentview.js -->
+        </div>
+      </section>
 
-        </section>
+      <section aria-labelledby="sessions-heading">
+        <header>
+          <h2 id="sessions-heading">Upcoming Sessions</h2>
+          <a href="#">View all</a>
+        </header>
 
-        <section aria-labelledby="courses-heading">
-            <header>
-                <h2 id="courses-heading">Modules You Can Tutor</h2>
-                <p>Courses currently looking for student volunteers.</p>
-            </header>
-
-            <section aria-label="Available courses" id="courseList">
-                <!-- rendered by studentview.js -->
-            </section>
-        </section>
-
-        <section class="card" aria-labelledby="pending-heading">
-            <h2 id="pending-heading">Awaiting Approval</h2>
-            <p class="card-hint">Modules you've volunteered for that are still waiting on an organiser.</p>
-
-            <div class="session-list" id="pendingList">
-                <!-- rendered by studentview.js -->
-            </div>
-        </section>
-
-        <section aria-labelledby="sessions-heading">
-
-            <header>
-                <h2 id="sessions-heading">Upcoming Sessions</h2>
-                <a href="#">View all</a>
-            </header>
-
-            <div id="upcomingSessionsList">
-                <!-- rendered by studentview.js -->
-            </div>
-
-        </section>
-
+        <div id="upcomingSessionsList">
+          <!-- rendered by studentview.js -->
+        </div>
+      </section>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script type="module" src="../js/studentview.js"></script>
     <script src="../js/logout.js"></script>
-</body>
+  </body>
 </html>

@@ -1,7 +1,7 @@
 // Read-only view onto scheduled tutoring sessions, stored under the same
 // localStorage key the future scheduling feature will write to.
 
-const SESSIONS_KEY = 'tutorHours.sessions';
+const SESSIONS_KEY = "tutorHours.sessions";
 
 export function getSessions() {
   const raw = localStorage.getItem(SESSIONS_KEY);

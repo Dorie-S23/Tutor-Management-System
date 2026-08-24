@@ -6,12 +6,12 @@
    says so.
    ============================================================ */
 
-import { getCurrentUser, getEntries } from './storage.js';
+import { getCurrentUser, getEntries } from "./storage.js";
 
 const currentUser = getCurrentUser();
 if (!currentUser) {
-  window.location.href = 'login.html';
-  throw new Error('Not logged in');
+  window.location.href = "login.html";
+  throw new Error("Not logged in");
 }
 
 const welcomeHeadingEl = document.getElementById("welcome-heading");
@@ -24,7 +24,10 @@ welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
 
 async function renderHoursVolunteered() {
   const entries = await getEntries();
-  hoursVolunteeredEl.textContent = entries.reduce((sum, entry) => sum + Number(entry.hours), 0);
+  hoursVolunteeredEl.textContent = entries.reduce(
+    (sum, entry) => sum + Number(entry.hours),
+    0,
+  );
 }
 
 async function renderCourses() {
@@ -41,7 +44,9 @@ async function renderCourses() {
   }
 
   // Only show courses that still need tutors - hide ones already fully staffed.
-  const openCourses = courses.filter((course) => (course.no_of_tutors_assigned || 0) < course.tutors_needed);
+  const openCourses = courses.filter(
+    (course) => (course.no_of_tutors_assigned || 0) < course.tutors_needed,
+  );
 
   if (openCourses.length === 0) {
     courseListEl.innerHTML = `<p class="empty-state">No courses need tutors right now — check back soon.</p>`;
@@ -101,7 +106,11 @@ async function renderCourses() {
         const res = await fetch("/api/course-volunteers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: currentUser.id, courseId: course.id, mark }),
+          body: JSON.stringify({
+            userId: currentUser.id,
+            courseId: course.id,
+            mark,
+          }),
         });
         const data = await res.json();
 
@@ -115,7 +124,9 @@ async function renderCourses() {
         volunteerBtn.hidden = false;
         volunteerBtn.textContent = "Pending approval";
         volunteerBtn.disabled = true;
-        showToast(`Applied for ${course.course_code} — waiting for organiser approval`);
+        showToast(
+          `Applied for ${course.course_code} — waiting for organiser approval`,
+        );
         renderPendingApplications();
       } catch (err) {
         showToast("Something went wrong, try again");
@@ -132,7 +143,9 @@ async function renderPendingApplications() {
 
   let applications;
   try {
-    const res = await fetch(`/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`);
+    const res = await fetch(
+      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+    );
     if (!res.ok) throw new Error("Failed to load applications");
     applications = await res.json();
   } catch (err) {

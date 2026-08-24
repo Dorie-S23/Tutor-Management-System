@@ -14,15 +14,15 @@ const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
 
 // Supabase client
 const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY,
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-            detectSessionInUrl: false
-        }
-    }
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  },
 );
 
 // Middleware
@@ -30,32 +30,29 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
-    req.supabase = supabase;
-    next();
+  req.supabase = supabase;
+  next();
 });
 
 // Test route
 app.get("/", (req, res) => {
-    res.redirect("/html/login.html");
+  res.redirect("/html/login.html");
 });
 
 // Test Supabase connection
 app.get("/api/test", async (req, res) => {
-    const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .limit(1);
+  const { data, error } = await supabase.from("users").select("*").limit(1);
 
-    if (error) {
-        return res.status(500).json({
-            error: error.message
-        });
-    }
-
-    res.json({
-        message: "Supabase connection successful",
-        data: data
+  if (error) {
+    return res.status(500).json({
+      error: error.message,
     });
+  }
+
+  res.json({
+    message: "Supabase connection successful",
+    data: data,
+  });
 });
 
 // Authentication routes

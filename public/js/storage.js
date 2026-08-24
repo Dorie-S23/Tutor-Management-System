@@ -4,7 +4,7 @@
 // getCurrentUser).
 
 export function getCurrentUser() {
-  const raw = sessionStorage.getItem('user');
+  const raw = sessionStorage.getItem("user");
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -18,11 +18,11 @@ function fromApiEntry(row) {
     id: row.id,
     date: row.date,
     hours: Number(row.hours),
-    startTime: row.start_time || '',
-    endTime: row.end_time || '',
-    taskType: row.task_type || 'Tutoring',
-    subject: row.subject || '',
-    notes: row.notes || '',
+    startTime: row.start_time || "",
+    endTime: row.end_time || "",
+    taskType: row.task_type || "Tutoring",
+    subject: row.subject || "",
+    notes: row.notes || "",
   };
 }
 
@@ -41,8 +41,10 @@ let entriesCache = null;
 async function fetchEntries() {
   const user = getCurrentUser();
   if (!user) return [];
-  const res = await fetch(`/api/hour-entries?userId=${encodeURIComponent(user.id)}`);
-  const data = await readJson(res, 'Failed to load hours');
+  const res = await fetch(
+    `/api/hour-entries?userId=${encodeURIComponent(user.id)}`,
+  );
+  const data = await readJson(res, "Failed to load hours");
   return data.map(fromApiEntry);
 }
 
@@ -53,39 +55,42 @@ export async function getEntries() {
 
 export async function addEntry(entry) {
   const user = getCurrentUser();
-  const res = await fetch('/api/hour-entries', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const res = await fetch("/api/hour-entries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId: user.id, ...entry }),
   });
-  const row = await readJson(res, 'Failed to add entry');
+  const row = await readJson(res, "Failed to add entry");
   entriesCache = null;
   return fromApiEntry(row);
 }
 
 export async function updateEntry(id, changes) {
   const res = await fetch(`/api/hour-entries/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(changes),
   });
-  const row = await readJson(res, 'Failed to update entry');
+  const row = await readJson(res, "Failed to update entry");
   entriesCache = null;
   return fromApiEntry(row);
 }
 
 export async function deleteEntry(id) {
-  const res = await fetch(`/api/hour-entries/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/hour-entries/${id}`, { method: "DELETE" });
   if (!res.ok && res.status !== 204) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || 'Failed to delete entry');
+    throw new Error(body.error || "Failed to delete entry");
   }
   entriesCache = null;
 }
 
 // Flags an entry with the same date, hours, task type and course code as an
 // existing one (ignoring the entry currently being edited, if any).
-export async function findDuplicateEntry({ date, hours, taskType, subject }, excludeId = null) {
+export async function findDuplicateEntry(
+  { date, hours, taskType, subject },
+  excludeId = null,
+) {
   const entries = await getEntries();
   return (
     entries.find(
@@ -93,8 +98,8 @@ export async function findDuplicateEntry({ date, hours, taskType, subject }, exc
         e.id !== excludeId &&
         e.date === date &&
         Number(e.hours) === Number(hours) &&
-        (e.taskType || 'Tutoring') === (taskType || 'Tutoring') &&
-        (e.subject || '') === (subject || '')
+        (e.taskType || "Tutoring") === (taskType || "Tutoring") &&
+        (e.subject || "") === (subject || ""),
     ) || null
   );
 }
@@ -119,7 +124,7 @@ export async function getEntriesForDate(dateStr) {
 
 // Monday-based week start for a given 'YYYY-MM-DD' date string.
 export function getWeekStart(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
   const diffToMonday = day === 0 ? -6 : 1 - day;
@@ -128,7 +133,7 @@ export function getWeekStart(dateStr) {
 }
 
 export function addDays(dateStr, days) {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   date.setDate(date.getDate() + days);
   return toDateStr(date);
@@ -136,8 +141,8 @@ export function addDays(dateStr, days) {
 
 function toDateStr(date) {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
@@ -147,7 +152,7 @@ export function todayStr() {
 
 // ---------- tutor profile (used to fill in the printable timesheet) ----------
 
-const PROFILE_KEY = 'tutorHours.profile';
+const PROFILE_KEY = "tutorHours.profile";
 
 export function getProfile() {
   const raw = localStorage.getItem(PROFILE_KEY);
@@ -167,7 +172,7 @@ export function saveProfile(profile) {
 // Each class recurs weekly on the same weekday from firstDate through endDate,
 // separate from logged hours so it never affects hours-worked totals.
 
-const SCHEDULE_KEY = 'tutorHours.schedule';
+const SCHEDULE_KEY = "tutorHours.schedule";
 
 function readSchedule() {
   const raw = localStorage.getItem(SCHEDULE_KEY);
@@ -190,7 +195,11 @@ export function getSchedule() {
 
 export function addScheduleClasses(classes) {
   const now = new Date().toISOString();
-  const withIds = classes.map((c) => ({ id: crypto.randomUUID(), createdAt: now, ...c }));
+  const withIds = classes.map((c) => ({
+    id: crypto.randomUUID(),
+    createdAt: now,
+    ...c,
+  }));
   writeSchedule([...readSchedule(), ...withIds]);
   return withIds;
 }
@@ -204,9 +213,10 @@ export function clearSchedule() {
 }
 
 export function getScheduleForDate(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   const weekday = new Date(y, m - 1, d).getDay();
   return readSchedule().filter(
-    (c) => c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate
+    (c) =>
+      c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate,
   );
 }
