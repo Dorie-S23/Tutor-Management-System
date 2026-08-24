@@ -1,8 +1,9 @@
 /* ============================================================
    Student Dashboard
    Modules You Can Tutor (real courses from Supabase) + a mark-based
-   volunteer application. No real backing data for upcoming sessions
-   yet, so that list just says so.
+   volunteer application + the resulting pending applications. No
+   real backing data for upcoming sessions yet, so that list just
+   says so.
    ============================================================ */
 
 import { getCurrentUser, getEntries } from './storage.js';
@@ -16,6 +17,7 @@ if (!currentUser) {
 const welcomeHeadingEl = document.getElementById("welcome-heading");
 const hoursVolunteeredEl = document.getElementById("stat-hours-volunteered");
 const courseListEl = document.getElementById("courseList");
+const pendingListEl = document.getElementById("pendingList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
 
 welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
@@ -114,6 +116,7 @@ async function renderCourses() {
         volunteerBtn.textContent = "Pending approval";
         volunteerBtn.disabled = true;
         showToast(`Applied for ${course.course_code} — waiting for organiser approval`);
+        renderPendingApplications();
       } catch (err) {
         showToast("Something went wrong, try again");
         submitMarkBtn.disabled = false;
@@ -121,6 +124,37 @@ async function renderCourses() {
     });
 
     courseListEl.appendChild(article);
+  });
+}
+
+async function renderPendingApplications() {
+  pendingListEl.innerHTML = "";
+
+  let applications;
+  try {
+    const res = await fetch(`/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`);
+    if (!res.ok) throw new Error("Failed to load applications");
+    applications = await res.json();
+  } catch (err) {
+    pendingListEl.innerHTML = `<p class="empty-state">Couldn't load your applications right now.</p>`;
+    return;
+  }
+
+  const pending = applications.filter((app) => app.status === "pending");
+
+  if (pending.length === 0) {
+    pendingListEl.innerHTML = `<p class="empty-state">No modules waiting on approval.</p>`;
+    return;
+  }
+
+  pending.forEach((app) => {
+    const article = document.createElement("article");
+    article.innerHTML = `
+      <h3>${app.courses.course_code}</h3>
+      <p>${app.courses.course_name} &bull; Mark submitted: ${app.mark}</p>
+      <span class="status-pill pending">Pending</span>
+    `;
+    pendingListEl.appendChild(article);
   });
 }
 
@@ -140,3 +174,4 @@ function showToast(message) {
 upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
 renderHoursVolunteered();
 renderCourses();
+renderPendingApplications();

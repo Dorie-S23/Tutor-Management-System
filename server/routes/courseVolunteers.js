@@ -3,6 +3,23 @@ const supabase = require('../supabaseClient');
 
 const router = express.Router();
 
+// GET /api/course-volunteers?userId=... - a student's own applications, with course info attached
+router.get('/', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  const { data, error } = await supabase
+    .from('course_volunteers')
+    .select('*, courses(course_code, course_name, department)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // POST /api/course-volunteers - volunteer for a course, self-reporting a mark.
 // Below the course's min_mark is rejected outright (nothing recorded); at or
 // above it goes in as 'pending' for an organiser to review later.

@@ -4,6 +4,13 @@
     padding: 0;
 }
 
+/* The hidden attribute must always win, even over classes that set their
+   own display (flex/grid/etc) - otherwise elements hidden via JS silently
+   stay visible. */
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: Arial, sans-serif;
     background: #f4f6f8;
@@ -381,6 +388,11 @@ body > footer p {
 .status-pill.missed {
     background: #fdecea;
     color: #d33;
+}
+
+.status-pill.pending {
+    background: #fdf3e3;
+    color: #a6690f;
 }
 
 /* Forms (Profile / Log Hours) */
