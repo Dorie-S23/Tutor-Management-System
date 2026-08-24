@@ -1,12 +1,21 @@
 import { highlightActiveTab } from './nav.js';
 import { getCurrentUser, getEntriesForDate, getScheduleForDate, todayStr, clearSchedule } from './storage.js';
 
-if (!getCurrentUser()) {
+const currentUser = getCurrentUser();
+if (!currentUser) {
   window.location.href = 'login.html';
   throw new Error('Not logged in');
 }
 
 highlightActiveTab();
+
+// Timetable import (and clearing it) is a tutor-only feature - not relevant for volunteers.
+const importTimetableCard = document.getElementById('import-timetable-card');
+const clearClassesRow = document.getElementById('clear-classes-row');
+if (currentUser.role !== 'tutor') {
+  if (importTimetableCard) importTimetableCard.hidden = true;
+  if (clearClassesRow) clearClassesRow.hidden = true;
+}
 
 const monthLabelEl = document.getElementById('calendar-month-label');
 const gridEl = document.getElementById('calendar-grid');
