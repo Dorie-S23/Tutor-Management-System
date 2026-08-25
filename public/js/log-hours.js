@@ -19,6 +19,14 @@ if (!currentUser) {
 
 highlightActiveTab();
 
+// This page is shared between the tutor and student volunteer flows, so the
+// "Dashboard" link has to point at whichever dashboard actually matches the
+// signed-in user's role.
+const dashboardNavLink = document.getElementById("dashboard-nav-link");
+if (dashboardNavLink && currentUser.role !== "tutor") {
+  dashboardNavLink.href = "StudentView.html";
+}
+
 const form = document.getElementById("entry-form");
 const entryIdField = document.getElementById("entry-id");
 const dateField = document.getElementById("date");
