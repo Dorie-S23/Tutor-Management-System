@@ -117,7 +117,10 @@ npm run deploy      # wrangler deploy — ships to Cloudflare Workers
 
 In the Workers build, static files in `public/` are served by Cloudflare's assets layer (configured in `wrangler.toml`) instead of `express.static`.
 
-GitLab CI (`.gitlab-ci.yml`) currently runs a `format` job (Prettier check) on every push, and a `pages` job that builds and deploys **this documentation site** to GitLab Pages. There's no CI job yet that deploys the app itself — that still happens via `npm run deploy` run by hand.
+CI runs on **Gitea Actions** (`.gitea/workflows/`), not GitLab CI — `sdp.ms.wits.ac.za` is a self-hosted Gitea instance, so the `.gitlab-ci.yml` file in the repo root is inert and never runs; ignore it. Three workflows run on push to `main`:
+- `format.yml` — Prettier check (`npm run format:check`) on every push.
+- `deploy.yml` — deploys the app itself to Cloudflare Workers via `wrangler deploy`.
+- `docs-deploy.yml` — builds this documentation site and deploys it to Cloudflare Pages via `wrangler pages deploy`, only when something under `my-docs/` changes.
 
 :::danger Open security item
 Every Supabase table currently has Row Level Security **disabled**. Supabase auto-generates a full REST API for every table via PostgREST — with RLS off, anyone holding the anon key (which is unavoidably public, it ships in the browser) can read and write every table directly, completely bypassing this hand-written API. This has been confirmed live: it's possible to pull every user's real name, email and role straight from Supabase with nothing but the anon key.

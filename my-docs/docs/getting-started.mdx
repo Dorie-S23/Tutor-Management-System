@@ -65,7 +65,7 @@ npm run format         # auto-fix formatting across the repo
 npm run format:check   # check only, no writes
 ```
 
-CI runs `format:check` on every push (see `.gitlab-ci.yml`, `format` job) — pushing unformatted code fails the pipeline before anything else runs.
+CI runs `format:check` on every push (see `.gitea/workflows/format.yml`) — pushing unformatted code fails the pipeline before anything else runs.
 
 ## 6. Run this documentation site
 
@@ -102,7 +102,7 @@ Tutor-Management-System/
 │   └── js/                     # one script per page, plus shared helpers (nav.js, storage.js, ...)
 ├── models/User.js              # plain User data class
 ├── my-docs/                     # this documentation site (independent Docusaurus app)
-└── .gitlab-ci.yml               # format-check job + docs-site deploy pipeline
+└── .gitea/workflows/            # format-check, app-deploy, docs-deploy pipelines
 ```
 
 :::info Two Supabase clients

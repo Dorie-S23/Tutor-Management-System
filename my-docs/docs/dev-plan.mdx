@@ -22,8 +22,8 @@ The School of Computer Science and Applied Mathematics needs a better way to man
 | Hand-Written API | Every endpoint under `/api/*` is a hand-written Express route (see [API design](#api-design) below). The frontend never talks to Supabase's auto-generated REST API directly — it always goes through our own routes, which then use `@supabase/supabase-js` internally as a database/auth client. |
 | Authentication & Security | Sign up / sign in via **Supabase Auth** (`routes/auth.js`, `supabase.auth.signUp` / `signInWithPassword`) — an established library, not a hand-rolled auth system. **TODO:** password reset and account deletion flows are not implemented yet — required by the brief, needs to be scheduled. |
 | Integration (external API) | Timetable PDF import (`server/timetableRoutes.js`) sends the uploaded PDF to the **Anthropic API** (Claude) to extract class times/venues into structured JSON, which seeds the calendar. |
-| CI/CD | GitLab CI (`.gitlab-ci.yml`): a `format` job (Prettier check) runs on every push; a `pages` job builds and deploys this documentation site to GitLab Pages on the default branch. **TODO:** no automated test or deploy-the-app job yet — see [Roadmap](#roadmap) below. |
-| Documentation Website | This site (Docusaurus, `my-docs/`), deployed via GitLab Pages. |
+| CI/CD | Gitea Actions (`.gitea/workflows/`): `format.yml` (Prettier check) on every push; `deploy.yml` deploys the app to Cloudflare Workers on push to `main`; `docs-deploy.yml` deploys this documentation site to Cloudflare Pages on push to `main`. The `.gitlab-ci.yml` in the repo root is a leftover from before we realised the server runs Gitea, not GitLab — it never executes and can be ignored/removed. |
+| Documentation Website | This site (Docusaurus, `my-docs/`), deployed via Cloudflare Pages. |
 | Responsiveness & Accessibility | **TODO:** not yet audited — needs a pass before Milestone 2. |
 
 ## System architecture
@@ -53,9 +53,9 @@ Express app (app.js)
 | Database + Auth | Supabase (Postgres + Supabase Auth) | Managed Postgres without hosting our own DB; Supabase Auth satisfies "may not write your own authentication system." We only ever call it from our own server routes, never expose it directly to the client. |
 | External integration | Anthropic API (`@anthropic-ai/sdk`) | Timetable PDFs come in inconsistent layouts (different universities' exports, scanned grids, etc.); an LLM-based extraction generalizes across formats where a hand-coded parser tied to one layout previously did not. |
 | Frontend | Vanilla HTML/CSS/JS (`public/`) | No build step, no framework — keeps the front-end genuinely separate from the back-end (see non-monolithic requirement) and easy for every team member to touch regardless of framework experience. |
-| Deployment target(s) | Node process (`server.js`) and/or Cloudflare Workers (`worker.js` via Wrangler) | **TODO:** decide which is the actual deployed target for submission and document it here — right now both exist but only local `npm start` has been exercised in this doc set. |
-| Docs site | Docusaurus, deployed to GitLab Pages | Markdown-based, satisfies the course's documentation-site requirement, deploys as a static site with no account-gated platform. |
-| CI | GitLab CI | Already in use for the repo; format-check job + docs deploy job. |
+| Deployment target(s) | Cloudflare Workers (`worker.js` via Wrangler), deployed automatically by `deploy.yml` on push to `main`. `server.js` still exists for local `npm start`. | Satisfies the deployment requirement; auto-deploys on every meaningful update per the team's agreed build-release cycle. |
+| Docs site | Docusaurus, deployed to Cloudflare Pages | Markdown-based, satisfies the course's documentation-site requirement, deploys as a static site with no account-gated platform. |
+| CI | Gitea Actions (`.gitea/workflows/`) | Self-hosted Gitea, not GitLab — format-check, app-deploy, and docs-deploy workflows. |
 
 ## API design
 
