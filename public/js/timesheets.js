@@ -56,6 +56,10 @@ function loadProfileIntoForm() {
   headOfSchoolField.value = profile.headOfSchool || '';
 }
 
+function safeRenderClaim() {
+  renderClaim().catch((err) => console.error('Failed to render claim:', err));
+}
+
 profileForm.addEventListener('submit', (event) => {
   event.preventDefault();
   saveProfile({
@@ -68,7 +72,7 @@ profileForm.addEventListener('submit', (event) => {
     hourlyRate: hourlyRateField.value ? Number(hourlyRateField.value) : null,
     headOfSchool: headOfSchoolField.value.trim(),
   });
-  renderClaim();
+  safeRenderClaim();
 });
 
 function defaultRange() {
@@ -77,7 +81,7 @@ function defaultRange() {
   return { from: `${y}-${m}-01`, to: today };
 }
 
-function renderClaim() {
+async function renderClaim() {
   const profile = getProfile();
   const hasProfile = !!(profile && profile.fullName && profile.studentNumber && profile.email);
 
@@ -96,7 +100,8 @@ function renderClaim() {
 
   const from = rangeFromField.value;
   const to = rangeToField.value;
-  const entries = getEntries().filter((e) => (!from || e.date >= from) && (!to || e.date <= to));
+  const allEntries = await getEntries();
+  const entries = allEntries.filter((e) => (!from || e.date >= from) && (!to || e.date <= to));
 
   claimRowsEl.innerHTML = '';
   let totalHours = 0;
@@ -125,12 +130,12 @@ function renderClaim() {
 }
 
 printBtn.addEventListener('click', () => window.print());
-rangeFromField.addEventListener('change', renderClaim);
-rangeToField.addEventListener('change', renderClaim);
+rangeFromField.addEventListener('change', safeRenderClaim);
+rangeToField.addEventListener('change', safeRenderClaim);
 
 const { from, to } = defaultRange();
 rangeFromField.value = from;
 rangeToField.value = to;
 
 loadProfileIntoForm();
-renderClaim();
+safeRenderClaim();

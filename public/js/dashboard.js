@@ -25,9 +25,9 @@ function renderWelcome() {
   if (user?.name) welcomeHeadingEl.textContent = `Welcome, ${user.name}`;
 }
 
-function renderHoursStats() {
+async function renderHoursStats() {
   const weekStart = getWeekStart(todayStr());
-  const worked = getWeekTotal(weekStart);
+  const worked = await getWeekTotal(weekStart);
   const remaining = WEEKLY_HOUR_LIMIT - worked;
 
   hoursWorkedEl.textContent = worked;
@@ -43,7 +43,9 @@ function renderHoursStats() {
   }
 }
 
-renderHoursStats();
+renderHoursStats().catch((err) => {
+  console.error('Failed to load hours stats:', err);
+});
 renderWelcome();
 
 // ---------- apply to tutor a subject ----------
