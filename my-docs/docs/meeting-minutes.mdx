@@ -1,0 +1,103 @@
+---
+sidebar_position: 7
+---
+
+# Meeting Minutes — Sprint 1
+
+Record of team meetings for Sprint 1 (August 2026), kept as evidence of process for the course's Project Methodology requirement. All meetings were held online and recorded via AI transcription, except the planned in-person session.
+
+**Team:** Mkateko Chauke (Scrum Master / Lead Developer), Tagona Danha (Authentication & Database), Mutsawashe Njowa (Developer / Documentation), Dorsa Shahrokh (Developer / Documentation)
+
+## Meeting 1 — First Team Meeting
+
+**Date:** Monday, 3 August 2026, 5:09 PM · **Duration:** 2 min 55 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+First official meeting: confirmed everyone was present and agreed on recording/transcription practice for future meetings, since the project requires proof of meetings.
+
+- **Decision:** transcription enabled for all future meetings as the primary record-keeping method.
+- **Action items:** all members ensure availability/punctuality; Mkateko to set up a recurring meeting schedule.
+
+## Meeting 2 — Sprint 1 Planning
+
+**Date:** Monday, 10 August 2026, 5:15 PM · **Duration:** 10 min 28 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+Defined Sprint 1 scope and aligned on tooling/process.
+
+- **Scope:** Basic Tier features as the minimum; Intermediate Tier features tackled where time allows, to ease pressure on Sprint 2. Goal: something tangible, presentable, and deployable by Sprint 1's end.
+- **Database:** Supabase (already set up by Mutsawashe) — proceed with it unless a change is required.
+- **Architecture:** non-monolithic, i.e. front end and back end kept separate rather than one combined interface (per Software Design patterns; Tagona to share the reference PDF).
+- **CI/CD:** build-release cycle — deploy with every meaningful update. The Git methodology doc (shared by Tagona) needs polishing and will be published to the docs site.
+- **Deployment:** required by the brief; static hosting via GitHub Pages or Cloudflare Pages. To be investigated and targeted within Sprint 1.
+- **Diagrams:** UML not strictly required — client (Brendan) confirmed one diagram explaining how the app works is sufficient.
+- **Documentation:** shared responsibility between Dorsa and Mutsawashe, with Mkateko contributing. Git methodology section still outstanding.
+- **Communication:** Tagona to join Discord; 2–3 Daily Scrums per week.
+
+**Action items:** join Discord; Tagona shares design-patterns PDF; team begins Basic Tier work immediately; Mkateko sets up scrum schedule; Dorsa & Mutsawashe begin documentation.
+
+## Meeting 3 — Daily Scrum 1
+
+**Date:** Wednesday, 13 August 2026, 5:10 PM · **Duration:** 17 min 13 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Tagona:** paused registration back-end work pending a possible database migration decision; shifted to front-end login/registration pages in the interim.
+- **Mkateko:** reviewed Tagona's front-end work; requested an Educator role be added to registration; suggested all roles sign in from one page.
+- **Key discussion — database migration:** the team considered moving from Supabase to MongoDB. Tagona found the main difference is that MongoDB needs manual auth handling (password hashing, sessions) versus Supabase's built-in auth, and would own that work if it happens. Migration is pending confirmation from Brendan (client/supervisor) and, if it happens, the *whole* system moves — not a partial migration.
+- Daily Scrums set for Monday/Wednesday/Friday at 7:00 PM.
+
+**Decisions:** registration page unified across roles with Educator added; migration pending Brendan; in-person meeting planned for the next day at MSL to brainstorm roadmap/diagrams/database decision.
+
+**Action items:** Tagona completes login/registration front end and adds Educator role, awaits DB decision before resuming back end; Mkateko follows up with Brendan on migration; all attend the MSL in-person session.
+
+## Meeting 4 — Daily Scrum 2
+
+**Date:** Sunday, 17 August 2026, 5:04 PM · **Duration:** 12 min 4 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Tagona:** still awaiting Brendan's confirmation on the Supabase → MongoDB migration; reconfirmed the main challenge is manual auth handling.
+- **Mkateko:** confirmed comfort proceeding with MongoDB if authorised.
+- **Mutsawashe:** available for most 7:00 PM scrums going forward.
+- **Deployment:** confirmed as a Sprint 1 requirement; plan is to finish feature work during the week and push on deployment over the weekend, targeting GitHub Pages or Cloudflare Pages.
+- **Stakeholder meeting:** no updates ready yet that week; proposed rescheduling to Thursday if the client is available.
+
+**Decisions:** Daily Scrum days confirmed as Wednesday and Friday; deployment target set (GitHub Pages/Cloudflare Pages) within Sprint 1; stakeholder meeting tentatively Thursday.
+
+**Action items:** Mkateko arranges the Thursday stakeholder meeting if possible; Tagona awaits DB confirmation before resuming back end; team aims for deployable work by the weekend.
+
+## Meeting 5 — Daily Scrum 3
+
+**Date:** Tuesday, 19 August 2026, 5:33 PM · **Duration:** 14 min 48 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Tagona:** added the Educator role to the auth pages; started the Educator dashboard; asked for layout guidance.
+- **Mutsawashe:** advised following the existing app layout/conventions for now — current UI is a Sprint 1 placeholder, not final design.
+- **Mkateko:** discussed role-based data retrieval — e.g. the Organiser role pulls from the `tutors` table but those users remain part of the overall app user base; stressed regular communication given the approaching deadline.
+- **Documentation/diagrams:** Brendan confirmed not all UML types are needed — at minimum one diagram explaining app flow. Git methodology documentation still outstanding. Agreed all branches should eventually stem from `main` to avoid disorganised structure.
+
+**Decisions:** Educator dashboard follows existing conventions for Sprint 1; at least one flow diagram required; client meeting targeted for Friday if there's something to show; team meeting planned Friday or Saturday.
+
+**Action items:** Tagona continues the Educator dashboard; Mkateko arranges the Friday client meeting and works on Tutor/Organiser features; documentation team begins Git methodology + diagrams; everyone stays communicative toward the Sprint 1 deliverable.
+
+## Meeting 6 — Daily Scrum 4 (final before deadline)
+
+**Date:** Saturday, 22 August 2026, 5:15 PM · **Duration:** 12 min 3 sec · **Attendees:** Mkateko, Tagona, Dorsa · **Scribe:** Mkateko
+
+- **Tagona:** fixed the bug where new users weren't being added to their role-specific tables on registration — required dropping and recreating tables with ID types matching the `users` table schema. Pushed the fix to the authentication branch and flagged it was also broken locally for others, asking Mkateko to pull and verify.
+- **Mkateko:** reviewed and confirmed the fix; verified the required Wits email (`@wits.ac.za`) validation on login was working correctly; confirmed authentication was stable with no further bugs observed.
+- **File structure:** Mkateko to reorganise the project structure after merging authentication into `main`; going forward, all new branches are created from `main` to avoid merge conflicts and disorganised files.
+- **Documentation:** Git methodology still needed; Tagona assigned to UML diagrams and finishing documentation while Mkateko and Dorsa handle the merge and deployment.
+
+**Decisions:** merge the authentication branch into `main` once confirmed stable; reorganise file structure post-merge; Tagona's next task is UML diagrams/documentation pending Jira assignment.
+
+**Action items:** Mkateko merges authentication into `main`, reorganises structure, starts Tutor/Organiser features, connects auth to the Tutor dashboard; Tagona works on diagrams/documentation; Dorsa joins Mkateko on campus for remaining Sprint 1 tasks.
+
+## Sprint 1 Summary
+
+**Overall progress**
+
+| Area | Status |
+|---|---|
+| Front-end | Login and registration pages completed; Educator role added |
+| Back-end | Authentication built and debugged; role-based table insertion working |
+| Database | Supabase selected and in use; MongoDB migration discussed but never confirmed by the client |
+| Architecture | Non-monolithic (separate front end / back end) confirmed |
+| Deployment | Target identified (GitHub Pages / Cloudflare Pages); implementation outstanding at meeting-log time |
+| Documentation | In progress; Git methodology and UML diagrams outstanding at meeting-log time |
+
+**Outstanding items carried out of Sprint 1:** Tutor and Organiser role features, Educator dashboard, deployment to static hosting, at least one UML/app-flow diagram, Git methodology write-up, and a client demo meeting.

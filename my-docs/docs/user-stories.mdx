@@ -1,0 +1,123 @@
+---
+sidebar_position: 6
+---
+
+# User Stories & UATs
+
+Sprint 1 user stories and their acceptance tests (UATs), grouped by role. Each story follows **Who / What / Why**, and each UAT follows a **Given / When / Then** format.
+
+## Educator
+
+1. **User Story:** As an educator, I want to create an account, so that I can access the Tutor Management System.
+   **UAT:** Given I am on the registration page, when I enter my details and submit the form, then my account is created successfully.
+
+2. **User Story:** As an educator, I want to log in to my own dashboard, so that I can access my educator information.
+   **UAT:** Given I have an educator account, when I log in successfully, then I can access my dashboard.
+
+## Organizer
+
+1. **User Story:** As an organizer, I want to create an account, so that I can access the Tutor Management System.
+   **UAT:** Given I am on the registration page, when I enter my details and submit the form, then my account is created successfully.
+
+2. **User Story:** As an organizer, I want to log in to my own dashboard, so that I can manage tutoring activities.
+   **UAT:** Given I have an organizer account, when I log in successfully, then I can access my dashboard.
+
+3. **User Story:** As an organizer, I want to view and manage modules requiring tutors, so that I can coordinate tutoring across the system.
+   **UAT:** Given I am logged in as an organizer, when I view the modules, then I can manage modules requiring tutors.
+
+4. **User Story:** As an organizer, I want to allocate tutors to specific modules, so that each module has the required tutoring support.
+   **UAT:** Given a tutor and module are available, when I allocate the tutor to the module, then the tutor is assigned to that module.
+
+5. **User Story:** As an organizer, I want to change a tutor's module allocation, so that I can manage changes in tutoring requirements.
+   **UAT:** Given a tutor is assigned to a module, when I change their allocation, then the tutor is assigned to the new module.
+
+6. **User Story:** As an organizer, I want to view which tutors are assigned to each module, so that I can keep track of tutoring allocations.
+   **UAT:** Given tutors have been allocated, when I view the allocations, then I can see which tutors are assigned to each module.
+
+7. **User Story:** As an organizer, I want to see how many tutors are assigned to each module, so that I can identify modules that still require tutors.
+   **UAT:** Given modules have tutor allocations, when I view module staffing, then I can see how many tutors are assigned to each module.
+
+## Tutor
+
+1. **User Story:** As a tutor, I want to log into the Tutor Management System, so that I can access my tutoring information and activities.
+   **UAT:** Given I have a tutor account, when I enter my login details, then I can access the Tutor Management System.
+
+2. **User Story:** As a tutor, I want to access my own dashboard, so that I can view an overview of my tutoring activities.
+   **UAT:** Given I am logged in as a tutor, when I open my dashboard, then I can see my tutoring information.
+
+3. **User Story:** As a tutor, I want to record the hours I have worked, so that I can keep an accurate record of my tutoring hours.
+   **UAT:** Given I am logged in, when I enter and submit my hours worked, then the hours are added to my records.
+
+4. **User Story:** As a tutor, I want to view the hours I have previously logged, so that I can keep track of the work I have completed.
+   **UAT:** Given I have logged tutoring hours, when I view my hours, then I can see my previously recorded hours.
+
+5. **User Story:** As a tutor, I want to edit my logged hours, so that I can correct any mistakes in my records.
+   **UAT:** Given I have a logged hour entry, when I edit and save it, then the updated hours are displayed.
+
+6. **User Story:** As a tutor, I want to delete an incorrect hour entry, so that my records remain accurate.
+   **UAT:** Given I have a logged hour entry, when I delete it, then the entry is removed from my records.
+
+7. **User Story:** As a tutor, I want to view my upcoming tutoring sessions, so that I know when I am expected to tutor.
+   **UAT:** Given I am logged in, when I open my upcoming sessions, then I can see my scheduled tutoring sessions.
+
+8. **User Story:** As a tutor, I want to view the details of my upcoming sessions, so that I know when and where my tutoring sessions will take place.
+   **UAT:** Given I have an upcoming session, when I select the session, then I can view its relevant details.
+
+9. **User Story:** As a tutor, I want to view my tutoring schedule on a calendar, so that I can easily plan around my tutoring commitments.
+   **UAT:** Given I have scheduled tutoring sessions, when I open the calendar, then I can see my sessions on their scheduled dates.
+
+10. **User Story:** As a tutor, I want to generate a timesheet containing my recorded hours, so that I can submit it to the organiser.
+    **UAT:** Given I have recorded tutoring hours, when I generate my timesheet, then a timesheet containing my hours is created.
+
+11. **User Story:** As a tutor, I want to review my timesheet before submitting it, so that I can ensure my recorded hours are correct.
+    **UAT:** Given I have generated a timesheet, when I review it, then I can see my recorded hours before submitting it.
+
+12. **User Story:** As a tutor, I want to submit my timesheet to the organiser, so that my hours can be reviewed and processed.
+    **UAT:** Given I have reviewed my timesheet, when I submit it, then it is sent to the organiser for review.
+
+13. **User Story:** As a tutor, I want to view the status of my submitted timesheet, so that I know whether it has been reviewed and processed.
+    **UAT:** Given I have submitted a timesheet, when I view its status, then I can see whether it is pending, approved, or requires changes.
+
+14. **User Story:** As a tutor, I want to view my total hours worked, so that I can keep track of my overall tutoring contribution.
+    **UAT:** Given I have recorded tutoring hours, when I view my total hours, then I can see the total time I have worked.
+
+15. **User Story:** As a tutor, I want to view the modules I have been assigned to, so that I know which modules I am responsible for tutoring.
+    **UAT:** Given I have been assigned to modules, when I view my assigned modules, then I can see the modules I am responsible for.
+
+16. **User Story:** As a tutor, I want to view information about my assigned modules, so that I have the information I need to perform my tutoring responsibilities.
+    **UAT:** Given I have an assigned module, when I select the module, then I can view its relevant information.
+
+17. **User Story:** As a tutor, I want to know when my timesheet has been approved or requires changes, so that I know what action to take next.
+    **UAT:** Given I have submitted a timesheet, when its status changes, then I can see the updated status.
+
+18. **User Story:** As a tutor, I want to view my previous timesheets, so that I can keep track of my submitted and processed hours.
+    **UAT:** Given I have submitted previous timesheets, when I view my timesheet history, then I can see my previous timesheets.
+
+## Student Volunteer
+
+1. **User Story:** As a student who wants to volunteer as a tutor, I want to create an account with my personal and student details, so that I can access the volunteering system.
+   **UAT:** Given I am on the registration page, when I enter my details and submit the form, then my account is created successfully.
+
+2. **User Story:** As a registered student volunteer, I want to log in to my account, so that I can access my personal dashboard.
+   **UAT:** Given I have an account, when I log in successfully, then I can see my dashboard with my name displayed.
+
+3. **User Story:** As a student volunteer, I want to see my total volunteered hours, so that I can keep track of my contribution.
+   **UAT:** Given I have logged volunteering hours, when I open my dashboard, then I can see my total hours volunteered.
+
+4. **User Story:** As a student volunteer, I want to see available tutoring modules, so that I can choose a module to volunteer for.
+   **UAT:** Given I am on my dashboard, when I view the available modules, then I can see the modules currently needing tutors.
+
+5. **User Story:** As a student volunteer, I want to provide my mark when applying for a module, so that my eligibility can be checked.
+   **UAT:** Given I am viewing an available module, when I select Volunteer, then I can enter my mark and submit my application.
+
+6. **User Story:** As a student volunteer, I want to record my volunteering hours, so that I can keep an accurate record of my work.
+   **UAT:** Given I am on the Log Hours page, when I enter my volunteering details and submit them, then my hours are added to my records.
+
+7. **User Story:** As a student volunteer, I want to edit or delete my hour entries, so that I can correct mistakes in my records.
+   **UAT:** Given I have a logged hour entry, when I edit or delete it, then my records are updated accordingly.
+
+8. **User Story:** As a student volunteer, I want to view my hours by week, so that I can track my volunteering over time.
+   **UAT:** Given I have logged hours across different weeks, when I navigate between weeks, then I can see the correct hours for each week.
+
+9. **User Story:** As a student volunteer, I want to see my logged hours on the calendar, so that I can view my volunteering activity by date.
+   **UAT:** Given I have logged volunteering hours, when I open the calendar, then my hours appear on the correct dates.
