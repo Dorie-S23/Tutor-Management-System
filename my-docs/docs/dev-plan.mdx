@@ -1,0 +1,118 @@
+---
+sidebar_position: 3
+---
+
+# Dev Plan
+
+System design, tech stack rationale, and feature roadmap for the Tutor Management System — COMS3011A Project 1.
+
+:::info Living document
+This reflects the current build and a proposed roadmap, not a final signed-off plan. Sections marked **TODO** need the group to fill in — don't leave them unedited before Milestone 1 submission.
+:::
+
+## Problem statement
+
+The School of Computer Science and Applied Mathematics needs a better way to manage tutors. The platform must let an **organiser** assign available tutors to courses based on the tutor's mark in the course, their availability against their own timetable, and hours already worked per week. It also needs to let **students volunteer** for overflow tutoring work, let **tutors** sign and submit timesheets and excuse themselves from sessions, and generally support the admin work around running a tutoring programme.
+
+## How this meets the course's key requirements
+
+| Requirement | How this project meets it |
+|---|---|
+| Non-monolithic front-end/back-end | Front-end is static HTML/CSS/vanilla JS (`public/`); back-end is a separate Express API (`app.js` + `routes/`, `server/routes/`). No framework merges the two. |
+| Hand-Written API | Every endpoint under `/api/*` is a hand-written Express route (see [API design](#api-design) below). The frontend never talks to Supabase's auto-generated REST API directly — it always goes through our own routes, which then use `@supabase/supabase-js` internally as a database/auth client. |
+| Authentication & Security | Sign up / sign in via **Supabase Auth** (`routes/auth.js`, `supabase.auth.signUp` / `signInWithPassword`) — an established library, not a hand-rolled auth system. **TODO:** password reset and account deletion flows are not implemented yet — required by the brief, needs to be scheduled. |
+| Integration (external API) | Timetable PDF import (`server/timetableRoutes.js`) sends the uploaded PDF to the **Anthropic API** (Claude) to extract class times/venues into structured JSON, which seeds the calendar. |
+| CI/CD | GitLab CI (`.gitlab-ci.yml`): a `format` job (Prettier check) runs on every push; a `pages` job builds and deploys this documentation site to GitLab Pages on the default branch. **TODO:** no automated test or deploy-the-app job yet — see [Roadmap](#roadmap) below. |
+| Documentation Website | This site (Docusaurus, `my-docs/`), deployed via GitLab Pages. |
+| Responsiveness & Accessibility | **TODO:** not yet audited — needs a pass before Milestone 2. |
+
+## System architecture
+
+```
+Browser (public/html + public/js)
+        │  fetch()
+        ▼
+Express app (app.js)
+        │
+        ├── routes/auth.js ─────────────► Supabase Auth (sign up / sign in)
+        ├── server/routes/courses.js ───► Supabase Postgres (courses table)
+        ├── server/routes/tutors.js ────► Supabase Postgres (tutors table)
+        ├── server/routes/hourEntries.js ─► Supabase Postgres (logged hours)
+        ├── server/routes/courseVolunteers.js ─► Supabase Postgres
+        ├── server/routes/tutorApplications.js ─► Supabase Postgres
+        └── server/timetableRoutes.js ──► Anthropic API (PDF → structured JSON)
+```
+
+`app.js` is the single source of truth for the Express app — both entry points (`server.js` for a normal Node process, `worker.js` for a Cloudflare Worker via Wrangler) load the same `app.js` and just differ in how static assets are served and how the process listens.
+
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Backend runtime | Node.js + Express 5 | Small, well-understood, easy to hand-write REST routes on — satisfies the Hand-Written API requirement directly. |
+| Database + Auth | Supabase (Postgres + Supabase Auth) | Managed Postgres without hosting our own DB; Supabase Auth satisfies "may not write your own authentication system." We only ever call it from our own server routes, never expose it directly to the client. |
+| External integration | Anthropic API (`@anthropic-ai/sdk`) | Timetable PDFs come in inconsistent layouts (different universities' exports, scanned grids, etc.); an LLM-based extraction generalizes across formats where a hand-coded parser tied to one layout previously did not. |
+| Frontend | Vanilla HTML/CSS/JS (`public/`) | No build step, no framework — keeps the front-end genuinely separate from the back-end (see non-monolithic requirement) and easy for every team member to touch regardless of framework experience. |
+| Deployment target(s) | Node process (`server.js`) and/or Cloudflare Workers (`worker.js` via Wrangler) | **TODO:** decide which is the actual deployed target for submission and document it here — right now both exist but only local `npm start` has been exercised in this doc set. |
+| Docs site | Docusaurus, deployed to GitLab Pages | Markdown-based, satisfies the course's documentation-site requirement, deploys as a static site with no account-gated platform. |
+| CI | GitLab CI | Already in use for the repo; format-check job + docs deploy job. |
+
+## API design
+
+All endpoints are mounted under `/api` by `app.js`.
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/auth/register` | Create a Supabase Auth user + row in `users` (and role-specific table: `students`, `tutors`, `educators`, or `organisers`). |
+| `POST /api/auth/login` | Authenticate via Supabase, return session + `{ id, email, name, role }`. |
+| `GET/POST /api/courses`, `PUT /api/courses/:id`, `PATCH /api/courses/:id/tutors-assigned` | Course records an organiser manages. |
+| `GET /api/tutors`, `GET /api/tutors/:id`, `POST /api/tutors`, `PUT /api/tutors/:id`, `DELETE /api/tutors/:id` | Tutor records. |
+| `GET/POST /api/hour-entries`, `PUT /api/hour-entries/:id`, `DELETE /api/hour-entries/:id` | Logged tutoring hours. |
+| `GET/POST /api/course-volunteers`, `DELETE /api/course-volunteers` | Students volunteering for overflow course work. |
+| `GET/POST /api/tutor-applications`, `PATCH /api/tutor-applications/:id` | Tutors applying to tutor a specific course, organiser approval flow. |
+| `POST /api/timetable/parse` | Upload a timetable PDF, get back extracted class blocks (day, time, venue) via the Anthropic API. |
+
+**TODO:** a Database Documentation page (full schema — tables, columns, relationships) is a separate rubric item (Milestone 2, 5%) and doesn't exist yet.
+
+## Roadmap
+
+Grouped by the course's Basic / Intermediate / Advanced tiers. **TODO: the group should review and adjust this — it's a first draft based on what's already built plus obvious next steps, not an agreed plan.**
+
+### Basic (already largely in place)
+- Sign up / sign in for all four roles (student, tutor, educator, organiser)
+- Organiser: create/edit courses, assign tutors
+- Tutor: log hours, view timesheets, view calendar
+- Student: volunteer for overflow course work
+- Tutor: apply to tutor a course (mark + availability check)
+- Timetable import from a PDF via the Anthropic integration
+
+### Intermediate
+- Password reset and account deletion (required by the brief, not yet built)
+- Automated testing (none exists yet — Milestone 2 rubric weighs this at 10%)
+- Responsiveness/accessibility pass
+- Bug tracker in active use (**TODO:** confirm what the group is using — GitLab Issues?)
+- Database schema documentation page
+
+### Advanced
+- Deployment pipeline (CI job that actually deploys the app, not just the docs site)
+- Performance pass
+- Extended stakeholder feedback loop with the assigned client tutor
+
+## Timeline
+
+From the course's official schedule:
+
+| Milestone | Date |
+|---|---|
+| Milestone 1: Sprint 1 | 2026-08-25 |
+| Milestone 2: Sprint 2 | 2026-09-15 |
+| Milestone 3: Sprint 3 | 2026-09-29 |
+| Milestone 4: Submission | 2026-10-11 |
+
+**TODO:** add the group's own internal sprint breakdown / methodology here (e.g. Scrum with N-week sprints, Kanban board link) — the course rubric grades "Project Methodology" as a separate criterion and expects it documented and referenced, not just implied by this timeline.
+
+## Open questions for the group
+
+- Which deployment target (Node/Render-style host vs. Cloudflare Workers) is the one we're actually submitting?
+- Who is our assigned client/tutor, and what's the cadence for stakeholder check-ins?
+- What methodology are we following, and where is it documented/evidenced (standups, board, retro notes)?
