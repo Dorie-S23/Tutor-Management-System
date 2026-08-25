@@ -332,6 +332,30 @@
 
 
                 /*
+                 * Store the logged-in user's information the
+                 * same way public/js/auth.js does for password
+                 * logins, so pages that read sessionStorage's
+                 * "user" key (see storage.js's getCurrentUser)
+                 * recognize this session too.
+                 */
+
+                sessionStorage.setItem(
+                    "access_token",
+                    session.access_token
+                );
+
+                sessionStorage.setItem(
+                    "user",
+                    JSON.stringify({
+                        id: user.id,
+                        email: user.email,
+                        name: profile.name,
+                        role: profile.role,
+                    })
+                );
+
+
+                /*
                  * Existing users go to the page matching
                  * their role.
                  */

@@ -211,6 +211,11 @@
 
           message.textContent = "Registration successful! Redirecting...";
 
+          // Same sessionStorage keys public/js/auth.js sets for password
+          // logins, so pages reading getCurrentUser() recognize this session.
+          sessionStorage.setItem("access_token", googleAccessToken);
+          sessionStorage.setItem("user", JSON.stringify(result.user));
+
           sessionStorage.removeItem("googleUserId");
           sessionStorage.removeItem("googleEmail");
           sessionStorage.removeItem("googleName");
