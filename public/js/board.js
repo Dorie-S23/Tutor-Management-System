@@ -4,6 +4,7 @@ const COURSES = [];
 
 let activeCourseId = null;
 let tutorCount = 0; // total tutors in the system, for the header stat
+let volunteerCounts = {}; // course_id -> number of approved volunteers
 
 // ---------- data loading ----------
 
@@ -41,6 +42,19 @@ async function fetchCourses() {
     rows.forEach((row) => COURSES.push(mapCourseRow(row)));
   } catch (err) {
     showToast("Couldn't load courses from the database.");
+  }
+  renderCourseList();
+  renderDetail();
+}
+
+async function fetchVolunteerCounts() {
+  try {
+    const res = await fetch("/api/course-volunteers/counts?status=approved");
+    const counts = await res.json();
+    if (!res.ok) throw new Error(counts.error || "Failed to load volunteers");
+    volunteerCounts = counts;
+  } catch (err) {
+    volunteerCounts = {};
   }
   renderCourseList();
   renderDetail();
@@ -104,7 +118,7 @@ function renderCourseList() {
         <span class="course-code">${course.code}</span>
         <span class="course-name">${course.name}</span>
         <div class="card-foot">
-          <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned</span>
+          <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned, ${volunteerCounts[course.id] ?? 0} volunteered</span>
           <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : "Open"}</span>
         </div>
       `;
@@ -149,9 +163,12 @@ function renderDetail() {
   document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
   document.getElementById("dTutorsAssigned").textContent =
     `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
+  document.getElementById("dVolunteered").textContent =
+    volunteerCounts[course.id] ?? 0;
 
   renderAssignmentCard(course);
   renderApplicants(course);
+  renderVolunteers(course);
 }
 
 // ---------- applications ----------
@@ -294,6 +311,114 @@ async function setApplicationStatus(course, app, status, name) {
     };
     showToast(messages[status] || "Application updated.");
     await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
+// ---------- volunteers ----------
+
+const volunteerListEl = document.getElementById("volunteerList");
+const volunteersEmptyEl = document.getElementById("volunteersEmpty");
+
+let volunteersRequestId = 0;
+
+async function renderVolunteers(course) {
+  const requestId = ++volunteersRequestId;
+  volunteerListEl.innerHTML = "";
+  volunteersEmptyEl.hidden = true;
+
+  let rows = [];
+  try {
+    const res = await fetch(`/api/course-volunteers?courseId=${course.id}`);
+    rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load volunteers");
+  } catch (err) {
+    if (requestId === volunteersRequestId)
+      showToast("Couldn't load volunteers for this course.");
+    return;
+  }
+
+  // the active course may have changed while this request was in flight
+  if (requestId !== volunteersRequestId) return;
+
+  if (rows.length === 0) {
+    volunteersEmptyEl.hidden = false;
+    return;
+  }
+
+  rows.forEach((vol) => {
+    const student = vol.users;
+    const name = student?.name || "Unknown";
+    const status = (vol.status || "pending").toLowerCase();
+    const markStamp =
+      typeof vol.mark === "number"
+        ? `<span class="stamp ok">Mark ${vol.mark}</span>`
+        : "";
+
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "tutor-row";
+    row.style.cursor = "default";
+    row.innerHTML = `
+      <span class="avatar">${initials(name)}</span>
+      <span class="name-block">
+        <span class="name">${name}</span>
+        <span class="role">${student?.email || ""}</span>
+      </span>
+      <span class="stamp-row">
+        ${markStamp}
+      </span>
+      <span class="status-pill ${status}">${status}</span>
+      <span class="applicant-actions"></span>
+    `;
+
+    const actionsEl = row.querySelector(".applicant-actions");
+
+    if (status === "pending") {
+      actionsEl.appendChild(
+        makeApplicantActionBtn("Approve", "approve", () =>
+          setVolunteerStatus(course, vol, "approved", name),
+        ),
+      );
+      actionsEl.appendChild(
+        makeApplicantActionBtn("Reject", "", () =>
+          setVolunteerStatus(course, vol, "rejected", name),
+        ),
+      );
+    } else {
+      actionsEl.appendChild(
+        makeApplicantActionBtn("Reconsider", "", () =>
+          setVolunteerStatus(course, vol, "pending", name),
+        ),
+      );
+    }
+
+    li.appendChild(row);
+    volunteerListEl.appendChild(li);
+  });
+}
+
+async function setVolunteerStatus(course, vol, status, name) {
+  try {
+    const res = await fetch(`/api/course-volunteers/${vol.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't update that volunteer.");
+      return;
+    }
+    const messages = {
+      approved: `${name} approved for ${course.code}`,
+      rejected: `${name}'s volunteer request rejected`,
+      pending: `${name} moved back to pending`,
+    };
+    showToast(messages[status] || "Volunteer updated.");
+    renderVolunteers(course);
+    fetchVolunteerCounts();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
@@ -455,3 +580,4 @@ document.querySelectorAll('input[type="number"]').forEach((el) => {
 
 fetchCourses();
 fetchTutorCount();
+fetchVolunteerCounts();

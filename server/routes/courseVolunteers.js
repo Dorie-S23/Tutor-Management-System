@@ -3,18 +3,42 @@ const supabase = require("../supabaseClient");
 
 const router = express.Router();
 
+// GET /api/course-volunteers/counts?status=approved - number of volunteers per course, for the course list view
+router.get("/counts", async (req, res) => {
+  const { status } = req.query;
+
+  let query = supabase.from("course_volunteers").select("course_id");
+  if (status) query = query.eq("status", status);
+
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+
+  const counts = {};
+  data.forEach((row) => {
+    counts[row.course_id] = (counts[row.course_id] || 0) + 1;
+  });
+  res.json(counts);
+});
+
 // GET /api/course-volunteers?userId=... - a student's own applications, with course info attached
+// GET /api/course-volunteers?courseId=... - everyone who has volunteered for a course, with student info attached
 router.get("/", async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) {
-    return res.status(400).json({ error: "userId is required" });
+  const { userId, courseId } = req.query;
+  if (!userId && !courseId) {
+    return res.status(400).json({ error: "userId or courseId is required" });
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("course_volunteers")
-    .select("*, courses(course_code, course_name, department)")
-    .eq("user_id", userId)
+    .select(
+      "*, courses(course_code, course_name, department), users(name, email)",
+    )
     .order("created_at", { ascending: false });
+
+  if (userId) query = query.eq("user_id", userId);
+  if (courseId) query = query.eq("course_id", courseId);
+
+  const { data, error } = await query;
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
@@ -74,6 +98,36 @@ router.post("/", async (req, res) => {
   }
 
   res.status(201).json(data);
+});
+
+const VALID_STATUSES = ["pending", "approved", "rejected"];
+
+// PATCH /api/course-volunteers/:id — organiser approves/rejects/resets a volunteer
+router.patch("/:id", async (req, res) => {
+  const { status } = req.body ?? {};
+  if (!VALID_STATUSES.includes(status)) {
+    return res
+      .status(400)
+      .json({ error: "status must be pending, approved or rejected" });
+  }
+
+  const { data, error } = await supabase
+    .from("course_volunteers")
+    .update({ status })
+    .eq("id", req.params.id)
+    .select(
+      "*, courses(course_code, course_name, department), users(name, email)",
+    )
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return res.status(404).json({ error: "Volunteer not found" });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json(data);
 });
 
 // DELETE /api/course-volunteers?userId=...&courseId=... - withdraw

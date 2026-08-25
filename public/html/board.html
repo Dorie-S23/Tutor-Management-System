@@ -87,6 +87,10 @@
                 <dt class="stat-label">tutors assigned</dt>
                 <dd class="stat-value" id="dTutorsAssigned"></dd>
               </dl>
+              <dl class="hours-need">
+                <dt class="stat-label">students volunteered</dt>
+                <dd class="stat-value" id="dVolunteered"></dd>
+              </dl>
               <button
                 class="btn btn-ghost btn-small-pad"
                 id="editCourseBtn"
@@ -116,6 +120,24 @@
             </ul>
             <p class="empty-copy" id="applicantsEmpty" hidden>
               No tutors have applied for this course yet.
+            </p>
+          </section>
+
+          <section class="assign-panel" aria-labelledby="volunteersHeading">
+            <header class="assign-panel-head">
+              <h3 id="volunteersHeading">Student Volunteers</h3>
+            </header>
+
+            <p class="hint">
+              Approve or reject students who've volunteered to be tutored in
+              this module.
+            </p>
+
+            <ul class="tutor-list" id="volunteerList">
+              <!-- injected -->
+            </ul>
+            <p class="empty-copy" id="volunteersEmpty" hidden>
+              No students have volunteered for this course yet.
             </p>
           </section>
         </article>
