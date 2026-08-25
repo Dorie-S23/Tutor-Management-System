@@ -24,24 +24,6 @@ A web app for organising tutor allocations to courses — tracking which courses
 
 - **[Docusaurus](https://docusaurus.io/)** — this site. A separate static site generator (React-based) for project documentation, self-contained in `my-docs/` with its own `package.json`.
 
-## Project Structure
-
-```
-Tutor-Management-System/
-├── server/
-│   ├── index.js            # Express app entry point
-│   ├── supabaseClient.js   # Supabase client setup
-│   └── routes/
-│       └── courses.js      # /api/courses endpoints
-├── public/
-│   ├── html/board.html     # main page (tutor allocation board)
-│   ├── css/global.css
-│   └── js/board.js         # frontend logic, fetches data from the API
-├── my-docs/                 # Docusaurus documentation site (independent app)
-├── package.json
-└── .env                     # SUPABASE_URL, SUPABASE_KEY, PORT (not committed)
-```
-
 ## How It Fits Together
 
 1. `server/index.js` starts an Express server and serves everything in `public/` as static files.
