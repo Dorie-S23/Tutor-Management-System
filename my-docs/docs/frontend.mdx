@@ -1,0 +1,88 @@
+---
+sidebar_position: 4
+---
+
+# Frontend
+
+How the browser-facing side of the app is built, and the conventions to follow when working on it.
+
+## Overview
+
+Everything under `public/` — one plain HTML page per screen, one script per page, and a handful of shared helpers. Covers four roles (student, tutor, organiser, educator), each with their own set of pages behind a shared login.
+
+## Tech Stack
+
+- **Vanilla HTML/CSS/JS** — no framework, no build step. What's written in `public/` is exactly what ships.
+- **No bundler** — pages load plain `<script>` tags (`type="module"` where a page needs `import`/`export`, e.g. the student pages that pull from `storage.js`). Nothing is compiled or bundled.
+- **Google Fonts** — Fraunces, Space Grotesk, Inter, IBM Plex Mono — loaded via `<link>` tags per page.
+- Served as static files by the backend (`express.static("public")` locally, Cloudflare's assets layer in production) — there's no separate frontend dev server.
+
+## Prerequisites
+
+- A modern browser
+- The backend running — the frontend has nothing to run on its own, it's served by Express. See [Getting Started](./getting-started.mdx).
+
+## Getting Started
+
+There's no separate frontend install or dev server to start. Follow [Getting Started](./getting-started.mdx) to get the whole app running, then open `http://localhost:3000`.
+
+## Project Structure
+
+```
+public/
+├── html/                # one .html file per page
+│   ├── login.html, register.html,
+│   │   google-register.html, google-callback.html   # auth
+│   ├── StudentView.html, my-sessions.html,
+│   │   log-hours.html, calendar.html, profile.html   # student pages
+│   ├── dashboard.html, timesheets.html               # tutor pages
+│   ├── educator.html                                 # educator page
+│   └── board.html, tutors.html                       # organiser pages
+├── css/
+│   ├── style.css                  # student pages
+│   ├── global.css                 # organiser pages (board / tutors)
+│   └── auth.css, auth-global.css  # login / register
+└── js/
+    ├── nav.js          # highlights the active nav tab
+    ├── storage.js      # fetch() wrapper around the hour-entries / course API
+    ├── sessions.js     # reads the logged-in user out of sessionStorage
+    ├── logout.js       # shared handler for any page with a #logout-button
+    ├── auth.js         # login/register form handling, incl. Google OAuth
+    └── <page>.js        # one script per page (studentview.js, calendar.js, board.js, ...)
+```
+
+Each page is self-contained — its `.html` links only the stylesheet and script(s) it needs. Different areas of the app can look and behave differently without a shared design system forcing consistency across all of them.
+
+## How a Page Works
+
+1. The `.html` file holds the markup and links its `.js` file(s).
+2. On load, page scripts read the logged-in user out of `sessionStorage` (set at login by `auth.js`). If there isn't one, the script redirects to `login.html` before rendering anything.
+3. The script calls the backend's REST API with `fetch()` for whatever data the page needs — e.g. `studentview.js` calls `/api/courses` and `/api/course-volunteers`.
+4. DOM updates happen directly (`element.innerHTML`, `createElement`, `.hidden`) — there's no virtual DOM or component re-render cycle.
+
+:::info No shared state layer
+There's no client-side store. Each page fetches what it needs on load and re-fetches after a mutation (e.g. after submitting a volunteer application) rather than keeping data in memory across pages.
+:::
+
+## Development Guide
+
+### Branching & commit conventions
+
+Follows the team's GitHub methodology: commits as `type: short description` (`feat`, `fix`, `docs`, `style`, `refactor`, `chore`), one logical change per commit. Feature work happens on `feature/<name>` / `bugfix/<name>` branches, merged via a reviewed pull request.
+
+### Code style / formatting
+
+```bash
+npm run format         # auto-fix formatting across the whole repo
+npm run format:check   # check only, no writes — what CI runs
+```
+
+Prettier only, default config (`.prettierrc` is empty `{}`). No linter is configured.
+
+### Styling conventions
+
+There's no single shared design system — each "zone" of the app (student, organiser, auth) has its own stylesheet and its own visual language. When adding a page, match the stylesheet already used by its zone rather than introducing a new one.
+
+## Deployment
+
+The frontend ships as static assets inside the same Cloudflare Worker as the backend — see [Backend → Deployment](./backend.mdx#deployment).
