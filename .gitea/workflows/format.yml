@@ -1,0 +1,11 @@
+name: Format Check
+
+on: [push]
+
+jobs:
+  format:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run format:check
