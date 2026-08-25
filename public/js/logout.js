@@ -1,8 +1,8 @@
 document.getElementById("logout-button")?.addEventListener("click", (event) => {
-    event.preventDefault();
+  event.preventDefault();
 
-    sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("user");
+  sessionStorage.removeItem("access_token");
+  sessionStorage.removeItem("user");
 
-    window.location.href = "login.html";
+  window.location.href = "login.html";
 });

@@ -1,6 +1,6 @@
-const express = require('express');
-const multer = require('multer');
-const anthropic = require('./anthropicClient');
+const express = require("express");
+const multer = require("multer");
+const anthropic = require("./anthropicClient");
 
 const router = express.Router();
 
@@ -21,78 +21,89 @@ For each session capture:
 Ignore non-class rows such as "BREAK" labels, empty cells, and the day/time headers themselves. This timetable is a weekly template with no real calendar dates attached to it — do not invent or guess a date.`;
 
 const EXTRACT_CLASSES_TOOL = {
-  name: 'extract_classes',
-  description: 'Return the list of recurring weekly classes found in the timetable PDF.',
+  name: "extract_classes",
+  description:
+    "Return the list of recurring weekly classes found in the timetable PDF.",
   strict: true,
   input_schema: {
-    type: 'object',
+    type: "object",
     properties: {
       classes: {
-        type: 'array',
+        type: "array",
         items: {
-          type: 'object',
+          type: "object",
           properties: {
-            title: { type: 'string' },
+            title: { type: "string" },
             dayName: {
-              type: 'string',
-              enum: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+              type: "string",
+              enum: [
+                "Sunday",
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+              ],
             },
-            startTime: { type: 'string' },
-            endTime: { type: 'string' },
-            venue: { type: 'string' },
+            startTime: { type: "string" },
+            endTime: { type: "string" },
+            venue: { type: "string" },
           },
-          required: ['title', 'dayName', 'startTime', 'endTime', 'venue'],
+          required: ["title", "dayName", "startTime", "endTime", "venue"],
           additionalProperties: false,
         },
       },
     },
-    required: ['classes'],
+    required: ["classes"],
     additionalProperties: false,
   },
 };
 
-router.post('/timetable/parse', upload.single('file'), async (req, res) => {
+router.post("/timetable/parse", upload.single("file"), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'No PDF file uploaded.' });
+    return res.status(400).json({ error: "No PDF file uploaded." });
   }
-  if (req.file.mimetype !== 'application/pdf') {
-    return res.status(400).json({ error: 'Uploaded file must be a PDF.' });
+  if (req.file.mimetype !== "application/pdf") {
+    return res.status(400).json({ error: "Uploaded file must be a PDF." });
   }
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-opus-5',
+      model: "claude-opus-5",
       max_tokens: 8000,
-      output_config: { effort: 'low' },
+      output_config: { effort: "low" },
       tools: [EXTRACT_CLASSES_TOOL],
-      tool_choice: { type: 'tool', name: 'extract_classes' },
+      tool_choice: { type: "tool", name: "extract_classes" },
       messages: [
         {
-          role: 'user',
+          role: "user",
           content: [
             {
-              type: 'document',
+              type: "document",
               source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: req.file.buffer.toString('base64'),
+                type: "base64",
+                media_type: "application/pdf",
+                data: req.file.buffer.toString("base64"),
               },
             },
-            { type: 'text', text: EXTRACT_PROMPT },
+            { type: "text", text: EXTRACT_PROMPT },
           ],
         },
       ],
     });
 
-    const toolUse = response.content.find((block) => block.type === 'tool_use');
+    const toolUse = response.content.find((block) => block.type === "tool_use");
     if (!toolUse) {
-      return res.status(502).json({ error: 'Could not extract classes from that PDF.' });
+      return res
+        .status(502)
+        .json({ error: "Could not extract classes from that PDF." });
     }
 
     res.json({ classes: toolUse.input.classes });
   } catch (err) {
-    console.error('Timetable parse failed:', err);
-    res.status(500).json({ error: 'Failed to parse timetable PDF.' });
+    console.error("Timetable parse failed:", err);
+    res.status(500).json({ error: "Failed to parse timetable PDF." });
   }
 });
 

@@ -1,172 +1,120 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>Register | Tutor Management System</title>
 
-    <link rel="stylesheet" href="../css/auth-global.css">
+    <link rel="stylesheet" href="../css/auth-global.css" />
 
     <!-- Fonts used by your stylesheet -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <link
-        href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap"
-        rel="stylesheet">
-</head>
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
 
-<body>
-
+  <body>
     <main class="auth-page">
+      <section class="auth-card">
+        <header class="auth-header">
+          <span class="eyebrow"> Tutor Management System </span>
 
-        <section class="auth-card">
+          <h1>Create your account</h1>
 
-            <header class="auth-header">
+          <p>Register to get started.</p>
+        </header>
 
-                <span class="eyebrow">
-                    Tutor Management System
-                </span>
-
-                <h1>Create your account</h1>
-
-                <p>
-                    Register to get started.
-                </p>
-
-            </header>
-
-
-            <form id="register-form">
-
-                <!-- =========================
+        <form id="register-form">
+          <!-- =========================
                      NAME
                      ========================= -->
 
-                <div class="form-group">
+          <div class="form-group">
+            <label for="name"> Full name </label>
 
-                    <label for="name">
-                        Full name
-                    </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              placeholder="Your full name"
+              required
+            />
+          </div>
 
-                    <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        placeholder="Your full name"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- =========================
+          <!-- =========================
                      EMAIL
                      ========================= -->
 
-                <div class="form-group">
+          <div class="form-group">
+            <label for="email"> Email </label>
 
-                    <label for="email">
-                        Email
-                    </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
 
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        placeholder="you@example.com"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- =========================
+          <!-- =========================
                      PASSWORD
                      ========================= -->
 
-                <div class="form-group">
+          <div class="form-group">
+            <label for="password"> Password </label>
 
-                    <label for="password">
-                        Password
-                    </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Create a password"
+              required
+            />
+          </div>
 
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        placeholder="Create a password"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- =========================
+          <!-- =========================
                      CONFIRM PASSWORD
                      ========================= -->
 
-                <div class="form-group">
+          <div class="form-group">
+            <label for="confirm-password"> Confirm password </label>
 
-                    <label for="confirm-password">
-                        Confirm password
-                    </label>
+            <input
+              type="password"
+              id="confirm-password"
+              name="confirm-password"
+              placeholder="Enter your password again"
+              required
+            />
+          </div>
 
-                    <input
-                        type="password"
-                        id="confirm-password"
-                        name="confirm-password"
-                        placeholder="Enter your password again"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- =========================
+          <!-- =========================
                      ROLE
                      ========================= -->
 
-                <div class="form-group">
+          <div class="form-group">
+            <label for="role"> Account type </label>
 
-                    <label for="role">
-                        Account type
-                    </label>
+            <select id="role" name="role" required>
+              <option value="" disabled selected>Select your role</option>
 
-                    <select
-                        id="role"
-                        name="role"
-                        required
-                    >
+              <option value="student">Student</option>
 
-                        <option value="" disabled selected>
-                            Select your role
-                        </option>
+              <option value="tutor">Tutor</option>
 
-                        <option value="student">
-                            Student
-                        </option>
+              <option value="organiser">Organiser</option>
 
-                        <option value="tutor">
-                            Tutor
-                        </option>
+              <option value="educator">Educator</option>
+            </select>
+          </div>
 
-                        <option value="organiser">
-                            Organiser
-                        </option>
-
-                        <option value="educator">
-                            Educator
-                        </option>
-
-                    </select>
-
-                </div>
-
-
-                <!-- =========================
+          <!-- =========================
                      STUDENT NUMBER
                      
                      Shown for:
@@ -174,106 +122,66 @@
                      - Tutor
                      ========================= -->
 
-                <div
-                    class="form-group"
-                    id="student-number-group"
-                    style="display: none;"
-                >
+          <div
+            class="form-group"
+            id="student-number-group"
+            style="display: none"
+          >
+            <label for="student-number"> Student number </label>
 
-                    <label for="student-number">
-                        Student number
-                    </label>
+            <input
+              type="text"
+              id="student-number"
+              name="student-number"
+              placeholder="e.g. 1234567"
+            />
+          </div>
 
-                    <input
-                        type="text"
-                        id="student-number"
-                        name="student-number"
-                        placeholder="e.g. 1234567"
-                    >
-
-                </div>
-
-
-                <!-- =========================
-                     STAFF ID
-                     
-                     Shown for:
-                     - Organiser
-                     ========================= -->
-
-                <div
-                    class="form-group"
-                    id="staff-id-group"
-                    style="display: none;"
-                >
-
-                    <label for="staff-id">
-                        Staff ID
-                    </label>
-
-                    <input
-                        type="text"
-                        id="staff-id"
-                        name="staff-id"
-                        placeholder="Enter your staff ID"
-                    >
-
-                </div>
-
-
-                <!-- =========================
+          <!-- =========================
                      SUBMIT
                      ========================= -->
 
-                <button
-                    type="submit"
-                    class="btn btn-primary auth-button"
-                >
-                    Create account
-                </button>
+          <button type="submit" class="btn btn-primary auth-button">
+            Create account
+          </button>
+        </form>
 
-            </form>
+        <!-- =========================
+                 GOOGLE REGISTRATION
+                 ========================= -->
 
+        <div class="auth-divider">
+          <span>OR</span>
+        </div>
 
-            <!-- =========================
+        <button
+          type="button"
+          id="google-register-button"
+          class="btn btn-ghost auth-button"
+        >
+          Continue with Google
+        </button>
+
+        <!-- =========================
                  MESSAGE
                  ========================= -->
 
-            <p
-                id="register-message"
-                class="form-message"
-                aria-live="polite"
-            ></p>
+        <p id="register-message" class="form-message" aria-live="polite"></p>
 
-
-            <!-- =========================
+        <!-- =========================
                  LOGIN LINK
                  ========================= -->
 
-            <div class="auth-divider">
+        <div class="auth-divider">
+          <span> Already have an account? </span>
+        </div>
 
-                <span>
-                    Already have an account?
-                </span>
-
-            </div>
-
-
-            <a
-                href="login.html"
-                class="btn btn-ghost auth-button"
-            >
-                Back to login
-            </a>
-
-
-        </section>
-
+        <a href="login.html" class="btn btn-ghost auth-button">
+          Back to login
+        </a>
+      </section>
     </main>
 
-
     <script src="../js/auth.js"></script>
-
-</body>
-
+  </body>
 </html>

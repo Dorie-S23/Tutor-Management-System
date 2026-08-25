@@ -7,6 +7,8 @@
     "start": "node server.js",
     "dev:worker": "wrangler dev",
     "deploy": "wrangler deploy",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -26,6 +28,7 @@
     "multer": "^2.0.1"
   },
   "devDependencies": {
+    "prettier": "3.9.6",
     "wrangler": "^4.125.0"
   },
   "allowScripts": {

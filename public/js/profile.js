@@ -17,7 +17,9 @@ const form = document.getElementById("profileForm");
 const fullNameEl = document.getElementById("fullName");
 const yearOfStudyEl = document.getElementById("yearOfStudy");
 const bioEl = document.getElementById("bio");
-const subjectCheckboxes = Array.from(document.querySelectorAll('input[name="subject"]'));
+const subjectCheckboxes = Array.from(
+  document.querySelectorAll('input[name="subject"]'),
+);
 
 function loadProfile() {
   const raw = localStorage.getItem(PROFILE_KEY);
@@ -43,7 +45,9 @@ form.addEventListener("submit", (e) => {
   const profile = {
     fullName: fullNameEl.value.trim(),
     yearOfStudy: yearOfStudyEl.value.trim(),
-    subjects: subjectCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value),
+    subjects: subjectCheckboxes
+      .filter((cb) => cb.checked)
+      .map((cb) => cb.value),
     bio: bioEl.value.trim(),
   };
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));

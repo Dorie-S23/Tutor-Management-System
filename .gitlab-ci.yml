@@ -1,3 +1,10 @@
+format:
+  stage: test
+  image: node:20
+  script:
+    - npm ci
+    - npm run format:check
+
 pages:
   stage: deploy
   image: node:20
@@ -12,4 +19,4 @@ pages:
     paths:
       - public
   rules:
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
