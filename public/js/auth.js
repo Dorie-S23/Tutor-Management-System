@@ -10,10 +10,6 @@ const studentNumberGroup = document.getElementById("student-number-group");
 
 const studentNumberInput = document.getElementById("student-number");
 
-const staffIdGroup = document.getElementById("staff-id-group");
-
-const staffIdInput = document.getElementById("staff-id");
-
 const googleRegisterButton = document.getElementById("google-register-button");
 
 if (googleRegisterButton) {
@@ -34,10 +30,6 @@ if (roleSelect) {
 
       // Make student number required
       studentNumberInput.required = true;
-    } else if (roleSelect.value === "organiser") {
-      staffIdGroup.style.display = "block";
-
-      staffIdInput.required = true;
     } else {
       // Hide student number field
       studentNumberGroup.style.display = "none";

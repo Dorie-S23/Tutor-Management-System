@@ -3,13 +3,47 @@ const express = require("express");
 const router = express.Router();
 
 /* =========================================================
+   GENERATE STAFF ID
+
+   Organisers don't choose their own staff ID - we assign
+   one in the format "A" followed by 7 digits (e.g.
+   A1234567), retrying on the rare chance of a collision.
+   ========================================================= */
+
+async function generateStaffId(supabase) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const digits = Math.floor(Math.random() * 10000000)
+      .toString()
+      .padStart(7, "0");
+
+    const staffId = `A${digits}`;
+
+    const { data: existing, error } = await supabase
+      .from("organisers")
+      .select("staff_id")
+      .eq("staff_id", staffId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!existing) {
+      return staffId;
+    }
+  }
+
+  throw new Error("Could not generate a unique staff ID");
+}
+
+/* =========================================================
    REGISTER
    POST /api/auth/register
    ========================================================= */
 
 router.post("/register", async (req, res) => {
   try {
-    const { email, password, name, role, studentNumber, staffId } = req.body;
+    const { email, password, name, role, studentNumber } = req.body;
 
     /* =====================================================
            Validate required fields
@@ -57,16 +91,6 @@ router.post("/register", async (req, res) => {
     if ((userRole === "student" || userRole === "tutor") && !studentNumber) {
       return res.status(400).json({
         error: "Student number is required for students and tutors",
-      });
-    }
-
-    /* =====================================================
-           Validate organiser staff ID
-           ===================================================== */
-
-    if (userRole === "organiser" && !staffId) {
-      return res.status(400).json({
-        error: "Staff ID is required for organisers",
       });
     }
 
@@ -236,6 +260,8 @@ router.post("/register", async (req, res) => {
            email
            ===================================================== */
     else if (userRole === "organiser") {
+      const staffId = await generateStaffId(req.supabase);
+
       const { error: organiserError } = await req.supabase
         .from("organisers")
         .insert({
@@ -352,7 +378,6 @@ router.post("/google/register", async (req, res) => {
             name,
             role,
             studentNumber,
-            staffId,
             accessToken
         } = req.body;
 
@@ -408,22 +433,6 @@ router.post("/google/register", async (req, res) => {
             return res.status(400).json({
                 error:
                     "Student number is required for students and tutors"
-            });
-        }
-
-
-        /* =====================================================
-           Validate organiser staff ID
-           ===================================================== */
-
-        if (
-            userRole === "organiser" &&
-            !staffId
-        ) {
-
-            return res.status(400).json({
-                error:
-                    "Staff ID is required for organisers"
             });
         }
 
@@ -700,6 +709,9 @@ router.post("/google/register", async (req, res) => {
            ===================================================== */
 
         else if (userRole === "organiser") {
+
+            const staffId =
+                await generateStaffId(authenticatedSupabase);
 
             const {
                 error: organiserError
