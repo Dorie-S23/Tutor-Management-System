@@ -1,0 +1,126 @@
+---
+sidebar_position: 5
+---
+
+# Backend
+
+How the server side of the app is built: the API, its routes, and the conventions to follow when adding to it.
+
+## Overview
+
+A single hand-written Express API in front of Supabase — every request from the frontend goes through `/api/*` routes we wrote ourselves; nothing in the browser talks to Supabase directly. The same app runs two ways: as a plain Node process locally, and as a Cloudflare Worker in production.
+
+## Tech Stack
+
+- **[Node.js](https://nodejs.org/)** — runtime.
+- **[Express 5](https://expressjs.com/)** — routing and middleware.
+- **[Supabase](https://supabase.com/)** (`@supabase/supabase-js`) — hosted Postgres for data storage, plus Supabase Auth for sign-up/sign-in (not a hand-rolled JWT system).
+- **[Anthropic API](https://console.anthropic.com)** (`@anthropic-ai/sdk`) — used by the timetable-PDF-import feature to extract class times from an uploaded PDF into structured JSON.
+- **[dotenv](https://www.npmjs.com/package/dotenv)** — loads `.env` locally (Cloudflare Workers gets its environment a different way, via `wrangler` secrets/vars — not covered by `dotenv` in production).
+- **[cors](https://www.npmjs.com/package/cors)**, **[multer](https://www.npmjs.com/package/multer)** — CORS headers and multipart/file-upload handling (used by the timetable PDF upload).
+
+## Prerequisites
+
+- Node.js 20+
+- Access to the project's Supabase project (URL + anon key) — ask a teammate
+- *(Optional)* An Anthropic API key with a funded balance — only needed for timetable PDF parsing; everything else works without it
+
+## Getting Started
+
+Full setup steps (clone, install, `.env`, run) are in [Getting Started](./getting-started.mdx) — this section only covers what's backend-specific.
+
+Environment variables the server reads:
+
+| Variable | Required | Description |
+|---|---|---|
+| `SUPABASE_URL` | Yes | Your Supabase project's URL |
+| `SUPABASE_ANON_KEY` | Yes | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
+| `ANTHROPIC_API_KEY` | No | Only needed for timetable PDF parsing |
+| `PORT` | No | Defaults to `3000` |
+
+There's no separate migration or seed step — the Postgres schema (tables, columns, constraints) is managed directly in the Supabase dashboard's SQL editor, not via migration files in this repo.
+
+```bash
+npm start
+```
+
+Runs `server.js`, which loads `app.js` (the actual Express app) and serves `public/` as static files, at `http://localhost:3000`.
+
+## Project Structure
+
+```
+app.js                     # the Express app itself — middleware + every route mounted here
+server.js                  # Node entry point: requires app.js, adds express.static, listens
+worker.js                  # Cloudflare Workers entry point: same app.js, no express.static
+routes/
+└── auth.js                 # /api/auth/register, /login, /google, /google/register
+server/
+├── supabaseClient.js       # Supabase client shared by everything under server/routes/
+├── anthropicClient.js      # Anthropic client, constructed lazily
+├── timetableRoutes.js      # POST /api/timetable/parse — LLM-based PDF parsing
+└── routes/
+    ├── courses.js           # /api/courses — CRUD + tutor-assignment counter
+    ├── tutors.js             # /api/tutors
+    ├── hourEntries.js        # /api/hour-entries — a student's logged hours
+    ├── courseVolunteers.js   # /api/course-volunteers — mark-gated volunteer applications
+    └── tutorApplications.js  # /api/tutor-applications — year-gated tutor applications
+models/
+└── User.js                  # plain User data class
+```
+
+:::info Two Supabase clients
+`app.js` builds its own Supabase client and attaches it to every request as `req.supabase` (used by `routes/auth.js`). Separately, `server/supabaseClient.js` exports its own instance, imported directly by everything under `server/routes/`. Both read the same env vars, so they behave identically — it's two instantiations rather than one shared one.
+:::
+
+## API Conventions
+
+- Every endpoint lives under `/api/*` and is a plain Express route — no framework-generated CRUD, no GraphQL.
+- Request/response bodies are JSON (`express.json()` / `express.urlencoded()`).
+- Errors are always `{ "error": "human-readable message" }`, with a status code that means something:
+  - `400` — bad/missing input, caught before touching the database
+  - `401` — authentication failed (wrong password, no session)
+  - `403` — authenticated, but not allowed to do this (e.g. a mark below a course's minimum)
+  - `404` — the thing referenced doesn't exist
+  - `409` — conflicts with something that already exists (duplicate application, taken course code)
+  - `500` — the database/Supabase call itself failed
+- No API versioning and no OpenAPI/Swagger spec — routes are small and read top-to-bottom instead.
+- Validation (required fields, numeric ranges, business rules like "mark must be ≥ course minimum") happens in the route handler itself, before any database call — never trust the client to have already checked.
+
+## Development Guide
+
+### Branching & commit conventions
+
+Follows the team's GitHub methodology: commits as `type: short description` (`feat`, `fix`, `docs`, `style`, `refactor`, `chore`), one logical change per commit. Feature work happens on `feature/<name>` / `bugfix/<name>` branches, merged via a reviewed pull request.
+
+### Code style / formatting
+
+```bash
+npm run format         # auto-fix formatting across the whole repo
+npm run format:check   # check only, no writes — what CI runs
+```
+
+Prettier only, default config. No linter is configured.
+
+### Adding a new route
+
+Add the file under `server/routes/`, `require` the shared client from `server/supabaseClient.js` (don't create a new client instance), and mount it in `app.js` alongside the existing `app.use('/api/...', ...)` lines.
+
+## Deployment
+
+The same `app.js` runs two ways:
+
+```bash
+npm start        # server.js — plain Node process, express.static serves public/
+npm run dev:worker  # wrangler dev — local Cloudflare Workers runtime
+npm run deploy      # wrangler deploy — ships to Cloudflare Workers
+```
+
+In the Workers build, static files in `public/` are served by Cloudflare's assets layer (configured in `wrangler.toml`) instead of `express.static`.
+
+GitLab CI (`.gitlab-ci.yml`) currently runs a `format` job (Prettier check) on every push, and a `pages` job that builds and deploys **this documentation site** to GitLab Pages. There's no CI job yet that deploys the app itself — that still happens via `npm run deploy` run by hand.
+
+:::danger Open security item
+Every Supabase table currently has Row Level Security **disabled**. Supabase auto-generates a full REST API for every table via PostgREST — with RLS off, anyone holding the anon key (which is unavoidably public, it ships in the browser) can read and write every table directly, completely bypassing this hand-written API. This has been confirmed live: it's possible to pull every user's real name, email and role straight from Supabase with nothing but the anon key.
+
+Fix, not yet done: re-enable RLS on every table, and switch `server/supabaseClient.js` / `app.js`'s Supabase client to a `service_role` key (bypasses RLS, must never be sent to a browser) so the server keeps working exactly as-is while the direct public API gets locked out.
+:::
