@@ -224,6 +224,16 @@ function buildClashStamp(check) {
   return `<span class="stamp warn">Clashes with ${c.course_code} (${c.tutor_start_time.slice(0, 5)}–${c.tutor_end_time.slice(0, 5)})</span>`;
 }
 
+function buildWorkloadStamp(check) {
+  if (!check) return "";
+  const { weeklyHourCap, projectedHours } = check.workload;
+  if (weeklyHourCap == null) {
+    return `<span class="stamp">${projectedHours} hrs/wk · no cap set</span>`;
+  }
+  const over = projectedHours > weeklyHourCap;
+  return `<span class="stamp ${over ? "blocked" : "ok"}">${projectedHours}/${weeklyHourCap} hrs/wk${over ? " · over cap" : ""}</span>`;
+}
+
 async function renderApplicants(course) {
   const requestId = ++applicantsRequestId;
   applicantListEl.innerHTML = "";
@@ -282,6 +292,7 @@ async function renderApplicants(course) {
         ${markStamp}
         ${availabilityStamp}
         ${buildClashStamp(check)}
+        ${buildWorkloadStamp(check)}
       </span>
       <span class="status-pill ${status}">${status}</span>
       <span class="applicant-actions"></span>
@@ -290,6 +301,7 @@ async function renderApplicants(course) {
     const actionsEl = row.querySelector(".applicant-actions");
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
+    const overCap = check?.workload?.overCap;
 
     if (status === "pending") {
       actionsEl.appendChild(
@@ -305,7 +317,9 @@ async function renderApplicants(course) {
             }
             setApplicationStatus(course, app, "approved", name);
           },
-          isFull && "This course already has all the tutors it needs",
+          (isFull && "This course already has all the tutors it needs") ||
+            (overCap &&
+              `This would put ${name} at ${check.workload.projectedHours} hrs/week, over their ${check.workload.weeklyHourCap} hr cap`),
         ),
       );
       actionsEl.appendChild(

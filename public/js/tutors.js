@@ -12,6 +12,7 @@ const studentNumberEl = document.getElementById("studentNumber");
 const emailEl = document.getElementById("email");
 const academicLevelEl = document.getElementById("academicLevel");
 const hourlyRateEl = document.getElementById("hourlyRate");
+const weeklyHourCapEl = document.getElementById("weeklyHourCap");
 const submitBtn = document.getElementById("submitBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const tableBody = document.getElementById("tutorsTableBody");
@@ -39,6 +40,7 @@ function renderTutors(tutors) {
       <td>${tutor.email || ""}</td>
       <td>${ACADEMIC_LEVEL_LABELS[tutor.academic_level] || ""}</td>
       <td>${tutor.hourly_rate != null ? tutor.hourly_rate : ""}</td>
+      <td>${tutor.weekly_hour_cap != null ? `${tutor.weekly_hour_cap} hrs` : ""}</td>
       <td class="row-actions">
         <button type="button" class="btn-small btn-small-neutral" data-action="edit">Edit</button>
         <button type="button" class="btn-small" data-action="delete">Delete</button>
@@ -61,6 +63,8 @@ function startEdit(tutor) {
   emailEl.value = tutor.email || "";
   academicLevelEl.value = tutor.academic_level || "";
   hourlyRateEl.value = tutor.hourly_rate != null ? tutor.hourly_rate : "";
+  weeklyHourCapEl.value =
+    tutor.weekly_hour_cap != null ? tutor.weekly_hour_cap : "";
   submitBtn.textContent = "Save changes";
   cancelEditBtn.hidden = false;
   nameEl.focus();
@@ -94,6 +98,7 @@ form.addEventListener("submit", async (e) => {
     email: emailEl.value.trim() || null,
     academic_level: academicLevelEl.value || null,
     hourly_rate: hourlyRateEl.value ? Number(hourlyRateEl.value) : null,
+    weekly_hour_cap: weeklyHourCapEl.value ? Number(weeklyHourCapEl.value) : null,
   };
 
   const id = tutorIdEl.value;

@@ -44,11 +44,25 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/tutors — add a new tutor
 router.post("/", async (req, res) => {
-  const { student_number, email, name, hourly_rate, academic_level } = req.body;
+  const {
+    student_number,
+    email,
+    name,
+    hourly_rate,
+    academic_level,
+    weekly_hour_cap,
+  } = req.body;
 
   const { data, error } = await supabase
     .from("tutors")
-    .insert({ student_number, email, name, hourly_rate, academic_level })
+    .insert({
+      student_number,
+      email,
+      name,
+      hourly_rate,
+      academic_level,
+      weekly_hour_cap,
+    })
     .select()
     .single();
 
@@ -58,11 +72,25 @@ router.post("/", async (req, res) => {
 
 // PUT /api/tutors/:id — edit an existing tutor
 router.put("/:id", async (req, res) => {
-  const { student_number, email, name, hourly_rate, academic_level } = req.body;
+  const {
+    student_number,
+    email,
+    name,
+    hourly_rate,
+    academic_level,
+    weekly_hour_cap,
+  } = req.body;
 
   const { data, error } = await supabase
     .from("tutors")
-    .update({ student_number, email, name, hourly_rate, academic_level })
+    .update({
+      student_number,
+      email,
+      name,
+      hourly_rate,
+      academic_level,
+      weekly_hour_cap,
+    })
     .eq("id", req.params.id)
     .select()
     .single();
@@ -121,8 +149,9 @@ router.put("/:id/busy-times", async (req, res) => {
   res.json(data);
 });
 
-// GET /api/tutors/:id/assignment-check?courseId=X — timetable clashes for
-// this tutor if they were assigned to courseId.
+// GET /api/tutors/:id/assignment-check?courseId=X — timetable clashes and
+// weekly-hours workload for this tutor if they were assigned to courseId.
+// Combined into one endpoint since the organiser board renders both at once.
 router.get("/:id/assignment-check", async (req, res) => {
   const tutorId = req.params.id;
   const { courseId } = req.query;
@@ -130,9 +159,19 @@ router.get("/:id/assignment-check", async (req, res) => {
     return res.status(400).json({ error: "courseId is required" });
   }
 
+  const { data: tutor, error: tutorError } = await supabase
+    .from("tutors")
+    .select("weekly_hour_cap")
+    .eq("id", tutorId)
+    .single();
+
+  if (tutorError || !tutor) {
+    return res.status(404).json({ error: "Tutor not found" });
+  }
+
   const { data: course, error: courseError } = await supabase
     .from("courses")
-    .select("Day_of_tut, tutor_start_time, tutor_end_time")
+    .select("Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week")
     .eq("id", courseId)
     .single();
 
@@ -140,6 +179,21 @@ router.get("/:id/assignment-check", async (req, res) => {
     return res.status(404).json({ error: "Course not found" });
   }
 
+  // Tutor's other approved courses (for both course-vs-course clashes and workload)
+  const { data: otherApprovals, error: approvalsError } = await supabase
+    .from("tutor_subject_preference")
+    .select(
+      "course_id, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
+    )
+    .eq("tutor_id", tutorId)
+    .eq("status", "approved")
+    .neq("course_id", courseId);
+
+  if (approvalsError) {
+    return res.status(500).json({ error: approvalsError.message });
+  }
+
+  // ---- clash check ----
   let busyTimeClashes = [];
   let courseClashes = [];
 
@@ -163,19 +217,6 @@ router.get("/:id/assignment-check", async (req, res) => {
       overlaps(courseStart, courseEnd, toMinutes(b.start_time), toMinutes(b.end_time)),
     );
 
-    const { data: otherApprovals, error: approvalsError } = await supabase
-      .from("tutor_subject_preference")
-      .select(
-        "courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time)",
-      )
-      .eq("tutor_id", tutorId)
-      .eq("status", "approved")
-      .neq("course_id", courseId);
-
-    if (approvalsError) {
-      return res.status(500).json({ error: approvalsError.message });
-    }
-
     courseClashes = (otherApprovals || [])
       .map((a) => a.courses)
       .filter((c) => c && DAY_NAMES.indexOf(c.Day_of_tut) === courseDay)
@@ -189,7 +230,25 @@ router.get("/:id/assignment-check", async (req, res) => {
       );
   }
 
-  res.json({ clashes: { busyTimeClashes, courseClashes } });
+  // ---- workload check ----
+  const currentAssignedHours = (otherApprovals || []).reduce(
+    (sum, a) => sum + (a.courses?.hours_per_week || 0),
+    0,
+  );
+  const courseHours = course.hours_per_week || 0;
+  const projectedHours = currentAssignedHours + courseHours;
+  const weeklyHourCap = tutor.weekly_hour_cap;
+
+  res.json({
+    clashes: { busyTimeClashes, courseClashes },
+    workload: {
+      weeklyHourCap,
+      currentAssignedHours,
+      courseHours,
+      projectedHours,
+      overCap: weeklyHourCap != null && projectedHours > weeklyHourCap,
+    },
+  });
 });
 
 module.exports = router;
