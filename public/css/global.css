@@ -1860,3 +1860,19 @@ body.tutor-app {
     margin: 0;
   }
 }
+
+/* ---------- timesheet review (organiser) ---------- */
+
+.timesheet-review-layout {
+  grid-template-columns: 1fr;
+}
+
+.submission-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.submission-detail table {
+  width: 100%;
+}

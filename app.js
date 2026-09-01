@@ -11,6 +11,7 @@ const timetableRoutes = require("./server/timetableRoutes");
 const hourEntriesRoutes = require("./server/routes/hourEntries");
 const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
 const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
+const timesheetsRoutes = require("./server/routes/timesheets");
 
 // Supabase client
 const supabase = createClient(
@@ -73,5 +74,8 @@ app.use("/api/course-volunteers", courseVolunteersRoutes);
 
 // Tutor applications (tutor_subject_preference)
 app.use("/api/tutor-applications", tutorApplicationsRoutes);
+
+// Timesheet submission + organiser sign-off
+app.use("/api/timesheets", timesheetsRoutes);
 
 module.exports = app;

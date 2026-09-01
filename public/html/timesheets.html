@@ -98,6 +98,44 @@
         </p>
       </div>
 
+      <div class="card no-print">
+        <h2>Submit a weekly timesheet</h2>
+        <p class="card-hint">
+          Submitting locks in that week's logged hours for organiser sign-off
+          — later edits to your logged hours won't change a submitted week.
+        </p>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="submitWeekStart">Week starting (Monday)</label>
+            <input type="date" id="submitWeekStart" />
+          </div>
+          <div class="form-actions">
+            <button type="button" id="submitTimesheetBtn" class="btn-primary">
+              Submit for approval
+            </button>
+          </div>
+        </div>
+        <p class="card-hint" id="submitWeekHint"></p>
+      </div>
+
+      <div class="card no-print">
+        <h2>My submitted timesheets</h2>
+        <table class="tutors-table">
+          <thead>
+            <tr>
+              <th>Week of</th>
+              <th>Hours</th>
+              <th>Status</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody id="submissionsTableBody"></tbody>
+        </table>
+        <p class="card-hint" id="submissionsEmpty" hidden>
+          No timesheets submitted yet.
+        </p>
+      </div>
+
       <div class="card claim-preview" id="claimWrapper">
         <div class="claim-form" id="claimForm">
           <table class="claim-title-table">
@@ -184,6 +222,8 @@
         </div>
       </div>
     </main>
+
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
     <script type="module" src="../js/timesheets.js"></script>
     <script src="../js/logout.js"></script>
