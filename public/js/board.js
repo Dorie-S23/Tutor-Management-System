@@ -186,6 +186,44 @@ const applicantsEmptyEl = document.getElementById("applicantsEmpty");
 
 let applicantsRequestId = 0;
 
+// Live timetable-clash + weekly-hours check for one tutor against one course.
+// Fails open (returns null) so a check-endpoint hiccup never blocks rendering
+// the applicant list — the stamps just don't show for that row.
+async function fetchAssignmentCheck(tutorId, courseId) {
+  try {
+    const res = await fetch(
+      `/api/tutors/${tutorId}/assignment-check?courseId=${courseId}`,
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "assignment-check failed");
+    return data;
+  } catch (err) {
+    return null;
+  }
+}
+
+function hasClash(check) {
+  return (
+    !!check &&
+    (check.clashes.busyTimeClashes.length > 0 ||
+      check.clashes.courseClashes.length > 0)
+  );
+}
+
+function buildClashStamp(check) {
+  if (!check) return "";
+  const { busyTimeClashes, courseClashes } = check.clashes;
+  if (busyTimeClashes.length === 0 && courseClashes.length === 0) {
+    return `<span class="stamp ok">No timetable clashes</span>`;
+  }
+  if (busyTimeClashes.length > 0) {
+    const b = busyTimeClashes[0];
+    return `<span class="stamp warn">Clashes with ${b.title || "your timetable"} (${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)})</span>`;
+  }
+  const c = courseClashes[0];
+  return `<span class="stamp warn">Clashes with ${c.course_code} (${c.tutor_start_time.slice(0, 5)}–${c.tutor_end_time.slice(0, 5)})</span>`;
+}
+
 async function renderApplicants(course) {
   const requestId = ++applicantsRequestId;
   applicantListEl.innerHTML = "";
@@ -210,7 +248,14 @@ async function renderApplicants(course) {
     return;
   }
 
-  rows.forEach((app) => {
+  const checks = await Promise.all(
+    rows.map((app) => fetchAssignmentCheck(app.tutor_id, course.id)),
+  );
+
+  if (requestId !== applicantsRequestId) return;
+
+  rows.forEach((app, i) => {
+    const check = checks[i];
     const tutor = app.tutors;
     const name = app.Tutor_name || tutor?.name || "Unknown";
     const status = (app.status || "pending").toLowerCase();
@@ -236,6 +281,7 @@ async function renderApplicants(course) {
       <span class="stamp-row">
         ${markStamp}
         ${availabilityStamp}
+        ${buildClashStamp(check)}
       </span>
       <span class="status-pill ${status}">${status}</span>
       <span class="applicant-actions"></span>
@@ -250,7 +296,15 @@ async function renderApplicants(course) {
         makeApplicantActionBtn(
           "Approve",
           "approve",
-          () => setApplicationStatus(course, app, "approved", name),
+          () => {
+            if (
+              hasClash(check) &&
+              !confirm(`${name} has a timetable clash — assign anyway?`)
+            ) {
+              return;
+            }
+            setApplicationStatus(course, app, "approved", name);
+          },
           isFull && "This course already has all the tutors it needs",
         ),
       );
