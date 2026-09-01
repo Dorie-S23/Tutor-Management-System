@@ -325,7 +325,13 @@ router.get("/google", async (req, res) => {
                 provider: "google",
 
                 options: {
-                    redirectTo: `${req.protocol}://${req.get("host")}/html/google-callback.html`
+                    redirectTo: `${req.protocol}://${req.get("host")}/html/google-callback.html`,
+
+                    // Force Google's account chooser every time instead of
+                    // silently reusing an already-signed-in browser session.
+                    queryParams: {
+                        prompt: "select_account"
+                    }
                 }
 
             });
