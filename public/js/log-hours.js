@@ -23,8 +23,18 @@ highlightActiveTab();
 // "Dashboard" link has to point at whichever dashboard actually matches the
 // signed-in user's role.
 const dashboardNavLink = document.getElementById("dashboard-nav-link");
-if (dashboardNavLink && currentUser.role !== "tutor") {
-  dashboardNavLink.href = "StudentView.html";
+const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
+const timesheetsNavLink = document.getElementById("timesheets-nav-link");
+if (currentUser.role !== "tutor") {
+  if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
+  // Timesheets is a tutor-only payroll claim — no use to a student volunteer.
+  if (timesheetsNavLink) timesheetsNavLink.hidden = true;
+} else {
+  // "My Sessions" is a student-volunteer concept (sessions they've
+  // volunteered for) — hide it for tutors so they can't wander onto a
+  // student-only page and get stuck (its Dashboard link only knows how
+  // to get back to StudentView.html).
+  if (mySessionsNavLink) mySessionsNavLink.hidden = true;
 }
 
 const form = document.getElementById("entry-form");

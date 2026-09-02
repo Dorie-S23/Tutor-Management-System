@@ -1,5 +1,13 @@
 import { highlightActiveTab } from "./nav.js";
-import { getEntries, getProfile, saveProfile, todayStr } from "./storage.js";
+import {
+  getCurrentUser,
+  getEntries,
+  getProfile,
+  saveProfile,
+  todayStr,
+  getWeekStart,
+  getWeekTotal,
+} from "./storage.js";
 
 highlightActiveTab();
 
@@ -23,9 +31,23 @@ const headOfSchoolField = document.getElementById("headOfSchool");
 const rangeFromField = document.getElementById("rangeFrom");
 const rangeToField = document.getElementById("rangeTo");
 const printBtn = document.getElementById("printBtn");
+const submitWeekStartField = document.getElementById("submitWeekStart");
+const submitTimesheetBtn = document.getElementById("submitTimesheetBtn");
+const submitWeekHint = document.getElementById("submitWeekHint");
 const timesheetHint = document.getElementById("timesheet-hint");
 const claimWrapper = document.getElementById("claimWrapper");
 const claimRowsEl = document.getElementById("claimRows");
+const submissionsTableBody = document.getElementById("submissionsTableBody");
+const submissionsEmptyEl = document.getElementById("submissionsEmpty");
+
+let toastTimer = null;
+function showToast(message) {
+  const el = document.getElementById("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
 
 function toDisplayDate(dateStr) {
   if (!dateStr) return "";
@@ -153,6 +175,83 @@ async function renderClaim() {
     : "";
 }
 
+async function loadSubmissions() {
+  const user = getCurrentUser();
+  if (!user) return;
+
+  let rows = [];
+  try {
+    const res = await fetch(
+      `/api/timesheets?tutorId=${encodeURIComponent(user.id)}`,
+    );
+    rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load timesheets");
+  } catch (err) {
+    return;
+  }
+
+  submissionsTableBody.innerHTML = "";
+  submissionsEmptyEl.hidden = rows.length > 0;
+
+  rows.forEach((sub) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${toDisplayDate(sub.week_start)}</td>
+      <td>${sub.total_hours}</td>
+      <td><span class="status-pill ${sub.status}">${sub.status}</span></td>
+      <td>${toDisplayDate(sub.submitted_at.slice(0, 10))}</td>
+    `;
+    submissionsTableBody.appendChild(tr);
+  });
+}
+
+async function updateSubmitWeekHint() {
+  const weekStart = submitWeekStartField.value;
+  if (!weekStart) {
+    submitWeekHint.textContent = "";
+    return;
+  }
+  const total = await getWeekTotal(weekStart);
+  submitWeekHint.textContent = `${total} hrs logged for the week of ${toDisplayDate(weekStart)}.`;
+}
+
+submitWeekStartField.addEventListener("change", () => {
+  // Snap whatever date is picked to that week's Monday.
+  submitWeekStartField.value = getWeekStart(submitWeekStartField.value);
+  updateSubmitWeekHint();
+});
+
+submitTimesheetBtn.addEventListener("click", async () => {
+  const user = getCurrentUser();
+  if (!user) {
+    showToast("You need to be signed in to submit a timesheet.");
+    return;
+  }
+
+  submitTimesheetBtn.disabled = true;
+  try {
+    const res = await fetch("/api/timesheets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tutorId: user.id,
+        weekStart: submitWeekStartField.value,
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't submit that timesheet.");
+      return;
+    }
+    showToast("Timesheet submitted for approval.");
+    await loadSubmissions();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    submitTimesheetBtn.disabled = false;
+  }
+});
+
 printBtn.addEventListener("click", () => window.print());
 rangeFromField.addEventListener("change", safeRenderClaim);
 rangeToField.addEventListener("change", safeRenderClaim);
@@ -161,5 +260,9 @@ const { from, to } = defaultRange();
 rangeFromField.value = from;
 rangeToField.value = to;
 
+submitWeekStartField.value = getWeekStart(todayStr());
+updateSubmitWeekHint();
+
 loadProfileIntoForm();
 safeRenderClaim();
+loadSubmissions();

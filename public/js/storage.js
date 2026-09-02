@@ -193,6 +193,21 @@ export function getSchedule() {
   return readSchedule();
 }
 
+// Mirrors the local schedule to the server as tutor_busy_times, so the
+// organiser board can run live timetable-clash checks. Best-effort: the
+// local calendar (source of truth for the tutor's own view) already
+// succeeded by the time this runs, so a network failure here shouldn't
+// block anything — just log it.
+function syncScheduleToServer() {
+  const user = getCurrentUser();
+  if (!user) return;
+  fetch(`/api/tutors/${user.id}/busy-times`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ classes: readSchedule() }),
+  }).catch((err) => console.warn("Failed to sync schedule to server:", err));
+}
+
 export function addScheduleClasses(classes) {
   const now = new Date().toISOString();
   const withIds = classes.map((c) => ({
@@ -201,15 +216,18 @@ export function addScheduleClasses(classes) {
     ...c,
   }));
   writeSchedule([...readSchedule(), ...withIds]);
+  syncScheduleToServer();
   return withIds;
 }
 
 export function deleteScheduleClass(id) {
   writeSchedule(readSchedule().filter((c) => c.id !== id));
+  syncScheduleToServer();
 }
 
 export function clearSchedule() {
   writeSchedule([]);
+  syncScheduleToServer();
 }
 
 export function getScheduleForDate(dateStr) {

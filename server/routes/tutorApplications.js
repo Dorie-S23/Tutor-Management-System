@@ -149,7 +149,7 @@ router.patch("/:id", async (req, res) => {
 
   const { data: application, error: applicationError } = await supabase
     .from("tutor_subject_preference")
-    .select("id, status, course_id")
+    .select("id, status, course_id, tutor_id")
     .eq("id", req.params.id)
     .single();
 
@@ -163,7 +163,7 @@ router.patch("/:id", async (req, res) => {
   if (wasApproved !== willBeApproved) {
     const { data: course, error: courseError } = await supabase
       .from("courses")
-      .select("no_of_tutors_assigned, tutors_needed")
+      .select("no_of_tutors_assigned, tutors_needed, hours_per_week")
       .eq("id", application.course_id)
       .single();
 
@@ -178,6 +178,47 @@ router.patch("/:id", async (req, res) => {
       return res
         .status(409)
         .json({ error: "This course already has all the tutors it needs" });
+    }
+
+    // Weekly hour cap check — only blocks on approval, and only if the
+    // tutor has an explicit cap set (opt-in, so untouched tutors never block).
+    if (willBeApproved) {
+      const { data: tutor, error: tutorError } = await supabase
+        .from("tutors")
+        .select("weekly_hour_cap")
+        .eq("id", application.tutor_id)
+        .single();
+
+      if (tutorError || !tutor) {
+        return res.status(404).json({ error: "Tutor not found" });
+      }
+
+      if (tutor.weekly_hour_cap != null) {
+        const { data: otherApprovals, error: otherApprovalsError } =
+          await supabase
+            .from("tutor_subject_preference")
+            .select("courses(hours_per_week)")
+            .eq("tutor_id", application.tutor_id)
+            .eq("status", "approved")
+            .neq("course_id", application.course_id);
+
+        if (otherApprovalsError) {
+          return res.status(500).json({ error: otherApprovalsError.message });
+        }
+
+        const currentAssignedHours = (otherApprovals || []).reduce(
+          (sum, a) => sum + (a.courses?.hours_per_week || 0),
+          0,
+        );
+        const projectedHours =
+          currentAssignedHours + (course.hours_per_week || 0);
+
+        if (projectedHours > tutor.weekly_hour_cap) {
+          return res.status(409).json({
+            error: `This would put the tutor at ${projectedHours} hrs/week, over their ${tutor.weekly_hour_cap} hr cap`,
+          });
+        }
+      }
     }
 
     const { error: bumpError } = await supabase
