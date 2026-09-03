@@ -27,6 +27,9 @@
         <dd class="stat-value" id="statTutors">0</dd>
       </dl>
 
+      <button class="btn btn-primary" id="obviousFillBtn" type="button">
+        Fill obvious assignments
+      </button>
       <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
       <button class="btn btn-ghost" id="logout-button" type="button">
         Logout
@@ -278,6 +281,58 @@
           </li>
         </menu>
       </form>
+    </dialog>
+
+    <dialog
+      class="modal modal-wide"
+      id="obviousFillModal"
+      aria-labelledby="obviousFillHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="obviousFillHeading">Fill obvious assignments</h2>
+          <button
+            class="modal-close"
+            id="obviousFillCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="obviousFillHint"></p>
+
+        <ul class="tutor-list" id="obviousFillList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="obviousFillEmpty" hidden>
+          No pending application is an obvious fill right now — every open
+          course either has no eligible applicant, or more eligible
+          applicants than open slots.
+        </p>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="obviousFillCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="obviousFillConfirmBtn"
+              type="button"
+            >
+              Approve selected
+            </button>
+          </li>
+        </menu>
+      </div>
     </dialog>
 
     <script src="../js/board.js"></script>
