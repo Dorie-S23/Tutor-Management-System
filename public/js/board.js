@@ -753,6 +753,132 @@ function renderAssignmentCard(course) {
     : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "—"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
 }
 
+// ---------- bulk-fill obvious assignments ----------
+
+const obviousFillBtn = document.getElementById("obviousFillBtn");
+const obviousFillModal = document.getElementById("obviousFillModal");
+const obviousFillList = document.getElementById("obviousFillList");
+const obviousFillEmpty = document.getElementById("obviousFillEmpty");
+const obviousFillHint = document.getElementById("obviousFillHint");
+const obviousFillConfirmBtn = document.getElementById("obviousFillConfirmBtn");
+
+function closeObviousFillModal() {
+  obviousFillModal.close();
+}
+
+async function openObviousFillModal() {
+  obviousFillList.innerHTML = "";
+  obviousFillEmpty.hidden = true;
+  obviousFillHint.textContent = "Loading…";
+  obviousFillConfirmBtn.hidden = false;
+  obviousFillConfirmBtn.disabled = true;
+  obviousFillModal.showModal();
+
+  let groups = [];
+  try {
+    const res = await fetch("/api/tutor-applications/obvious-fill");
+    groups = await res.json();
+    if (!res.ok)
+      throw new Error(groups.error || "Failed to load obvious fills");
+  } catch (err) {
+    obviousFillHint.textContent = "Couldn't load obvious fills — try again.";
+    return;
+  }
+
+  const totalApplications = groups.reduce(
+    (sum, g) => sum + g.applications.length,
+    0,
+  );
+
+  if (totalApplications === 0) {
+    obviousFillHint.textContent = "";
+    obviousFillEmpty.hidden = false;
+    obviousFillConfirmBtn.hidden = true;
+    return;
+  }
+
+  obviousFillHint.textContent = `${totalApplications} application${totalApplications === 1 ? "" : "s"} across ${groups.length} course${groups.length === 1 ? "" : "s"} can be filled without any judgment call — uncheck anything you'd rather decide yourself.`;
+
+  groups.forEach((group) => {
+    const heading = document.createElement("li");
+    heading.className = "obvious-fill-course-head";
+    heading.textContent = `${group.course.code} — ${group.course.name}`;
+    obviousFillList.appendChild(heading);
+
+    group.applications.forEach((app) => {
+      const li = document.createElement("li");
+      const row = document.createElement("label");
+      row.className = "tutor-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <input type="checkbox" class="obvious-fill-check" data-id="${app.id}" checked>
+        <span class="name-block">
+          <span class="name">${app.tutorName || "Unknown"}</span>
+        </span>
+        <span class="stamp-row">
+          <span class="stamp ok">Mark ${app.mark}</span>
+        </span>
+      `;
+      li.appendChild(row);
+      obviousFillList.appendChild(li);
+    });
+  });
+
+  obviousFillConfirmBtn.disabled = false;
+}
+
+obviousFillBtn.addEventListener("click", openObviousFillModal);
+document
+  .getElementById("obviousFillCloseBtn")
+  .addEventListener("click", closeObviousFillModal);
+document
+  .getElementById("obviousFillCancelBtn")
+  .addEventListener("click", closeObviousFillModal);
+obviousFillModal.addEventListener("click", (e) => {
+  if (e.target === obviousFillModal) closeObviousFillModal();
+});
+
+obviousFillConfirmBtn.addEventListener("click", async () => {
+  const ids = Array.from(
+    obviousFillList.querySelectorAll(".obvious-fill-check:checked"),
+  ).map((cb) => cb.dataset.id);
+
+  if (ids.length === 0) {
+    closeObviousFillModal();
+    return;
+  }
+
+  obviousFillConfirmBtn.disabled = true;
+  obviousFillConfirmBtn.textContent = "Approving…";
+
+  try {
+    const res = await fetch("/api/tutor-applications/bulk-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicationIds: ids }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't fill those assignments.");
+      return;
+    }
+    const failed = body.results.filter((r) => !r.success);
+    const succeeded = body.results.length - failed.length;
+    showToast(
+      failed.length === 0
+        ? `${succeeded} assignment${succeeded === 1 ? "" : "s"} filled.`
+        : `${succeeded} filled, ${failed.length} couldn't be — something changed since you opened this.`,
+    );
+    closeObviousFillModal();
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    obviousFillConfirmBtn.disabled = false;
+    obviousFillConfirmBtn.textContent = "Approve selected";
+  }
+});
+
 // ---------- add / edit course modal ----------
 
 const addCourseBtn = document.getElementById("addCourseBtn");

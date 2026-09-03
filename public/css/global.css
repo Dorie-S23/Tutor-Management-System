@@ -685,6 +685,21 @@ input[type="search"]:focus-visible {
   background: rgba(30, 42, 46, 0.45);
 }
 
+.modal-wide {
+  width: min(640px, 94vw);
+}
+
+.obvious-fill-course-head {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 10px 0 -2px;
+}
+.obvious-fill-course-head:first-child {
+  margin-top: 0;
+}
+
 .modal-form {
   display: flex;
   flex-direction: column;
