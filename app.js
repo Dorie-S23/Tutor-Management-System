@@ -12,6 +12,7 @@ const hourEntriesRoutes = require("./server/routes/hourEntries");
 const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
 const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
 const timesheetsRoutes = require("./server/routes/timesheets");
+const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
 
 // Supabase client
 const supabase = createClient(
@@ -77,5 +78,8 @@ app.use("/api/tutor-applications", tutorApplicationsRoutes);
 
 // Timesheet submission + organiser sign-off
 app.use("/api/timesheets", timesheetsRoutes);
+
+// Tutor self-excusal from a scheduled session
+app.use("/api/session-excusals", sessionExcusalsRoutes);
 
 module.exports = app;

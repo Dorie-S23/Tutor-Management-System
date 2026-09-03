@@ -168,6 +168,7 @@ function renderDetail() {
 
   renderAssignmentCard(course);
   renderApplicants(course);
+  renderExcusals(course);
   renderVolunteers(course);
 }
 
@@ -382,6 +383,59 @@ async function setApplicationStatus(course, app, status, name) {
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
+}
+
+// ---------- session excusals ----------
+
+const excusalListEl = document.getElementById("excusalList");
+const excusalsEmptyEl = document.getElementById("excusalsEmpty");
+
+let excusalsRequestId = 0;
+
+async function renderExcusals(course) {
+  const requestId = ++excusalsRequestId;
+  excusalListEl.innerHTML = "";
+  excusalsEmptyEl.hidden = true;
+
+  let rows = [];
+  try {
+    const res = await fetch(`/api/session-excusals?courseId=${course.id}`);
+    rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load excusals");
+  } catch (err) {
+    if (requestId === excusalsRequestId)
+      showToast("Couldn't load session excusals for this course.");
+    return;
+  }
+
+  if (requestId !== excusalsRequestId) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = rows.filter((e) => e.session_date >= today);
+
+  if (upcoming.length === 0) {
+    excusalsEmptyEl.hidden = false;
+    return;
+  }
+
+  upcoming.forEach((excusal) => {
+    const name = excusal.tutors?.name || "Unknown";
+
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "tutor-row";
+    row.style.cursor = "default";
+    row.innerHTML = `
+      <span class="avatar">${initials(name)}</span>
+      <span class="name-block">
+        <span class="name">${name}</span>
+        <span class="role">${excusal.session_date}${excusal.reason ? ` — ${excusal.reason}` : ""}</span>
+      </span>
+    `;
+
+    li.appendChild(row);
+    excusalListEl.appendChild(li);
+  });
 }
 
 // ---------- volunteers ----------
