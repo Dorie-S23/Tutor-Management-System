@@ -114,6 +114,12 @@ function renderCourseList() {
     btn.className =
       "course-card" + (course.id === activeCourseId ? " active" : "");
     btn.setAttribute("aria-pressed", course.id === activeCourseId);
+    // Roving tabindex: only the active card (or the first, if none is active
+    // yet) sits in the page's Tab order — Up/Down/Home/End move between the
+    // rest, so an organiser paging through many courses isn't tabbing past
+    // every single one to get anywhere else on the page.
+    btn.tabIndex = course.id === activeCourseId ? 0 : -1;
+    btn.dataset.courseId = String(course.id);
     btn.innerHTML = `
         <span class="course-code">${course.code}</span>
         <span class="course-name">${course.name}</span>
@@ -126,7 +132,51 @@ function renderCourseList() {
     li.appendChild(btn);
     courseListEl.appendChild(li);
   });
+
+  const cards = Array.from(courseListEl.querySelectorAll(".course-card"));
+  if (cards.length && !cards.some((c) => c.tabIndex === 0)) {
+    cards[0].tabIndex = 0;
+  }
 }
+
+function focusCourseCard(courseId) {
+  const card = courseListEl.querySelector(
+    `.course-card[data-course-id="${CSS.escape(String(courseId))}"]`,
+  );
+  if (card) card.focus();
+}
+
+courseListEl.addEventListener("keydown", (event) => {
+  const cards = Array.from(courseListEl.querySelectorAll(".course-card"));
+  if (cards.length === 0) return;
+
+  const currentIndex = cards.indexOf(document.activeElement);
+  let targetIndex;
+  switch (event.key) {
+    case "ArrowDown":
+      targetIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, cards.length - 1);
+      break;
+    case "ArrowUp":
+      targetIndex = currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0);
+      break;
+    case "Home":
+      targetIndex = 0;
+      break;
+    case "End":
+      targetIndex = cards.length - 1;
+      break;
+    default:
+      return;
+  }
+
+  event.preventDefault();
+  const targetCourseId = cards[targetIndex].dataset.courseId;
+  const targetCourse = COURSES.find((c) => String(c.id) === targetCourseId);
+  if (!targetCourse) return;
+
+  selectCourse(targetCourse.id);
+  focusCourseCard(targetCourse.id);
+});
 
 // ---------- rendering: detail pane ----------
 
@@ -694,6 +744,21 @@ function showToast(message) {
 // ---------- search wiring ----------
 
 courseSearchEl.addEventListener("input", renderCourseList);
+
+// "/" jumps to the course search from anywhere on the page, unless the
+// organiser is already typing into a field (so it doesn't hijack real input).
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "/") return;
+  const active = document.activeElement;
+  const isTyping =
+    active &&
+    (active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.isContentEditable);
+  if (isTyping) return;
+  event.preventDefault();
+  courseSearchEl.focus();
+});
 
 // ---------- misc ----------
 
