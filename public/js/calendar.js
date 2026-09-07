@@ -3,6 +3,7 @@ import {
   getCurrentUser,
   getEntriesForDate,
   getScheduleForDate,
+  addScheduleClasses,
   todayStr,
   clearSchedule,
 } from "./storage.js";
@@ -15,10 +16,12 @@ if (!currentUser) {
 
 highlightActiveTab();
 
-// Timetable import (and clearing it) is a tutor-only feature - not relevant for volunteers.
+// Timetable import, manual class entry, and clearing the schedule are all
+// tutor-only features - not relevant for volunteers.
+const isTutor = currentUser.role === "tutor";
 const importTimetableCard = document.getElementById("import-timetable-card");
 const clearClassesRow = document.getElementById("clear-classes-row");
-if (currentUser.role !== "tutor") {
+if (!isTutor) {
   if (importTimetableCard) importTimetableCard.hidden = true;
   if (clearClassesRow) clearClassesRow.hidden = true;
 }
@@ -28,6 +31,57 @@ const gridEl = document.getElementById("calendar-grid");
 const prevMonthBtn = document.getElementById("prev-month-btn");
 const nextMonthBtn = document.getElementById("next-month-btn");
 const clearClassesBtn = document.getElementById("clear-classes-btn");
+
+const addClassBtn = document.getElementById("add-class-btn");
+const addClassCard = document.getElementById("add-class-card");
+const addClassForm = document.getElementById("add-class-form");
+const addClassDateInput = document.getElementById("add-class-date");
+const addClassSubjectInput = document.getElementById("add-class-subject");
+const addClassStartInput = document.getElementById("add-class-start");
+const addClassEndInput = document.getElementById("add-class-end");
+const addClassVenueInput = document.getElementById("add-class-venue");
+const cancelAddClassBtn = document.getElementById("cancel-add-class-btn");
+
+function openAddClassForm(dateStr) {
+  addClassDateInput.value = dateStr || todayStr();
+  addClassCard.hidden = false;
+  addClassCard.scrollIntoView({ behavior: "smooth", block: "center" });
+  addClassSubjectInput.focus();
+}
+
+function closeAddClassForm() {
+  addClassCard.hidden = true;
+  addClassForm.reset();
+}
+
+if (isTutor) {
+  addClassBtn.addEventListener("click", () => openAddClassForm(todayStr()));
+  cancelAddClassBtn.addEventListener("click", closeAddClassForm);
+
+  addClassForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const date = addClassDateInput.value;
+    const [y, m, d] = date.split("-").map(Number);
+    const dayOfWeek = new Date(y, m - 1, d).getDay();
+
+    addScheduleClasses([
+      {
+        title: addClassSubjectInput.value.trim(),
+        dayOfWeek,
+        firstDate: date,
+        endDate: date,
+        startTime: addClassStartInput.value,
+        endTime: addClassEndInput.value,
+        venue: addClassVenueInput.value.trim(),
+      },
+    ]);
+
+    closeAddClassForm();
+    viewYear = y;
+    viewMonth = m - 1;
+    render();
+  });
+}
 
 const today = new Date();
 let viewYear = today.getFullYear();
@@ -81,6 +135,12 @@ async function render() {
 
     const cellDateStr = toDateStr(cellYear, cellMonth, cellDay);
     if (cellDateStr === current) cell.classList.add("today");
+
+    if (isTutor) {
+      cell.classList.add("calendar-day-clickable");
+      cell.title = "Click to add a class on this day";
+      cell.addEventListener("click", () => openAddClassForm(cellDateStr));
+    }
 
     const dayNumber = document.createElement("span");
     dayNumber.className = "calendar-day-number";

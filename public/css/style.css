@@ -647,6 +647,15 @@ body > footer p {
   border-width: 2px;
 }
 
+.calendar-day-clickable {
+  cursor: pointer;
+}
+
+.calendar-day-clickable:hover {
+  border-color: #2563eb;
+  background: #f5f9ff;
+}
+
 .calendar-day-number {
   font-size: 13px;
   font-weight: 600;
