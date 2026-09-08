@@ -124,8 +124,7 @@ router.put("/:id/busy-times", async (req, res) => {
     .delete()
     .eq("tutor_id", req.params.id);
 
-  if (deleteError)
-    return res.status(500).json({ error: deleteError.message });
+  if (deleteError) return res.status(500).json({ error: deleteError.message });
 
   if (classes.length === 0) return res.json([]);
 
@@ -200,7 +199,8 @@ router.get("/:id/assignment-check", async (req, res) => {
   const courseDay = DAY_NAMES.indexOf(course.Day_of_tut);
   const courseStart = toMinutes(course.tutor_start_time);
   const courseEnd = toMinutes(course.tutor_end_time);
-  const courseIsScheduled = courseDay !== -1 && courseStart != null && courseEnd != null;
+  const courseIsScheduled =
+    courseDay !== -1 && courseStart != null && courseEnd != null;
 
   if (courseIsScheduled) {
     const { data: busyTimes, error: busyTimesError } = await supabase
@@ -214,7 +214,12 @@ router.get("/:id/assignment-check", async (req, res) => {
     }
 
     busyTimeClashes = busyTimes.filter((b) =>
-      overlaps(courseStart, courseEnd, toMinutes(b.start_time), toMinutes(b.end_time)),
+      overlaps(
+        courseStart,
+        courseEnd,
+        toMinutes(b.start_time),
+        toMinutes(b.end_time),
+      ),
     );
 
     courseClashes = (otherApprovals || [])
