@@ -659,6 +659,8 @@ input[type="search"]:focus-visible {
   border-radius: var(--radius);
   padding: 0;
   width: min(420px, 92vw);
+  max-height: min(640px, 90vh);
+  overflow-y: auto;
   box-shadow: 0 12px 32px rgba(30, 42, 46, 0.18);
   background: var(--panel);
   color: var(--ink);
@@ -742,6 +744,17 @@ input[type="search"]:focus-visible {
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
+
+.field-warning {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--amber);
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
 
 .modal-actions {
   display: flex;
@@ -889,6 +902,134 @@ input[type="search"]:focus-visible {
 }
 .btn-small-neutral:hover {
   background: var(--line-soft);
+}
+
+/* ---------- weekly timetable grid (organiser) ---------- */
+
+.timetable-page {
+  display: block;
+  min-height: calc(100vh - 96px);
+}
+
+.timetable-legend {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+
+.legend-swatch.tutorial {
+  background: var(--navy-bg);
+  border-color: var(--navy);
+}
+.legend-swatch.clash {
+  background: var(--red-bg);
+  border-color: var(--red);
+}
+
+.timetable-unscheduled {
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.timetable-grid-wrap {
+  overflow-x: auto;
+}
+
+.timetable-grid {
+  display: grid;
+  grid-template-columns: 64px repeat(7, minmax(110px, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel);
+  min-width: 820px;
+}
+
+.timetable-grid-header {
+  padding: 8px 4px;
+  text-align: center;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line-soft);
+}
+
+.timetable-time-label {
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: right;
+  padding: 2px 6px 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.timetable-cell-bg {
+  border-top: 1px solid var(--line-soft);
+  border-left: 1px solid var(--line-soft);
+}
+
+/* One per day, spanning every time-slot row — the positioning context so
+   overlapping sessions on the same day can sit side-by-side instead of
+   stacking on top of each other. */
+.timetable-day-overlay {
+  position: relative;
+}
+
+.timetable-session {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  display: block;
+}
+
+.timetable-session:hover {
+  filter: brightness(0.97);
+}
+
+.timetable-session.tutorial {
+  background: var(--navy-bg);
+  color: var(--navy);
+  border-color: var(--navy);
+}
+
+.timetable-session.clash {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.timetable-session .session-code {
+  font-weight: 700;
+  display: block;
+}
+
+.timetable-session .session-meta {
+  display: block;
+  opacity: 0.85;
 }
 
 /* ---------- accessibility ---------- */

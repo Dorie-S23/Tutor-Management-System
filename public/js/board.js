@@ -21,6 +21,7 @@ function mapCourseRow(row) {
     dayOfTut: row.Day_of_tut,
     startTime: row.tutor_start_time,
     endTime: row.tutor_end_time,
+    tutorialVenue: row.tutorial_venue,
     session:
       row.Day_of_tut && row.tutor_start_time && row.tutor_end_time
         ? {
@@ -30,6 +31,81 @@ function mapCourseRow(row) {
           }
         : null,
   };
+}
+
+// Returns every scheduled tutorial session across all courses, tagged with
+// its course — the flat list the timetable grid and the venue-clash check
+// both work from.
+function getAllSessions() {
+  const sessions = [];
+  COURSES.forEach((course) => {
+    if (course.session) {
+      sessions.push({
+        courseId: course.id,
+        courseCode: course.code,
+        type: "Tutorial",
+        day: course.session.day,
+        start: course.session.start,
+        end: course.session.end,
+        venue: course.tutorialVenue || "",
+      });
+    }
+  });
+  return sessions;
+}
+
+function timeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function timesOverlap(startA, endA, startB, endB) {
+  return timeToMinutes(startA) < timeToMinutes(endB) &&
+    timeToMinutes(startB) < timeToMinutes(endA);
+}
+
+// A venue field can list several rooms for one session (e.g. multiple
+// tutorial groups) as "MSL004,005,006" — a shorthand where bare numbers
+// inherit the last letter prefix (so "005" means "MSL005"). Split that into
+// individual, fully-qualified room names rather than comparing the whole
+// field as one string.
+function parseVenues(venueStr) {
+  const tokens = (venueStr || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  let prefix = "";
+  return tokens.map((token) => {
+    const match = token.match(/^([A-Za-z]+)(\d.*)$/);
+    if (match) {
+      prefix = match[1];
+      return token;
+    }
+    return prefix && /^\d/.test(token) ? prefix + token : token;
+  });
+}
+
+// Rooms shared between two venue fields, preserving venueA's original casing.
+function sharedVenues(venueA, venueB) {
+  const setB = new Set(parseVenues(venueB).map((v) => v.toLowerCase()));
+  return parseVenues(venueA).filter((v) => setB.has(v.toLowerCase()));
+}
+
+// Venue double-bookings: same day, at least one room in common, overlapping
+// time. excludeCourseId lets the edit modal check a course's own
+// in-progress edits against everyone else without flagging itself.
+function findVenueClashes(session, excludeCourseId = null) {
+  if (!session.day || !session.start || !session.end || !session.venue) {
+    return [];
+  }
+  return getAllSessions().filter(
+    (other) =>
+      other.courseId !== excludeCourseId &&
+      other.day === session.day &&
+      sharedVenues(session.venue, other.venue).length > 0 &&
+      timesOverlap(session.start, session.end, other.start, other.end),
+  );
 }
 
 async function fetchCourses() {
@@ -153,13 +229,9 @@ function renderDetail() {
 
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
-  const timeRange =
-    course.startTime && course.endTime
-      ? `${course.startTime.slice(0, 5)}–${course.endTime.slice(0, 5)}`
-      : null;
   document.getElementById("dSession").textContent = course.session
-    ? `${course.session.day} · ${course.session.start}–${course.session.end}  ·  requires a mark of ${course.minMark}+`
-    : `${course.department}  ·  requires a mark of ${course.minMark}+  ·  ${timeRange ? timeRange : "not yet scheduled"}`;
+    ? `Tutorial ${course.session.day} ${course.session.start}–${course.session.end}${course.tutorialVenue ? ` (${course.tutorialVenue})` : ""}  ·  requires a mark of ${course.minMark}+`
+    : `${course.department}  ·  requires a mark of ${course.minMark}+  ·  not yet scheduled`;
   document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
   document.getElementById("dTutorsAssigned").textContent =
     `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
@@ -511,6 +583,9 @@ const addCourseForm = document.getElementById("addCourseForm");
 const addCourseError = document.getElementById("addCourseError");
 const addCourseSubmitBtn = document.getElementById("addCourseSubmitBtn");
 const addCourseHeading = document.getElementById("addCourseHeading");
+const courseClashWarningEl = document.getElementById("courseClashWarning");
+
+const tutorialVenueInput = document.getElementById("tutorialVenueInput");
 
 let editingCourseId = null; // null = adding a new course, otherwise id of course being edited
 
@@ -518,6 +593,7 @@ function openCourseModal(course = null) {
   editingCourseId = course ? course.id : null;
   addCourseForm.reset();
   addCourseError.hidden = true;
+  courseClashWarningEl.hidden = true;
 
   addCourseHeading.textContent = course ? "Edit course" : "Add a course";
   addCourseSubmitBtn.textContent = course ? "Save changes" : "Add course";
@@ -538,11 +614,46 @@ function openCourseModal(course = null) {
     document.getElementById("tutorEndTimeInput").value = course.endTime
       ? course.endTime.slice(0, 5)
       : "";
+    tutorialVenueInput.value = course.tutorialVenue ?? "";
   }
 
   addCourseModal.showModal();
   document.getElementById("courseCodeInput").focus();
+  checkModalClashes();
 }
+
+// Live venue-clash preview while editing a course's tutorial time — purely
+// client-side against the already-loaded COURSES list, so it updates instantly
+// as the organiser types. Never blocks saving, just warns.
+function checkModalClashes() {
+  const tutorialSession = {
+    day: document.getElementById("dayOfTutInput").value.trim(),
+    start: document.getElementById("tutorStartTimeInput").value,
+    end: document.getElementById("tutorEndTimeInput").value,
+    venue: tutorialVenueInput.value.trim(),
+  };
+
+  const clashes = findVenueClashes(tutorialSession, editingCourseId);
+
+  if (clashes.length === 0) {
+    courseClashWarningEl.hidden = true;
+    return;
+  }
+
+  const c = clashes[0];
+  const shared = sharedVenues(tutorialSession.venue, c.venue).join(", ");
+  courseClashWarningEl.textContent = `⚠ Venue clash: ${shared} is already booked for ${c.courseCode} ${c.type} (${c.day} ${c.start}–${c.end})${clashes.length > 1 ? ` and ${clashes.length - 1} more` : ""}.`;
+  courseClashWarningEl.hidden = false;
+}
+
+[
+  "dayOfTutInput",
+  "tutorStartTimeInput",
+  "tutorEndTimeInput",
+  "tutorialVenueInput",
+].forEach((id) => {
+  document.getElementById(id).addEventListener("input", checkModalClashes);
+});
 
 function closeCourseModal() {
   addCourseModal.close();
@@ -583,6 +694,7 @@ addCourseForm.addEventListener("submit", async (e) => {
     day_of_tut: dayOfTutValue === "" ? null : dayOfTutValue,
     tutor_start_time: startTimeValue === "" ? null : startTimeValue,
     tutor_end_time: endTimeValue === "" ? null : endTimeValue,
+    tutorial_venue: tutorialVenueInput.value.trim() || null,
   };
 
   const isEditing = editingCourseId !== null;
@@ -646,6 +758,21 @@ document.querySelectorAll('input[type="number"]').forEach((el) => {
 
 // ---------- init ----------
 
-fetchCourses();
-fetchTutorCount();
-fetchVolunteerCounts();
+async function init() {
+  await fetchCourses();
+  fetchTutorCount();
+  fetchVolunteerCounts();
+
+  // Arriving from the timetable grid with ?edit=<courseId> jumps straight to
+  // that course's edit modal, so a session block there is a one-click edit.
+  const editId = Number(new URLSearchParams(location.search).get("edit"));
+  if (Number.isInteger(editId) && editId > 0) {
+    const course = COURSES.find((c) => c.id === editId);
+    if (course) {
+      selectCourse(course.id);
+      openCourseModal(course);
+    }
+  }
+}
+
+init();

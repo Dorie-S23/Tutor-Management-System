@@ -6,6 +6,11 @@ const router = express.Router();
 // shared validation for POST (create) and PUT (update)
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 
+function parseOptionalVenue(value) {
+  if (value === undefined || value === null || value === "") return null;
+  return String(value).trim();
+}
+
 function parseCoursePayload(body) {
   const {
     course_code,
@@ -17,6 +22,7 @@ function parseCoursePayload(body) {
     day_of_tut,
     tutor_start_time,
     tutor_end_time,
+    tutorial_venue,
   } = body ?? {};
 
   if (typeof course_code !== "string" || !course_code.trim()) {
@@ -115,6 +121,7 @@ function parseCoursePayload(body) {
       min_mark: minMarkNum,
       department: department.trim(),
       hours_per_week: hoursPerWeekNum,
+      tutorial_venue: parseOptionalVenue(tutorial_venue),
       tutors_needed: tutorsNeeded,
       Day_of_tut: dayOfTut,
       tutor_start_time: startTime,

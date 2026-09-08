@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timetable | Tutor Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/global.css" />
+  </head>
+  <body>
+    <header class="board-header">
+      <hgroup class="header-left">
+        <p class="eyebrow">
+          School of Computer Science &amp; Applied Mathematics
+        </p>
+        <h1>Timetable</h1>
+      </hgroup>
+
+      <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+      <button class="btn btn-ghost" id="logout-button" type="button">
+        Logout
+      </button>
+    </header>
+
+    <main class="timetable-page">
+      <section class="detail-pane" aria-label="Weekly session timetable">
+        <p class="hint">
+          Every tutorial session across all courses, laid out by day and
+          time. Click a session to edit its details on the allocation board.
+        </p>
+
+        <div class="timetable-legend">
+          <span><span class="legend-swatch tutorial"></span>Tutorial</span>
+          <span
+            ><span class="legend-swatch clash"></span>Venue clash — same room,
+            overlapping time</span
+          >
+        </div>
+
+        <div class="timetable-grid-wrap">
+          <div class="timetable-grid" id="timetableGrid"></div>
+        </div>
+
+        <p class="timetable-unscheduled" id="timetableUnscheduled" hidden></p>
+      </section>
+    </main>
+
+    <script src="../js/timetable.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
+</html>

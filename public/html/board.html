@@ -29,6 +29,7 @@
 
       <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
       <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
+      <a class="btn btn-ghost" href="timetable.html">Timetable</a>
       <button class="btn btn-ghost" id="logout-button" type="button">
         Logout
       </button>
@@ -261,6 +262,18 @@
           <span class="field-label">Tutor session end time</span>
           <input type="time" id="tutorEndTimeInput" name="tutor_end_time" />
         </label>
+
+        <label class="field">
+          <span class="field-label">Tutorial venue</span>
+          <input
+            type="text"
+            id="tutorialVenueInput"
+            name="tutorial_venue"
+            placeholder="e.g. FNB1"
+          />
+        </label>
+
+        <p class="field-warning" id="courseClashWarning" hidden></p>
 
         <menu class="modal-actions">
           <li>
