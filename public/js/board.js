@@ -5,6 +5,7 @@ const COURSES = [];
 let activeCourseId = null;
 let tutorCount = 0; // total tutors in the system, for the header stat
 let volunteerCounts = {}; // course_id -> number of approved volunteers
+let shortfallOnly = false; // when true, course rail shows only short-staffed courses, worst-first
 
 // ---------- data loading ----------
 
@@ -87,8 +88,13 @@ function initials(name) {
 
 const courseListEl = document.getElementById("courseList");
 const courseSearchEl = document.getElementById("courseSearch");
+const shortfallToggleEl = document.getElementById("shortfallToggle");
 const statFilledEl = document.getElementById("statFilled");
 const statTutorsEl = document.getElementById("statTutors");
+
+function shortfall(course) {
+  return course.tutorsNeeded ? course.tutorsNeeded - course.tutorsAssigned : 0;
+}
 
 function renderCourseList() {
   const query = courseSearchEl.value.trim().toLowerCase();
@@ -99,12 +105,20 @@ function renderCourseList() {
 
   courseListEl.innerHTML = "";
 
-  COURSES.filter(
+  let visible = COURSES.filter(
     (c) =>
       !query ||
       c.code.toLowerCase().includes(query) ||
       c.name.toLowerCase().includes(query),
-  ).forEach((course) => {
+  );
+
+  if (shortfallOnly) {
+    visible = visible
+      .filter((c) => shortfall(c) > 0)
+      .sort((a, b) => shortfall(b) - shortfall(a));
+  }
+
+  visible.forEach((course) => {
     const li = document.createElement("li");
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
@@ -119,7 +133,7 @@ function renderCourseList() {
         <span class="course-name">${course.name}</span>
         <div class="card-foot">
           <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned, ${volunteerCounts[course.id] ?? 0} volunteered</span>
-          <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : "Open"}</span>
+          <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : shortfall(course) > 0 ? `Short ${shortfall(course)}` : "Open"}</span>
         </div>
       `;
     btn.addEventListener("click", () => selectCourse(course.id));
@@ -168,6 +182,7 @@ function renderDetail() {
 
   renderAssignmentCard(course);
   renderApplicants(course);
+  renderExcusals(course);
   renderVolunteers(course);
 }
 
@@ -382,6 +397,59 @@ async function setApplicationStatus(course, app, status, name) {
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
+}
+
+// ---------- session excusals ----------
+
+const excusalListEl = document.getElementById("excusalList");
+const excusalsEmptyEl = document.getElementById("excusalsEmpty");
+
+let excusalsRequestId = 0;
+
+async function renderExcusals(course) {
+  const requestId = ++excusalsRequestId;
+  excusalListEl.innerHTML = "";
+  excusalsEmptyEl.hidden = true;
+
+  let rows = [];
+  try {
+    const res = await fetch(`/api/session-excusals?courseId=${course.id}`);
+    rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load excusals");
+  } catch (err) {
+    if (requestId === excusalsRequestId)
+      showToast("Couldn't load session excusals for this course.");
+    return;
+  }
+
+  if (requestId !== excusalsRequestId) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = rows.filter((e) => e.session_date >= today);
+
+  if (upcoming.length === 0) {
+    excusalsEmptyEl.hidden = false;
+    return;
+  }
+
+  upcoming.forEach((excusal) => {
+    const name = excusal.tutors?.name || "Unknown";
+
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "tutor-row";
+    row.style.cursor = "default";
+    row.innerHTML = `
+      <span class="avatar">${initials(name)}</span>
+      <span class="name-block">
+        <span class="name">${name}</span>
+        <span class="role">${excusal.session_date}${excusal.reason ? ` — ${excusal.reason}` : ""}</span>
+      </span>
+    `;
+
+    li.appendChild(row);
+    excusalListEl.appendChild(li);
+  });
 }
 
 // ---------- volunteers ----------
@@ -636,6 +704,10 @@ function showToast(message) {
 // ---------- search wiring ----------
 
 courseSearchEl.addEventListener("input", renderCourseList);
+shortfallToggleEl.addEventListener("change", () => {
+  shortfallOnly = shortfallToggleEl.checked;
+  renderCourseList();
+});
 
 // ---------- misc ----------
 

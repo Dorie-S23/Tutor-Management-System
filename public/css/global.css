@@ -175,6 +175,16 @@ input[type="search"]:focus-visible {
   max-width: 150px;
 }
 
+.shortfall-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
 .course-list {
   list-style: none;
   margin: 0;

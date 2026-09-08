@@ -43,6 +43,19 @@
         </div>
       </div>
 
+      <div class="card">
+        <h2>Excuse yourself from a session</h2>
+        <p>Can't make a tutorial? Let the organiser know which one and why.</p>
+        <button class="btn-primary" id="excuse-btn" type="button">
+          Excuse yourself from a session
+        </button>
+
+        <div id="excusals-list" class="applications-list" hidden>
+          <h3>Your upcoming excusals</h3>
+          <ul id="excusals-items"></ul>
+        </div>
+      </div>
+
       <div class="stat-grid">
         <div class="stat-tile">
           <span class="stat-label">Hours worked this week</span>
@@ -152,6 +165,63 @@
           <li>
             <button class="btn-primary" id="apply-submit-btn" type="submit">
               Submit application
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog
+      class="modal"
+      id="excuse-modal"
+      aria-labelledby="excuse-modal-heading"
+    >
+      <form method="dialog" class="modal-form" id="excuse-form">
+        <header class="modal-head">
+          <h2 id="excuse-modal-heading">Excuse yourself from a session</h2>
+          <button
+            class="modal-close"
+            id="excuse-modal-close-btn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="excuse-form-error" hidden></p>
+
+        <label class="field">
+          <span class="field-label">Course</span>
+          <select id="excuse-course-select" name="course_id" required>
+            <option value="" disabled selected>Choose a course&hellip;</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Session date</span>
+          <input type="date" id="excuse-date-input" name="session_date" required />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Reason (optional)</span>
+          <textarea
+            id="excuse-reason-input"
+            name="reason"
+            rows="2"
+            placeholder="e.g. clashing exam"
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn-secondary" id="excuse-cancel-btn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button class="btn-primary" id="excuse-submit-btn" type="submit">
+              Excuse me from this session
             </button>
           </li>
         </menu>
