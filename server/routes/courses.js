@@ -6,9 +6,89 @@ const router = express.Router();
 // shared validation for POST (create) and PUT (update)
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 
-function parseOptionalVenue(value) {
-  if (value === undefined || value === null || value === "") return null;
-  return String(value).trim();
+// A venue field can list several rooms for one session (e.g. multiple
+// tutorial groups) as "MSL004,005,006" — a shorthand where bare numbers
+// inherit the last letter prefix (so "005" means "MSL005"). Split that into
+// individual, fully-qualified room names rather than comparing the whole
+// field as one string. Mirrors parseVenues() in public/js/board.js.
+function parseVenues(venueStr) {
+  const tokens = (venueStr || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  let prefix = "";
+  return tokens.map((token) => {
+    const match = token.match(/^([A-Za-z]+)(\d.*)$/);
+    if (match) {
+      prefix = match[1];
+      return token;
+    }
+    return prefix && /^\d/.test(token) ? prefix + token : token;
+  });
+}
+
+// Rooms shared between two venue fields, preserving venueA's original casing.
+function sharedVenues(venueA, venueB) {
+  const setB = new Set(parseVenues(venueB).map((v) => v.toLowerCase()));
+  return parseVenues(venueA).filter((v) => setB.has(v.toLowerCase()));
+}
+
+function timeToMinutes(hhmmss) {
+  const [h, m] = hhmmss.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function timesOverlap(startA, endA, startB, endB) {
+  return (
+    timeToMinutes(startA) < timeToMinutes(endB) &&
+    timeToMinutes(startB) < timeToMinutes(endA)
+  );
+}
+
+// Looks for another course sharing a venue with this one, on the same day,
+// at an overlapping time. excludeId lets an edit check itself against every
+// other course without flagging its own pre-edit row. Fails open (returns
+// null) on a lookup error so a Supabase hiccup never blocks saving.
+async function findVenueClash(values, excludeId) {
+  if (
+    !values.Day_of_tut ||
+    !values.tutor_start_time ||
+    !values.tutor_end_time ||
+    !values.venues
+  ) {
+    return null;
+  }
+
+  let query = supabase
+    .from("courses")
+    .select("id, course_code, tutor_start_time, tutor_end_time, venues")
+    .eq("Day_of_tut", values.Day_of_tut)
+    .not("venues", "is", null)
+    .not("tutor_start_time", "is", null)
+    .not("tutor_end_time", "is", null);
+
+  if (excludeId != null) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data, error } = await query;
+  if (error) return null;
+
+  const clash = data.find(
+    (row) =>
+      sharedVenues(values.venues, row.venues).length > 0 &&
+      timesOverlap(
+        values.tutor_start_time,
+        values.tutor_end_time,
+        row.tutor_start_time,
+        row.tutor_end_time,
+      ),
+  );
+  if (!clash) return null;
+
+  const shared = sharedVenues(values.venues, clash.venues).join(", ");
+  return `Venue clash: ${shared} is already booked for ${clash.course_code} on ${values.Day_of_tut} ${clash.tutor_start_time.slice(0, 5)}–${clash.tutor_end_time.slice(0, 5)}`;
 }
 
 function parseCoursePayload(body) {
@@ -22,7 +102,7 @@ function parseCoursePayload(body) {
     day_of_tut,
     tutor_start_time,
     tutor_end_time,
-    tutorial_venue,
+    venues,
   } = body ?? {};
 
   if (typeof course_code !== "string" || !course_code.trim()) {
@@ -33,6 +113,9 @@ function parseCoursePayload(body) {
   }
   if (typeof department !== "string" || !department.trim()) {
     return { error: "department is required" };
+  }
+  if (typeof venues !== "string" || !venues.trim()) {
+    return { error: "venues is required" };
   }
   const minMarkNum = Number(min_mark);
   if (!Number.isInteger(minMarkNum) || minMarkNum < 0 || minMarkNum > 100) {
@@ -121,7 +204,7 @@ function parseCoursePayload(body) {
       min_mark: minMarkNum,
       department: department.trim(),
       hours_per_week: hoursPerWeekNum,
-      tutorial_venue: parseOptionalVenue(tutorial_venue),
+      venues: venues.trim(),
       tutors_needed: tutorsNeeded,
       Day_of_tut: dayOfTut,
       tutor_start_time: startTime,
@@ -148,6 +231,11 @@ router.post("/", async (req, res) => {
   const { values, error: validationError } = parseCoursePayload(req.body);
   if (validationError) {
     return res.status(400).json({ error: validationError });
+  }
+
+  const clashError = await findVenueClash(values, null);
+  if (clashError) {
+    return res.status(409).json({ error: clashError });
   }
 
   const { data, error } = await supabase
@@ -178,6 +266,11 @@ router.put("/:id", async (req, res) => {
   const { values, error: validationError } = parseCoursePayload(req.body);
   if (validationError) {
     return res.status(400).json({ error: validationError });
+  }
+
+  const clashError = await findVenueClash(values, id);
+  if (clashError) {
+    return res.status(409).json({ error: clashError });
   }
 
   const { data, error } = await supabase

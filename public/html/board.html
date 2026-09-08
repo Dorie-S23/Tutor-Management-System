@@ -15,10 +15,21 @@
     <header class="board-header">
       <hgroup class="header-left">
         <p class="eyebrow">
+          <img
+            src="../images/images.png"
+            alt=""
+            class="eyebrow-logo"
+          />
           School of Computer Science &amp; Applied Mathematics
         </p>
         <h1>Tutor Allocation Board</h1>
       </hgroup>
+
+      <img
+        src="../images/Wits-890x664.png"
+        alt="University of the Witwatersrand"
+        class="header-wits-logo"
+      />
 
       <dl class="header-right">
         <dt class="stat-label">courses staffed</dt>
@@ -30,7 +41,7 @@
       <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
       <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
       <a class="btn btn-ghost" href="timetable.html">Timetable</a>
-      <button class="btn btn-ghost" id="logout-button" type="button">
+      <button class="btn btn-danger" id="logout-button" type="button">
         Logout
       </button>
     </header>
@@ -245,12 +256,16 @@
 
         <label class="field">
           <span class="field-label">Day of tutoring</span>
-          <input
-            type="text"
-            id="dayOfTutInput"
-            name="day_of_tut"
-            placeholder="e.g. Monday"
-          />
+          <select id="dayOfTutInput" name="day_of_tut">
+            <option value="">Select a day</option>
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+            <option value="Friday">Friday</option>
+            <option value="Saturday">Saturday</option>
+            <option value="Sunday">Sunday</option>
+          </select>
         </label>
 
         <label class="field">
@@ -267,9 +282,10 @@
           <span class="field-label">Tutorial venue</span>
           <input
             type="text"
-            id="tutorialVenueInput"
-            name="tutorial_venue"
+            id="venuesInput"
+            name="venues"
             placeholder="e.g. FNB1"
+            required
           />
         </label>
 

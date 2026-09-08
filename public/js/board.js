@@ -21,7 +21,7 @@ function mapCourseRow(row) {
     dayOfTut: row.Day_of_tut,
     startTime: row.tutor_start_time,
     endTime: row.tutor_end_time,
-    tutorialVenue: row.tutorial_venue,
+    venues: row.venues,
     session:
       row.Day_of_tut && row.tutor_start_time && row.tutor_end_time
         ? {
@@ -47,7 +47,7 @@ function getAllSessions() {
         day: course.session.day,
         start: course.session.start,
         end: course.session.end,
-        venue: course.tutorialVenue || "",
+        venue: course.venues || "",
       });
     }
   });
@@ -230,7 +230,7 @@ function renderDetail() {
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
   document.getElementById("dSession").textContent = course.session
-    ? `Tutorial ${course.session.day} ${course.session.start}–${course.session.end}${course.tutorialVenue ? ` (${course.tutorialVenue})` : ""}  ·  requires a mark of ${course.minMark}+`
+    ? `Tutorial ${course.session.day} ${course.session.start}–${course.session.end}${course.venues ? ` (${course.venues})` : ""}  ·  requires a mark of ${course.minMark}+`
     : `${course.department}  ·  requires a mark of ${course.minMark}+  ·  not yet scheduled`;
   document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
   document.getElementById("dTutorsAssigned").textContent =
@@ -585,7 +585,7 @@ const addCourseSubmitBtn = document.getElementById("addCourseSubmitBtn");
 const addCourseHeading = document.getElementById("addCourseHeading");
 const courseClashWarningEl = document.getElementById("courseClashWarning");
 
-const tutorialVenueInput = document.getElementById("tutorialVenueInput");
+const venuesInput = document.getElementById("venuesInput");
 
 let editingCourseId = null; // null = adding a new course, otherwise id of course being edited
 
@@ -614,7 +614,7 @@ function openCourseModal(course = null) {
     document.getElementById("tutorEndTimeInput").value = course.endTime
       ? course.endTime.slice(0, 5)
       : "";
-    tutorialVenueInput.value = course.tutorialVenue ?? "";
+    venuesInput.value = course.venues ?? "";
   }
 
   addCourseModal.showModal();
@@ -624,19 +624,21 @@ function openCourseModal(course = null) {
 
 // Live venue-clash preview while editing a course's tutorial time — purely
 // client-side against the already-loaded COURSES list, so it updates instantly
-// as the organiser types. Never blocks saving, just warns.
+// as the organiser types. Disables the submit button while a clash shows;
+// the server re-checks on submit regardless as the source of truth.
 function checkModalClashes() {
   const tutorialSession = {
     day: document.getElementById("dayOfTutInput").value.trim(),
     start: document.getElementById("tutorStartTimeInput").value,
     end: document.getElementById("tutorEndTimeInput").value,
-    venue: tutorialVenueInput.value.trim(),
+    venue: venuesInput.value.trim(),
   };
 
   const clashes = findVenueClashes(tutorialSession, editingCourseId);
 
   if (clashes.length === 0) {
     courseClashWarningEl.hidden = true;
+    addCourseSubmitBtn.disabled = false;
     return;
   }
 
@@ -644,13 +646,14 @@ function checkModalClashes() {
   const shared = sharedVenues(tutorialSession.venue, c.venue).join(", ");
   courseClashWarningEl.textContent = `⚠ Venue clash: ${shared} is already booked for ${c.courseCode} ${c.type} (${c.day} ${c.start}–${c.end})${clashes.length > 1 ? ` and ${clashes.length - 1} more` : ""}.`;
   courseClashWarningEl.hidden = false;
+  addCourseSubmitBtn.disabled = true;
 }
 
 [
   "dayOfTutInput",
   "tutorStartTimeInput",
   "tutorEndTimeInput",
-  "tutorialVenueInput",
+  "venuesInput",
 ].forEach((id) => {
   document.getElementById(id).addEventListener("input", checkModalClashes);
 });
@@ -694,7 +697,7 @@ addCourseForm.addEventListener("submit", async (e) => {
     day_of_tut: dayOfTutValue === "" ? null : dayOfTutValue,
     tutor_start_time: startTimeValue === "" ? null : startTimeValue,
     tutor_end_time: endTimeValue === "" ? null : endTimeValue,
-    tutorial_venue: tutorialVenueInput.value.trim() || null,
+    venues: venuesInput.value.trim() || null,
   };
 
   const isEditing = editingCourseId !== null;

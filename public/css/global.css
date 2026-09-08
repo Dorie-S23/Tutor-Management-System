@@ -65,6 +65,7 @@ button {
 /* ---------- header ---------- */
 
 .board-header {
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -72,17 +73,36 @@ button {
   padding: 28px clamp(20px, 4vw, 48px) 20px;
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
+  min-height: 168px;
 }
 
 .eyebrow {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: "Space Grotesk", sans-serif;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  margin-bottom: 6px;
+  margin: 0 0 6px;
+}
+
+.eyebrow-logo {
+  height: 72px;
+  width: auto;
+  flex-shrink: 0;
+  margin-left: 1px;
+}
+
+.header-wits-logo {
+  position: absolute;
+  left: 50%;
+  top: 28px;
+  transform: translateX(-50%);
+  height: 88px;
+  width: auto;
 }
 
 .board-header h1 {
@@ -93,6 +113,14 @@ button {
 .header-right {
   display: flex;
   gap: 28px;
+}
+
+.board-header #logout-button {
+  position: absolute;
+  top: 64px;
+  right: clamp(20px, 4vw, 48px);
+  transform: translateY(-50%);
+  z-index: 20;
 }
 
 .header-stat {
@@ -610,6 +638,14 @@ input[type="search"]:focus-visible {
 }
 .btn-ghost:hover {
   border-color: var(--ink-faint);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+.btn-danger:hover {
+  opacity: 0.9;
 }
 
 .btn-small {

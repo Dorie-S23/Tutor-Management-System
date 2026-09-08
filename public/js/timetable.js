@@ -36,7 +36,7 @@ function mapCourseRow(row) {
     dayOfTut: row.Day_of_tut,
     startTime: row.tutor_start_time,
     endTime: row.tutor_end_time,
-    tutorialVenue: row.tutorial_venue,
+    venues: row.venues,
   };
 }
 
@@ -52,7 +52,7 @@ function getAllSessions(courses) {
         day: c.dayOfTut,
         start: c.startTime.slice(0, 5),
         end: c.endTime.slice(0, 5),
-        venue: c.tutorialVenue || "",
+        venue: c.venues || "",
       });
     }
   });
