@@ -1353,6 +1353,10 @@ body.tutor-app {
   color: var(--ta-text);
 }
 
+.tutor-app .tab-nav a[hidden] {
+  display: none;
+}
+
 .tutor-app .tab-nav a.active {
   color: var(--ta-primary);
   border-bottom-color: var(--ta-primary);
@@ -1409,6 +1413,10 @@ body.tutor-app {
   display: flex;
   gap: 0.6rem;
   margin-top: 0.25rem;
+}
+
+.tutor-app .form-actions[hidden] {
+  display: none;
 }
 
 .tutor-app button {
@@ -1700,6 +1708,15 @@ body.tutor-app {
 .tutor-app .calendar-day.today {
   border-color: var(--ta-primary);
   border-width: 2px;
+}
+
+.tutor-app .calendar-day-clickable {
+  cursor: pointer;
+}
+
+.tutor-app .calendar-day-clickable:hover {
+  border-color: var(--ta-primary);
+  background: var(--ta-bg);
 }
 
 .tutor-app .calendar-day-number {
