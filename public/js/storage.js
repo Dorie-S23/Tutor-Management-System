@@ -222,19 +222,115 @@ export function addScheduleClasses(classes) {
 
 export function deleteScheduleClass(id) {
   writeSchedule(readSchedule().filter((c) => c.id !== id));
+  writeExceptions(readExceptions().filter((e) => e.classId !== id));
   syncScheduleToServer();
 }
 
 export function clearSchedule() {
   writeSchedule([]);
+  writeExceptions([]);
   syncScheduleToServer();
+}
+
+// ---------- exceptions to the recurring schedule ----------
+// A single occurrence of a recurring class can be cancelled (e.g. a public
+// holiday) or modified (e.g. moved to a different time/venue for one week)
+// without touching the recurrence rule itself. Keyed by (classId, date) so
+// there's at most one exception per class per day.
+
+const SCHEDULE_EXCEPTIONS_KEY = "tutorHours.scheduleExceptions";
+
+function readExceptions() {
+  const raw = localStorage.getItem(SCHEDULE_EXCEPTIONS_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeExceptions(exceptions) {
+  localStorage.setItem(SCHEDULE_EXCEPTIONS_KEY, JSON.stringify(exceptions));
+}
+
+export function getScheduleExceptions() {
+  return readExceptions();
+}
+
+// Cancels a single occurrence of a recurring class on the given date.
+export function cancelScheduleOccurrence(classId, dateStr) {
+  const exceptions = readExceptions().filter(
+    (e) => !(e.classId === classId && e.date === dateStr),
+  );
+  exceptions.push({ classId, date: dateStr, type: "cancelled" });
+  writeExceptions(exceptions);
+}
+
+// Overrides one or more fields (startTime, endTime, venue, title) for a
+// single occurrence, leaving every other occurrence untouched.
+export function modifyScheduleOccurrence(classId, dateStr, overrides) {
+  const exceptions = readExceptions().filter(
+    (e) => !(e.classId === classId && e.date === dateStr),
+  );
+  exceptions.push({ classId, date: dateStr, type: "modified", overrides });
+  writeExceptions(exceptions);
+}
+
+// Removes any exception for this occurrence, reverting it back to the
+// normal recurring class.
+export function clearScheduleException(classId, dateStr) {
+  writeExceptions(
+    readExceptions().filter(
+      (e) => !(e.classId === classId && e.date === dateStr),
+    ),
+  );
+}
+
+// getScheduleForDate hides cancelled occurrences entirely, so the calendar
+// UI needs a separate lookup to show *something* clickable in their place
+// (otherwise a cancelled class silently vanishes with no way to undo it).
+export function getCancelledOccurrencesForDate(dateStr) {
+  const exceptions = readExceptions().filter(
+    (e) => e.date === dateStr && e.type === "cancelled",
+  );
+  if (exceptions.length === 0) return [];
+
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const weekday = new Date(y, m - 1, d).getDay();
+  const classes = readSchedule().filter(
+    (c) =>
+      c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate,
+  );
+
+  return exceptions
+    .map((e) => classes.find((c) => c.id === e.classId))
+    .filter(Boolean);
 }
 
 export function getScheduleForDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const weekday = new Date(y, m - 1, d).getDay();
-  return readSchedule().filter(
+  const classes = readSchedule().filter(
     (c) =>
       c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate,
   );
+
+  const exceptions = readExceptions();
+  if (exceptions.length === 0) return classes;
+
+  return classes
+    .map((c) => {
+      const exception = exceptions.find(
+        (e) => e.classId === c.id && e.date === dateStr,
+      );
+      if (!exception) return c;
+      if (exception.type === "cancelled") return null;
+      if (exception.type === "modified") {
+        return { ...c, ...exception.overrides, isModifiedOccurrence: true };
+      }
+      return c;
+    })
+    .filter(Boolean);
 }
