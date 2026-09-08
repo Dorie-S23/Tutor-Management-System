@@ -193,13 +193,14 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
 
   const dateLine = document.createElement("p");
   dateLine.className = "card-hint";
-  dateLine.textContent = new Date(
-    `${dateStr}T00:00:00`,
-  ).toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  dateLine.textContent = new Date(`${dateStr}T00:00:00`).toLocaleDateString(
+    undefined,
+    {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    },
+  );
   box.appendChild(dateLine);
 
   function closeModal() {

@@ -41,9 +41,7 @@ router.post("/", async (req, res) => {
   }
 
   if (sessionDate < todayStr()) {
-    return res
-      .status(400)
-      .json({ error: "sessionDate can't be in the past" });
+    return res.status(400).json({ error: "sessionDate can't be in the past" });
   }
 
   const { data: course, error: courseError } = await supabase

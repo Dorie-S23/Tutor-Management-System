@@ -44,7 +44,9 @@ router.post("/", async (req, res) => {
   const { tutorId, weekStart } = req.body ?? {};
 
   if (!tutorId || !weekStart) {
-    return res.status(400).json({ error: "tutorId and weekStart are required" });
+    return res
+      .status(400)
+      .json({ error: "tutorId and weekStart are required" });
   }
 
   const weekEnd = addDays(weekStart, 6);

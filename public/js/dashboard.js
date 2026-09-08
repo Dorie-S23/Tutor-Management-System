@@ -44,7 +44,7 @@ async function renderHoursStats() {
 }
 
 renderHoursStats().catch((err) => {
-  console.error('Failed to load hours stats:', err);
+  console.error("Failed to load hours stats:", err);
 });
 renderWelcome();
 

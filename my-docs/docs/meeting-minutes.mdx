@@ -40,7 +40,7 @@ Defined Sprint 1 scope and aligned on tooling/process.
 
 - **Tagona:** paused registration back-end work pending a possible database migration decision; shifted to front-end login/registration pages in the interim.
 - **Mkateko:** reviewed Tagona's front-end work; requested an Educator role be added to registration; suggested all roles sign in from one page.
-- **Key discussion — database migration:** the team considered moving from Supabase to MongoDB. Tagona found the main difference is that MongoDB needs manual auth handling (password hashing, sessions) versus Supabase's built-in auth, and would own that work if it happens. Migration is pending confirmation from Brendan (client/supervisor) and, if it happens, the *whole* system moves — not a partial migration.
+- **Key discussion — database migration:** the team considered moving from Supabase to MongoDB. Tagona found the main difference is that MongoDB needs manual auth handling (password hashing, sessions) versus Supabase's built-in auth, and would own that work if it happens. Migration is pending confirmation from Brendan (client/supervisor) and, if it happens, the _whole_ system moves — not a partial migration.
 - Daily Scrums set for Monday/Wednesday/Friday at 7:00 PM.
 
 **Decisions:** registration page unified across roles with Educator added; migration pending Brendan; in-person meeting planned for the next day at MSL to brainstorm roadmap/diagrams/database decision.
@@ -91,13 +91,13 @@ Defined Sprint 1 scope and aligned on tooling/process.
 
 **Overall progress**
 
-| Area | Status |
-|---|---|
-| Front-end | Login and registration pages completed; Educator role added |
-| Back-end | Authentication built and debugged; role-based table insertion working |
-| Database | Supabase selected and in use; MongoDB migration discussed but never confirmed by the client |
-| Architecture | Non-monolithic (separate front end / back end) confirmed |
-| Deployment | Target identified (GitHub Pages / Cloudflare Pages); implementation outstanding at meeting-log time |
-| Documentation | In progress; Git methodology and UML diagrams outstanding at meeting-log time |
+| Area          | Status                                                                                              |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| Front-end     | Login and registration pages completed; Educator role added                                         |
+| Back-end      | Authentication built and debugged; role-based table insertion working                               |
+| Database      | Supabase selected and in use; MongoDB migration discussed but never confirmed by the client         |
+| Architecture  | Non-monolithic (separate front end / back end) confirmed                                            |
+| Deployment    | Target identified (GitHub Pages / Cloudflare Pages); implementation outstanding at meeting-log time |
+| Documentation | In progress; Git methodology and UML diagrams outstanding at meeting-log time                       |
 
 **Outstanding items carried out of Sprint 1:** Tutor and Organiser role features, Educator dashboard, deployment to static hosting, at least one UML/app-flow diagram, Git methodology write-up, and a client demo meeting.

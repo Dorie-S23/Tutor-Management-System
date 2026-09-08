@@ -27,10 +27,8 @@ router.get("/", async (req, res) => {
     });
   }
 
-  let query = supabase
-    .from("tutor_subject_preference")
-    .select(
-      `
+  let query = supabase.from("tutor_subject_preference").select(
+    `
       *,
       courses(
         course_code,
@@ -48,7 +46,7 @@ router.get("/", async (req, res) => {
         weekly_hour_cap
       )
       `,
-    );
+  );
 
   if (tutorId) {
     query = query.eq("tutor_id", tutorId);
@@ -173,19 +171,12 @@ router.get("/", async (req, res) => {
       const courseEnd = toMinutes(course?.tutor_end_time);
 
       // Only perform clash checking when the course has a schedule.
-      if (
-        courseDay &&
-        courseStart != null &&
-        courseEnd != null
-      ) {
+      if (courseDay && courseStart != null && courseEnd != null) {
         // Check the tutor's own busy times
-        const { data: busyTimes, error: busyTimesError } =
-          await supabase
-            .from("tutor_busy_times")
-            .select(
-              "title, day_of_week, start_time, end_time",
-            )
-            .eq("tutor_id", tutorId);
+        const { data: busyTimes, error: busyTimesError } = await supabase
+          .from("tutor_busy_times")
+          .select("title, day_of_week, start_time, end_time")
+          .eq("tutor_id", tutorId);
 
         if (!busyTimesError && busyTimes) {
           for (const busy of busyTimes) {
@@ -195,12 +186,7 @@ router.get("/", async (req, res) => {
             if (
               busyStart != null &&
               busyEnd != null &&
-              overlaps(
-                courseStart,
-                courseEnd,
-                busyStart,
-                busyEnd,
-              )
+              overlaps(courseStart, courseEnd, busyStart, busyEnd)
             ) {
               timetableClash = true;
               break;
@@ -234,30 +220,18 @@ router.get("/", async (req, res) => {
             for (const other of otherCourses) {
               const otherCourse = other.courses;
 
-              if (
-                !otherCourse ||
-                otherCourse.Day_of_tut !== courseDay
-              ) {
+              if (!otherCourse || otherCourse.Day_of_tut !== courseDay) {
                 continue;
               }
 
-              const otherStart = toMinutes(
-                otherCourse.tutor_start_time,
-              );
+              const otherStart = toMinutes(otherCourse.tutor_start_time);
 
-              const otherEnd = toMinutes(
-                otherCourse.tutor_end_time,
-              );
+              const otherEnd = toMinutes(otherCourse.tutor_end_time);
 
               if (
                 otherStart != null &&
                 otherEnd != null &&
-                overlaps(
-                  courseStart,
-                  courseEnd,
-                  otherStart,
-                  otherEnd,
-                )
+                overlaps(courseStart, courseEnd, otherStart, otherEnd)
               ) {
                 timetableClash = true;
                 break;
@@ -307,13 +281,9 @@ router.get("/", async (req, res) => {
       if (weeklyHourCap == null) {
         score += 10;
       } else if (weeklyHourCap > 0) {
-        const workloadRatio =
-          hoursRemaining / Number(weeklyHourCap);
+        const workloadRatio = hoursRemaining / Number(weeklyHourCap);
 
-        score += Math.min(
-          Math.max(workloadRatio, 0),
-          1,
-        ) * 10;
+        score += Math.min(Math.max(workloadRatio, 0), 1) * 10;
       }
 
       return {
@@ -329,9 +299,7 @@ router.get("/", async (req, res) => {
           weeklyHourCap,
           currentAssignedHours,
           hoursRemaining:
-            hoursRemaining === Infinity
-              ? null
-              : Number(hoursRemaining),
+            hoursRemaining === Infinity ? null : Number(hoursRemaining),
           projectedHours,
         },
       };
@@ -359,22 +327,13 @@ router.get("/", async (req, res) => {
     }
 
     // Tie-breaker 3: no timetable clash first
-    if (
-      a.ranking.timetableClash !==
-      b.ranking.timetableClash
-    ) {
+    if (a.ranking.timetableClash !== b.ranking.timetableClash) {
       return a.ranking.timetableClash ? 1 : -1;
     }
 
     // Tie-breaker 4: higher academic level
-    if (
-      b.ranking.academicRank !==
-      a.ranking.academicRank
-    ) {
-      return (
-        b.ranking.academicRank -
-        a.ranking.academicRank
-      );
+    if (b.ranking.academicRank !== a.ranking.academicRank) {
+      return b.ranking.academicRank - a.ranking.academicRank;
     }
 
     return 0;
@@ -389,13 +348,8 @@ router.get("/", async (req, res) => {
 // ============================================================
 
 router.post("/", async (req, res) => {
-  const {
-    tutorId,
-    courseId,
-    mark,
-    availability,
-    academicLevel,
-  } = req.body ?? {};
+  const { tutorId, courseId, mark, availability, academicLevel } =
+    req.body ?? {};
 
   if (!tutorId || !courseId) {
     return res.status(400).json({
@@ -405,11 +359,7 @@ router.post("/", async (req, res) => {
 
   const markNum = Number(mark);
 
-  if (
-    !Number.isInteger(markNum) ||
-    markNum < 0 ||
-    markNum > 100
-  ) {
+  if (!Number.isInteger(markNum) || markNum < 0 || markNum > 100) {
     return res.status(400).json({
       error: "mark must be an integer between 0 and 100",
     });
@@ -422,23 +372,17 @@ router.post("/", async (req, res) => {
   }
 
   // Self-reported by the tutor — not set by an organiser
-  if (
-    !Object.prototype.hasOwnProperty.call(
-      LEVEL_RANK,
-      academicLevel,
-    )
-  ) {
+  if (!Object.prototype.hasOwnProperty.call(LEVEL_RANK, academicLevel)) {
     return res.status(400).json({
       error: "Please select your year of study",
     });
   }
 
-  const { data: tutor, error: tutorError } =
-    await supabase
-      .from("tutors")
-      .select("name")
-      .eq("id", tutorId)
-      .single();
+  const { data: tutor, error: tutorError } = await supabase
+    .from("tutors")
+    .select("name")
+    .eq("id", tutorId)
+    .single();
 
   if (tutorError || !tutor) {
     return res.status(404).json({
@@ -446,14 +390,11 @@ router.post("/", async (req, res) => {
     });
   }
 
-  const { data: course, error: courseError } =
-    await supabase
-      .from("courses")
-      .select(
-        "course_code, course_name, course_level",
-      )
-      .eq("id", courseId)
-      .single();
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("course_code, course_name, course_level")
+    .eq("id", courseId)
+    .single();
 
   if (courseError || !course) {
     return res.status(404).json({
@@ -477,13 +418,12 @@ router.post("/", async (req, res) => {
   }
 
   // Persist tutor's self-reported year of study
-  const { error: levelUpdateError } =
-    await supabase
-      .from("tutors")
-      .update({
-        academic_level: academicLevel,
-      })
-      .eq("id", tutorId);
+  const { error: levelUpdateError } = await supabase
+    .from("tutors")
+    .update({
+      academic_level: academicLevel,
+    })
+    .eq("id", tutorId);
 
   if (levelUpdateError) {
     return res.status(500).json({
@@ -491,13 +431,12 @@ router.post("/", async (req, res) => {
     });
   }
 
-  const { data: existing, error: existingError } =
-    await supabase
-      .from("tutor_subject_preference")
-      .select("id")
-      .eq("tutor_id", tutorId)
-      .eq("course_id", courseId)
-      .maybeSingle();
+  const { data: existing, error: existingError } = await supabase
+    .from("tutor_subject_preference")
+    .select("id")
+    .eq("tutor_id", tutorId)
+    .eq("course_id", courseId)
+    .maybeSingle();
 
   if (existingError) {
     return res.status(500).json({
@@ -539,30 +478,20 @@ router.post("/", async (req, res) => {
 // Organiser approves/rejects/resets an application.
 // ============================================================
 
-const VALID_STATUSES = [
-  "pending",
-  "approved",
-  "rejected",
-];
+const VALID_STATUSES = ["pending", "approved", "rejected"];
 
 router.patch("/:id", async (req, res) => {
   const { status } = req.body ?? {};
 
   if (!VALID_STATUSES.includes(status)) {
     return res.status(400).json({
-      error:
-        "status must be pending, approved or rejected",
+      error: "status must be pending, approved or rejected",
     });
   }
 
-  const {
-    data: application,
-    error: applicationError,
-  } = await supabase
+  const { data: application, error: applicationError } = await supabase
     .from("tutor_subject_preference")
-    .select(
-      "id, status, course_id, tutor_id",
-    )
+    .select("id, status, course_id, tutor_id")
     .eq("id", req.params.id)
     .single();
 
@@ -572,21 +501,14 @@ router.patch("/:id", async (req, res) => {
     });
   }
 
-  const wasApproved =
-    application.status === "approved";
+  const wasApproved = application.status === "approved";
 
-  const willBeApproved =
-    status === "approved";
+  const willBeApproved = status === "approved";
 
   if (wasApproved !== willBeApproved) {
-    const {
-      data: course,
-      error: courseError,
-    } = await supabase
+    const { data: course, error: courseError } = await supabase
       .from("courses")
-      .select(
-        "no_of_tutors_assigned, tutors_needed, hours_per_week",
-      )
+      .select("no_of_tutors_assigned, tutors_needed, hours_per_week")
       .eq("id", application.course_id)
       .single();
 
@@ -597,25 +519,17 @@ router.patch("/:id", async (req, res) => {
     }
 
     const next =
-      (course.no_of_tutors_assigned ?? 0) +
-      (willBeApproved ? 1 : -1);
+      (course.no_of_tutors_assigned ?? 0) + (willBeApproved ? 1 : -1);
 
-    if (
-      willBeApproved &&
-      next > course.tutors_needed
-    ) {
+    if (willBeApproved && next > course.tutors_needed) {
       return res.status(409).json({
-        error:
-          "This course already has all the tutors it needs",
+        error: "This course already has all the tutors it needs",
       });
     }
 
     // Weekly hour cap check
     if (willBeApproved) {
-      const {
-        data: tutor,
-        error: tutorError,
-      } = await supabase
+      const { data: tutor, error: tutorError } = await supabase
         .from("tutors")
         .select("weekly_hour_cap")
         .eq("id", application.tutor_id)
@@ -628,47 +542,29 @@ router.patch("/:id", async (req, res) => {
       }
 
       if (tutor.weekly_hour_cap != null) {
-        const {
-          data: otherApprovals,
-          error: otherApprovalsError,
-        } = await supabase
-          .from("tutor_subject_preference")
-          .select(
-            "courses(hours_per_week)",
-          )
-          .eq(
-            "tutor_id",
-            application.tutor_id,
-          )
-          .eq("status", "approved")
-          .neq(
-            "course_id",
-            application.course_id,
-          );
+        const { data: otherApprovals, error: otherApprovalsError } =
+          await supabase
+            .from("tutor_subject_preference")
+            .select("courses(hours_per_week)")
+            .eq("tutor_id", application.tutor_id)
+            .eq("status", "approved")
+            .neq("course_id", application.course_id);
 
         if (otherApprovalsError) {
           return res.status(500).json({
-            error:
-              otherApprovalsError.message,
+            error: otherApprovalsError.message,
           });
         }
 
-        const currentAssignedHours =
-          (otherApprovals || []).reduce(
-            (sum, a) =>
-              sum +
-              (a.courses?.hours_per_week || 0),
-            0,
-          );
+        const currentAssignedHours = (otherApprovals || []).reduce(
+          (sum, a) => sum + (a.courses?.hours_per_week || 0),
+          0,
+        );
 
         const projectedHours =
-          currentAssignedHours +
-          (course.hours_per_week || 0);
+          currentAssignedHours + (course.hours_per_week || 0);
 
-        if (
-          projectedHours >
-          tutor.weekly_hour_cap
-        ) {
+        if (projectedHours > tutor.weekly_hour_cap) {
           return res.status(409).json({
             error: `This would put the tutor at ${projectedHours} hrs/week, over their ${tutor.weekly_hour_cap} hr cap`,
           });
@@ -676,17 +572,12 @@ router.patch("/:id", async (req, res) => {
       }
     }
 
-    const { error: bumpError } =
-      await supabase
-        .from("courses")
-        .update({
-          no_of_tutors_assigned:
-            Math.max(next, 0),
-        })
-        .eq(
-          "id",
-          application.course_id,
-        );
+    const { error: bumpError } = await supabase
+      .from("courses")
+      .update({
+        no_of_tutors_assigned: Math.max(next, 0),
+      })
+      .eq("id", application.course_id);
 
     if (bumpError) {
       return res.status(500).json({
@@ -695,13 +586,12 @@ router.patch("/:id", async (req, res) => {
     }
   }
 
-  const { data, error } =
-    await supabase
-      .from("tutor_subject_preference")
-      .update({ status })
-      .eq("id", req.params.id)
-      .select(
-        `
+  const { data, error } = await supabase
+    .from("tutor_subject_preference")
+    .update({ status })
+    .eq("id", req.params.id)
+    .select(
+      `
         *,
         courses(
           course_code,
@@ -713,8 +603,8 @@ router.patch("/:id", async (req, res) => {
           academic_level
         )
         `,
-      )
-      .single();
+    )
+    .single();
 
   if (error) {
     return res.status(500).json({
@@ -726,4 +616,3 @@ router.patch("/:id", async (req, res) => {
 });
 
 module.exports = router;
-

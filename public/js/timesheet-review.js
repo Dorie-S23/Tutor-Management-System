@@ -33,7 +33,9 @@ async function loadSubmissions() {
   let rows = [];
   try {
     const status = statusFilterEl.value;
-    const res = await fetch(`/api/timesheets${status ? `?status=${status}` : ""}`);
+    const res = await fetch(
+      `/api/timesheets${status ? `?status=${status}` : ""}`,
+    );
     rows = await res.json();
     if (!res.ok) throw new Error(rows.error || "Failed to load timesheets");
   } catch (err) {
@@ -73,9 +75,7 @@ function renderSubmission(sub) {
 
   const actionsEl = row.querySelector(".applicant-actions");
   actionsEl.appendChild(
-    makeActionBtn("Details", "btn-small-neutral", () =>
-      toggleDetail(li, sub),
-    ),
+    makeActionBtn("Details", "btn-small-neutral", () => toggleDetail(li, sub)),
   );
 
   if (status === "pending") {
