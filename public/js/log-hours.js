@@ -25,10 +25,14 @@ highlightActiveTab();
 const dashboardNavLink = document.getElementById("dashboard-nav-link");
 const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
 const timesheetsNavLink = document.getElementById("timesheets-nav-link");
+const modulesNavLink = document.getElementById("modules-nav-link");
 if (currentUser.role === "student") {
   if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
-  // Timesheets is a tutor-only payroll claim — no use to a student volunteer.
+  // Timesheets is a tutor-only payroll claim, and applying to tutor a
+  // module is a tutor-only concept — neither is useful to a student
+  // volunteer.
   if (timesheetsNavLink) timesheetsNavLink.hidden = true;
+  if (modulesNavLink) modulesNavLink.hidden = true;
 } else {
   // "My Sessions" is a student-volunteer concept (sessions they've
   // volunteered for) — hide it for anyone else (tutors, organisers,

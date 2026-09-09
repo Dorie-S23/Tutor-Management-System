@@ -1970,7 +1970,14 @@ body.tutor-app {
 .tutor-app .card-hint {
   color: var(--ta-text-muted);
   font-size: 0.85rem;
-  margin: -0.5rem 0 1rem;
+  margin: 0.75rem 0 0;
+}
+
+/* Pull a hint tight against a heading it directly follows — doesn't apply
+   when a hint follows a form/table instead, where it needs breathing room. */
+.tutor-app .card h2 + .card-hint {
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
 }
 
 .tutor-app .claim-preview[hidden] {

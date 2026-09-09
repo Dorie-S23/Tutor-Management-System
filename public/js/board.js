@@ -578,6 +578,27 @@ function renderAssignmentCard(course) {
 
 const addCourseBtn = document.getElementById("addCourseBtn");
 const editCourseBtn = document.getElementById("editCourseBtn");
+const deleteCourseBtn = document.getElementById("deleteCourseBtn");
+const deleteCourseModal = document.getElementById("deleteCourseModal");
+const deleteCourseMessage = document.getElementById("deleteCourseMessage");
+const deleteCourseError = document.getElementById("deleteCourseError");
+const deleteCourseConfirmBtn = document.getElementById(
+  "deleteCourseConfirmBtn",
+);
+
+let deletingCourseId = null;
+
+function openDeleteCourseModal(course) {
+  deletingCourseId = course.id;
+  deleteCourseError.hidden = true;
+  deleteCourseMessage.textContent = `Delete ${course.code} — ${course.name}? This can't be undone.`;
+  deleteCourseModal.showModal();
+}
+
+function closeDeleteCourseModal() {
+  deleteCourseModal.close();
+  deletingCourseId = null;
+}
 const addCourseModal = document.getElementById("addCourseModal");
 const addCourseForm = document.getElementById("addCourseForm");
 const addCourseError = document.getElementById("addCourseError");
@@ -666,6 +687,50 @@ addCourseBtn.addEventListener("click", () => openCourseModal());
 editCourseBtn.addEventListener("click", () => {
   const course = COURSES.find((c) => c.id === activeCourseId);
   if (course) openCourseModal(course);
+});
+deleteCourseBtn.addEventListener("click", () => {
+  const course = COURSES.find((c) => c.id === activeCourseId);
+  if (course) openDeleteCourseModal(course);
+});
+
+deleteCourseConfirmBtn.addEventListener("click", async () => {
+  if (deletingCourseId === null) return;
+
+  deleteCourseError.hidden = true;
+  deleteCourseConfirmBtn.disabled = true;
+  deleteCourseConfirmBtn.textContent = "Deleting…";
+
+  try {
+    const res = await fetch(`/api/courses/${deletingCourseId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      deleteCourseError.textContent =
+        body.error || "Couldn't delete that course.";
+      deleteCourseError.hidden = false;
+      return;
+    }
+    closeDeleteCourseModal();
+    activeCourseId = null;
+    await fetchCourses();
+  } catch (err) {
+    deleteCourseError.textContent = "Network error — couldn't reach the server.";
+    deleteCourseError.hidden = false;
+  } finally {
+    deleteCourseConfirmBtn.disabled = false;
+    deleteCourseConfirmBtn.textContent = "Delete course";
+  }
+});
+
+document
+  .getElementById("deleteCourseCloseBtn")
+  .addEventListener("click", closeDeleteCourseModal);
+document
+  .getElementById("deleteCourseCancelBtn")
+  .addEventListener("click", closeDeleteCourseModal);
+deleteCourseModal.addEventListener("click", (e) => {
+  if (e.target === deleteCourseModal) closeDeleteCourseModal();
 });
 document
   .getElementById("addCourseCloseBtn")

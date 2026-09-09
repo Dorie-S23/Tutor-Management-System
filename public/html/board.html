@@ -111,6 +111,13 @@
               >
                 Edit course
               </button>
+              <button
+                class="btn btn-danger btn-small-pad"
+                id="deleteCourseBtn"
+                type="button"
+              >
+                Delete course
+              </button>
             </div>
           </header>
 
@@ -308,6 +315,47 @@
           </li>
         </menu>
       </form>
+    </dialog>
+
+    <dialog
+      class="modal"
+      id="deleteCourseModal"
+      aria-labelledby="deleteCourseHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="deleteCourseHeading">Delete course</h2>
+          <button
+            class="modal-close"
+            id="deleteCourseCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="deleteCourseError" hidden></p>
+
+        <p id="deleteCourseMessage"></p>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="deleteCourseCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-danger"
+              id="deleteCourseConfirmBtn"
+              type="button"
+            >
+              Delete course
+            </button>
+          </li>
+        </menu>
+      </div>
     </dialog>
 
     <script src="../js/board.js"></script>

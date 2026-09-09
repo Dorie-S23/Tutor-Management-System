@@ -23,7 +23,7 @@ router.get("/", async (req, res) => {
   let query = supabase
     .from("tutor_subject_preference")
     .select(
-      "*, courses(course_code, course_name), tutors(name, email, academic_level)",
+      "*, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time), tutors(name, email, academic_level)",
     );
 
   if (tutorId) query = query.eq("tutor_id", tutorId);
@@ -240,6 +240,52 @@ router.patch("/:id", async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// DELETE /api/tutor-applications/:id — a tutor withdraws their own application.
+// Keeps the course's no_of_tutors_assigned counter in sync if it was approved.
+router.delete("/:id", async (req, res) => {
+  const { data: application, error: applicationError } = await supabase
+    .from("tutor_subject_preference")
+    .select("id, status, course_id")
+    .eq("id", req.params.id)
+    .single();
+
+  if (applicationError || !application) {
+    return res.status(404).json({ error: "Application not found" });
+  }
+
+  if (application.status === "approved") {
+    const { data: course, error: courseError } = await supabase
+      .from("courses")
+      .select("no_of_tutors_assigned")
+      .eq("id", application.course_id)
+      .single();
+
+    if (courseError || !course) {
+      return res.status(404).json({ error: "Course not found" });
+    }
+
+    const { error: bumpError } = await supabase
+      .from("courses")
+      .update({
+        no_of_tutors_assigned: Math.max(
+          (course.no_of_tutors_assigned ?? 0) - 1,
+          0,
+        ),
+      })
+      .eq("id", application.course_id);
+
+    if (bumpError) return res.status(500).json({ error: bumpError.message });
+  }
+
+  const { error } = await supabase
+    .from("tutor_subject_preference")
+    .delete()
+    .eq("id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
 });
 
 module.exports = router;

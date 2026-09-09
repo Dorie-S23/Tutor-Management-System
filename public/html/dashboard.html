@@ -14,6 +14,7 @@
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html">Calendar</a>
         <a href="timesheets.html">Timesheets</a>
+        <a href="modules.html">Module Application</a>
         <a href="#" id="logout-button">Logout</a>
       </nav>
     </header>
@@ -28,19 +29,16 @@
       </div>
 
       <div class="card">
-        <h2>Tutor a subject</h2>
-        <p>
-          Apply to tutor one of the courses that need tutors. We'll check your
-          mark and availability before it goes to the board.
-        </p>
-        <button class="btn-primary" id="apply-to-tutor-btn" type="button">
-          Apply to tutor a subject
-        </button>
+        <h2>Upcoming sessions</h2>
+        <p>Sessions from the modules you've been approved to tutor.</p>
 
-        <div id="applications-list" class="applications-list" hidden>
-          <h3>Your applications</h3>
-          <ul id="applications-items"></ul>
+        <div id="upcoming-sessions-list" class="applications-list" hidden>
+          <ul id="upcoming-sessions-items"></ul>
         </div>
+        <p class="upcoming-empty" id="upcoming-sessions-empty" hidden>
+          No upcoming sessions yet.
+          <a href="modules.html">Apply to tutor a module</a> to get scheduled.
+        </p>
       </div>
 
       <div class="stat-grid">
@@ -54,8 +52,9 @@
           <span class="stat-sublabel" id="stat-hours-sublabel"></span>
         </div>
         <div class="stat-tile">
-          <span class="stat-label">Upcoming session</span>
-          <p class="upcoming-empty">Coming soon.</p>
+          <span class="stat-label">Next session</span>
+          <span class="stat-value" id="stat-next-session">—</span>
+          <span class="stat-sublabel" id="stat-next-session-sublabel"></span>
         </div>
       </div>
 
@@ -72,91 +71,14 @@
           <h3>Calendar</h3>
           <p>See your tutoring sessions laid out by month.</p>
         </a>
+        <a class="tile" href="modules.html">
+          <h3>Module Application</h3>
+          <p>Apply to tutor a module and track your applications.</p>
+        </a>
       </div>
     </main>
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
-
-    <dialog
-      class="modal"
-      id="apply-modal"
-      aria-labelledby="apply-modal-heading"
-    >
-      <form method="dialog" class="modal-form" id="apply-form">
-        <header class="modal-head">
-          <h2 id="apply-modal-heading">Apply to tutor a subject</h2>
-          <button
-            class="modal-close"
-            id="apply-modal-close-btn"
-            type="button"
-            aria-label="Close"
-          >
-            &times;
-          </button>
-        </header>
-
-        <p class="field-error" id="apply-form-error" hidden></p>
-
-        <label class="field">
-          <span class="field-label">Course</span>
-          <select id="apply-course-select" name="course_id" required>
-            <option value="" disabled selected>Choose a course&hellip;</option>
-          </select>
-        </label>
-
-        <p class="course-meta" id="apply-course-meta" hidden></p>
-
-        <label class="field">
-          <span class="field-label">Your year of study</span>
-          <select id="apply-year-select" name="academic_level" required>
-            <option value="" disabled selected>Select&hellip;</option>
-            <option value="second_year">2nd year</option>
-            <option value="third_year">3rd year</option>
-            <option value="honours">Honours</option>
-            <option value="masters">Masters</option>
-            <option value="phd">PhD</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Your mark for this subject</span>
-          <input
-            type="number"
-            id="apply-mark-input"
-            name="mark"
-            min="0"
-            max="100"
-            step="1"
-            placeholder="e.g. 75"
-            required
-          />
-        </label>
-
-        <label class="field">
-          <span class="field-label" id="apply-availability-label"
-            >Are you free at the tutorial time?</span
-          >
-          <select id="apply-availability-select" name="availability" required>
-            <option value="" disabled selected>Select&hellip;</option>
-            <option value="true">Yes, I'm free then</option>
-            <option value="false">No, I'm not free then</option>
-          </select>
-        </label>
-
-        <menu class="modal-actions">
-          <li>
-            <button class="btn-secondary" id="apply-cancel-btn" type="button">
-              Cancel
-            </button>
-          </li>
-          <li>
-            <button class="btn-primary" id="apply-submit-btn" type="submit">
-              Submit application
-            </button>
-          </li>
-        </menu>
-      </form>
-    </dialog>
 
     <script type="module" src="../js/dashboard.js"></script>
     <script src="../js/logout.js"></script>

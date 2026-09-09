@@ -295,6 +295,35 @@ router.put("/:id", async (req, res) => {
   res.json(data);
 });
 
+// DELETE /api/courses/:id — remove a course
+router.delete("/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid course id" });
+  }
+
+  const { error, count } = await supabase
+    .from("courses")
+    .delete({ count: "exact" })
+    .eq("id", id);
+
+  if (error) {
+    if (error.code === "23503") {
+      return res.status(409).json({
+        error:
+          "Can't delete this course — it still has tutor applications, volunteers, or preferences linked to it. Remove those first.",
+      });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+
+  if (count === 0) {
+    return res.status(404).json({ error: "Course not found" });
+  }
+
+  res.status(204).end();
+});
+
 // PATCH /api/courses/:id/tutors-assigned — bump the assigned-tutor counter up or down by 1
 router.patch("/:id/tutors-assigned", async (req, res) => {
   const id = Number(req.params.id);
