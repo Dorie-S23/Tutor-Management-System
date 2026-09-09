@@ -1061,11 +1061,17 @@ input[type="search"]:focus-visible {
 .timetable-session .session-code {
   font-weight: 700;
   display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .timetable-session .session-meta {
   display: block;
   opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- accessibility ---------- */
@@ -1501,8 +1507,32 @@ body.tutor-app {
 }
 
 .tutor-app .app-header {
+  position: relative;
   background: var(--ta-surface);
   border-bottom: 1px solid var(--ta-border);
+}
+
+/* Pulled out of the tab row into a button pinned to the header's
+   upper-right corner. #logout-button's id beats .tab-nav a's specificity,
+   so this cleanly overrides the plain-tab-link look below without !important. */
+.tutor-app #logout-button {
+  position: absolute;
+  top: 1.85rem;
+  right: 1.5rem;
+  display: inline-block;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--ta-danger);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ta-danger);
+}
+
+.tutor-app #logout-button:hover {
+  background: var(--ta-danger);
+  color: #fff;
 }
 
 .tutor-app .app-header h1 {

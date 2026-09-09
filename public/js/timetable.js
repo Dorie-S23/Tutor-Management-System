@@ -164,49 +164,75 @@ function renderGrid(sessions) {
     overlay.style.gridColumn = String(dayIndex + 2);
     gridEl.appendChild(overlay);
 
-    // Greedy lane assignment (like Google Calendar's day view): sessions
-    // sorted by start time each go into the first lane whose previous
-    // session has already ended, otherwise a new lane opens.
     const sorted = [...daySessions].sort(
       (a, b) => timeToMinutes(a.start) - timeToMinutes(b.start),
     );
-    const laneEndMinutes = [];
-    const laneOfSession = new Map();
+
+    // Group into clusters of transitively-overlapping sessions first, so a
+    // session gets squeezed into narrow side-by-side lanes only when it
+    // genuinely overlaps something — not just because something else
+    // overlaps elsewhere that same day. Sessions are sorted by start time,
+    // so a session joins the running cluster whenever it starts before the
+    // cluster's current latest end (even if it doesn't directly overlap the
+    // very first session in the cluster — that's what makes it transitive).
+    const clusters = [];
     sorted.forEach((session) => {
       const startMin = timeToMinutes(session.start);
-      let lane = laneEndMinutes.findIndex((end) => end <= startMin);
-      if (lane === -1) {
-        lane = laneEndMinutes.length;
-        laneEndMinutes.push(timeToMinutes(session.end));
+      const endMin = timeToMinutes(session.end);
+      const cluster = clusters.find((c) => c.end > startMin);
+      if (cluster) {
+        cluster.sessions.push(session);
+        cluster.end = Math.max(cluster.end, endMin);
       } else {
-        laneEndMinutes[lane] = timeToMinutes(session.end);
+        clusters.push({ sessions: [session], end: endMin });
       }
-      laneOfSession.set(session, lane);
     });
-    const laneCount = laneEndMinutes.length;
 
-    sorted.forEach((session) => {
-      const startMin = Math.max(timeToMinutes(session.start), HOUR_START * 60);
-      const endMin = Math.min(timeToMinutes(session.end), HOUR_END * 60);
-      const lane = laneOfSession.get(session);
+    clusters.forEach(({ sessions: clusterSessions }) => {
+      // Greedy lane assignment within this cluster only (like Google
+      // Calendar's day view): sessions each go into the first lane whose
+      // previous session has already ended, otherwise a new lane opens.
+      const laneEndMinutes = [];
+      const laneOfSession = new Map();
+      clusterSessions.forEach((session) => {
+        const startMin = timeToMinutes(session.start);
+        let lane = laneEndMinutes.findIndex((end) => end <= startMin);
+        if (lane === -1) {
+          lane = laneEndMinutes.length;
+          laneEndMinutes.push(timeToMinutes(session.end));
+        } else {
+          laneEndMinutes[lane] = timeToMinutes(session.end);
+        }
+        laneOfSession.set(session, lane);
+      });
+      const laneCount = laneEndMinutes.length;
 
-      const clashPartners = findClashPartners(session, sessions);
-      const block = document.createElement("a");
-      block.href = `board.html?edit=${session.courseId}`;
-      block.className = `timetable-session ${session.type.toLowerCase()}${clashPartners.length ? " clash" : ""}`;
-      block.style.top = `${((startMin - HOUR_START * 60) / totalMinutes) * 100}%`;
-      block.style.height = `${((endMin - startMin) / totalMinutes) * 100}%`;
-      block.style.left = `${(lane / laneCount) * 100}%`;
-      block.style.width = `${100 / laneCount}%`;
-      block.title = clashPartners.length
-        ? `Venue clash (${clashPartners.map((p) => sharedVenues(session.venue, p.venue).join("/")).join(", ")}) with ${clashPartners.map((p) => `${p.courseCode} ${p.type}`).join(", ")}`
-        : `${session.courseCode} ${session.type}${session.venue ? ` · ${session.venue}` : " · no venue set"}`;
-      block.innerHTML = `
-        <span class="session-code">${session.courseCode}${clashPartners.length ? " ⚠" : ""}</span>
-        <span class="session-meta">${session.type} · ${session.start}–${session.end}</span>
-        ${session.venue ? `<span class="session-meta">${session.venue}</span>` : ""}
-      `;
-      overlay.appendChild(block);
+      clusterSessions.forEach((session) => {
+        const startMin = Math.max(
+          timeToMinutes(session.start),
+          HOUR_START * 60,
+        );
+        const endMin = Math.min(timeToMinutes(session.end), HOUR_END * 60);
+        const lane = laneOfSession.get(session);
+
+        const clashPartners = findClashPartners(session, sessions);
+        const block = document.createElement("a");
+        block.href = `board.html?edit=${session.courseId}`;
+        block.className = `timetable-session ${session.type.toLowerCase()}${clashPartners.length ? " clash" : ""}`;
+        block.style.top = `${((startMin - HOUR_START * 60) / totalMinutes) * 100}%`;
+        block.style.height = `${((endMin - startMin) / totalMinutes) * 100}%`;
+        block.style.left = `${(lane / laneCount) * 100}%`;
+        block.style.width = `${100 / laneCount}%`;
+        block.title = clashPartners.length
+          ? `Venue clash (${clashPartners.map((p) => sharedVenues(session.venue, p.venue).join("/")).join(", ")}) with ${clashPartners.map((p) => `${p.courseCode} ${p.type}`).join(", ")}`
+          : `${session.courseCode} ${session.type}${session.venue ? ` · ${session.venue}` : " · no venue set"}`;
+        block.innerHTML = `
+          <span class="session-code">${session.courseCode}${clashPartners.length ? " ⚠" : ""}</span>
+          <span class="session-meta">${session.type} · ${session.start}–${session.end}</span>
+          ${session.venue ? `<span class="session-meta">${session.venue}</span>` : ""}
+        `;
+        overlay.appendChild(block);
+      });
     });
   });
 
