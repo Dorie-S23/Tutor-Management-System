@@ -184,8 +184,11 @@ function renderUpcomingSessions(sessions) {
 (async function initUpcomingSessions() {
   const user = getCurrentUser();
   if (user) {
-    await fetchUpcomingSessions(user.id);
-    await fetchMyExcusals(user.id);
+    // Independent endpoints — no need to wait for one before starting the other.
+    await Promise.all([
+      fetchUpcomingSessions(user.id),
+      fetchMyExcusals(user.id),
+    ]);
   }
 })();
 

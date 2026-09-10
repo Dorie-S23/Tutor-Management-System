@@ -158,35 +158,42 @@ router.get("/:id/assignment-check", async (req, res) => {
     return res.status(400).json({ error: "courseId is required" });
   }
 
-  const { data: tutor, error: tutorError } = await supabase
-    .from("tutors")
-    .select("weekly_hour_cap")
-    .eq("id", tutorId)
-    .single();
+  // These three don't depend on each other's results — only on tutorId and
+  // courseId, both already known from the request — so fire them together
+  // instead of paying for three sequential round trips.
+  const [
+    { data: tutor, error: tutorError },
+    { data: course, error: courseError },
+    { data: otherApprovals, error: approvalsError },
+  ] = await Promise.all([
+    supabase
+      .from("tutors")
+      .select("weekly_hour_cap")
+      .eq("id", tutorId)
+      .single(),
+    supabase
+      .from("courses")
+      .select("Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week")
+      .eq("id", courseId)
+      .single(),
+    // Tutor's other approved courses (for both course-vs-course clashes and workload)
+    supabase
+      .from("tutor_subject_preference")
+      .select(
+        "course_id, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
+      )
+      .eq("tutor_id", tutorId)
+      .eq("status", "approved")
+      .neq("course_id", courseId),
+  ]);
 
   if (tutorError || !tutor) {
     return res.status(404).json({ error: "Tutor not found" });
   }
 
-  const { data: course, error: courseError } = await supabase
-    .from("courses")
-    .select("Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week")
-    .eq("id", courseId)
-    .single();
-
   if (courseError || !course) {
     return res.status(404).json({ error: "Course not found" });
   }
-
-  // Tutor's other approved courses (for both course-vs-course clashes and workload)
-  const { data: otherApprovals, error: approvalsError } = await supabase
-    .from("tutor_subject_preference")
-    .select(
-      "course_id, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
-    )
-    .eq("tutor_id", tutorId)
-    .eq("status", "approved")
-    .neq("course_id", courseId);
 
   if (approvalsError) {
     return res.status(500).json({ error: approvalsError.message });
