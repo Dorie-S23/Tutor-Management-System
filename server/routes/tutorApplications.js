@@ -286,8 +286,31 @@ router.get("/", async (req, res) => {
         score += Math.min(Math.max(workloadRatio, 0), 1) * 10;
       }
 
+      // --------------------------------------------------------
+      // Override info — was this approval pushed through past a
+      // blocking rule? Only relevant once approved.
+      // --------------------------------------------------------
+
+      let overrideInfo = null;
+
+      if (application.status === "approved") {
+        const { data: overrides } = await supabase
+          .from("allocation_overrides")
+          .select("rule_overridden, reason, created_at")
+          .eq("tutor_id", tutorId)
+          .eq("course_id", application.course_id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (overrides && overrides.length > 0) {
+          overrideInfo = overrides[0];
+        }
+      }
+
       return {
         ...application,
+
+        overrideInfo,
 
         ranking: {
           score: Number(score.toFixed(2)),
@@ -481,13 +504,30 @@ router.post("/", async (req, res) => {
 const VALID_STATUSES = ["pending", "approved", "rejected"];
 
 router.patch("/:id", async (req, res) => {
-  const { status } = req.body ?? {};
+  const { status, override, organiserId, reason } = req.body ?? {};
 
   if (!VALID_STATUSES.includes(status)) {
     return res.status(400).json({
       error: "status must be pending, approved or rejected",
     });
   }
+
+  const overrideRequested = override === true;
+
+  if (overrideRequested) {
+    if (!organiserId) {
+      return res.status(400).json({
+        error: "organiserId is required to record an override",
+      });
+    }
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        error: "A reason is required to record an override",
+      });
+    }
+  }
+
+  const bypassedRules = [];
 
   const { data: application, error: applicationError } = await supabase
     .from("tutor_subject_preference")
@@ -522,8 +562,14 @@ router.patch("/:id", async (req, res) => {
       (course.no_of_tutors_assigned ?? 0) + (willBeApproved ? 1 : -1);
 
     if (willBeApproved && next > course.tutors_needed) {
-      return res.status(409).json({
-        error: "This course already has all the tutors it needs",
+      if (!overrideRequested) {
+        return res.status(409).json({
+          error: "This course already has all the tutors it needs",
+        });
+      }
+      bypassedRules.push({
+        rule_overridden: "course_capacity",
+        detail: `Would be ${next}/${course.tutors_needed} tutors assigned`,
       });
     }
 
@@ -565,8 +611,14 @@ router.patch("/:id", async (req, res) => {
           currentAssignedHours + (course.hours_per_week || 0);
 
         if (projectedHours > tutor.weekly_hour_cap) {
-          return res.status(409).json({
-            error: `This would put the tutor at ${projectedHours} hrs/week, over their ${tutor.weekly_hour_cap} hr cap`,
+          if (!overrideRequested) {
+            return res.status(409).json({
+              error: `This would put the tutor at ${projectedHours} hrs/week, over their ${tutor.weekly_hour_cap} hr cap`,
+            });
+          }
+          bypassedRules.push({
+            rule_overridden: "weekly_hour_cap",
+            detail: `Would put tutor at ${projectedHours}/${tutor.weekly_hour_cap} hrs/week`,
           });
         }
       }
@@ -610,6 +662,26 @@ router.patch("/:id", async (req, res) => {
     return res.status(500).json({
       error: error.message,
     });
+  }
+
+  if (bypassedRules.length > 0) {
+    const { error: overrideError } = await supabase
+      .from("allocation_overrides")
+      .insert(
+        bypassedRules.map((r) => ({
+          organiser_id: organiserId,
+          tutor_id: application.tutor_id,
+          course_id: application.course_id,
+          rule_overridden: r.rule_overridden,
+          reason: `${reason.trim()} (${r.detail})`,
+        })),
+      );
+
+    if (overrideError) {
+      return res.status(500).json({
+        error: `The approval went through, but the override reason couldn't be saved: ${overrideError.message}`,
+      });
+    }
   }
 
   res.json(data);

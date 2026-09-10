@@ -308,6 +308,58 @@
       </form>
     </dialog>
 
+    <dialog
+      class="modal"
+      id="overrideModal"
+      aria-labelledby="overrideModalHeading"
+    >
+      <form method="dialog" class="modal-form" id="overrideForm">
+        <header class="modal-head">
+          <h2 id="overrideModalHeading">Override and approve</h2>
+          <button
+            class="modal-close"
+            id="overrideModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="overrideFormError" hidden></p>
+
+        <p class="hint" id="overrideModalContext"></p>
+
+        <label class="field">
+          <span class="field-label">Reason for the override</span>
+          <textarea
+            id="overrideReasonInput"
+            name="reason"
+            rows="3"
+            required
+            placeholder="e.g. Strongest applicant available this term, worth the exception"
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="overrideCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="overrideSubmitBtn"
+              type="submit"
+            >
+              Approve with override
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
+
     <script src="../js/onboarding.js"></script>
     <script src="../js/board.js"></script>
     <script src="../js/logout.js"></script>

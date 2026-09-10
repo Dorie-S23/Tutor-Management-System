@@ -356,6 +356,9 @@ async function renderApplicants(course) {
     const availabilityStamp = app.Availability
       ? `<span class="stamp ok">Free at tutorial time</span>`
       : `<span class="stamp blocked">Not free at tutorial time</span>`;
+    const overrideStamp = app.overrideInfo
+      ? `<span class="stamp warn">Overridden: ${app.overrideInfo.reason}</span>`
+      : "";
 
     const li = document.createElement("li");
     const row = document.createElement("div");
@@ -372,6 +375,7 @@ async function renderApplicants(course) {
         ${availabilityStamp}
         ${buildClashStamp(check)}
         ${buildWorkloadStamp(check)}
+        ${overrideStamp}
       </span>
       <span class="status-pill ${status}">${status}</span>
       <span class="applicant-actions"></span>
@@ -381,6 +385,10 @@ async function renderApplicants(course) {
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
     const overCap = check?.workload?.overCap;
+    const blockReason =
+      (isFull && "This course already has all the tutors it needs") ||
+      (overCap &&
+        `This would put ${name} at ${check.workload.projectedHours} hrs/week, over their ${check.workload.weeklyHourCap} hr cap`);
 
     if (status === "pending") {
       actionsEl.appendChild(
@@ -396,11 +404,16 @@ async function renderApplicants(course) {
             }
             setApplicationStatus(course, app, "approved", name);
           },
-          (isFull && "This course already has all the tutors it needs") ||
-            (overCap &&
-              `This would put ${name} at ${check.workload.projectedHours} hrs/week, over their ${check.workload.weeklyHourCap} hr cap`),
+          blockReason,
         ),
       );
+      if (blockReason) {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Override", "override", () =>
+            openOverrideModal(course, app, name, blockReason),
+          ),
+        );
+      }
       actionsEl.appendChild(
         makeApplicantActionBtn("Reject", "", () =>
           setApplicationStatus(course, app, "rejected", name),
@@ -476,6 +489,85 @@ async function setApplicationStatus(course, app, status, name) {
     showToast("Network error — couldn't reach the server.");
   }
 }
+
+// ---------- override modal ----------
+
+let pendingOverride = null; // { course, app, name } for whichever row opened the modal
+
+const overrideModal = document.getElementById("overrideModal");
+const overrideForm = document.getElementById("overrideForm");
+const overrideFormError = document.getElementById("overrideFormError");
+const overrideModalContext = document.getElementById("overrideModalContext");
+const overrideReasonInput = document.getElementById("overrideReasonInput");
+const overrideSubmitBtn = document.getElementById("overrideSubmitBtn");
+
+function openOverrideModal(course, app, name, blockReason) {
+  pendingOverride = { course, app, name };
+  overrideForm.reset();
+  overrideFormError.hidden = true;
+  overrideModalContext.textContent = `${blockReason}. Approving ${name} for ${course.code} anyway will be recorded against your account with the reason below.`;
+  overrideModal.showModal();
+  overrideReasonInput.focus();
+}
+
+function closeOverrideModal() {
+  overrideModal.close();
+  pendingOverride = null;
+}
+
+document
+  .getElementById("overrideModalCloseBtn")
+  .addEventListener("click", closeOverrideModal);
+document
+  .getElementById("overrideCancelBtn")
+  .addEventListener("click", closeOverrideModal);
+overrideModal.addEventListener("click", (e) => {
+  if (e.target === overrideModal) closeOverrideModal();
+});
+
+overrideForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  overrideFormError.hidden = true;
+  if (!pendingOverride) return;
+
+  const { course, app, name } = pendingOverride;
+  const reason = overrideReasonInput.value.trim();
+
+  overrideSubmitBtn.disabled = true;
+  overrideSubmitBtn.textContent = "Approving…";
+
+  try {
+    const res = await fetch(`/api/tutor-applications/${app.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "approved",
+        override: true,
+        organiserId: getSessionUserId(),
+        reason,
+      }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      overrideFormError.textContent =
+        body.error || "Couldn't override that rule.";
+      overrideFormError.hidden = false;
+      return;
+    }
+
+    closeOverrideModal();
+    showToast(`${name} approved for ${course.code} (override recorded)`);
+    await fetchCourses();
+  } catch (err) {
+    overrideFormError.textContent =
+      "Network error — couldn't reach the server.";
+    overrideFormError.hidden = false;
+  } finally {
+    overrideSubmitBtn.disabled = false;
+    overrideSubmitBtn.textContent = "Approve with override";
+  }
+});
 
 // ---------- session excusals ----------
 

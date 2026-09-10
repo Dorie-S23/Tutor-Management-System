@@ -642,6 +642,13 @@ input[type="search"]:focus-visible {
 .btn-small.approve:hover {
   background: var(--green-bg);
 }
+.btn-small.override {
+  color: var(--amber);
+  border-color: var(--amber-line);
+}
+.btn-small.override:hover {
+  background: var(--amber-bg);
+}
 .btn-small:disabled {
   opacity: 0.5;
   cursor: not-allowed;
