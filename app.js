@@ -7,7 +7,6 @@ const app = express();
 const authRoutes = require("./routes/auth");
 const coursesRoutes = require("./server/routes/courses");
 const tutorsRoutes = require("./server/routes/tutors");
-const timetableRoutes = require("./server/timetableRoutes");
 const hourEntriesRoutes = require("./server/routes/hourEntries");
 const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
 const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
@@ -65,9 +64,6 @@ app.use("/api/courses", coursesRoutes);
 
 // Tutor management routes
 app.use("/api/tutors", tutorsRoutes);
-
-// Timetable parsing routes
-app.use("/api", timetableRoutes);
 
 // Student volunteer hour logging + course volunteering
 app.use("/api/hour-entries", hourEntriesRoutes);
