@@ -6,6 +6,8 @@ let activeCourseId = null;
 let tutorCount = 0; // total tutors in the system, for the header stat
 let volunteerCounts = {}; // course_id -> number of approved volunteers
 let shortfallOnly = false; // when true, course rail shows only short-staffed courses, worst-first
+let pendingApplicationCounts = {}; // course_id -> number of pending tutor applications
+let pendingVolunteerCounts = {}; // course_id -> number of pending student volunteers
 
 // ---------- data loading ----------
 
@@ -73,6 +75,52 @@ async function fetchTutorCount() {
   statTutorsEl.textContent = tutorCount;
 }
 
+// No dedicated "pending applications across all courses" endpoint exists,
+// so this fetches per-course the same way renderApplicants() already does,
+// just for every course at once, and keeps only the counts.
+async function fetchPendingApplicationCounts() {
+  if (COURSES.length === 0) {
+    pendingApplicationCounts = {};
+    renderCourseList();
+    return;
+  }
+  try {
+    const results = await Promise.all(
+      COURSES.map(async (course) => {
+        const res = await fetch(
+          `/api/tutor-applications?courseId=${course.id}`,
+        );
+        const rows = await res.json();
+        if (!res.ok) throw new Error(rows.error || "Failed to load applications");
+        const pending = rows.filter(
+          (a) => (a.status || "pending").toLowerCase() === "pending",
+        ).length;
+        return [course.id, pending];
+      }),
+    );
+    pendingApplicationCounts = Object.fromEntries(results);
+  } catch (err) {
+    // Fails open, same as the rest of the board: badges just show 0 rather
+    // than blocking the page if one course's fetch has a hiccup.
+    pendingApplicationCounts = {};
+  }
+  renderCourseList();
+}
+
+// Assumes /api/course-volunteers/counts accepts status=pending the same
+// way it already accepts status=approved (see fetchVolunteerCounts above).
+async function fetchPendingVolunteerCounts() {
+  try {
+    const res = await fetch("/api/course-volunteers/counts?status=pending");
+    const counts = await res.json();
+    if (!res.ok) throw new Error(counts.error || "Failed to load volunteers");
+    pendingVolunteerCounts = counts;
+  } catch (err) {
+    pendingVolunteerCounts = {};
+  }
+  renderCourseList();
+}
+
 // ---------- helpers ----------
 
 function initials(name) {
@@ -91,9 +139,19 @@ const courseSearchEl = document.getElementById("courseSearch");
 const shortfallToggleEl = document.getElementById("shortfallToggle");
 const statFilledEl = document.getElementById("statFilled");
 const statTutorsEl = document.getElementById("statTutors");
+const statPendingEl = document.getElementById("statPending");
 
 function shortfall(course) {
   return course.tutorsNeeded ? course.tutorsNeeded - course.tutorsAssigned : 0;
+}
+
+// Total items on this course awaiting an organiser's decision: pending
+// tutor applications + pending student volunteers.
+function pendingCount(course) {
+  return (
+    (pendingApplicationCounts[course.id] || 0) +
+    (pendingVolunteerCounts[course.id] || 0)
+  );
 }
 
 function renderCourseList() {
@@ -102,6 +160,10 @@ function renderCourseList() {
     (c) => c.tutorsNeeded && c.tutorsAssigned >= c.tutorsNeeded,
   ).length;
   statFilledEl.textContent = `${filled} / ${COURSES.length}`;
+
+  const totalPending = COURSES.reduce((sum, c) => sum + pendingCount(c), 0);
+  statPendingEl.textContent = totalPending;
+  statPendingEl.classList.toggle("stat-value--attention", totalPending > 0);
 
   courseListEl.innerHTML = "";
 
@@ -122,6 +184,7 @@ function renderCourseList() {
     const li = document.createElement("li");
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
+    const pending = pendingCount(course);
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -134,6 +197,7 @@ function renderCourseList() {
         <div class="card-foot">
           <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned, ${volunteerCounts[course.id] ?? 0} volunteered</span>
           <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : shortfall(course) > 0 ? `Short ${shortfall(course)}` : "Open"}</span>
+          ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
         </div>
       `;
     btn.addEventListener("click", () => selectCourse(course.id));
@@ -376,6 +440,7 @@ function makeApplicantActionBtn(label, variant, onClick, disabledTitle) {
 }
 
 async function setApplicationStatus(course, app, status, name) {
+  const previousStatus = (app.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/tutor-applications/${app.id}`, {
       method: "PATCH",
@@ -393,6 +458,19 @@ async function setApplicationStatus(course, app, status, name) {
       pending: `${name} moved back to pending`,
     };
     showToast(messages[status] || "Application updated.");
+
+    // Update the pending badge locally instead of re-fetching every
+    // course's applications again just to recompute one count.
+    const wasPending = previousStatus === "pending";
+    const isPending = status === "pending";
+    if (wasPending !== isPending) {
+      const current = pendingApplicationCounts[course.id] || 0;
+      pendingApplicationCounts[course.id] = Math.max(
+        0,
+        current + (isPending ? 1 : -1),
+      );
+    }
+
     await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
@@ -536,6 +614,7 @@ async function renderVolunteers(course) {
 }
 
 async function setVolunteerStatus(course, vol, status, name) {
+  const previousStatus = (vol.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/course-volunteers/${vol.id}`, {
       method: "PATCH",
@@ -553,8 +632,20 @@ async function setVolunteerStatus(course, vol, status, name) {
       pending: `${name} moved back to pending`,
     };
     showToast(messages[status] || "Volunteer updated.");
+
+    const wasPending = previousStatus === "pending";
+    const isPending = status === "pending";
+    if (wasPending !== isPending) {
+      const current = pendingVolunteerCounts[course.id] || 0;
+      pendingVolunteerCounts[course.id] = Math.max(
+        0,
+        current + (isPending ? 1 : -1),
+      );
+    }
+
     renderVolunteers(course);
     fetchVolunteerCounts();
+    renderCourseList();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
@@ -718,6 +809,10 @@ document.querySelectorAll('input[type="number"]').forEach((el) => {
 
 // ---------- init ----------
 
-fetchCourses();
-fetchTutorCount();
-fetchVolunteerCounts();
+(async () => {
+  await fetchCourses();
+  fetchTutorCount();
+  fetchVolunteerCounts();
+  fetchPendingApplicationCounts();
+  fetchPendingVolunteerCounts();
+})();
