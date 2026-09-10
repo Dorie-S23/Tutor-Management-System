@@ -84,8 +84,40 @@ router.get("/workload", async (req, res) => {
   }
 });
 
+// PUT /api/tutors/bulk — update a field across all tutors at once.
+// Used by the global settings card to set the weekly hour cap for everyone.
+router.put("/bulk", async (req, res) => {
+  const { weekly_hour_cap } = req.body;
+  if (weekly_hour_cap == null) {
+    return res.status(400).json({ error: "weekly_hour_cap is required" });
+  }
+
+  const { data: tutors, error: fetchErr } = await supabase
+    .from("tutors")
+    .select("id");
+
+  if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+
+  if (!tutors || tutors.length === 0) return res.json({ updated: 0 });
+
+  const { error: updateErr } = await supabase
+    .from("tutors")
+    .update({ weekly_hour_cap })
+    .neq("id", "00000000-0000-0000-0000-000000000000"); // update all rows
+
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  res.json({ updated: tutors.length });
+});
+
+// Simple UUID check so non-UUID path segments get a clean 404 instead of
+// a cryptic Postgres error.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /api/tutors/:id — a single tutor
 router.get("/:id", async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Tutor not found" });
+  }
   const { data, error } = await supabase
     .from("tutors")
     .select("*")
@@ -106,7 +138,6 @@ router.post("/", async (req, res) => {
     student_number,
     email,
     name,
-    hourly_rate,
     academic_level,
     weekly_hour_cap,
   } = req.body;
@@ -117,7 +148,6 @@ router.post("/", async (req, res) => {
       student_number,
       email,
       name,
-      hourly_rate,
       academic_level,
       weekly_hour_cap,
     })
@@ -134,7 +164,6 @@ router.put("/:id", async (req, res) => {
     student_number,
     email,
     name,
-    hourly_rate,
     academic_level,
     weekly_hour_cap,
   } = req.body;
@@ -145,7 +174,6 @@ router.put("/:id", async (req, res) => {
       student_number,
       email,
       name,
-      hourly_rate,
       academic_level,
       weekly_hour_cap,
     })
