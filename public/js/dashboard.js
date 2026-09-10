@@ -63,6 +63,24 @@ const DAY_NAMES = [
   "Saturday",
 ];
 
+// A light pastel palette, cycled by course id, so each course's row in
+// "Upcoming sessions" gets a consistent colour instead of one flat grey list.
+const COURSE_COLORS = [
+  { bg: "#e6eeef", text: "#26424b", border: "#26424b" }, // navy
+  { bg: "#e3eee6", text: "#2f6b4f", border: "#b9d2c1" }, // green
+  { bg: "#f5ead5", text: "#a66a17", border: "#e3cb9a" }, // amber
+  { bg: "#ece6f5", text: "#5b3a91", border: "#c9b8e0" }, // purple
+  { bg: "#dff0ef", text: "#1f7a72", border: "#a9d9d4" }, // teal
+  { bg: "#f6e3ea", text: "#a13d67", border: "#e3b9cc" }, // rose
+  { bg: "#e1ecf7", text: "#2560a3", border: "#b7d3ee" }, // blue
+  { bg: "#eef0d8", text: "#6b7a1f", border: "#d6dba0" }, // olive
+  { bg: "#f3e2d8", text: "#a85332", border: "#e6c2ac" }, // terracotta
+];
+
+function courseColor(courseId) {
+  return COURSE_COLORS[Number(courseId) % COURSE_COLORS.length];
+}
+
 const upcomingListEl = document.getElementById("upcoming-sessions-list");
 const upcomingItemsEl = document.getElementById("upcoming-sessions-items");
 const upcomingEmptyEl = document.getElementById("upcoming-sessions-empty");
@@ -134,6 +152,7 @@ async function fetchUpcomingSessions(tutorId) {
         const daysAway = course ? daysUntil(course.Day_of_tut) : null;
         if (!course || !session || daysAway === null) return null;
         return {
+          courseId: app.course_id,
           courseCode: course.course_code,
           courseName: course.course_name,
           session,
@@ -167,11 +186,14 @@ function renderUpcomingSessions(sessions) {
   upcomingItemsEl.innerHTML = "";
 
   sessions.forEach((s) => {
+    const palette = courseColor(s.courseId);
     const li = document.createElement("li");
-    li.className = "application-row";
+    li.className = "application-row application-row--course";
+    li.style.background = palette.bg;
+    li.style.borderColor = palette.border;
     li.innerHTML = `
-      <span>${s.courseCode} — ${s.courseName}<br />${s.session}</span>
-      <span class="status-pill">${describeDaysAway(s.daysAway)}</span>
+      <span><strong style="color: ${palette.text}">${s.courseCode}</strong> — ${s.courseName}<br />${s.session}</span>
+      <span class="status-pill" style="background: rgba(255, 255, 255, 0.6); color: ${palette.text}; border-color: ${palette.border}">${describeDaysAway(s.daysAway)}</span>
     `;
     upcomingItemsEl.appendChild(li);
   });

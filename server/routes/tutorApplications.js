@@ -37,7 +37,12 @@ router.get("/", async (req, res) => {
         hours_per_week,
         Day_of_tut,
         tutor_start_time,
-        tutor_end_time
+        tutor_end_time,
+        venues,
+        Day_of_lab,
+        lab_start_time,
+        lab_end_time,
+        lab_venues
       ),
       tutors(
         name,

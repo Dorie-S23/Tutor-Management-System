@@ -548,7 +548,6 @@ input[type="search"]:focus-visible {
   margin-left: auto;
 }
 
-/* the signature element: rubber-stamp style status chips */
 .stamp {
   display: inline-flex;
   align-items: center;
@@ -561,14 +560,7 @@ input[type="search"]:focus-visible {
   padding: 4px 8px;
   border-radius: 4px;
   border: 1.5px solid currentColor;
-  transform: rotate(-1.4deg);
   white-space: nowrap;
-}
-.tutor-row:nth-child(3n) .stamp {
-  transform: rotate(1.2deg);
-}
-.tutor-row:nth-child(3n + 1) .stamp {
-  transform: rotate(-1.8deg);
 }
 
 .stamp.ok {
@@ -1793,6 +1785,11 @@ body.tutor-app {
   gap: 0.3rem;
 }
 
+.tutor-app .stat-tile--accent {
+  background: #eef1fd;
+  border-color: #c3cdf5;
+}
+
 .tutor-app .stat-label {
   font-size: 0.8rem;
   font-weight: 600;
@@ -1802,8 +1799,20 @@ body.tutor-app {
 }
 
 .tutor-app .stat-value {
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 1.8rem;
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--ta-primary);
+  letter-spacing: -0.01em;
+}
+
+.tutor-app .stat-value--session {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ta-text);
+  letter-spacing: 0;
 }
 
 .tutor-app .stat-value.danger {
@@ -1987,6 +1996,20 @@ body.tutor-app {
   background: #fff;
   border: 1px solid var(--ta-primary);
   color: var(--ta-primary);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tutorial/Lab sessions sourced from the modules this tutor tutors — solid
+   per-course colour (set inline) to stand apart from the outlined personal-
+   schedule pills above and the solid-blue logged-hours pills below. */
+.tutor-app .calendar-course-pill {
+  border: 1px solid transparent;
+  font-weight: 600;
   font-size: 0.7rem;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;

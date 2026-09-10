@@ -30,6 +30,100 @@ if (!isTutor) {
   if (clearClassesRow) clearClassesRow.hidden = true;
 }
 
+// ---------- tutorial/lab sessions from the modules this tutor tutors ----------
+
+// Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching Date#getDay().
+const DAY_NAME_TO_INDEX = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+// Same light palette used on the tutor dashboard's "Upcoming sessions" list,
+// so a course renders in the same colour everywhere it shows up.
+const COURSE_COLORS = [
+  { bg: "#e6eeef", text: "#26424b", border: "#26424b" }, // navy
+  { bg: "#e3eee6", text: "#2f6b4f", border: "#b9d2c1" }, // green
+  { bg: "#f5ead5", text: "#a66a17", border: "#e3cb9a" }, // amber
+  { bg: "#ece6f5", text: "#5b3a91", border: "#c9b8e0" }, // purple
+  { bg: "#dff0ef", text: "#1f7a72", border: "#a9d9d4" }, // teal
+  { bg: "#f6e3ea", text: "#a13d67", border: "#e3b9cc" }, // rose
+  { bg: "#e1ecf7", text: "#2560a3", border: "#b7d3ee" }, // blue
+  { bg: "#eef0d8", text: "#6b7a1f", border: "#d6dba0" }, // olive
+  { bg: "#f3e2d8", text: "#a85332", border: "#e6c2ac" }, // terracotta
+];
+
+function courseColor(courseId) {
+  return COURSE_COLORS[Number(courseId) % COURSE_COLORS.length];
+}
+
+// Weekly-recurring Tutorial/Lab sessions for every module this tutor is
+// approved to tutor — flattened from courses (day/start/end/venue set
+// straight on the course row, no separate "sessions" table). Courses carry
+// no semester start/end date, so these repeat on every matching weekday
+// shown on the calendar, same as the organiser's timetable grid does.
+let courseSessions = [];
+
+async function fetchCourseSessions() {
+  if (!isTutor) return;
+  try {
+    const res = await fetch(
+      `/api/tutor-applications?tutorId=${encodeURIComponent(currentUser.id)}`,
+    );
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load course sessions");
+
+    const sessions = [];
+    rows
+      .filter((app) => (app.status || "").toLowerCase() === "approved")
+      .forEach((app) => {
+        const course = app.courses;
+        if (!course) return;
+
+        if (
+          course.Day_of_tut &&
+          course.tutor_start_time &&
+          course.tutor_end_time &&
+          DAY_NAME_TO_INDEX[course.Day_of_tut] !== undefined
+        ) {
+          sessions.push({
+            courseId: app.course_id,
+            courseCode: course.course_code,
+            type: "Tutorial",
+            dayIndex: DAY_NAME_TO_INDEX[course.Day_of_tut],
+            start: course.tutor_start_time.slice(0, 5),
+            end: course.tutor_end_time.slice(0, 5),
+            venue: course.venues || "",
+          });
+        }
+
+        if (
+          course.Day_of_lab &&
+          course.lab_start_time &&
+          course.lab_end_time &&
+          DAY_NAME_TO_INDEX[course.Day_of_lab] !== undefined
+        ) {
+          sessions.push({
+            courseId: app.course_id,
+            courseCode: course.course_code,
+            type: "Lab",
+            dayIndex: DAY_NAME_TO_INDEX[course.Day_of_lab],
+            start: course.lab_start_time.slice(0, 5),
+            end: course.lab_end_time.slice(0, 5),
+            venue: course.lab_venues || "",
+          });
+        }
+      });
+    courseSessions = sessions;
+  } catch {
+    courseSessions = [];
+  }
+}
+
 const monthLabelEl = document.getElementById("calendar-month-label");
 const gridEl = document.getElementById("calendar-grid");
 const prevMonthBtn = document.getElementById("prev-month-btn");
@@ -150,6 +244,22 @@ async function render() {
     dayNumber.className = "calendar-day-number";
     dayNumber.textContent = cellDay;
     cell.appendChild(dayNumber);
+
+    if (isTutor) {
+      const cellWeekday = new Date(cellYear, cellMonth, cellDay).getDay();
+      for (const s of courseSessions) {
+        if (s.dayIndex !== cellWeekday) continue;
+        const palette = courseColor(s.courseId);
+        const pill = document.createElement("div");
+        pill.className = "calendar-course-pill";
+        pill.style.background = palette.bg;
+        pill.style.borderColor = palette.border;
+        pill.style.color = palette.text;
+        pill.textContent = `${s.start} ${s.courseCode} · ${s.type === "Lab" ? "Lab" : "Tut"}`;
+        pill.title = `${s.courseCode} ${s.type} · ${s.start}–${s.end}${s.venue ? ` · ${s.venue}` : ""}`;
+        cell.appendChild(pill);
+      }
+    }
 
     const classes = getScheduleForDate(cellDateStr);
     for (const cls of classes) {
@@ -415,3 +525,4 @@ window.jumpToCalendarDate = (dateStr) => {
 };
 
 render();
+fetchCourseSessions().then(render);
