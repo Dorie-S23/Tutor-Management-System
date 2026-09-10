@@ -12,6 +12,38 @@ const LEVEL_RANK = {
   phd: 6,
 };
 
+function toMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function overlaps(startA, endA, startB, endB) {
+  return startA < endB && startB < endA;
+}
+
+// Every scheduled session (Tutorial and/or Lab) a course row carries.
+function courseSessions(course) {
+  const sessions = [];
+  if (course.Day_of_tut && course.tutor_start_time && course.tutor_end_time) {
+    sessions.push({
+      type: "Tutorial",
+      day: course.Day_of_tut,
+      start: toMinutes(course.tutor_start_time),
+      end: toMinutes(course.tutor_end_time),
+    });
+  }
+  if (course.Day_of_lab && course.lab_start_time && course.lab_end_time) {
+    sessions.push({
+      type: "Lab",
+      day: course.Day_of_lab,
+      start: toMinutes(course.lab_start_time),
+      end: toMinutes(course.lab_end_time),
+    });
+  }
+  return sessions;
+}
+
 // ============================================================
 // GET /api/tutor-applications
 //
@@ -391,7 +423,9 @@ router.post("/", async (req, res) => {
 
   const { data: course, error: courseError } = await supabase
     .from("courses")
-    .select("course_code, course_name, course_level")
+    .select(
+      "course_code, course_name, course_level, Day_of_tut, tutor_start_time, tutor_end_time, Day_of_lab, lab_start_time, lab_end_time",
+    )
     .eq("id", courseId)
     .single();
 
@@ -447,6 +481,46 @@ router.post("/", async (req, res) => {
     return res.status(409).json({
       error: `You've already applied to tutor ${course.course_code}.`,
     });
+  }
+
+  // A tutor can't be double-booked across two modules they tutor — check
+  // this course's Tutorial/Lab against every module they're already
+  // approved to tutor, regardless of venue (they can't be in two places at
+  // once even if the rooms differ — that's a separate, venue-only check
+  // done when the course itself is scheduled).
+  const newSessions = courseSessions(course);
+
+  if (newSessions.length > 0) {
+    const { data: approvedApplications, error: approvedError } =
+      await supabase
+        .from("tutor_subject_preference")
+        .select(
+          "courses(course_code, Day_of_tut, tutor_start_time, tutor_end_time, Day_of_lab, lab_start_time, lab_end_time)",
+        )
+        .eq("tutor_id", tutorId)
+        .eq("status", "approved");
+
+    if (approvedError) {
+      return res.status(500).json({ error: approvedError.message });
+    }
+
+    for (const approved of approvedApplications || []) {
+      const otherCourse = approved.courses;
+      if (!otherCourse) continue;
+
+      for (const mine of newSessions) {
+        for (const other of courseSessions(otherCourse)) {
+          if (
+            mine.day === other.day &&
+            overlaps(mine.start, mine.end, other.start, other.end)
+          ) {
+            return res.status(409).json({
+              error: `Your ${mine.type} for ${course.course_code} clashes with your ${other.type} for ${otherCourse.course_code} (${mine.day}) — you're already approved to tutor that module at an overlapping time.`,
+            });
+          }
+        }
+      }
+    }
   }
 
   const { data, error } = await supabase
