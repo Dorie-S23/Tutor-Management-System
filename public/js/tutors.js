@@ -17,6 +17,8 @@ const submitBtn = document.getElementById("submitBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const tableBody = document.getElementById("tutorsTableBody");
 const emptyCopyEl = document.getElementById("emptyCopy");
+const workloadListEl = document.getElementById("workloadList");
+const workloadEmptyEl = document.getElementById("workloadEmpty");
 
 async function loadTutors() {
   const res = await fetch("/api/tutors");
@@ -56,6 +58,64 @@ function renderTutors(tutors) {
   });
 }
 
+async function loadWorkload() {
+  try {
+    const res = await fetch("/api/tutors/workload");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load workload");
+    renderWorkload(data);
+  } catch (err) {
+    showToast("Couldn't load the workload spread.");
+  }
+}
+
+function renderWorkload(tutors) {
+  workloadListEl.innerHTML = "";
+  workloadEmptyEl.hidden = tutors.length > 0;
+
+  // Busiest tutor first, so overloaded people surface at the top.
+  const sorted = [...tutors].sort((a, b) => b.assignedHours - a.assignedHours);
+
+  // Tutors with no cap set still get a bar, sized relative to the busiest
+  // capped-or-uncapped tutor so the spread stays visually comparable.
+  const maxHours = Math.max(1, ...sorted.map((t) => t.assignedHours));
+
+  sorted.forEach((tutor) => {
+    const row = document.createElement("div");
+    row.className = "workload-row";
+
+    let fillClass = "";
+    let percent;
+    let hoursLabel;
+
+    if (tutor.weeklyHourCap != null) {
+      const ratio = tutor.assignedHours / tutor.weeklyHourCap;
+      percent = Math.min(100, ratio * 100);
+      if (ratio > 1) fillClass = "blocked";
+      else if (ratio >= 0.8) fillClass = "warn";
+      hoursLabel = `${tutor.assignedHours} / ${tutor.weeklyHourCap} hrs`;
+    } else {
+      percent = (tutor.assignedHours / maxHours) * 100;
+      fillClass = "no-cap";
+      hoursLabel = `${tutor.assignedHours} hrs · no cap set`;
+    }
+
+    row.innerHTML = `
+      <span class="workload-name">${tutor.name || "Unnamed tutor"}</span>
+      <span class="workload-bar-track">
+        <span class="workload-bar-fill ${fillClass}" style="width: ${percent}%"></span>
+      </span>
+      <span class="workload-hours">${hoursLabel}</span>
+    `;
+    row.title = tutor.courses.length
+      ? tutor.courses
+          .map((c) => `${c.course_code} (${c.hours_per_week}h)`)
+          .join(", ")
+      : "No approved courses";
+    workloadListEl.appendChild(row);
+  });
+}
+
 function startEdit(tutor) {
   tutorIdEl.value = tutor.id;
   nameEl.value = tutor.name || "";
@@ -87,6 +147,7 @@ async function deleteTutor(tutor) {
   }
   showToast(`Removed ${tutor.name || "tutor"}`);
   loadTutors();
+  loadWorkload();
 }
 
 form.addEventListener("submit", async (e) => {
@@ -122,6 +183,7 @@ form.addEventListener("submit", async (e) => {
   showToast(id ? `Updated ${data.name}` : `Added ${data.name}`);
   resetForm();
   loadTutors();
+  loadWorkload();
 });
 
 cancelEditBtn.addEventListener("click", resetForm);
@@ -136,3 +198,4 @@ function showToast(message) {
 }
 
 loadTutors();
+loadWorkload();
