@@ -26,12 +26,31 @@
     </header>
 
     <main>
-      <div class="card">
+      <div class="card card--welcome">
         <h2 id="welcome-heading">Welcome</h2>
         <p>
           Use the sections below to log your tutoring hours for the week or
           review your timesheets.
         </p>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-tile">
+          <span class="stat-label">Hours worked this week</span>
+          <span class="stat-value" id="stat-hours-worked">0</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Hours remaining</span>
+          <span class="stat-value" id="stat-hours-remaining">0</span>
+          <span class="stat-sublabel" id="stat-hours-sublabel"></span>
+        </div>
+        <div class="stat-tile stat-tile--accent">
+          <span class="stat-label">Next session</span>
+          <span class="stat-value stat-value--session" id="stat-next-session"
+            >—</span
+          >
+          <span class="stat-sublabel" id="stat-next-session-sublabel"></span>
+        </div>
       </div>
 
       <div class="card">
@@ -57,25 +76,6 @@
         <div id="excusals-list" class="applications-list" hidden>
           <h3>Your upcoming excusals</h3>
           <ul id="excusals-items"></ul>
-        </div>
-      </div>
-
-      <div class="stat-grid">
-        <div class="stat-tile">
-          <span class="stat-label">Hours worked this week</span>
-          <span class="stat-value" id="stat-hours-worked">0</span>
-        </div>
-        <div class="stat-tile">
-          <span class="stat-label">Hours remaining</span>
-          <span class="stat-value" id="stat-hours-remaining">0</span>
-          <span class="stat-sublabel" id="stat-hours-sublabel"></span>
-        </div>
-        <div class="stat-tile stat-tile--accent">
-          <span class="stat-label">Next session</span>
-          <span class="stat-value stat-value--session" id="stat-next-session"
-            >—</span
-          >
-          <span class="stat-sublabel" id="stat-next-session-sublabel"></span>
         </div>
       </div>
 

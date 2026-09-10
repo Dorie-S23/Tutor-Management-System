@@ -226,6 +226,18 @@ export function deleteScheduleClass(id) {
   syncScheduleToServer();
 }
 
+// Updates the base fields of a recurring class (title, dayOfWeek, startTime,
+// endTime, venue, firstDate, endDate). Affects every future occurrence that
+// hasn't been individually overridden.
+export function updateScheduleClass(id, changes) {
+  const schedule = readSchedule().map((c) =>
+    c.id === id ? { ...c, ...changes } : c,
+  );
+  writeSchedule(schedule);
+  syncScheduleToServer();
+}
+
+
 export function clearSchedule() {
   writeSchedule([]);
   writeExceptions([]);

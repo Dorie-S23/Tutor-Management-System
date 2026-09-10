@@ -1705,6 +1705,32 @@ body.tutor-app {
   margin-bottom: 1.25rem;
 }
 
+.tutor-app .card--welcome {
+  background: linear-gradient(
+    135deg,
+    var(--ta-primary),
+    var(--ta-primary-hover)
+  );
+  border-color: transparent;
+  padding: 1.5rem 1.6rem;
+  box-shadow: 0 4px 14px rgba(52, 87, 213, 0.25);
+}
+
+.tutor-app .card--welcome h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #fff;
+  margin-bottom: 0.35rem;
+}
+
+.tutor-app .card--welcome p {
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+}
+
 .tutor-app .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

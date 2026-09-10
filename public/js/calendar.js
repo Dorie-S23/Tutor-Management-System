@@ -8,6 +8,8 @@ import {
   cancelScheduleOccurrence,
   modifyScheduleOccurrence,
   clearScheduleException,
+  updateScheduleClass,
+  deleteScheduleClass,
   todayStr,
   clearSchedule,
 } from "./storage.js";
@@ -333,8 +335,13 @@ nextMonthBtn.addEventListener("click", () => {
   render();
 });
 
-// Popup for managing a single occurrence of a recurring class, without
-// touching every other week it repeats on.
+// Popup for managing a class — edit this occurrence, the recurring series,
+// cancel/restore, or delete entirely.
+const DAY_INDEX_TO_NAME = [
+  "Sunday", "Monday", "Tuesday", "Wednesday",
+  "Thursday", "Friday", "Saturday",
+];
+
 function openOccurrenceModal(cls, dateStr, isCancelled) {
   const overlay = document.createElement("div");
   overlay.className = "occurrence-modal-overlay";
@@ -346,37 +353,38 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     alignItems: "center",
     justifyContent: "center",
     zIndex: "1000",
+    overflowY: "auto",
+    padding: "24px 0",
   });
 
   const box = document.createElement("div");
   box.className = "card occurrence-modal";
   Object.assign(box.style, {
     background: "#fff",
-    maxWidth: "360px",
-    width: "90%",
+    maxWidth: "440px",
+    width: "92%",
+    maxHeight: "90vh",
+    overflowY: "auto",
   });
-
-  const heading = document.createElement("h2");
-  heading.textContent = cls.title;
-  box.appendChild(heading);
-
-  const dateLine = document.createElement("p");
-  dateLine.className = "card-hint";
-  dateLine.textContent = new Date(`${dateStr}T00:00:00`).toLocaleDateString(
-    undefined,
-    {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    },
-  );
-  box.appendChild(dateLine);
 
   function closeModal() {
     overlay.remove();
   }
 
+  // ---- Header ----
+  const heading = document.createElement("h2");
+  heading.textContent = isCancelled ? "Cancelled class" : "Edit class";
+  box.appendChild(heading);
+
+  const dateLine = document.createElement("p");
+  dateLine.className = "card-hint";
+  dateLine.textContent = new Date(dateStr + "T00:00:00").toLocaleDateString(
+    undefined, { weekday: "long", month: "long", day: "numeric" },
+  );
+  box.appendChild(dateLine);
+
   if (isCancelled) {
+    // ---- Cancelled state: restore or close ----
     const note = document.createElement("p");
     note.textContent = "This class is cancelled on this day.";
     box.appendChild(note);
@@ -404,54 +412,102 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
 
     box.appendChild(actions);
   } else {
-    const grid = document.createElement("div");
-    grid.className = "form-grid";
+    // ---- Editable form (review-table style) ----
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    ["Field", "Value"].forEach((t) => {
+      const th = document.createElement("th");
+      th.textContent = t;
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
 
-    const startField = document.createElement("div");
-    startField.className = "form-field";
-    const startLabel = document.createElement("label");
+    const tbody = document.createElement("tbody");
+
+    // Subject row
+    const subjectRow = document.createElement("tr");
+    const subjectLabel = document.createElement("td");
+    subjectLabel.textContent = "Subject";
+    const subjectCell = document.createElement("td");
+    const subjectInput = document.createElement("input");
+    subjectInput.type = "text";
+    subjectInput.value = cls.title || "";
+    subjectInput.style.width = "100%";
+    subjectCell.appendChild(subjectInput);
+    subjectRow.append(subjectLabel, subjectCell);
+    tbody.appendChild(subjectRow);
+
+    // Day row (read-only for context)
+    const dayRow = document.createElement("tr");
+    const dayLabel = document.createElement("td");
+    dayLabel.textContent = "Day";
+    const dayCell = document.createElement("td");
+    dayCell.textContent = DAY_INDEX_TO_NAME[cls.dayOfWeek] || "";
+    dayRow.append(dayLabel, dayCell);
+    tbody.appendChild(dayRow);
+
+    // Start time row
+    const startRow = document.createElement("tr");
+    const startLabel = document.createElement("td");
     startLabel.textContent = "Start time";
+    const startCell = document.createElement("td");
     const startInput = document.createElement("input");
     startInput.type = "time";
     startInput.value = cls.startTime || "";
-    startField.append(startLabel, startInput);
+    startCell.appendChild(startInput);
+    startRow.append(startLabel, startCell);
+    tbody.appendChild(startRow);
 
-    const endField = document.createElement("div");
-    endField.className = "form-field";
-    const endLabel = document.createElement("label");
+    // End time row
+    const endRow = document.createElement("tr");
+    const endLabel = document.createElement("td");
     endLabel.textContent = "End time";
+    const endCell = document.createElement("td");
     const endInput = document.createElement("input");
     endInput.type = "time";
     endInput.value = cls.endTime || "";
-    endField.append(endLabel, endInput);
+    endCell.appendChild(endInput);
+    endRow.append(endLabel, endCell);
+    tbody.appendChild(endRow);
 
-    const venueField = document.createElement("div");
-    venueField.className = "form-field full-width";
-    const venueLabel = document.createElement("label");
+    // Venue row
+    const venueRow = document.createElement("tr");
+    const venueLabel = document.createElement("td");
     venueLabel.textContent = "Venue";
+    const venueCell = document.createElement("td");
     const venueInput = document.createElement("input");
     venueInput.type = "text";
     venueInput.value = cls.venue || "";
-    venueField.append(venueLabel, venueInput);
+    venueInput.style.width = "100%";
+    venueCell.appendChild(venueInput);
+    venueRow.append(venueLabel, venueCell);
+    tbody.appendChild(venueRow);
 
-    grid.append(startField, endField, venueField);
-    box.appendChild(grid);
+    table.appendChild(tbody);
+    box.appendChild(table);
 
-    const helpText = document.createElement("p");
-    helpText.className = "card-hint";
-    helpText.textContent =
-      "Changes here only apply to this one day — every other week keeps the usual time and venue.";
-    box.appendChild(helpText);
+    // ---- Per-occurrence actions ----
+    const occurrenceSection = document.createElement("div");
+    occurrenceSection.style.marginTop = "12px";
 
-    const actions = document.createElement("div");
-    actions.className = "form-actions";
+    const occHint = document.createElement("p");
+    occHint.className = "card-hint";
+    occHint.textContent =
+      "Changes below apply only to this one day — every other week keeps the usual details.";
+    occurrenceSection.appendChild(occHint);
 
-    const saveBtn = document.createElement("button");
-    saveBtn.type = "button";
-    saveBtn.className = "btn-primary";
-    saveBtn.textContent = "Save changes for this day";
-    saveBtn.addEventListener("click", () => {
+    const occActions = document.createElement("div");
+    occActions.className = "form-actions";
+
+    const saveOccBtn = document.createElement("button");
+    saveOccBtn.type = "button";
+    saveOccBtn.className = "btn-primary";
+    saveOccBtn.textContent = "Save for this day only";
+    saveOccBtn.addEventListener("click", () => {
       modifyScheduleOccurrence(cls.id, dateStr, {
+        title: subjectInput.value.trim() || cls.title,
         startTime: startInput.value || cls.startTime,
         endTime: endInput.value || cls.endTime,
         venue: venueInput.value,
@@ -459,18 +515,18 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
       closeModal();
       render();
     });
-    actions.appendChild(saveBtn);
+    occActions.appendChild(saveOccBtn);
 
-    const cancelBtn = document.createElement("button");
-    cancelBtn.type = "button";
-    cancelBtn.className = "btn-danger";
-    cancelBtn.textContent = "Cancel class for this day";
-    cancelBtn.addEventListener("click", () => {
+    const cancelOccBtn = document.createElement("button");
+    cancelOccBtn.type = "button";
+    cancelOccBtn.className = "btn-danger";
+    cancelOccBtn.textContent = "Cancel class for this day";
+    cancelOccBtn.addEventListener("click", () => {
       cancelScheduleOccurrence(cls.id, dateStr);
       closeModal();
       render();
     });
-    actions.appendChild(cancelBtn);
+    occActions.appendChild(cancelOccBtn);
 
     if (cls.isModifiedOccurrence) {
       const revertBtn = document.createElement("button");
@@ -482,17 +538,70 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
         closeModal();
         render();
       });
-      actions.appendChild(revertBtn);
+      occActions.appendChild(revertBtn);
     }
 
+    occurrenceSection.appendChild(occActions);
+    box.appendChild(occurrenceSection);
+
+    // ---- Recurring series actions ----
+    const seriesSection = document.createElement("div");
+    seriesSection.style.marginTop = "16px";
+    seriesSection.style.borderTop = "1px solid #e0e0e0";
+    seriesSection.style.paddingTop = "12px";
+
+    const seriesHint = document.createElement("p");
+    seriesHint.className = "card-hint";
+    seriesHint.textContent =
+      "Changes below update the recurring class itself — this and all future weeks will reflect the new details.";
+    seriesSection.appendChild(seriesHint);
+
+    const seriesActions = document.createElement("div");
+    seriesActions.className = "form-actions";
+
+    const saveSeriesBtn = document.createElement("button");
+    saveSeriesBtn.type = "button";
+    saveSeriesBtn.className = "btn-primary";
+    saveSeriesBtn.textContent = "Update all future classes";
+    saveSeriesBtn.addEventListener("click", () => {
+      updateScheduleClass(cls.id, {
+        title: subjectInput.value.trim() || cls.title,
+        startTime: startInput.value || cls.startTime,
+        endTime: endInput.value || cls.endTime,
+        venue: venueInput.value,
+      });
+      closeModal();
+      render();
+    });
+    seriesActions.appendChild(saveSeriesBtn);
+
+    const deleteSeriesBtn = document.createElement("button");
+    deleteSeriesBtn.type = "button";
+    deleteSeriesBtn.className = "btn-danger";
+    deleteSeriesBtn.textContent = "Delete all future classes";
+    deleteSeriesBtn.addEventListener("click", () => {
+      if (confirm("Remove this recurring class and all its future occurrences?")) {
+        deleteScheduleClass(cls.id);
+        closeModal();
+        render();
+      }
+    });
+    seriesActions.appendChild(deleteSeriesBtn);
+
+    seriesSection.appendChild(seriesActions);
+    box.appendChild(seriesSection);
+
+    // ---- Close ----
+    const closeRow = document.createElement("div");
+    closeRow.className = "form-actions";
+    closeRow.style.marginTop = "12px";
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = "btn-secondary";
-    closeBtn.textContent = "Close";
+    closeBtn.textContent = "Close without saving";
     closeBtn.addEventListener("click", closeModal);
-    actions.appendChild(closeBtn);
-
-    box.appendChild(actions);
+    closeRow.appendChild(closeBtn);
+    box.appendChild(closeRow);
   }
 
   overlay.addEventListener("click", (e) => {
