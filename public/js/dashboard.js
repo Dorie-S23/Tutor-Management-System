@@ -268,6 +268,59 @@ applyForm?.addEventListener("submit", async (e) => {
   }
 });
 
+// ---------- guided tour ----------
+
+const TUTOR_TOUR_STEPS = [
+  {
+    selector: ".card:has(#welcome-heading)",
+    title: "Welcome",
+    body: "Your tutoring hub — log hours for the week, review timesheets, and keep an eye on your weekly limit from here.",
+    placement: "bottom",
+  },
+  {
+    selector: ".card:has(#apply-to-tutor-btn)",
+    title: "Apply to tutor a subject",
+    body: "Pick a course that needs tutors, confirm your mark and availability, and it'll go to the organiser board for approval. Track the status of your applications right here once you've applied.",
+    placement: "bottom",
+  },
+  {
+    selector: ".card:has(#excuse-btn)",
+    title: "Excuse yourself from a session",
+    body: "Can't make a tutorial? Let the organiser know which session and why — they can find cover if needed.",
+    placement: "bottom",
+  },
+  {
+    selector: ".stat-grid",
+    title: "Your week at a glance",
+    body: "Hours worked so far this week, how many you have left before your weekly limit, and your next upcoming session.",
+    placement: "top",
+  },
+  {
+    selector: ".tile-grid",
+    title: "Quick links",
+    body: "Jump straight to logging hours, reviewing timesheets, or your calendar — where your imported class schedule lives, with support for cancelling or editing a single class occurrence.",
+    placement: "top",
+  },
+  {
+    selector: ".tab-nav",
+    title: "Get around",
+    body: "These tabs are always here at the top, wherever you are in the app.",
+    placement: "bottom",
+  },
+];
+
+const tourLink = document.getElementById("tour-link");
+if (tourLink) {
+  tourLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.Onboarding?.start(TUTOR_TOUR_STEPS, {
+      tourId: "tutor-dashboard",
+      userId: getCurrentUser()?.id,
+      force: true,
+    });
+  });
+}
+
 (async function initApply() {
   await fetchCourses();
   const user = getCurrentUser();
@@ -276,6 +329,11 @@ applyForm?.addEventListener("submit", async (e) => {
     await fetchMyApplications(user.id);
     await fetchMyExcusals(user.id);
   }
+
+  window.Onboarding?.start(TUTOR_TOUR_STEPS, {
+    tourId: "tutor-dashboard",
+    userId: user?.id,
+  });
 })();
 
 // ---------- excuse yourself from a session ----------
