@@ -66,14 +66,22 @@ button {
 
 .board-header {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
   gap: 24px;
   padding: 28px clamp(20px, 4vw, 48px) 20px;
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
   min-height: 168px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  justify-self: end;
+  gap: 28px;
 }
 
 .eyebrow {
@@ -97,12 +105,9 @@ button {
 }
 
 .header-wits-logo {
-  position: absolute;
-  left: 50%;
-  top: 28px;
-  transform: translateX(-50%);
   height: 88px;
   width: auto;
+  justify-self: center;
 }
 
 .board-header h1 {
@@ -121,6 +126,20 @@ button {
   right: clamp(20px, 4vw, 48px);
   transform: translateY(-50%);
   z-index: 20;
+}
+
+@media (max-width: 860px) {
+  .board-header {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    row-gap: 12px;
+  }
+
+  .header-actions {
+    justify-self: center;
+    justify-content: center;
+  }
 }
 
 .header-stat {
@@ -876,6 +895,76 @@ input[type="search"]:focus-visible {
 @media (max-width: 860px) {
   .tutors-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+.workload-card {
+  grid-column: 1 / -1;
+}
+
+.workload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.workload-row {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.workload-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workload-bar-track {
+  background: var(--line-soft);
+  border-radius: 100px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.workload-bar-fill {
+  height: 100%;
+  border-radius: 100px;
+  background: var(--navy);
+}
+
+.workload-bar-fill.warn {
+  background: var(--amber);
+}
+
+.workload-bar-fill.blocked {
+  background: var(--red);
+}
+
+.workload-bar-fill.no-cap {
+  background: var(--ink-faint);
+}
+
+.workload-hours {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .workload-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .workload-hours {
+    text-align: left;
   }
 }
 

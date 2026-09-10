@@ -31,7 +31,9 @@
         class="header-wits-logo"
       />
 
-      <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+      <div class="header-actions">
+        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+      </div>
       <button class="btn btn-danger" id="logout-button" type="button">
         Logout
       </button>
@@ -112,6 +114,20 @@
         </table>
         <p class="empty-copy" id="emptyCopy" hidden>
           No tutors yet — add one on the left.
+        </p>
+      </section>
+
+      <section
+        class="card workload-card"
+        aria-labelledby="workloadHeading"
+      >
+        <h2 id="workloadHeading">Workload spread</h2>
+        <p class="hint">
+          Each tutor's approved course hours against their weekly cap.
+        </p>
+        <div class="workload-list" id="workloadList"></div>
+        <p class="empty-copy" id="workloadEmpty" hidden>
+          No tutors yet.
         </p>
       </section>
     </main>
