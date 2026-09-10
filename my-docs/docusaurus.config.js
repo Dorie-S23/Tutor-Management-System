@@ -19,11 +19,10 @@ const config = {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
 
-  // TODO: after your first successful GitLab Pages deploy, GitLab shows the
-  // live URL under Deploy > Pages in the project sidebar. Put that exact
-  // URL here, and set baseUrl to match its path (often '/<projectName>/').
-  url: "https://the-devden.pages.sdp.ms.wits.ac.za",
-  baseUrl: "/Tutor-Management-System/",
+  // Deployed as its own Cloudflare Worker (see my-docs/wrangler.toml),
+  // not GitLab/Gitea Pages — Gitea here only has Actions, no Pages hosting.
+  url: "https://tutorx-documentation.devden.workers.dev",
+  baseUrl: "/",
 
   organizationName: "the-devden",
   projectName: "Tutor-Management-System",

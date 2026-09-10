@@ -60,6 +60,10 @@
             />
           </search>
         </header>
+        <label class="shortfall-toggle">
+          <input type="checkbox" id="shortfallToggle" />
+          Show short-staffed courses only
+        </label>
         <button
           class="btn btn-primary btn-full"
           id="addCourseBtn"
@@ -140,6 +144,24 @@
             </ul>
             <p class="empty-copy" id="applicantsEmpty" hidden>
               No tutors have applied for this course yet.
+            </p>
+          </section>
+
+          <section class="assign-panel" aria-labelledby="excusalsHeading">
+            <header class="assign-panel-head">
+              <h3 id="excusalsHeading">Session Excusals</h3>
+            </header>
+
+            <p class="hint">
+              Tutors who've excused themselves from an upcoming session on this
+              course — find cover if you need to.
+            </p>
+
+            <ul class="tutor-list" id="excusalList">
+              <!-- injected -->
+            </ul>
+            <p class="empty-copy" id="excusalsEmpty" hidden>
+              No excusals recorded for this course.
             </p>
           </section>
 

@@ -98,7 +98,9 @@ form.addEventListener("submit", async (e) => {
     email: emailEl.value.trim() || null,
     academic_level: academicLevelEl.value || null,
     hourly_rate: hourlyRateEl.value ? Number(hourlyRateEl.value) : null,
-    weekly_hour_cap: weeklyHourCapEl.value ? Number(weeklyHourCapEl.value) : null,
+    weekly_hour_cap: weeklyHourCapEl.value
+      ? Number(weeklyHourCapEl.value)
+      : null,
   };
 
   const id = tutorIdEl.value;

@@ -23,7 +23,7 @@ A single hand-written Express API in front of Supabase — every request from th
 
 - Node.js 20+
 - Access to the project's Supabase project (URL + anon key) — ask a teammate
-- *(Optional)* An Anthropic API key with a funded balance — only needed for timetable PDF parsing; everything else works without it
+- _(Optional)_ An Anthropic API key with a funded balance — only needed for timetable PDF parsing; everything else works without it
 
 ## Getting Started
 
@@ -31,12 +31,12 @@ Full setup steps (clone, install, `.env`, run) are in [Getting Started](./gettin
 
 Environment variables the server reads:
 
-| Variable | Required | Description |
-|---|---|---|
-| `SUPABASE_URL` | Yes | Your Supabase project's URL |
-| `SUPABASE_ANON_KEY` | Yes | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
-| `ANTHROPIC_API_KEY` | No | Only needed for timetable PDF parsing |
-| `PORT` | No | Defaults to `3000` |
+| Variable            | Required | Description                                                                                                                                                                                                |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`      | Yes      | Your Supabase project's URL                                                                                                                                                                                |
+| `SUPABASE_ANON_KEY` | Yes      | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
+| `ANTHROPIC_API_KEY` | No       | Only needed for timetable PDF parsing                                                                                                                                                                      |
+| `PORT`              | No       | Defaults to `3000`                                                                                                                                                                                         |
 
 There's no separate migration or seed step — the Postgres schema (tables, columns, constraints) is managed directly in the Supabase dashboard's SQL editor, not via migration files in this repo.
 
@@ -118,6 +118,7 @@ npm run deploy      # wrangler deploy — ships to Cloudflare Workers
 In the Workers build, static files in `public/` are served by Cloudflare's assets layer (configured in `wrangler.toml`) instead of `express.static`.
 
 CI runs on **Gitea Actions** (`.gitea/workflows/`), not GitLab CI — `sdp.ms.wits.ac.za` is a self-hosted Gitea instance, so the `.gitlab-ci.yml` file in the repo root is inert and never runs; ignore it. Three workflows run on push to `main`:
+
 - `format.yml` — Prettier check (`npm run format:check`) on every push.
 - `deploy.yml` — deploys the app itself to Cloudflare Workers via `wrangler deploy`.
 - `docs-deploy.yml` — builds this documentation site and deploys it to Cloudflare Pages via `wrangler pages deploy`, only when something under `my-docs/` changes.
