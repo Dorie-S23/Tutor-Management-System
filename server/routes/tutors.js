@@ -30,44 +30,58 @@ router.get("/", async (req, res) => {
 // approved courses) against their weekly hour cap, for the workload spread
 // view. Registered before /:id so "workload" isn't swallowed as a tutor id.
 router.get("/workload", async (req, res) => {
-  const { data: tutors, error: tutorsError } = await supabase
-    .from("tutors")
-    .select("id, name, weekly_hour_cap")
-    .order("name");
+  try {
+    const { data: tutors, error: tutorsError } = await supabase
+      .from("tutors")
+      .select("id, name, weekly_hour_cap")
+      .order("name");
 
-  if (tutorsError) return res.status(500).json({ error: tutorsError.message });
+    if (tutorsError) {
+      console.error("Workload: failed to load tutors:", tutorsError);
+      return res.status(500).json({ error: tutorsError.message });
+    }
 
-  const { data: approvals, error: approvalsError } = await supabase
-    .from("tutor_subject_preference")
-    .select("tutor_id, courses(course_code, course_name, hours_per_week)")
-    .eq("status", "approved");
+    const { data: approvals, error: approvalsError } = await supabase
+      .from("tutor_subject_preference")
+      .select("tutor_id, courses(course_code, course_name, hours_per_week)")
+      .eq("status", "approved");
 
-  if (approvalsError)
-    return res.status(500).json({ error: approvalsError.message });
+    if (approvalsError) {
+      console.error("Workload: failed to load approvals:", approvalsError);
+      return res.status(500).json({ error: approvalsError.message });
+    }
 
-  const coursesByTutor = {};
-  (approvals || []).forEach((a) => {
-    if (!a.courses) return;
-    if (!coursesByTutor[a.tutor_id]) coursesByTutor[a.tutor_id] = [];
-    coursesByTutor[a.tutor_id].push({
-      course_code: a.courses.course_code,
-      course_name: a.courses.course_name,
-      hours_per_week: a.courses.hours_per_week || 0,
+    const coursesByTutor = {};
+    (approvals || []).forEach((a) => {
+      // The embedded course can come back as a single object or (depending
+      // on how the foreign key is set up) an array with one entry — handle
+      // both instead of assuming one shape.
+      const course = Array.isArray(a.courses) ? a.courses[0] : a.courses;
+      if (!course) return;
+      if (!coursesByTutor[a.tutor_id]) coursesByTutor[a.tutor_id] = [];
+      coursesByTutor[a.tutor_id].push({
+        course_code: course.course_code,
+        course_name: course.course_name,
+        hours_per_week: course.hours_per_week || 0,
+      });
     });
-  });
 
-  const workload = tutors.map((t) => {
-    const courses = coursesByTutor[t.id] || [];
-    return {
-      id: t.id,
-      name: t.name,
-      weeklyHourCap: t.weekly_hour_cap,
-      assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
-      courses,
-    };
-  });
+    const workload = (tutors || []).map((t) => {
+      const courses = coursesByTutor[t.id] || [];
+      return {
+        id: t.id,
+        name: t.name,
+        weeklyHourCap: t.weekly_hour_cap,
+        assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
+        courses,
+      };
+    });
 
-  res.json(workload);
+    res.json(workload);
+  } catch (err) {
+    console.error("Workload endpoint crashed:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // GET /api/tutors/:id — a single tutor
