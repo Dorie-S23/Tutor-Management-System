@@ -325,6 +325,10 @@ input[type="search"]:focus-visible {
   gap: 6px;
 }
 
+.empty-state[hidden] {
+  display: none;
+}
+
 .empty-mark {
   font-family: "Fraunces", serif;
   font-size: 2rem;
