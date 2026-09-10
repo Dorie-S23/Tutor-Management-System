@@ -46,27 +46,36 @@ function timesOverlap(startA, endA, startB, endB) {
   );
 }
 
-// Looks for another course sharing a venue with this one, on the same day,
-// at an overlapping time. excludeId lets an edit check itself against every
-// other course without flagging its own pre-edit row. Fails open (returns
-// null) on a lookup error so a Supabase hiccup never blocks saving.
+// Looks for another course's Tutorial or Lab sharing a venue with one of
+// this course's own sessions, on the same day, at an overlapping time.
+// excludeId lets an edit check itself against every other course without
+// flagging its own pre-edit row. Fails open (returns null) on a lookup
+// error so a Supabase hiccup never blocks saving.
 async function findVenueClash(values, excludeId) {
-  if (
-    !values.Day_of_tut ||
-    !values.tutor_start_time ||
-    !values.tutor_end_time ||
-    !values.venues
-  ) {
-    return null;
-  }
+  const sessions = [
+    {
+      type: "Tutorial",
+      day: values.Day_of_tut,
+      start: values.tutor_start_time,
+      end: values.tutor_end_time,
+      venue: values.venues,
+    },
+    {
+      type: "Lab",
+      day: values.Day_of_lab,
+      start: values.lab_start_time,
+      end: values.lab_end_time,
+      venue: values.lab_venues,
+    },
+  ].filter((s) => s.day && s.start && s.end && s.venue);
+
+  if (sessions.length === 0) return null;
 
   let query = supabase
     .from("courses")
-    .select("id, course_code, tutor_start_time, tutor_end_time, venues")
-    .eq("Day_of_tut", values.Day_of_tut)
-    .not("venues", "is", null)
-    .not("tutor_start_time", "is", null)
-    .not("tutor_end_time", "is", null);
+    .select(
+      "id, course_code, Day_of_tut, tutor_start_time, tutor_end_time, venues, Day_of_lab, lab_start_time, lab_end_time, lab_venues",
+    );
 
   if (excludeId != null) {
     query = query.neq("id", excludeId);
@@ -75,20 +84,76 @@ async function findVenueClash(values, excludeId) {
   const { data, error } = await query;
   if (error) return null;
 
-  const clash = data.find(
-    (row) =>
-      sharedVenues(values.venues, row.venues).length > 0 &&
-      timesOverlap(
-        values.tutor_start_time,
-        values.tutor_end_time,
-        row.tutor_start_time,
-        row.tutor_end_time,
-      ),
-  );
-  if (!clash) return null;
+  const otherSessions = [];
+  data.forEach((row) => {
+    if (row.Day_of_tut && row.tutor_start_time && row.tutor_end_time && row.venues) {
+      otherSessions.push({
+        type: "Tutorial",
+        courseCode: row.course_code,
+        day: row.Day_of_tut,
+        start: row.tutor_start_time,
+        end: row.tutor_end_time,
+        venue: row.venues,
+      });
+    }
+    if (
+      row.Day_of_lab &&
+      row.lab_start_time &&
+      row.lab_end_time &&
+      row.lab_venues
+    ) {
+      otherSessions.push({
+        type: "Lab",
+        courseCode: row.course_code,
+        day: row.Day_of_lab,
+        start: row.lab_start_time,
+        end: row.lab_end_time,
+        venue: row.lab_venues,
+      });
+    }
+  });
 
-  const shared = sharedVenues(values.venues, clash.venues).join(", ");
-  return `Venue clash: ${shared} is already booked for ${clash.course_code} on ${values.Day_of_tut} ${clash.tutor_start_time.slice(0, 5)}–${clash.tutor_end_time.slice(0, 5)}`;
+  for (const session of sessions) {
+    const clash = otherSessions.find(
+      (other) =>
+        other.day === session.day &&
+        sharedVenues(session.venue, other.venue).length > 0 &&
+        timesOverlap(session.start, session.end, other.start, other.end),
+    );
+    if (clash) {
+      const shared = sharedVenues(session.venue, clash.venue).join(", ");
+      return `${session.type} venue clash: ${shared} is already booked for ${clash.courseCode} ${clash.type} on ${session.day} ${clash.start.slice(0, 5)}–${clash.end.slice(0, 5)}`;
+    }
+  }
+
+  return null;
+}
+
+// Parses one Tutorial-or-Lab session group. When `has` is false the group
+// wasn't selected, so it's forced to all-null regardless of what the client
+// sent (defensive against a stale value lingering after the checkbox is
+// unticked). When `has` is true, day/start/end/venue are all required
+// together — a session isn't "complete" with only some of them set.
+function parseSessionGroup(has, day, start, end, venue, label) {
+  if (!has) {
+    return { day: null, start: null, end: null, venue: null };
+  }
+  if (typeof day !== "string" || !day.trim()) {
+    return { error: `${label} day is required` };
+  }
+  if (typeof start !== "string" || !TIME_RE.test(start)) {
+    return { error: `${label} start time must be a valid time (HH:MM)` };
+  }
+  if (typeof end !== "string" || !TIME_RE.test(end)) {
+    return { error: `${label} end time must be a valid time (HH:MM)` };
+  }
+  if (start >= end) {
+    return { error: `${label} start time must be before its end time` };
+  }
+  if (typeof venue !== "string" || !venue.trim()) {
+    return { error: `${label} venue is required` };
+  }
+  return { day: day.trim(), start, end, venue: venue.trim() };
 }
 
 function parseCoursePayload(body) {
@@ -99,10 +164,16 @@ function parseCoursePayload(body) {
     department,
     hours_per_week,
     tutors_needed,
+    has_tutorial,
     day_of_tut,
     tutor_start_time,
     tutor_end_time,
     venues,
+    has_lab,
+    day_of_lab,
+    lab_start_time,
+    lab_end_time,
+    lab_venues,
   } = body ?? {};
 
   if (typeof course_code !== "string" || !course_code.trim()) {
@@ -114,9 +185,43 @@ function parseCoursePayload(body) {
   if (typeof department !== "string" || !department.trim()) {
     return { error: "department is required" };
   }
-  if (typeof venues !== "string" || !venues.trim()) {
-    return { error: "venues is required" };
+  if (!has_tutorial && !has_lab) {
+    return { error: "Select at least one of Tutorials or Labs" };
   }
+
+  const tutorial = parseSessionGroup(
+    !!has_tutorial,
+    day_of_tut,
+    tutor_start_time,
+    tutor_end_time,
+    venues,
+    "Tutorial",
+  );
+  if (tutorial.error) return { error: tutorial.error };
+
+  const lab = parseSessionGroup(
+    !!has_lab,
+    day_of_lab,
+    lab_start_time,
+    lab_end_time,
+    lab_venues,
+    "Lab",
+  );
+  if (lab.error) return { error: lab.error };
+
+  if (
+    tutorial.day &&
+    lab.day &&
+    tutorial.day === lab.day &&
+    sharedVenues(tutorial.venue, lab.venue).length > 0 &&
+    timesOverlap(tutorial.start, tutorial.end, lab.start, lab.end)
+  ) {
+    return {
+      error:
+        "This course's own Tutorial and Lab overlap each other — pick different times or venues",
+    };
+  }
+
   const minMarkNum = Number(min_mark);
   if (!Number.isInteger(minMarkNum) || minMarkNum < 0 || minMarkNum > 100) {
     return { error: "min_mark must be an integer between 0 and 100" };
@@ -158,45 +263,6 @@ function parseCoursePayload(body) {
     };
   }
 
-  let dayOfTut = null;
-  if (day_of_tut !== undefined && day_of_tut !== null && day_of_tut !== "") {
-    if (typeof day_of_tut !== "string" || !day_of_tut.trim()) {
-      return { error: "Day_of_tut must be a non-empty string" };
-    }
-    dayOfTut = day_of_tut.trim();
-  }
-
-  let startTime = null;
-  if (
-    tutor_start_time !== undefined &&
-    tutor_start_time !== null &&
-    tutor_start_time !== ""
-  ) {
-    if (
-      typeof tutor_start_time !== "string" ||
-      !TIME_RE.test(tutor_start_time)
-    ) {
-      return { error: "tutor_start_time must be a valid time (HH:MM)" };
-    }
-    startTime = tutor_start_time;
-  }
-
-  let endTime = null;
-  if (
-    tutor_end_time !== undefined &&
-    tutor_end_time !== null &&
-    tutor_end_time !== ""
-  ) {
-    if (typeof tutor_end_time !== "string" || !TIME_RE.test(tutor_end_time)) {
-      return { error: "tutor_end_time must be a valid time (HH:MM)" };
-    }
-    endTime = tutor_end_time;
-  }
-
-  if (startTime && endTime && startTime >= endTime) {
-    return { error: "tutor_start_time must be before tutor_end_time" };
-  }
-
   return {
     values: {
       course_code: course_code.trim(),
@@ -204,11 +270,15 @@ function parseCoursePayload(body) {
       min_mark: minMarkNum,
       department: department.trim(),
       hours_per_week: hoursPerWeekNum,
-      venues: venues.trim(),
       tutors_needed: tutorsNeeded,
-      Day_of_tut: dayOfTut,
-      tutor_start_time: startTime,
-      tutor_end_time: endTime,
+      Day_of_tut: tutorial.day,
+      tutor_start_time: tutorial.start,
+      tutor_end_time: tutorial.end,
+      venues: tutorial.venue,
+      Day_of_lab: lab.day,
+      lab_start_time: lab.start,
+      lab_end_time: lab.end,
+      lab_venues: lab.venue,
     },
   };
 }

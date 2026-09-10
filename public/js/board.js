@@ -22,7 +22,11 @@ function mapCourseRow(row) {
     startTime: row.tutor_start_time,
     endTime: row.tutor_end_time,
     venues: row.venues,
-    session:
+    dayOfLab: row.Day_of_lab,
+    labStartTime: row.lab_start_time,
+    labEndTime: row.lab_end_time,
+    labVenues: row.lab_venues,
+    tutorialSession:
       row.Day_of_tut && row.tutor_start_time && row.tutor_end_time
         ? {
             day: row.Day_of_tut,
@@ -30,24 +34,43 @@ function mapCourseRow(row) {
             end: row.tutor_end_time.slice(0, 5),
           }
         : null,
+    labSession:
+      row.Day_of_lab && row.lab_start_time && row.lab_end_time
+        ? {
+            day: row.Day_of_lab,
+            start: row.lab_start_time.slice(0, 5),
+            end: row.lab_end_time.slice(0, 5),
+          }
+        : null,
   };
 }
 
-// Returns every scheduled tutorial session across all courses, tagged with
-// its course — the flat list the timetable grid and the venue-clash check
-// both work from.
+// Returns every scheduled tutorial/lab session across all courses, tagged
+// with its course — the flat list the timetable grid and the venue-clash
+// check both work from.
 function getAllSessions() {
   const sessions = [];
   COURSES.forEach((course) => {
-    if (course.session) {
+    if (course.tutorialSession) {
       sessions.push({
         courseId: course.id,
         courseCode: course.code,
         type: "Tutorial",
-        day: course.session.day,
-        start: course.session.start,
-        end: course.session.end,
+        day: course.tutorialSession.day,
+        start: course.tutorialSession.start,
+        end: course.tutorialSession.end,
         venue: course.venues || "",
+      });
+    }
+    if (course.labSession) {
+      sessions.push({
+        courseId: course.id,
+        courseCode: course.code,
+        type: "Lab",
+        day: course.labSession.day,
+        start: course.labSession.start,
+        end: course.labSession.end,
+        venue: course.labVenues || "",
       });
     }
   });
@@ -92,19 +115,29 @@ function sharedVenues(venueA, venueB) {
   return parseVenues(venueA).filter((v) => setB.has(v.toLowerCase()));
 }
 
-// Venue double-bookings: same day, at least one room in common, overlapping
-// time. excludeCourseId lets the edit modal check a course's own
-// in-progress edits against everyone else without flagging itself.
-function findVenueClashes(session, excludeCourseId = null) {
+// Same day, at least one room in common, overlapping time.
+function sessionsClash(a, b) {
+  return (
+    a.day &&
+    b.day &&
+    a.day === b.day &&
+    sharedVenues(a.venue, b.venue).length > 0 &&
+    timesOverlap(a.start, a.end, b.start, b.end)
+  );
+}
+
+// Venue double-bookings across every course's Tutorial and Lab sessions.
+// excludeCourseId + excludeType lets the edit modal check a session's
+// in-progress edits against everyone else (including the *other* session
+// type on the same course) without flagging itself.
+function findVenueClashes(session, excludeCourseId = null, excludeType = null) {
   if (!session.day || !session.start || !session.end || !session.venue) {
     return [];
   }
   return getAllSessions().filter(
     (other) =>
-      other.courseId !== excludeCourseId &&
-      other.day === session.day &&
-      sharedVenues(session.venue, other.venue).length > 0 &&
-      timesOverlap(session.start, session.end, other.start, other.end),
+      !(other.courseId === excludeCourseId && other.type === excludeType) &&
+      sessionsClash(session, other),
   );
 }
 
@@ -206,6 +239,24 @@ function renderCourseList() {
 
 // ---------- rendering: detail pane ----------
 
+function buildSessionSummary(course) {
+  const parts = [];
+  if (course.tutorialSession) {
+    parts.push(
+      `Tutorial ${course.tutorialSession.day} ${course.tutorialSession.start}–${course.tutorialSession.end}${course.venues ? ` (${course.venues})` : ""}`,
+    );
+  }
+  if (course.labSession) {
+    parts.push(
+      `Lab ${course.labSession.day} ${course.labSession.start}–${course.labSession.end}${course.labVenues ? ` (${course.labVenues})` : ""}`,
+    );
+  }
+  if (parts.length === 0) {
+    return `${course.department}  ·  requires a mark of ${course.minMark}+  ·  not yet scheduled`;
+  }
+  return `${parts.join("  ·  ")}  ·  requires a mark of ${course.minMark}+`;
+}
+
 const emptyStateEl = document.getElementById("emptyState");
 const courseDetailEl = document.getElementById("courseDetail");
 const assignmentCardEl = document.getElementById("assignmentCard");
@@ -229,9 +280,7 @@ function renderDetail() {
 
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
-  document.getElementById("dSession").textContent = course.session
-    ? `Tutorial ${course.session.day} ${course.session.start}–${course.session.end}${course.venues ? ` (${course.venues})` : ""}  ·  requires a mark of ${course.minMark}+`
-    : `${course.department}  ·  requires a mark of ${course.minMark}+  ·  not yet scheduled`;
+  document.getElementById("dSession").textContent = buildSessionSummary(course);
   document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
   document.getElementById("dTutorsAssigned").textContent =
     `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
@@ -607,8 +656,49 @@ const addCourseHeading = document.getElementById("addCourseHeading");
 const courseClashWarningEl = document.getElementById("courseClashWarning");
 
 const venuesInput = document.getElementById("venuesInput");
+const labVenuesInput = document.getElementById("labVenuesInput");
+const hasTutorialInput = document.getElementById("hasTutorialInput");
+const hasLabInput = document.getElementById("hasLabInput");
+const tutorialFieldsEl = document.getElementById("tutorialFields");
+const labFieldsEl = document.getElementById("labFields");
 
 let editingCourseId = null; // null = adding a new course, otherwise id of course being edited
+
+function setFieldsRequired(ids, required) {
+  ids.forEach((id) => {
+    document.getElementById(id).required = required;
+  });
+}
+
+const TUTORIAL_FIELD_IDS = [
+  "dayOfTutInput",
+  "tutorStartTimeInput",
+  "tutorEndTimeInput",
+  "venuesInput",
+];
+const LAB_FIELD_IDS = [
+  "dayOfLabInput",
+  "labStartTimeInput",
+  "labEndTimeInput",
+  "labVenuesInput",
+];
+
+function updateTutorialVisibility() {
+  const checked = hasTutorialInput.checked;
+  tutorialFieldsEl.hidden = !checked;
+  setFieldsRequired(TUTORIAL_FIELD_IDS, checked);
+  checkModalClashes();
+}
+
+function updateLabVisibility() {
+  const checked = hasLabInput.checked;
+  labFieldsEl.hidden = !checked;
+  setFieldsRequired(LAB_FIELD_IDS, checked);
+  checkModalClashes();
+}
+
+hasTutorialInput.addEventListener("change", updateTutorialVisibility);
+hasLabInput.addEventListener("change", updateLabVisibility);
 
 function openCourseModal(course = null) {
   editingCourseId = course ? course.id : null;
@@ -628,6 +718,7 @@ function openCourseModal(course = null) {
       course.hoursNeeded ?? "";
     document.getElementById("TutorsNeededInput").value =
       course.tutorsNeeded ?? "";
+
     document.getElementById("dayOfTutInput").value = course.dayOfTut ?? "";
     document.getElementById("tutorStartTimeInput").value = course.startTime
       ? course.startTime.slice(0, 5)
@@ -636,36 +727,95 @@ function openCourseModal(course = null) {
       ? course.endTime.slice(0, 5)
       : "";
     venuesInput.value = course.venues ?? "";
+    hasTutorialInput.checked = !!(course.dayOfTut || course.venues);
+
+    document.getElementById("dayOfLabInput").value = course.dayOfLab ?? "";
+    document.getElementById("labStartTimeInput").value = course.labStartTime
+      ? course.labStartTime.slice(0, 5)
+      : "";
+    document.getElementById("labEndTimeInput").value = course.labEndTime
+      ? course.labEndTime.slice(0, 5)
+      : "";
+    labVenuesInput.value = course.labVenues ?? "";
+    hasLabInput.checked = !!(course.dayOfLab || course.labVenues);
+  } else {
+    hasTutorialInput.checked = false;
+    hasLabInput.checked = false;
   }
+
+  updateTutorialVisibility();
+  updateLabVisibility();
 
   addCourseModal.showModal();
   document.getElementById("courseCodeInput").focus();
-  checkModalClashes();
 }
 
-// Live venue-clash preview while editing a course's tutorial time — purely
-// client-side against the already-loaded COURSES list, so it updates instantly
-// as the organiser types. Disables the submit button while a clash shows;
-// the server re-checks on submit regardless as the source of truth.
-function checkModalClashes() {
-  const tutorialSession = {
-    day: document.getElementById("dayOfTutInput").value.trim(),
-    start: document.getElementById("tutorStartTimeInput").value,
-    end: document.getElementById("tutorEndTimeInput").value,
-    venue: venuesInput.value.trim(),
+// Live venue-clash preview while editing a course's Tutorial/Lab times —
+// purely client-side against the already-loaded COURSES list, so it updates
+// instantly as the organiser types. Checks each checked session against
+// every other course's sessions, and (if both are checked) this course's
+// own Tutorial against its own Lab. Disables the submit button while a
+// problem shows; the server re-checks on submit regardless as the source
+// of truth.
+function readModalSession(checked, dayId, startId, endId, venueInput) {
+  if (!checked) return null;
+  return {
+    day: document.getElementById(dayId).value.trim(),
+    start: document.getElementById(startId).value,
+    end: document.getElementById(endId).value,
+    venue: venueInput.value.trim(),
   };
+}
 
-  const clashes = findVenueClashes(tutorialSession, editingCourseId);
+function clashMessage(type, session, other) {
+  const shared = sharedVenues(session.venue, other.venue).join(", ");
+  return `${type} clash: ${shared} is already booked for ${other.courseCode} ${other.type} (${other.day} ${other.start}–${other.end}).`;
+}
 
-  if (clashes.length === 0) {
+function checkModalClashes() {
+  const tutorialSession = readModalSession(
+    hasTutorialInput.checked,
+    "dayOfTutInput",
+    "tutorStartTimeInput",
+    "tutorEndTimeInput",
+    venuesInput,
+  );
+  const labSession = readModalSession(
+    hasLabInput.checked,
+    "dayOfLabInput",
+    "labStartTimeInput",
+    "labEndTimeInput",
+    labVenuesInput,
+  );
+
+  const problems = [];
+
+  if (tutorialSession) {
+    findVenueClashes(tutorialSession, editingCourseId, "Tutorial").forEach(
+      (c) => problems.push(clashMessage("Tutorial", tutorialSession, c)),
+    );
+  }
+  if (labSession) {
+    findVenueClashes(labSession, editingCourseId, "Lab").forEach((c) =>
+      problems.push(clashMessage("Lab", labSession, c)),
+    );
+  }
+  if (tutorialSession && labSession && sessionsClash(tutorialSession, labSession)) {
+    const shared = sharedVenues(tutorialSession.venue, labSession.venue).join(
+      ", ",
+    );
+    problems.push(
+      `This course's own Tutorial and Lab overlap each other (${shared}, ${tutorialSession.day}).`,
+    );
+  }
+
+  if (problems.length === 0) {
     courseClashWarningEl.hidden = true;
     addCourseSubmitBtn.disabled = false;
     return;
   }
 
-  const c = clashes[0];
-  const shared = sharedVenues(tutorialSession.venue, c.venue).join(", ");
-  courseClashWarningEl.textContent = `⚠ Venue clash: ${shared} is already booked for ${c.courseCode} ${c.type} (${c.day} ${c.start}–${c.end})${clashes.length > 1 ? ` and ${clashes.length - 1} more` : ""}.`;
+  courseClashWarningEl.textContent = `⚠ ${problems[0]}${problems.length > 1 ? ` (and ${problems.length - 1} more issue${problems.length > 2 ? "s" : ""})` : ""}`;
   courseClashWarningEl.hidden = false;
   addCourseSubmitBtn.disabled = true;
 }
@@ -675,6 +825,10 @@ function checkModalClashes() {
   "tutorStartTimeInput",
   "tutorEndTimeInput",
   "venuesInput",
+  "dayOfLabInput",
+  "labStartTimeInput",
+  "labEndTimeInput",
+  "labVenuesInput",
 ].forEach((id) => {
   document.getElementById(id).addEventListener("input", checkModalClashes);
 });
@@ -749,9 +903,18 @@ addCourseForm.addEventListener("submit", async (e) => {
 
   const hoursValue = document.getElementById("hoursPerWeekInput").value;
   const tutorsNeededValue = document.getElementById("TutorsNeededInput").value;
+
+  const tutorialChecked = hasTutorialInput.checked;
+  const labChecked = hasLabInput.checked;
+
   const dayOfTutValue = document.getElementById("dayOfTutInput").value.trim();
   const startTimeValue = document.getElementById("tutorStartTimeInput").value;
   const endTimeValue = document.getElementById("tutorEndTimeInput").value;
+
+  const dayOfLabValue = document.getElementById("dayOfLabInput").value.trim();
+  const labStartTimeValue = document.getElementById("labStartTimeInput").value;
+  const labEndTimeValue = document.getElementById("labEndTimeInput").value;
+
   const payload = {
     course_code: document.getElementById("courseCodeInput").value.trim(),
     course_name: document.getElementById("courseNameInput").value.trim(),
@@ -759,10 +922,19 @@ addCourseForm.addEventListener("submit", async (e) => {
     department: document.getElementById("departmentInput").value.trim(),
     hours_per_week: hoursValue === "" ? null : Number(hoursValue),
     tutors_needed: tutorsNeededValue === "" ? null : Number(tutorsNeededValue),
-    day_of_tut: dayOfTutValue === "" ? null : dayOfTutValue,
-    tutor_start_time: startTimeValue === "" ? null : startTimeValue,
-    tutor_end_time: endTimeValue === "" ? null : endTimeValue,
-    venues: venuesInput.value.trim() || null,
+    has_tutorial: tutorialChecked,
+    day_of_tut: tutorialChecked && dayOfTutValue !== "" ? dayOfTutValue : null,
+    tutor_start_time:
+      tutorialChecked && startTimeValue !== "" ? startTimeValue : null,
+    tutor_end_time: tutorialChecked && endTimeValue !== "" ? endTimeValue : null,
+    venues: tutorialChecked ? venuesInput.value.trim() || null : null,
+    has_lab: labChecked,
+    day_of_lab: labChecked && dayOfLabValue !== "" ? dayOfLabValue : null,
+    lab_start_time:
+      labChecked && labStartTimeValue !== "" ? labStartTimeValue : null,
+    lab_end_time:
+      labChecked && labEndTimeValue !== "" ? labEndTimeValue : null,
+    lab_venues: labChecked ? labVenuesInput.value.trim() || null : null,
   };
 
   const isEditing = editingCourseId !== null;

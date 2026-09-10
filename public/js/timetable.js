@@ -37,10 +37,15 @@ function mapCourseRow(row) {
     startTime: row.tutor_start_time,
     endTime: row.tutor_end_time,
     venues: row.venues,
+    dayOfLab: row.Day_of_lab,
+    labStartTime: row.lab_start_time,
+    labEndTime: row.lab_end_time,
+    labVenues: row.lab_venues,
   };
 }
 
-// Flattens each course's tutorial session into a list of placeable sessions.
+// Flattens each course's Tutorial and Lab sessions into a list of placeable
+// sessions.
 function getAllSessions(courses) {
   const sessions = [];
   courses.forEach((c) => {
@@ -55,8 +60,40 @@ function getAllSessions(courses) {
         venue: c.venues || "",
       });
     }
+    if (c.dayOfLab && c.labStartTime && c.labEndTime) {
+      sessions.push({
+        courseId: c.id,
+        courseCode: c.code,
+        type: "Lab",
+        day: c.dayOfLab,
+        start: c.labStartTime.slice(0, 5),
+        end: c.labEndTime.slice(0, 5),
+        venue: c.labVenues || "",
+      });
+    }
   });
   return sessions;
+}
+
+// A fixed palette of readable bg/text/border triples, cycled by course id so
+// every block for the same course (Tutorial and Lab alike) always renders in
+// the same colour. Deliberately excludes red — that stays reserved for the
+// clash indicator so a real double-booking still stands out from the normal
+// per-course colouring.
+const COURSE_COLORS = [
+  { bg: "#e6eeef", text: "#26424b", border: "#26424b" }, // navy
+  { bg: "#e3eee6", text: "#2f6b4f", border: "#b9d2c1" }, // green
+  { bg: "#f5ead5", text: "#a66a17", border: "#e3cb9a" }, // amber
+  { bg: "#ece6f5", text: "#5b3a91", border: "#c9b8e0" }, // purple
+  { bg: "#dff0ef", text: "#1f7a72", border: "#a9d9d4" }, // teal
+  { bg: "#f6e3ea", text: "#a13d67", border: "#e3b9cc" }, // rose
+  { bg: "#e1ecf7", text: "#2560a3", border: "#b7d3ee" }, // blue
+  { bg: "#eef0d8", text: "#6b7a1f", border: "#d6dba0" }, // olive
+  { bg: "#f3e2d8", text: "#a85332", border: "#e6c2ac" }, // terracotta
+];
+
+function courseColor(courseId) {
+  return COURSE_COLORS[courseId % COURSE_COLORS.length];
 }
 
 // A venue field can list several rooms for one session (e.g. multiple
@@ -223,6 +260,12 @@ function renderGrid(sessions) {
         block.style.height = `${((endMin - startMin) / totalMinutes) * 100}%`;
         block.style.left = `${(lane / laneCount) * 100}%`;
         block.style.width = `${100 / laneCount}%`;
+        if (!clashPartners.length) {
+          const palette = courseColor(session.courseId);
+          block.style.background = palette.bg;
+          block.style.color = palette.text;
+          block.style.borderColor = palette.border;
+        }
         block.title = clashPartners.length
           ? `Venue clash (${clashPartners.map((p) => sharedVenues(session.venue, p.venue).join("/")).join(", ")}) with ${clashPartners.map((p) => `${p.courseCode} ${p.type}`).join(", ")}`
           : `${session.courseCode} ${session.type}${session.venue ? ` · ${session.venue}` : " · no venue set"}`;

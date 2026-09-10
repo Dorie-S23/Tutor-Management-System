@@ -259,38 +259,95 @@
           />
         </label>
 
-        <label class="field">
-          <span class="field-label">Day of tutoring</span>
-          <select id="dayOfTutInput" name="day_of_tut">
-            <option value="">Select a day</option>
-            <option value="Monday">Monday</option>
-            <option value="Tuesday">Tuesday</option>
-            <option value="Wednesday">Wednesday</option>
-            <option value="Thursday">Thursday</option>
-            <option value="Friday">Friday</option>
-          </select>
-        </label>
+        <div class="field-group">
+          <label class="field-checkbox">
+            <input type="checkbox" id="hasTutorialInput" />
+            <span>Tutorials</span>
+          </label>
 
-        <label class="field">
-          <span class="field-label">Tutor session start time</span>
-          <input type="time" id="tutorStartTimeInput" name="tutor_start_time" />
-        </label>
+          <div id="tutorialFields" class="field-subgroup" hidden>
+            <label class="field">
+              <span class="field-label">Day of tutorial</span>
+              <select id="dayOfTutInput" name="day_of_tut">
+                <option value="">Select a day</option>
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+              </select>
+            </label>
 
-        <label class="field">
-          <span class="field-label">Tutor session end time</span>
-          <input type="time" id="tutorEndTimeInput" name="tutor_end_time" />
-        </label>
+            <label class="field">
+              <span class="field-label">Tutorial start time</span>
+              <input
+                type="time"
+                id="tutorStartTimeInput"
+                name="tutor_start_time"
+              />
+            </label>
 
-        <label class="field">
-          <span class="field-label">Tutorial venue</span>
-          <input
-            type="text"
-            id="venuesInput"
-            name="venues"
-            placeholder="e.g. FNB1"
-            required
-          />
-        </label>
+            <label class="field">
+              <span class="field-label">Tutorial end time</span>
+              <input
+                type="time"
+                id="tutorEndTimeInput"
+                name="tutor_end_time"
+              />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Tutorial venue</span>
+              <input
+                type="text"
+                id="venuesInput"
+                name="venues"
+                placeholder="e.g. FNB1"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-checkbox">
+            <input type="checkbox" id="hasLabInput" />
+            <span>Labs</span>
+          </label>
+
+          <div id="labFields" class="field-subgroup" hidden>
+            <label class="field">
+              <span class="field-label">Day of lab</span>
+              <select id="dayOfLabInput" name="day_of_lab">
+                <option value="">Select a day</option>
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Lab start time</span>
+              <input type="time" id="labStartTimeInput" name="lab_start_time" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Lab end time</span>
+              <input type="time" id="labEndTimeInput" name="lab_end_time" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Lab venue</span>
+              <input
+                type="text"
+                id="labVenuesInput"
+                name="lab_venues"
+                placeholder="e.g. FNB2"
+              />
+            </label>
+          </div>
+        </div>
 
         <p class="field-warning" id="courseClashWarning" hidden></p>
         <p class="field-error" id="addCourseError" hidden></p>

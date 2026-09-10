@@ -329,14 +329,13 @@ input[type="search"]:focus-visible {
 }
 
 .detail-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 24px;
   padding-bottom: 18px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
 }
 
 .detail-head .course-code {
@@ -771,6 +770,38 @@ input[type="search"]:focus-visible {
   outline-offset: 1px;
 }
 
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.field-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.field-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+
+.field-subgroup[hidden] {
+  display: none;
+}
+
 .field-error {
   margin: 0;
   font-size: 12.5px;
@@ -966,10 +997,6 @@ input[type="search"]:focus-visible {
   border: 1px solid transparent;
 }
 
-.legend-swatch.tutorial {
-  background: var(--navy-bg);
-  border-color: var(--navy);
-}
 .legend-swatch.clash {
   background: var(--red-bg);
   border-color: var(--red);
