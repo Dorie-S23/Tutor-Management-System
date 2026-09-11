@@ -128,7 +128,14 @@ function renderCourseList() {
           <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : "Open"}</span>
         </div>
       `;
-    btn.addEventListener("click", () => selectCourse(course.id));
+    btn.addEventListener("click", () => {
+      selectCourse(course.id);
+      // selectCourse() rebuilds this whole list, destroying the button that
+      // was just clicked — without this, focus silently falls back to
+      // <body> and the next arrow-key press just scrolls the page instead
+      // of reaching the keydown handler below.
+      focusCourseCard(course.id);
+    });
     li.appendChild(btn);
     courseListEl.appendChild(li);
   });
@@ -146,11 +153,32 @@ function focusCourseCard(courseId) {
   if (card) card.focus();
 }
 
-courseListEl.addEventListener("keydown", (event) => {
+function isTypingInField() {
+  const active = document.activeElement;
+  return !!(
+    active &&
+    (active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.isContentEditable)
+  );
+}
+
+// Listens on the whole page, not just the course list, so Up/Down/Home/End
+// navigate courses no matter where focus currently is (including nowhere,
+// e.g. right after a mouse click elsewhere) — the only thing that opts out
+// is actually typing into a text field, where arrow keys should do their
+// normal job of moving the cursor.
+document.addEventListener("keydown", (event) => {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+  if (isTypingInField()) return;
+
   const cards = Array.from(courseListEl.querySelectorAll(".course-card"));
   if (cards.length === 0) return;
 
-  const currentIndex = cards.indexOf(document.activeElement);
+  const currentIndex = cards.findIndex(
+    (c) => c.dataset.courseId === String(activeCourseId),
+  );
+
   let targetIndex;
   switch (event.key) {
     case "ArrowDown":
@@ -165,8 +193,6 @@ courseListEl.addEventListener("keydown", (event) => {
     case "End":
       targetIndex = cards.length - 1;
       break;
-    default:
-      return;
   }
 
   event.preventDefault();
@@ -749,13 +775,7 @@ courseSearchEl.addEventListener("input", renderCourseList);
 // organiser is already typing into a field (so it doesn't hijack real input).
 document.addEventListener("keydown", (event) => {
   if (event.key !== "/") return;
-  const active = document.activeElement;
-  const isTyping =
-    active &&
-    (active.tagName === "INPUT" ||
-      active.tagName === "TEXTAREA" ||
-      active.isContentEditable);
-  if (isTyping) return;
+  if (isTypingInField()) return;
   event.preventDefault();
   courseSearchEl.focus();
 });
