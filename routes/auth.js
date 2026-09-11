@@ -316,54 +316,38 @@ router.post("/register", async (req, res) => {
    ========================================================= */
 
 router.get("/google", async (req, res) => {
+  try {
+    const { data, error } = await req.supabase.auth.signInWithOAuth({
+      provider: "google",
 
-    try {
+      options: {
+        redirectTo: `${req.protocol}://${req.get("host")}/html/google-callback.html`,
 
-        const { data, error } =
-            await req.supabase.auth.signInWithOAuth({
+        // Force Google's account chooser every time instead of
+        // silently reusing an already-signed-in browser session.
+        queryParams: {
+          prompt: "select_account",
+        },
+      },
+    });
 
-                provider: "google",
+    if (error) {
+      console.error("Google authentication error:", error);
 
-                options: {
-                    redirectTo: `${req.protocol}://${req.get("host")}/html/google-callback.html`
-                }
-
-            });
-
-
-        if (error) {
-
-            console.error(
-                "Google authentication error:",
-                error
-            );
-
-            return res.status(400).json({
-                error: error.message
-            });
-        }
-
-
-        return res.redirect(data.url);
-
+      return res.status(400).json({
+        error: error.message,
+      });
     }
 
-    catch (error) {
+    return res.redirect(data.url);
+  } catch (error) {
+    console.error("Google login error:", error);
 
-        console.error(
-            "Google login error:",
-            error
-        );
-
-        return res.status(500).json({
-            error: "Internal server error"
-        });
-    }
-
+    return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
 });
-
-
-
 
 /* =========================================================
    GOOGLE REGISTER
@@ -371,73 +355,46 @@ router.get("/google", async (req, res) => {
    ========================================================= */
 
 router.post("/google/register", async (req, res) => {
+  try {
+    const { name, role, studentNumber, accessToken } = req.body;
 
-    try {
-
-        const {
-            name,
-            role,
-            studentNumber,
-            accessToken
-        } = req.body;
-
-
-        /* =====================================================
+    /* =====================================================
            Validate required fields
            ===================================================== */
 
-        if (!name || !role || !accessToken) {
+    if (!name || !role || !accessToken) {
+      return res.status(400).json({
+        error: "Name, role and authentication token are required",
+      });
+    }
 
-            return res.status(400).json({
-                error:
-                    "Name, role and authentication token are required"
-            });
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            Validate role
            ===================================================== */
 
-        const validRoles = [
-            "student",
-            "tutor",
-            "educator",
-            "organiser"
-        ];
+    const validRoles = ["student", "tutor", "educator", "organiser"];
 
-        const userRole =
-            role.toLowerCase();
+    const userRole = role.toLowerCase();
 
+    if (!validRoles.includes(userRole)) {
+      return res.status(400).json({
+        error: "Invalid role",
+      });
+    }
 
-        if (!validRoles.includes(userRole)) {
-
-            return res.status(400).json({
-                error: "Invalid role"
-            });
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            Validate student number
            
            Students and tutors require one.
            ===================================================== */
 
-        if (
-            (userRole === "student" ||
-             userRole === "tutor") &&
-            !studentNumber
-        ) {
+    if ((userRole === "student" || userRole === "tutor") && !studentNumber) {
+      return res.status(400).json({
+        error: "Student number is required for students and tutors",
+      });
+    }
 
-            return res.status(400).json({
-                error:
-                    "Student number is required for students and tutors"
-            });
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            Verify the Google/Supabase user
            
            We create a Supabase client using the user's
@@ -445,350 +402,229 @@ router.post("/google/register", async (req, res) => {
            by the browser.
            ===================================================== */
 
-        const {
-            createClient
-        } = require("@supabase/supabase-js");
+    const { createClient } = require("@supabase/supabase-js");
 
+    const authenticatedSupabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      },
+    );
 
-        const authenticatedSupabase =
-            createClient(
-                process.env.SUPABASE_URL,
-                process.env.SUPABASE_ANON_KEY,
-                {
-                    global: {
-                        headers: {
-                            Authorization:
-                                `Bearer ${accessToken}`
-                        }
-                    }
-                }
-            );
+    const { data: userData, error: userError } =
+      await authenticatedSupabase.auth.getUser(accessToken);
 
+    if (userError || !userData || !userData.user) {
+      console.error("Google user verification error:", userError);
 
-        const {
-            data: userData,
-            error: userError
-        } =
-            await authenticatedSupabase.auth.getUser(
-                accessToken
-            );
+      return res.status(401).json({
+        error: "Could not verify Google account",
+      });
+    }
 
-
-        if (
-            userError ||
-            !userData ||
-            !userData.user
-        ) {
-
-            console.error(
-                "Google user verification error:",
-                userError
-            );
-
-            return res.status(401).json({
-                error:
-                    "Could not verify Google account"
-            });
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            Get verified user information
            ===================================================== */
 
-        const authenticatedUser =
-            userData.user;
+    const authenticatedUser = userData.user;
 
-        const userId =
-            authenticatedUser.id;
+    const userId = authenticatedUser.id;
 
-        const email =
-            authenticatedUser.email;
+    const email = authenticatedUser.email;
 
-
-        /* =====================================================
+    /* =====================================================
            Validate Wits email
            ===================================================== */
 
-        if (
-            !email ||(!email.toLowerCase().endsWith("@wits.ac.za") && !email.toLowerCase().endsWith("@students.wits.ac.za"))
-        ) {
+    if (
+      !email ||
+      (!email.toLowerCase().endsWith("@wits.ac.za") &&
+        !email.toLowerCase().endsWith("@students.wits.ac.za"))
+    ) {
+      return res.status(400).json({
+        error: "You must use a Wits email address",
+      });
+    }
 
-            return res.status(400).json({
-                error:
-                    "You must use a Wits email address"
-            });
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            Make sure user isn't already registered
            ===================================================== */
 
-        const {
-            data: existingUser,
-            error: existingUserError
-        } =
-            await req.supabase
-                .from("users")
-                .select("id")
-                .eq("id", userId)
-                .maybeSingle();
+    const { data: existingUser, error: existingUserError } = await req.supabase
+      .from("users")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
 
+    if (existingUserError) {
+      console.error("Existing user check error:", existingUserError);
 
-        if (existingUserError) {
+      return res.status(500).json({
+        error: "Could not check existing user",
+      });
+    }
 
-            console.error(
-                "Existing user check error:",
-                existingUserError
-            );
+    if (existingUser) {
+      return res.status(409).json({
+        error: "This Google account is already registered",
+      });
+    }
 
-            return res.status(500).json({
-                error:
-                    "Could not check existing user"
-            });
-        }
-
-
-        if (existingUser) {
-
-            return res.status(409).json({
-                error:
-                    "This Google account is already registered"
-            });
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            Add user to users table
            ===================================================== */
 
-        const {
-            error: userInsertError
-        } =
-            await authenticatedSupabase
-                .from("users")
-                .insert({
-                    id: userId,
-                    email: email,
-                    name: name,
-                    role: userRole
-                });
+    const { error: userInsertError } = await authenticatedSupabase
+      .from("users")
+      .insert({
+        id: userId,
+        email: email,
+        name: name,
+        role: userRole,
+      });
 
+    if (userInsertError) {
+      console.error("Google users table error:", userInsertError);
 
-        if (userInsertError) {
+      return res.status(500).json({
+        error:
+          "Google account was authenticated, but could not be added to the users table",
 
-            console.error(
-                "Google users table error:",
-                userInsertError
-            );
+        details: userInsertError.message,
 
-            return res.status(500).json({
-                error:
-                    "Google account was authenticated, but could not be added to the users table",
+        hint: userInsertError.hint,
+      });
+    }
 
-                details:
-                    userInsertError.message,
-
-                hint:
-                    userInsertError.hint
-            });
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            STUDENT
            ===================================================== */
 
-        if (userRole === "student") {
+    if (userRole === "student") {
+      const { error: studentError } = await authenticatedSupabase
+        .from("students")
+        .insert({
+          id: userId,
+          name: name,
+          email: email,
+          student_no: studentNumber,
+        });
 
-            const {
-                error: studentError
-            } =
-                await authenticatedSupabase
-                    .from("students")
-                    .insert({
-                        id: userId,
-                        name: name,
-                        email: email,
-                        student_no: studentNumber
-                    });
+      if (studentError) {
+        console.error("Google student table error:", studentError);
 
+        return res.status(500).json({
+          error:
+            "User was created, but could not be added to the students table",
 
-            if (studentError) {
+          details: studentError.message,
+        });
+      }
+    }
 
-                console.error(
-                    "Google student table error:",
-                    studentError
-                );
-
-                return res.status(500).json({
-                    error:
-                        "User was created, but could not be added to the students table",
-
-                    details:
-                        studentError.message
-                });
-            }
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            TUTOR
            ===================================================== */
+    else if (userRole === "tutor") {
+      const { error: tutorError } = await authenticatedSupabase
+        .from("tutors")
+        .insert({
+          id: userId,
+          student_number: studentNumber,
+          email: email,
+          name: name,
+        });
 
-        else if (userRole === "tutor") {
+      if (tutorError) {
+        console.error("Google tutor table error:", tutorError);
 
-            const {
-                error: tutorError
-            } =
-                await authenticatedSupabase
-                    .from("tutors")
-                    .insert({
-                        id: userId,
-                        student_number: studentNumber,
-                        email: email,
-                        name: name
-                    });
+        return res.status(500).json({
+          error: "User was created, but could not be added to the tutors table",
 
+          details: tutorError.message,
+        });
+      }
+    }
 
-            if (tutorError) {
-
-                console.error(
-                    "Google tutor table error:",
-                    tutorError
-                );
-
-                return res.status(500).json({
-                    error:
-                        "User was created, but could not be added to the tutors table",
-
-                    details:
-                        tutorError.message
-                });
-            }
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            EDUCATOR
            ===================================================== */
+    else if (userRole === "educator") {
+      const { error: educatorError } = await authenticatedSupabase
+        .from("educators")
+        .insert({
+          id: userId,
+        });
 
-        else if (userRole === "educator") {
+      if (educatorError) {
+        console.error("Google educator table error:", educatorError);
 
-            const {
-                error: educatorError
-            } =
-                await authenticatedSupabase
-                    .from("educators")
-                    .insert({
-                        id: userId
-                    });
+        return res.status(500).json({
+          error:
+            "User was created, but could not be added to the educators table",
 
+          details: educatorError.message,
+        });
+      }
+    }
 
-            if (educatorError) {
-
-                console.error(
-                    "Google educator table error:",
-                    educatorError
-                );
-
-                return res.status(500).json({
-                    error:
-                        "User was created, but could not be added to the educators table",
-
-                    details:
-                        educatorError.message
-                });
-            }
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            ORGANISER
            ===================================================== */
+    else if (userRole === "organiser") {
+      const staffId = await generateStaffId(authenticatedSupabase);
 
-        else if (userRole === "organiser") {
+      const { error: organiserError } = await authenticatedSupabase
+        .from("organisers")
+        .insert({
+          id: userId,
+          staff_id: staffId,
+          full_name: name,
+          email: email,
+        });
 
-            const staffId =
-                await generateStaffId(authenticatedSupabase);
+      if (organiserError) {
+        console.error("Google organiser table error:", organiserError);
 
-            const {
-                error: organiserError
-            } =
-                await authenticatedSupabase
-                    .from("organisers")
-                    .insert({
-                        id: userId,
-                        staff_id: staffId,
-                        full_name: name,
-                        email: email
-                    });
+        return res.status(500).json({
+          error:
+            "User was created, but could not be added to the organisers table",
 
+          details: organiserError.message,
+        });
+      }
+    }
 
-            if (organiserError) {
-
-                console.error(
-                    "Google organiser table error:",
-                    organiserError
-                );
-
-                return res.status(500).json({
-                    error:
-                        "User was created, but could not be added to the organisers table",
-
-                    details:
-                        organiserError.message
-                });
-            }
-        }
-
-
-        /* =====================================================
+    /* =====================================================
            SUCCESS
            ===================================================== */
 
-        return res.status(201).json({
+    return res.status(201).json({
+      message: "Google registration successful",
 
-            message:
-                "Google registration successful",
+      user: {
+        id: userId,
 
-            user: {
+        email: email,
 
-                id: userId,
+        name: name,
 
-                email: email,
+        role: userRole,
+      },
+    });
+  } catch (error) {
+    console.error("Google registration error:", error);
 
-                name: name,
-
-                role: userRole
-
-            }
-
-        });
-
-    }
-
-
-    catch (error) {
-
-        console.error(
-            "Google registration error:",
-            error
-        );
-
-        return res.status(500).json({
-            error:
-                "Internal server error"
-        });
-    }
-
+    return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
 });
-
-
-
-
-
 
 /* =========================================================
    LOGIN

@@ -73,7 +73,10 @@ if (registerForm) {
            Validate Wits email
            ------------------------- */
 
-    if (!email.toLowerCase().endsWith("@wits.ac.za")) {
+    if (
+      !email.toLowerCase().endsWith("@wits.ac.za") &&
+      !email.toLowerCase.endsWith("@students.wits.ac.za")
+    ) {
       message.textContent = "Please use a Wits email address.";
 
       message.style.color = "red";

@@ -8,12 +8,13 @@
   </head>
   <body class="tutor-app">
     <header class="app-header no-print">
-      <h1>Tutor Dashboard</h1>
+      <h1>Timesheets</h1>
       <nav class="tab-nav">
         <a href="dashboard.html">Dashboard</a>
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html">Calendar</a>
         <a href="timesheets.html">Timesheets</a>
+        <a href="modules.html">Module Application</a>
         <a href="#" id="logout-button">Logout</a>
       </nav>
     </header>
@@ -95,6 +96,44 @@
         </div>
         <p id="timesheet-hint" class="card-hint" hidden>
           Fill in your details above to generate a timesheet.
+        </p>
+      </div>
+
+      <div class="card no-print">
+        <h2>Submit a weekly timesheet</h2>
+        <p class="card-hint">
+          Submitting locks in that week's logged hours for organiser sign-off —
+          later edits to your logged hours won't change a submitted week.
+        </p>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="submitWeekStart">Week starting (Monday)</label>
+            <input type="date" id="submitWeekStart" />
+          </div>
+          <div class="form-actions">
+            <button type="button" id="submitTimesheetBtn" class="btn-primary">
+              Submit for approval
+            </button>
+          </div>
+        </div>
+        <p class="card-hint" id="submitWeekHint"></p>
+      </div>
+
+      <div class="card no-print">
+        <h2>My submitted timesheets</h2>
+        <table class="tutors-table">
+          <thead>
+            <tr>
+              <th>Week of</th>
+              <th>Hours</th>
+              <th>Status</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody id="submissionsTableBody"></tbody>
+        </table>
+        <p class="card-hint" id="submissionsEmpty" hidden>
+          No timesheets submitted yet.
         </p>
       </div>
 
@@ -184,6 +223,8 @@
         </div>
       </div>
     </main>
+
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
     <script type="module" src="../js/timesheets.js"></script>
     <script src="../js/logout.js"></script>

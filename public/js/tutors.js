@@ -5,17 +5,57 @@ const ACADEMIC_LEVEL_LABELS = {
   phd: "PhD",
 };
 
+// Role-based hourly rates (ZAR). Stored in localStorage so organisers can
+// adjust them from the settings card without touching code.
+const RATES_KEY = "tms_role_rates";
+const DEFAULT_RATES = {
+  third_year: 120,
+  honours: 150,
+  masters: 170,
+  phd: 200,
+};
+
+function getRoleRates() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(RATES_KEY));
+    if (stored && typeof stored === "object") {
+      return { ...DEFAULT_RATES, ...stored };
+    }
+  } catch {}
+  return { ...DEFAULT_RATES };
+}
+
+function saveRoleRates(rates) {
+  localStorage.setItem(RATES_KEY, JSON.stringify(rates));
+}
+
+const GLOBAL_CAP_KEY = "tms_global_weekly_cap";
+const DEFAULT_CAP = 6;
+
+function getGlobalCap() {
+  const stored = localStorage.getItem(GLOBAL_CAP_KEY);
+  return stored != null ? Number(stored) : DEFAULT_CAP;
+}
+
+function setGlobalCap(value) {
+  localStorage.setItem(GLOBAL_CAP_KEY, String(value));
+}
+
+// DOM refs
 const form = document.getElementById("tutorForm");
 const tutorIdEl = document.getElementById("tutorId");
 const nameEl = document.getElementById("name");
 const studentNumberEl = document.getElementById("studentNumber");
 const emailEl = document.getElementById("email");
 const academicLevelEl = document.getElementById("academicLevel");
-const hourlyRateEl = document.getElementById("hourlyRate");
 const submitBtn = document.getElementById("submitBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const tableBody = document.getElementById("tutorsTableBody");
 const emptyCopyEl = document.getElementById("emptyCopy");
+const workloadListEl = document.getElementById("workloadList");
+const workloadEmptyEl = document.getElementById("workloadEmpty");
+const globalWeeklyCapEl = document.getElementById("globalWeeklyCap");
+const applyCapBtn = document.getElementById("applyCapBtn");
 
 async function loadTutors() {
   const res = await fetch("/api/tutors");
@@ -32,13 +72,16 @@ function renderTutors(tutors) {
   emptyCopyEl.hidden = tutors.length > 0;
 
   tutors.forEach((tutor) => {
+    const level = ACADEMIC_LEVEL_LABELS[tutor.academic_level] || "";
+    const rates = getRoleRates();
+    const rate = rates[tutor.academic_level];
+    const rateLabel = rate != null ? `R${rate}/h` : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${tutor.name || ""}</td>
       <td>${tutor.student_number || ""}</td>
       <td>${tutor.email || ""}</td>
-      <td>${ACADEMIC_LEVEL_LABELS[tutor.academic_level] || ""}</td>
-      <td>${tutor.hourly_rate != null ? tutor.hourly_rate : ""}</td>
+      <td>${level}${rateLabel ? ` <span class="tutor-rate-badge">${rateLabel}</span>` : ""}</td>
       <td class="row-actions">
         <button type="button" class="btn-small btn-small-neutral" data-action="edit">Edit</button>
         <button type="button" class="btn-small" data-action="delete">Delete</button>
@@ -54,13 +97,60 @@ function renderTutors(tutors) {
   });
 }
 
+async function loadWorkload() {
+  try {
+    const res = await fetch("/api/tutors/workload");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load workload");
+    renderWorkload(data);
+  } catch (err) {
+    showToast("Couldn't load the workload spread.");
+  }
+}
+
+function renderWorkload(tutors) {
+  workloadListEl.innerHTML = "";
+  workloadEmptyEl.hidden = tutors.length > 0;
+
+  const cap = getGlobalCap();
+
+  // Busiest tutor first, so overloaded people surface at the top.
+  const sorted = [...tutors].sort((a, b) => b.assignedHours - a.assignedHours);
+
+  sorted.forEach((tutor) => {
+    const row = document.createElement("div");
+    row.className = "workload-row";
+
+    const ratio = cap > 0 ? tutor.assignedHours / cap : 0;
+    const percent = Math.min(100, ratio * 100);
+    let fillClass = "";
+    if (ratio > 1) fillClass = "blocked";
+    else if (ratio >= 0.8) fillClass = "warn";
+    const pctText = `${Math.round(ratio * 100)}%`;
+    const hoursLabel = `${tutor.assignedHours} / ${cap} hrs`;
+
+    row.innerHTML = `
+      <span class="workload-name">${tutor.name || "Unnamed tutor"}</span>
+      <span class="workload-bar-track">
+        <span class="workload-bar-fill ${fillClass}" style="width: ${percent}%"></span>
+      </span>
+      <span class="workload-hours"><strong>${pctText}</strong> ${hoursLabel}</span>
+    `;
+    row.title = tutor.courses.length
+      ? tutor.courses
+          .map((c) => `${c.course_code} (${c.hours_per_week}h)`)
+          .join(", ")
+      : "No approved courses";
+    workloadListEl.appendChild(row);
+  });
+}
+
 function startEdit(tutor) {
   tutorIdEl.value = tutor.id;
   nameEl.value = tutor.name || "";
   studentNumberEl.value = tutor.student_number || "";
   emailEl.value = tutor.email || "";
   academicLevelEl.value = tutor.academic_level || "";
-  hourlyRateEl.value = tutor.hourly_rate != null ? tutor.hourly_rate : "";
   submitBtn.textContent = "Save changes";
   cancelEditBtn.hidden = false;
   nameEl.focus();
@@ -83,6 +173,7 @@ async function deleteTutor(tutor) {
   }
   showToast(`Removed ${tutor.name || "tutor"}`);
   loadTutors();
+  loadWorkload();
 }
 
 form.addEventListener("submit", async (e) => {
@@ -93,7 +184,7 @@ form.addEventListener("submit", async (e) => {
     student_number: studentNumberEl.value.trim(),
     email: emailEl.value.trim() || null,
     academic_level: academicLevelEl.value || null,
-    hourly_rate: hourlyRateEl.value ? Number(hourlyRateEl.value) : null,
+    weekly_hour_cap: getGlobalCap(),
   };
 
   const id = tutorIdEl.value;
@@ -115,9 +206,48 @@ form.addEventListener("submit", async (e) => {
   showToast(id ? `Updated ${data.name}` : `Added ${data.name}`);
   resetForm();
   loadTutors();
+  loadWorkload();
 });
 
 cancelEditBtn.addEventListener("click", resetForm);
+
+// ── Global weekly cap ──────────────────────────────────────────────────
+function initCapField() {
+  globalWeeklyCapEl.value = getGlobalCap();
+}
+
+applyCapBtn.addEventListener("click", async () => {
+  const value = Number(globalWeeklyCapEl.value);
+  if (!Number.isFinite(value) || value < 0) {
+    showToast("Enter a valid number of hours.");
+    return;
+  }
+  if (value > 6) {
+    showToast("Weekly cap cannot exceed 6 hours.");
+    globalWeeklyCapEl.value = 6;
+    return;
+  }
+  setGlobalCap(value);
+  applyCapBtn.disabled = true;
+  applyCapBtn.textContent = "Saving...";
+  try {
+    const res = await fetch("/api/tutors/bulk", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekly_hour_cap: value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Bulk update failed");
+    showToast(`Updated weekly cap to ${value} hrs for ${data.updated} tutors.`);
+    loadTutors();
+    loadWorkload();
+  } catch (err) {
+    showToast(err.message || "Failed to apply cap.");
+  } finally {
+    applyCapBtn.disabled = false;
+    applyCapBtn.textContent = "Apply to all";
+  }
+});
 
 let toastTimer = null;
 function showToast(message) {
@@ -128,4 +258,29 @@ function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+// ── Role rates (editable) ────────────────────────────────────────────
+function initRateFields() {
+  const rates = getRoleRates();
+  document.querySelectorAll(".rate-input").forEach((input) => {
+    const level = input.dataset.level;
+    if (rates[level] != null) input.value = rates[level];
+  });
+}
+
+document.getElementById("saveRatesBtn").addEventListener("click", () => {
+  const rates = {};
+  document.querySelectorAll(".rate-input").forEach((input) => {
+    const level = input.dataset.level;
+    const val = Number(input.value);
+    rates[level] = Number.isFinite(val) && val >= 0 ? val : 0;
+  });
+  saveRoleRates(rates);
+  showToast("Hourly rates saved.");
+  loadTutors();
+});
+
+// Boot
+initCapField();
+initRateFields();
 loadTutors();
+loadWorkload();

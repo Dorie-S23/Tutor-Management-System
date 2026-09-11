@@ -144,7 +144,9 @@
          ================================================ */
 
       const roleSelect = document.getElementById("role");
-      const studentNumberGroup = document.getElementById("student-number-group");
+      const studentNumberGroup = document.getElementById(
+        "student-number-group",
+      );
       const studentNumberInput = document.getElementById("student-number");
 
       /* ================================================
@@ -243,7 +245,8 @@
           }
         } catch (error) {
           console.error("Google registration error:", error);
-          message.textContent = "Could not connect to the server. Please try again.";
+          message.textContent =
+            "Could not connect to the server. Please try again.";
         }
       });
     </script>
