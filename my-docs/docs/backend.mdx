@@ -15,7 +15,7 @@ A single hand-written Express API in front of Supabase — every request from th
 - **[Node.js](https://nodejs.org/)** — runtime.
 - **[Express 5](https://expressjs.com/)** — routing and middleware.
 - **[Supabase](https://supabase.com/)** (`@supabase/supabase-js`) — hosted Postgres for data storage, plus Supabase Auth for sign-up/sign-in (not a hand-rolled JWT system).
-- **[Anthropic API](https://console.anthropic.com)** (`@anthropic-ai/sdk`) — used by the timetable-PDF-import feature to extract class times from an uploaded PDF into structured JSON.
+- **[Gemini API](https://ai.google.dev/)** (`@google/genai`) — used by the timetable-PDF-import feature to extract class times from an uploaded PDF into structured JSON.
 - **[dotenv](https://www.npmjs.com/package/dotenv)** — loads `.env` locally (Cloudflare Workers gets its environment a different way, via `wrangler` secrets/vars — not covered by `dotenv` in production).
 - **[cors](https://www.npmjs.com/package/cors)**, **[multer](https://www.npmjs.com/package/multer)** — CORS headers and multipart/file-upload handling (used by the timetable PDF upload).
 
@@ -23,7 +23,7 @@ A single hand-written Express API in front of Supabase — every request from th
 
 - Node.js 20+
 - Access to the project's Supabase project (URL + anon key) — ask a teammate
-- *(Optional)* An Anthropic API key with a funded balance — only needed for timetable PDF parsing; everything else works without it
+- *(Optional)* A Gemini API key — only needed for timetable PDF parsing; everything else works without it
 
 ## Getting Started
 
@@ -35,7 +35,7 @@ Environment variables the server reads:
 |---|---|---|
 | `SUPABASE_URL` | Yes | Your Supabase project's URL |
 | `SUPABASE_ANON_KEY` | Yes | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
-| `ANTHROPIC_API_KEY` | No | Only needed for timetable PDF parsing |
+| `GEMINI_API_KEY` | No | Only needed for timetable PDF parsing |
 | `PORT` | No | Defaults to `3000` |
 
 There's no separate migration or seed step — the Postgres schema (tables, columns, constraints) is managed directly in the Supabase dashboard's SQL editor, not via migration files in this repo.
@@ -56,7 +56,7 @@ routes/
 └── auth.js                 # /api/auth/register, /login, /google, /google/register
 server/
 ├── supabaseClient.js       # Supabase client shared by everything under server/routes/
-├── anthropicClient.js      # Anthropic client, constructed lazily
+├── geminiClient.js         # Gemini client, constructed lazily
 ├── timetableRoutes.js      # POST /api/timetable/parse — LLM-based PDF parsing
 └── routes/
     ├── courses.js           # /api/courses — CRUD + tutor-assignment counter

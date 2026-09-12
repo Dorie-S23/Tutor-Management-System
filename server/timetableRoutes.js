@@ -1,6 +1,6 @@
 const express = require("express");
 const multer = require("multer");
-const anthropic = require("./anthropicClient");
+const gemini = require("./geminiClient");
 
 const router = express.Router();
 
@@ -20,44 +20,40 @@ For each session capture:
 
 Ignore non-class rows such as "BREAK" labels, empty cells, and the day/time headers themselves. This timetable is a weekly template with no real calendar dates attached to it — do not invent or guess a date.`;
 
-const EXTRACT_CLASSES_TOOL = {
-  name: "extract_classes",
-  description:
-    "Return the list of recurring weekly classes found in the timetable PDF.",
-  strict: true,
-  input_schema: {
-    type: "object",
-    properties: {
-      classes: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            dayName: {
-              type: "string",
-              enum: [
-                "Sunday",
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-              ],
-            },
-            startTime: { type: "string" },
-            endTime: { type: "string" },
-            venue: { type: "string" },
+// Passed as responseJsonSchema to force Gemini's structured-output mode into
+// this exact shape.
+const EXTRACT_CLASSES_SCHEMA = {
+  type: "object",
+  properties: {
+    classes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          dayName: {
+            type: "string",
+            enum: [
+              "Sunday",
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+            ],
           },
-          required: ["title", "dayName", "startTime", "endTime", "venue"],
-          additionalProperties: false,
+          startTime: { type: "string" },
+          endTime: { type: "string" },
+          venue: { type: "string" },
         },
+        required: ["title", "dayName", "startTime", "endTime", "venue"],
+        additionalProperties: false,
       },
     },
-    required: ["classes"],
-    additionalProperties: false,
   },
+  required: ["classes"],
+  additionalProperties: false,
 };
 
 router.post("/timetable/parse", upload.single("file"), async (req, res) => {
@@ -69,38 +65,42 @@ router.post("/timetable/parse", upload.single("file"), async (req, res) => {
   }
 
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-opus-5",
-      max_tokens: 8000,
-      output_config: { effort: "low" },
-      tools: [EXTRACT_CLASSES_TOOL],
-      tool_choice: { type: "tool", name: "extract_classes" },
-      messages: [
+    const response = await gemini.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: [
         {
           role: "user",
-          content: [
+          parts: [
             {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
+              inlineData: {
+                mimeType: "application/pdf",
                 data: req.file.buffer.toString("base64"),
               },
             },
-            { type: "text", text: EXTRACT_PROMPT },
+            { text: EXTRACT_PROMPT },
           ],
         },
       ],
+      config: {
+        responseMimeType: "application/json",
+        responseJsonSchema: EXTRACT_CLASSES_SCHEMA,
+      },
     });
 
-    const toolUse = response.content.find((block) => block.type === "tool_use");
-    if (!toolUse) {
+    let parsed;
+    try {
+      parsed = JSON.parse(response.text ?? "");
+    } catch {
+      parsed = null;
+    }
+
+    if (!parsed || !Array.isArray(parsed.classes)) {
       return res
         .status(502)
         .json({ error: "Could not extract classes from that PDF." });
     }
 
-    res.json({ classes: toolUse.input.classes });
+    res.json({ classes: parsed.classes });
   } catch (err) {
     console.error("Timetable parse failed:", err);
     res.status(500).json({ error: "Failed to parse timetable PDF." });
