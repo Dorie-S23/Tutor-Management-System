@@ -91,7 +91,8 @@ async function fetchPendingApplicationCounts() {
           `/api/tutor-applications?courseId=${course.id}`,
         );
         const rows = await res.json();
-        if (!res.ok) throw new Error(rows.error || "Failed to load applications");
+        if (!res.ok)
+          throw new Error(rows.error || "Failed to load applications");
         const pending = rows.filter(
           (a) => (a.status || "pending").toLowerCase() === "pending",
         ).length;
@@ -923,7 +924,7 @@ const ORGANISER_TOUR_STEPS = [
   {
     selector: "#statPending",
     title: "Needs review",
-    body: "This counts every pending tutor application and student volunteer across all courses. Courses with something waiting also get a \"to review\" badge in the list on the left.",
+    body: 'This counts every pending tutor application and student volunteer across all courses. Courses with something waiting also get a "to review" badge in the list on the left.',
     placement: "bottom",
   },
   {
