@@ -13,6 +13,31 @@ export function getCurrentUser() {
   }
 }
 
+// Where each role lands after login (mirrors the switch in auth.js).
+const ROLE_HOME = {
+  student: "StudentView.html",
+  tutor: "dashboard.html",
+  educator: "educator.html",
+  organiser: "board.html",
+};
+
+// Guards a role-specific page: sends a signed-out visitor to login, and
+// sends a signed-in visitor of the *wrong* role back to their own home page
+// instead of letting them view (and act on) a page built for another role.
+// Call this at the top of a page's script, before anything else runs.
+export function requireRole(allowedRole) {
+  const user = getCurrentUser();
+  if (!user) {
+    window.location.href = "login.html";
+    return null;
+  }
+  if (user.role !== allowedRole) {
+    window.location.href = ROLE_HOME[user.role] || "login.html";
+    return null;
+  }
+  return user;
+}
+
 function fromApiEntry(row) {
   return {
     id: row.id,

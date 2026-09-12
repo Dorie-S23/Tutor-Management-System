@@ -6,12 +6,13 @@
    says so.
    ============================================================ */
 
-import { getCurrentUser, getEntries } from "./storage.js";
+import { getEntries, requireRole } from "./storage.js";
 
-const currentUser = getCurrentUser();
+// This page (StudentView.html) is student-only — symmetric with the guard
+// on the tutor pages, so a tutor can't wander in here either.
+const currentUser = requireRole("student");
 if (!currentUser) {
-  window.location.href = "login.html";
-  throw new Error("Not logged in");
+  throw new Error("Not authorized");
 }
 
 const welcomeHeadingEl = document.getElementById("welcome-heading");

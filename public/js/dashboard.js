@@ -1,5 +1,12 @@
 import { highlightActiveTab } from "./nav.js";
-import { getWeekStart, getWeekTotal, todayStr } from "./storage.js";
+import { getWeekStart, getWeekTotal, todayStr, requireRole } from "./storage.js";
+
+// This page (dashboard.html) is tutor-only. Without this, any signed-in
+// user (e.g. a student volunteer who wandered in via a stale nav link) could
+// land here and see a tutor's dashboard instead of being sent back to theirs.
+if (!requireRole("tutor")) {
+  throw new Error("Not authorized");
+}
 
 const WEEKLY_HOUR_LIMIT = 6;
 

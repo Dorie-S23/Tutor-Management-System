@@ -1,6 +1,6 @@
 import { highlightActiveTab } from "./nav.js";
 import {
-  getCurrentUser,
+  requireRole,
   getEntriesForDate,
   getScheduleForDate,
   addScheduleClasses,
@@ -14,23 +14,24 @@ import {
   clearSchedule,
 } from "./storage.js";
 
-const currentUser = getCurrentUser();
+// This script is shared by two pages: calendar.html (tutor) and
+// student_calender.html (student volunteer) — each declares which role it's
+// for via data-page-role, so a user of the *other* role gets sent back to
+// their own dashboard instead of landing on a page built for someone else.
+const pageRole = document.body.dataset.pageRole || "tutor";
+const currentUser = requireRole(pageRole);
 if (!currentUser) {
-  window.location.href = "login.html";
-  throw new Error("Not logged in");
+  throw new Error("Not authorized");
 }
 
 highlightActiveTab();
 
-// Timetable import, manual class entry, and clearing the schedule are all
-// tutor-only features - not relevant for volunteers.
+// Tutorial/lab session pills come from this tutor's own approved course
+// assignments — meaningless for a student volunteer, who has none — so that
+// piece stays tied to the real role. Adding/editing/cancelling a class on
+// the calendar, though, is a plain scheduling tool either role can use.
 const isTutor = currentUser.role === "tutor";
-const importTimetableCard = document.getElementById("import-timetable-card");
-const clearClassesRow = document.getElementById("clear-classes-row");
-if (!isTutor) {
-  if (importTimetableCard) importTimetableCard.hidden = true;
-  if (clearClassesRow) clearClassesRow.hidden = true;
-}
+const canManageSchedule = true;
 
 // ---------- tutorial/lab sessions from the modules this tutor tutors ----------
 
@@ -155,7 +156,7 @@ function closeAddClassForm() {
   addClassForm.reset();
 }
 
-if (isTutor) {
+if (canManageSchedule) {
   addClassBtn.addEventListener("click", () => openAddClassForm(todayStr()));
   cancelAddClassBtn.addEventListener("click", closeAddClassForm);
 
@@ -247,7 +248,7 @@ async function render() {
     const cellDateStr = toDateStr(cellYear, cellMonth, cellDay);
     if (cellDateStr === current) cell.classList.add("today");
 
-    if (isTutor) {
+    if (canManageSchedule) {
       cell.classList.add("calendar-day-clickable");
       cell.title = "Click to add a class on this day";
       cell.addEventListener("click", () => openAddClassForm(cellDateStr));
@@ -287,7 +288,7 @@ async function render() {
       pill.title = cls.isModifiedOccurrence
         ? `${cls.title} · ${cls.startTime}-${cls.endTime} · ${cls.venue} · edited for this day`
         : `${cls.title} · ${cls.startTime}-${cls.endTime} · ${cls.venue}`;
-      if (isTutor) {
+      if (canManageSchedule) {
         pill.classList.add("calendar-class-pill--editable");
         pill.addEventListener("click", () =>
           openOccurrenceModal(cls, cellDateStr, false),
@@ -296,7 +297,7 @@ async function render() {
       cell.appendChild(pill);
     }
 
-    if (isTutor) {
+    if (canManageSchedule) {
       const cancelled = getCancelledOccurrencesForDate(cellDateStr);
       for (const cls of cancelled) {
         const pill = document.createElement("div");

@@ -1,10 +1,11 @@
 import { highlightActiveTab } from "./nav.js";
-import { getCurrentUser } from "./storage.js";
+import { requireRole } from "./storage.js";
 
-const currentUser = getCurrentUser();
+// This page (modules.html) is tutor-only — applying to tutor a module isn't
+// a concept that applies to other roles.
+const currentUser = requireRole("tutor");
 if (!currentUser) {
-  window.location.href = "login.html";
-  throw new Error("Not logged in");
+  throw new Error("Not authorized");
 }
 
 highlightActiveTab();
