@@ -13,7 +13,10 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testPathIgnorePatterns": ["/node_modules/", "/my-docs/"]
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/my-docs/"
+    ]
   },
   "repository": {
     "type": "git",

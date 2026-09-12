@@ -508,7 +508,8 @@ router.get("/obvious-fill", async (req, res) => {
       "id, course_code, course_name, min_mark, tutors_needed, no_of_tutors_assigned",
     );
 
-  if (coursesError) return res.status(500).json({ error: coursesError.message });
+  if (coursesError)
+    return res.status(500).json({ error: coursesError.message });
 
   const { data: applications, error: applicationsError } = await supabase
     .from("tutor_subject_preference")

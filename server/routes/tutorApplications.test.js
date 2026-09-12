@@ -59,10 +59,38 @@ describe("GET /api/tutor-applications/obvious-fill", () => {
       },
     ];
     tables.tutor_subject_preference = [
-      { id: "a1", course_id: 1, tutor_mark: 70, Availability: true, Tutor_name: "Alice", status: "pending" },
-      { id: "a2", course_id: 1, tutor_mark: 40, Availability: true, Tutor_name: "Bob", status: "pending" }, // below min_mark
-      { id: "a3", course_id: 2, tutor_mark: 80, Availability: true, Tutor_name: "Cara", status: "pending" },
-      { id: "a4", course_id: 2, tutor_mark: 90, Availability: true, Tutor_name: "Dan", status: "pending" },
+      {
+        id: "a1",
+        course_id: 1,
+        tutor_mark: 70,
+        Availability: true,
+        Tutor_name: "Alice",
+        status: "pending",
+      },
+      {
+        id: "a2",
+        course_id: 1,
+        tutor_mark: 40,
+        Availability: true,
+        Tutor_name: "Bob",
+        status: "pending",
+      }, // below min_mark
+      {
+        id: "a3",
+        course_id: 2,
+        tutor_mark: 80,
+        Availability: true,
+        Tutor_name: "Cara",
+        status: "pending",
+      },
+      {
+        id: "a4",
+        course_id: 2,
+        tutor_mark: 90,
+        Availability: true,
+        Tutor_name: "Dan",
+        status: "pending",
+      },
     ];
 
     const res = await request(buildApp()).get(
@@ -90,7 +118,14 @@ describe("GET /api/tutor-applications/obvious-fill", () => {
       },
     ];
     tables.tutor_subject_preference = [
-      { id: "a1", course_id: 1, tutor_mark: 90, Availability: false, Tutor_name: "Alice", status: "pending" },
+      {
+        id: "a1",
+        course_id: 1,
+        tutor_mark: 90,
+        Availability: false,
+        Tutor_name: "Alice",
+        status: "pending",
+      },
     ];
 
     const res = await request(buildApp()).get(
