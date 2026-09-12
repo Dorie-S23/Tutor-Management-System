@@ -84,8 +84,10 @@ function timeToMinutes(hhmm) {
 }
 
 function timesOverlap(startA, endA, startB, endB) {
-  return timeToMinutes(startA) < timeToMinutes(endB) &&
-    timeToMinutes(startB) < timeToMinutes(endA);
+  return (
+    timeToMinutes(startA) < timeToMinutes(endB) &&
+    timeToMinutes(startB) < timeToMinutes(endA)
+  );
 }
 
 // A venue field can list several rooms for one session (e.g. multiple
@@ -868,7 +870,11 @@ function checkModalClashes() {
       problems.push(clashMessage("Lab", labSession, c)),
     );
   }
-  if (tutorialSession && labSession && sessionsClash(tutorialSession, labSession)) {
+  if (
+    tutorialSession &&
+    labSession &&
+    sessionsClash(tutorialSession, labSession)
+  ) {
     const shared = sharedVenues(tutorialSession.venue, labSession.venue).join(
       ", ",
     );
@@ -937,7 +943,8 @@ deleteCourseConfirmBtn.addEventListener("click", async () => {
     activeCourseId = null;
     await fetchCourses();
   } catch (err) {
-    deleteCourseError.textContent = "Network error — couldn't reach the server.";
+    deleteCourseError.textContent =
+      "Network error — couldn't reach the server.";
     deleteCourseError.hidden = false;
   } finally {
     deleteCourseConfirmBtn.disabled = false;
@@ -994,14 +1001,14 @@ addCourseForm.addEventListener("submit", async (e) => {
     day_of_tut: tutorialChecked && dayOfTutValue !== "" ? dayOfTutValue : null,
     tutor_start_time:
       tutorialChecked && startTimeValue !== "" ? startTimeValue : null,
-    tutor_end_time: tutorialChecked && endTimeValue !== "" ? endTimeValue : null,
+    tutor_end_time:
+      tutorialChecked && endTimeValue !== "" ? endTimeValue : null,
     venues: tutorialChecked ? venuesInput.value.trim() || null : null,
     has_lab: labChecked,
     day_of_lab: labChecked && dayOfLabValue !== "" ? dayOfLabValue : null,
     lab_start_time:
       labChecked && labStartTimeValue !== "" ? labStartTimeValue : null,
-    lab_end_time:
-      labChecked && labEndTimeValue !== "" ? labEndTimeValue : null,
+    lab_end_time: labChecked && labEndTimeValue !== "" ? labEndTimeValue : null,
     lab_venues: labChecked ? labVenuesInput.value.trim() || null : null,
   };
 

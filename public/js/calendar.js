@@ -77,7 +77,8 @@ async function fetchCourseSessions() {
       `/api/tutor-applications?tutorId=${encodeURIComponent(currentUser.id)}`,
     );
     const rows = await res.json();
-    if (!res.ok) throw new Error(rows.error || "Failed to load course sessions");
+    if (!res.ok)
+      throw new Error(rows.error || "Failed to load course sessions");
 
     const sessions = [];
     rows
@@ -338,8 +339,13 @@ nextMonthBtn.addEventListener("click", () => {
 // Popup for managing a class — edit this occurrence, the recurring series,
 // cancel/restore, or delete entirely.
 const DAY_INDEX_TO_NAME = [
-  "Sunday", "Monday", "Tuesday", "Wednesday",
-  "Thursday", "Friday", "Saturday",
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
 ];
 
 function openOccurrenceModal(cls, dateStr, isCancelled) {
@@ -379,7 +385,8 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
   const dateLine = document.createElement("p");
   dateLine.className = "card-hint";
   dateLine.textContent = new Date(dateStr + "T00:00:00").toLocaleDateString(
-    undefined, { weekday: "long", month: "long", day: "numeric" },
+    undefined,
+    { weekday: "long", month: "long", day: "numeric" },
   );
   box.appendChild(dateLine);
 
@@ -580,7 +587,9 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     deleteSeriesBtn.className = "btn-danger";
     deleteSeriesBtn.textContent = "Delete all future classes";
     deleteSeriesBtn.addEventListener("click", () => {
-      if (confirm("Remove this recurring class and all its future occurrences?")) {
+      if (
+        confirm("Remove this recurring class and all its future occurrences?")
+      ) {
         deleteScheduleClass(cls.id);
         closeModal();
         render();

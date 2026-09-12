@@ -185,7 +185,11 @@ function renderGrid(sessions) {
     );
     const startMin = timeToMinutes(session.start);
     const endMin = timeToMinutes(session.end);
-    if (dayIndex === -1 || endMin <= HOUR_START * 60 || startMin >= HOUR_END * 60) {
+    if (
+      dayIndex === -1 ||
+      endMin <= HOUR_START * 60 ||
+      startMin >= HOUR_END * 60
+    ) {
       unplaced.push(session);
       return;
     }

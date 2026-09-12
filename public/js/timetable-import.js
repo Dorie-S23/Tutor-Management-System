@@ -90,7 +90,9 @@ parseBtn.addEventListener("click", async () => {
   setStatus("Reading PDF…");
 
   try {
-    const classes = await parseTimetablePdf(file, (message) => setStatus(message));
+    const classes = await parseTimetablePdf(file, (message) =>
+      setStatus(message),
+    );
     parsedClasses = classes.map((cls) => ({
       ...cls,
       firstDate: firstOccurrenceOnOrAfter(

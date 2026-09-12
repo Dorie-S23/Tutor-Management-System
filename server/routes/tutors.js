@@ -111,7 +111,8 @@ router.put("/bulk", async (req, res) => {
 
 // Simple UUID check so non-UUID path segments get a clean 404 instead of
 // a cryptic Postgres error.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GET /api/tutors/:id — a single tutor
 router.get("/:id", async (req, res) => {
@@ -134,13 +135,8 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/tutors — add a new tutor
 router.post("/", async (req, res) => {
-  const {
-    student_number,
-    email,
-    name,
-    academic_level,
-    weekly_hour_cap,
-  } = req.body;
+  const { student_number, email, name, academic_level, weekly_hour_cap } =
+    req.body;
 
   const { data, error } = await supabase
     .from("tutors")
@@ -160,13 +156,8 @@ router.post("/", async (req, res) => {
 
 // PUT /api/tutors/:id — edit an existing tutor
 router.put("/:id", async (req, res) => {
-  const {
-    student_number,
-    email,
-    name,
-    academic_level,
-    weekly_hour_cap,
-  } = req.body;
+  const { student_number, email, name, academic_level, weekly_hour_cap } =
+    req.body;
 
   const { data, error } = await supabase
     .from("tutors")

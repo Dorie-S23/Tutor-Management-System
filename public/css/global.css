@@ -847,7 +847,6 @@ input[type="search"]:focus-visible {
   padding: 8px 10px;
 }
 
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -988,7 +987,6 @@ input[type="search"]:focus-visible {
   text-align: right;
   white-space: nowrap;
 }
-
 
 /* ── Settings card ──────────────────────────────────────────────── */
 .settings-card {

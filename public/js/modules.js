@@ -20,9 +20,7 @@ const courseSelect = document.getElementById("apply-course-select");
 const courseMeta = document.getElementById("apply-course-meta");
 const yearSelect = document.getElementById("apply-year-select");
 const markInput = document.getElementById("apply-mark-input");
-const availabilitySelect = document.getElementById(
-  "apply-availability-select",
-);
+const availabilitySelect = document.getElementById("apply-availability-select");
 const availabilityLabel = document.getElementById("apply-availability-label");
 const applicationsListEl = document.getElementById("applications-list");
 const applicationsItemsEl = document.getElementById("applications-items");

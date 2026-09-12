@@ -237,7 +237,6 @@ export function updateScheduleClass(id, changes) {
   syncScheduleToServer();
 }
 
-
 export function clearSchedule() {
   writeSchedule([]);
   writeExceptions([]);

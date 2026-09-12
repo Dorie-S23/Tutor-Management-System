@@ -491,14 +491,13 @@ router.post("/", async (req, res) => {
   const newSessions = courseSessions(course);
 
   if (newSessions.length > 0) {
-    const { data: approvedApplications, error: approvedError } =
-      await supabase
-        .from("tutor_subject_preference")
-        .select(
-          "courses(course_code, Day_of_tut, tutor_start_time, tutor_end_time, Day_of_lab, lab_start_time, lab_end_time)",
-        )
-        .eq("tutor_id", tutorId)
-        .eq("status", "approved");
+    const { data: approvedApplications, error: approvedError } = await supabase
+      .from("tutor_subject_preference")
+      .select(
+        "courses(course_code, Day_of_tut, tutor_start_time, tutor_end_time, Day_of_lab, lab_start_time, lab_end_time)",
+      )
+      .eq("tutor_id", tutorId)
+      .eq("status", "approved");
 
     if (approvedError) {
       return res.status(500).json({ error: approvedError.message });
