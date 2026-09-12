@@ -29,6 +29,21 @@
         <dd class="stat-value" id="statPending">0</dd>
       </dl>
 
+      <div class="universal-search">
+        <input
+          type="search"
+          id="universalSearchInput"
+          class="universal-search-input"
+          placeholder="Search courses, tutors, timesheets…"
+          aria-label="Universal search"
+        />
+        <ul
+          class="universal-search-results"
+          id="universalSearchResults"
+          hidden
+        ></ul>
+      </div>
+
       <button class="btn btn-primary" id="obviousFillBtn" type="button">
         Fill obvious assignments
       </button>
@@ -416,6 +431,7 @@
     </dialog>
 
     <script src="../js/onboarding.js"></script>
+    <script src="../js/universal-search.js"></script>
     <script src="../js/board.js"></script>
     <script src="../js/logout.js"></script>
   </body>

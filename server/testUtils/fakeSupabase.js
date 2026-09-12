@@ -1,27 +1,43 @@
 // A minimal stand-in for the @supabase/supabase-js query builder, backed by
 // plain in-memory arrays instead of Postgres. Only supports what this repo's
-// routes actually call (select/insert/update/delete, eq, order, single,
+// routes actually call (select/insert/update/delete, eq, in, order, single,
 // maybeSingle) — enough to unit-test route logic without a real database.
 //
 // Usage:
 //   const tables = { courses: [...seed rows...] };
 //   const supabase = fakeSupabase(tables);
 //   jest.mock("../supabaseClient", () => supabase);
+//
+// A table can also declare unique constraints, to simulate Postgres's 23505
+// duplicate-key error for routes that branch on it (e.g. "you've already
+// volunteered for this course"):
+//   const supabase = fakeSupabase(tables, {
+//     course_volunteers: [["user_id", "course_id"]],
+//   });
 
-function fakeSupabase(tables) {
+function fakeSupabase(tables, uniqueConstraints = {}) {
   return {
     from(tableName) {
       const rows = tables[tableName];
       if (!rows) {
         throw new Error(`fakeSupabase: no seed data for table "${tableName}"`);
       }
+      const constraints = uniqueConstraints[tableName] || [];
 
       const filters = [];
       let pendingWrite = null;
+      let insertConflict = null;
 
-      const matches = (row) => filters.every(([col, val]) => row[col] === val);
+      const matches = (row) =>
+        filters.every(([type, col, val]) =>
+          type === "in" ? val.includes(row[col]) : row[col] === val,
+        );
 
       function resolve(wantsSingle, allowNullSingle) {
+        if (insertConflict) {
+          return { data: null, error: insertConflict };
+        }
+
         let matched = rows.filter(matches);
 
         if (pendingWrite?.type === "update") {
@@ -47,10 +63,23 @@ function fakeSupabase(tables) {
       const builder = {
         select: () => builder,
         insert: (row) => {
+          const conflicts = constraints.some((cols) =>
+            rows.some((existing) => cols.every((c) => existing[c] === row[c])),
+          );
+          if (conflicts) {
+            insertConflict = {
+              code: "23505",
+              message: "duplicate key value violates unique constraint",
+            };
+            filters.length = 0;
+            pendingWrite = null;
+            return builder;
+          }
+
           const inserted = { id: rows.length + 1, ...row };
           rows.push(inserted);
           filters.length = 0;
-          filters.push(["id", inserted.id]);
+          filters.push(["eq", "id", inserted.id]);
           pendingWrite = null;
           return builder;
         },
@@ -63,7 +92,11 @@ function fakeSupabase(tables) {
           return builder;
         },
         eq: (column, value) => {
-          filters.push([column, value]);
+          filters.push(["eq", column, value]);
+          return builder;
+        },
+        in: (column, values) => {
+          filters.push(["in", column, values]);
           return builder;
         },
         order: () => builder,

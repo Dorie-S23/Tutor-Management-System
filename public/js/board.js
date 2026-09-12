@@ -1197,6 +1197,15 @@ if (tourBtn) {
   fetchPendingApplicationCounts();
   fetchPendingVolunteerCounts();
 
+  // Deep link from the universal search box (?course=<id>)
+  const courseParam = new URLSearchParams(window.location.search).get(
+    "course",
+  );
+  if (courseParam) {
+    const course = COURSES.find((c) => String(c.id) === courseParam);
+    if (course) selectCourse(course.id);
+  }
+
   window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
     tourId: "organiser-board",
     userId: getSessionUserId(),

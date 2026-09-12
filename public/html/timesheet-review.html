@@ -20,6 +20,21 @@
         <h1>Timesheet Review</h1>
       </hgroup>
 
+      <div class="universal-search">
+        <input
+          type="search"
+          id="universalSearchInput"
+          class="universal-search-input"
+          placeholder="Search courses, tutors, timesheets…"
+          aria-label="Universal search"
+        />
+        <ul
+          class="universal-search-results"
+          id="universalSearchResults"
+          hidden
+        ></ul>
+      </div>
+
       <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
       <button class="btn btn-ghost" id="logout-button" type="button">
         Logout
@@ -37,6 +52,9 @@
               <option value="rejected">Rejected</option>
               <option value="">All</option>
             </select>
+            <button class="btn btn-ghost" id="exportPayrollBtn" type="button">
+              Export payroll (CSV)
+            </button>
           </header>
 
           <ul class="tutor-list" id="submissionList">
@@ -51,6 +69,7 @@
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+    <script src="../js/universal-search.js"></script>
     <script src="../js/timesheet-review.js"></script>
     <script src="../js/logout.js"></script>
   </body>
