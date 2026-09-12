@@ -13,14 +13,10 @@
     <link rel="stylesheet" href="../css/global.css" />
   </head>
   <body>
-    <header class="board-header">
+    <header class="board-header board-header--brand">
       <hgroup class="header-left">
         <p class="eyebrow">
-          <img
-            src="../images/images.png"
-            alt=""
-            class="eyebrow-logo"
-          />
+          <img src="../images/images.png" alt="" class="eyebrow-logo" />
           School of Computer Science &amp; Applied Mathematics
         </p>
         <h1>Tutors</h1>
@@ -33,6 +29,21 @@
       />
 
       <div class="header-actions">
+        <div class="universal-search">
+          <input
+            type="search"
+            id="universalSearchInput"
+            class="universal-search-input"
+            placeholder="Search courses, tutors, timesheets…"
+            aria-label="Universal search"
+          />
+          <ul
+            class="universal-search-results"
+            id="universalSearchResults"
+            hidden
+          ></ul>
+        </div>
+
         <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
       </div>
       <button class="btn btn-danger" id="logout-button" type="button">
@@ -56,11 +67,11 @@
           </div>
           <div class="form-field">
             <label for="email">Email</label>
-            <input type="email" id="email" />
+            <input type="email" id="email" required />
           </div>
           <div class="form-field">
             <label for="academicLevel">Academic level</label>
-            <select id="academicLevel">
+            <select id="academicLevel" required>
               <option value="">—</option>
               <option value="third_year">3rd year</option>
               <option value="honours">Honours</option>
@@ -87,9 +98,7 @@
       <!-- Row 1 right: General settings (global cap + role rates) -->
       <section class="card settings-card" aria-labelledby="settingsHeading">
         <h2 id="settingsHeading">General settings</h2>
-        <p class="hint">
-          These values apply to every tutor.
-        </p>
+        <p class="hint">These values apply to every tutor.</p>
 
         <div class="settings-section">
           <h3 class="settings-sub">Weekly hour cap</h3>
@@ -104,7 +113,11 @@
               value="6"
             />
             <span class="settings-cap-unit">hrs / week</span>
-            <button type="button" class="btn btn-small-primary" id="applyCapBtn">
+            <button
+              type="button"
+              class="btn btn-small-primary"
+              id="applyCapBtn"
+            >
               Apply to all
             </button>
           </div>
@@ -122,23 +135,60 @@
             <tbody>
               <tr>
                 <td>3rd year tutor</td>
-                <td><input type="number" class="rate-input" data-level="third_year" step="1" min="0" /></td>
+                <td>
+                  <input
+                    type="number"
+                    class="rate-input"
+                    data-level="third_year"
+                    step="1"
+                    min="0"
+                  />
+                </td>
               </tr>
               <tr>
                 <td>Honours tutor</td>
-                <td><input type="number" class="rate-input" data-level="honours" step="1" min="0" /></td>
+                <td>
+                  <input
+                    type="number"
+                    class="rate-input"
+                    data-level="honours"
+                    step="1"
+                    min="0"
+                  />
+                </td>
               </tr>
               <tr>
                 <td>Masters tutor</td>
-                <td><input type="number" class="rate-input" data-level="masters" step="1" min="0" /></td>
+                <td>
+                  <input
+                    type="number"
+                    class="rate-input"
+                    data-level="masters"
+                    step="1"
+                    min="0"
+                  />
+                </td>
               </tr>
               <tr>
                 <td>PhD tutor</td>
-                <td><input type="number" class="rate-input" data-level="phd" step="1" min="0" /></td>
+                <td>
+                  <input
+                    type="number"
+                    class="rate-input"
+                    data-level="phd"
+                    step="1"
+                    min="0"
+                  />
+                </td>
               </tr>
             </tbody>
           </table>
-          <button type="button" class="btn btn-small-primary" id="saveRatesBtn" style="margin-top: 12px;">
+          <button
+            type="button"
+            class="btn btn-small-primary"
+            id="saveRatesBtn"
+            style="margin-top: 12px"
+          >
             Save rates
           </button>
         </div>
@@ -165,23 +215,19 @@
       </section>
 
       <!-- Row 3: Workload spread (full width) -->
-      <section
-        class="card workload-card"
-        aria-labelledby="workloadHeading"
-      >
+      <section class="card workload-card" aria-labelledby="workloadHeading">
         <h2 id="workloadHeading">Workload spread</h2>
         <p class="hint">
           Each tutor's approved course hours against the global weekly cap.
         </p>
         <div class="workload-list" id="workloadList"></div>
-        <p class="empty-copy" id="workloadEmpty" hidden>
-          No tutors yet.
-        </p>
+        <p class="empty-copy" id="workloadEmpty" hidden>No tutors yet.</p>
       </section>
     </main>
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+    <script src="../js/universal-search.js"></script>
     <script src="../js/tutors.js"></script>
     <script src="../js/logout.js"></script>
   </body>

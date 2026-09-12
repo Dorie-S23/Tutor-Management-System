@@ -120,6 +120,78 @@ button {
   gap: 28px;
 }
 
+/* ---------- universal search ---------- */
+
+.universal-search {
+  position: relative;
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.universal-search-input {
+  width: 100%;
+}
+
+.universal-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.universal-search-results li a {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.universal-search-results li a:hover {
+  background: var(--navy-bg);
+}
+
+.universal-search-group {
+  padding: 6px 10px 2px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.universal-search-empty {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+@keyframes search-highlight-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  30% {
+    background: var(--amber-bg);
+  }
+}
+
+.search-highlight {
+  animation: search-highlight-flash 2s ease;
+}
+
 .board-header #logout-button {
   position: absolute;
   top: 64px;
@@ -139,6 +211,92 @@ button {
   .header-actions {
     justify-self: center;
     justify-content: center;
+  }
+}
+
+/* ---------- coordinator header (board / tutors / timetable / timesheets) ----------
+   The Wits logo and the logout button are pulled out of normal flow and
+   centered/pinned against the full header width, so the snapshot stats and
+   every nav button can share the full width as one flex row underneath —
+   they only wrap onto a second line if the window is genuinely too narrow. */
+
+.board-header--brand {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  row-gap: 14px;
+}
+
+.board-header--brand .header-wits-logo {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.board-header--brand #logout-button {
+  position: absolute;
+  top: 72px;
+  right: clamp(20px, 4vw, 48px);
+  transform: translateY(-50%);
+}
+
+.board-header--brand .header-toolbar,
+.board-header--brand > .header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 20px 28px;
+  width: 100%;
+}
+
+.board-header--brand .header-toolbar .header-right {
+  margin-right: auto;
+  gap: 3px;
+}
+
+/* Keep each stat's label snug against its own value; the bigger gap moves to
+   before the next label instead, so "1 / 9" reads with "courses staffed". */
+.board-header--brand .header-toolbar .header-right dt:not(:first-child) {
+  margin-left: 25px;
+}
+
+/* Un-nest the actions wrapper so search + each nav button becomes its own
+   flex item in the toolbar row, wrapping individually instead of as a block. */
+.board-header--brand .header-toolbar .header-actions {
+  display: contents;
+}
+
+@media (max-width: 860px) {
+  .board-header--brand {
+    align-items: center;
+    text-align: center;
+  }
+
+  .board-header--brand .header-wits-logo {
+    position: static;
+    transform: none;
+    order: -3;
+  }
+
+  .board-header--brand .header-left {
+    order: -2;
+  }
+
+  .board-header--brand #logout-button {
+    position: static;
+    transform: none;
+    order: -1;
+  }
+
+  .board-header--brand .header-toolbar,
+  .board-header--brand > .header-actions {
+    justify-content: center;
+  }
+
+  .board-header--brand .header-toolbar .header-right {
+    margin-right: 0;
   }
 }
 
@@ -692,6 +850,13 @@ input[type="search"]:focus-visible {
 .btn-small.approve:hover {
   background: var(--green-bg);
 }
+.btn-small.override {
+  color: var(--amber);
+  border-color: var(--amber-line);
+}
+.btn-small.override:hover {
+  background: var(--amber-bg);
+}
 .btn-small:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -728,6 +893,21 @@ input[type="search"]:focus-visible {
 
 .modal::backdrop {
   background: rgba(30, 42, 46, 0.45);
+}
+
+.modal-wide {
+  width: min(640px, 94vw);
+}
+
+.obvious-fill-course-head {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 10px 0 -2px;
+}
+.obvious-fill-course-head:first-child {
+  margin-top: 0;
 }
 
 .modal-form {
@@ -846,7 +1026,6 @@ input[type="search"]:focus-visible {
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
-
 
 .modal-actions {
   display: flex;
@@ -988,7 +1167,6 @@ input[type="search"]:focus-visible {
   text-align: right;
   white-space: nowrap;
 }
-
 
 /* ── Settings card ──────────────────────────────────────────────── */
 .settings-card {

@@ -86,7 +86,12 @@ async function findVenueClash(values, excludeId) {
 
   const otherSessions = [];
   data.forEach((row) => {
-    if (row.Day_of_tut && row.tutor_start_time && row.tutor_end_time && row.venues) {
+    if (
+      row.Day_of_tut &&
+      row.tutor_start_time &&
+      row.tutor_end_time &&
+      row.venues
+    ) {
       otherSessions.push({
         type: "Tutorial",
         courseCode: row.course_code,

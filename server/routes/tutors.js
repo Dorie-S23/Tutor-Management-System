@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { DAY_NAMES } = require("../dayNames");
@@ -111,7 +112,29 @@ router.put("/bulk", async (req, res) => {
 
 // Simple UUID check so non-UUID path segments get a clean 404 instead of
 // a cryptic Postgres error.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// POST /api/tutors/bulk-rates — update hourly_rate per academic level.
+// The organiser edits rates in the settings card and clicks "Save rates";
+// this writes the new rate to every tutor at each level.
+router.post("/bulk-rates", async (req, res) => {
+  const { rates } = req.body;
+  if (!rates || typeof rates !== "object") {
+    return res.status(400).json({ error: "rates object is required" });
+  }
+
+  let totalUpdated = 0;
+  for (const [level, rate] of Object.entries(rates)) {
+    const { error, count } = await supabase
+      .from("tutors")
+      .update({ hourly_rate: rate })
+      .eq("academic_level", level);
+    if (error) return res.status(500).json({ error: error.message });
+    totalUpdated += count || 0;
+  }
+  res.json({ updated: totalUpdated });
+});
 
 // GET /api/tutors/:id — a single tutor
 router.get("/:id", async (req, res) => {
@@ -132,7 +155,10 @@ router.get("/:id", async (req, res) => {
   res.json(data);
 });
 
-// POST /api/tutors — add a new tutor
+// POST /api/tutors — add a new tutor.
+// The tutors.id column is a foreign key into auth.users, so creating a tutor
+// requires first creating an auth account. We generate a temporary password;
+// the tutor will be prompted to change it on first login.
 router.post("/", async (req, res) => {
   const {
     student_number,
@@ -140,22 +166,133 @@ router.post("/", async (req, res) => {
     name,
     academic_level,
     weekly_hour_cap,
+    hourly_rate,
   } = req.body;
 
-  const { data, error } = await supabase
+  // ── Input validation ─────────────────────────────────────────
+  const VALID_LEVELS = ["third_year", "honours", "masters", "phd"];
+  const WITS_EMAIL_RE = /@(wits\.ac\.za|students\.wits\.ac\.za)$/i;
+  const errors = [];
+
+  if (!name || !name.trim()) errors.push("Name is required.");
+  else if (name.trim().length < 2)
+    errors.push("Name must be at least 2 characters.");
+
+  if (!student_number || !String(student_number).trim())
+    errors.push("Student number is required.");
+  else if (!/^\d{5,10}$/.test(String(student_number).trim()))
+    errors.push("Student number must be 5–10 digits.");
+
+  if (!email || !email.trim())
+    errors.push("Email is required to create a tutor account.");
+  else if (!WITS_EMAIL_RE.test(email.trim()))
+    errors.push("Email must end with @wits.ac.za or @students.wits.ac.za.");
+
+  if (!academic_level) errors.push("Academic level is required.");
+  else if (!VALID_LEVELS.includes(academic_level))
+    errors.push(
+      "Invalid academic level. Must be one of: " + VALID_LEVELS.join(", "),
+    );
+
+  if (
+    weekly_hour_cap != null &&
+    (isNaN(weekly_hour_cap) || weekly_hour_cap < 0)
+  )
+    errors.push("Weekly hour cap must be a non-negative number.");
+
+  if (hourly_rate != null && (isNaN(hourly_rate) || hourly_rate < 0))
+    errors.push("Hourly rate must be a non-negative number.");
+
+  if (errors.length) {
+    return res.status(400).json({ error: errors.join(" ") });
+  }
+
+  // Check for duplicate student number
+  const { data: existingStudent } = await supabase
+    .from("tutors")
+    .select("id")
+    .eq("student_number", String(student_number).trim())
+    .maybeSingle();
+  if (existingStudent) {
+    return res
+      .status(409)
+      .json({ error: "A tutor with this student number already exists." });
+  }
+
+  // Check for duplicate email across all user accounts (not just tutors).
+  // An email in the users table means an auth account already exists for it,
+  // so signUp would fail anyway — catch it early with a clear message.
+  const { data: existingEmail } = await supabase
+    .from("users")
+    .select("id")
+    .eq("email", email.trim())
+    .maybeSingle();
+  if (existingEmail) {
+    return res
+      .status(409)
+      .json({ error: "An account with this email already exists." });
+  }
+
+  // 1. Create the auth user with a temporary password
+  const tempPassword = crypto.randomBytes(12).toString("base64url");
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password: tempPassword,
+  });
+
+  if (authError) {
+    // If the email already exists in auth, give a clear message
+    const isDuplicate = /already|registered|exists/i.test(authError.message);
+    if (isDuplicate) {
+      return res.status(409).json({
+        error:
+          "An account with this email already exists. Use a different email address.",
+      });
+    }
+    return res.status(400).json({ error: authError.message });
+  }
+
+  const userId = authData.user?.id;
+  if (!userId) {
+    return res.status(400).json({ error: "Auth user was not created." });
+  }
+
+  // 2. Insert into the users table (matches auth.js registration flow)
+  const { error: userError } = await supabase.from("users").insert({
+    id: userId,
+    email,
+    name,
+    role: "tutor",
+  });
+
+  if (userError) {
+    return res.status(500).json({
+      error:
+        "Auth user created, but users table insert failed: " +
+        userError.message,
+    });
+  }
+
+  // 3. Insert into the tutors table
+  const { data: tutor, error: tutorError } = await supabase
     .from("tutors")
     .insert({
+      id: userId,
       student_number,
       email,
       name,
       academic_level,
       weekly_hour_cap,
+      hourly_rate: hourly_rate ?? null,
     })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.status(201).json(data);
+  if (tutorError) {
+    return res.status(500).json({ error: tutorError.message });
+  }
+
+  res.status(201).json(tutor);
 });
 
 // PUT /api/tutors/:id — edit an existing tutor
@@ -166,6 +303,7 @@ router.put("/:id", async (req, res) => {
     name,
     academic_level,
     weekly_hour_cap,
+    hourly_rate,
   } = req.body;
 
   const { data, error } = await supabase
@@ -176,6 +314,7 @@ router.put("/:id", async (req, res) => {
       name,
       academic_level,
       weekly_hour_cap,
+      hourly_rate: hourly_rate ?? null,
     })
     .eq("id", req.params.id)
     .select()

@@ -75,7 +75,11 @@ async function renderPageToCanvas(page, scale) {
 }
 
 async function extractWords(worker, canvas) {
-  const { data } = await worker.recognize(canvas, {}, { blocks: true, text: true });
+  const { data } = await worker.recognize(
+    canvas,
+    {},
+    { blocks: true, text: true },
+  );
   const words = [];
   (data.blocks || []).forEach((block) => {
     (block.paragraphs || []).forEach((para) => {
@@ -108,7 +112,9 @@ function parseGridWords(rawWords) {
   );
 
   const dayHeaders = DAY_NAMES.map((name) => {
-    const w = words.find((w) => w.text.trim().toLowerCase() === name.toLowerCase());
+    const w = words.find(
+      (w) => w.text.trim().toLowerCase() === name.toLowerCase(),
+    );
     return w ? { name, cx: (w.x0 + w.x1) / 2, y1: w.y1 } : null;
   })
     .filter(Boolean)
@@ -126,7 +132,8 @@ function parseGridWords(rawWords) {
 
   function columnFor(x) {
     for (let i = 0; i < dayHeaders.length; i++) {
-      if (x >= boundaries[i] && x < boundaries[i + 1]) return dayHeaders[i].name;
+      if (x >= boundaries[i] && x < boundaries[i + 1])
+        return dayHeaders[i].name;
     }
     return null;
   }
@@ -161,10 +168,13 @@ function parseGridWords(rawWords) {
     const lines = [];
     sorted.forEach((w) => {
       const wCenter = (w.y0 + w.y1) / 2;
-      const line = lines.find((l) => Math.abs(l.center - wCenter) < LINE_CENTER_TOLERANCE);
+      const line = lines.find(
+        (l) => Math.abs(l.center - wCenter) < LINE_CENTER_TOLERANCE,
+      );
       if (line) {
         line.words.push(w);
-        line.center = (line.center * (line.words.length - 1) + wCenter) / line.words.length;
+        line.center =
+          (line.center * (line.words.length - 1) + wCenter) / line.words.length;
         line.y0 = Math.min(line.y0, w.y0);
         line.y1 = Math.max(line.y1, w.y1);
       } else {
@@ -264,7 +274,10 @@ function mergeEntries(rawEntries) {
 // weekly class grid — entirely in the browser, no server round-trip.
 export async function parseTimetablePdf(file, onProgress) {
   onProgress?.("Loading PDF reader…");
-  const [pdfjsLib, Tesseract] = await Promise.all([loadPdfjs(), loadTesseract()]);
+  const [pdfjsLib, Tesseract] = await Promise.all([
+    loadPdfjs(),
+    loadTesseract(),
+  ]);
 
   const data = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjsLib.getDocument({ data }).promise;

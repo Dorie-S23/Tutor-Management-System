@@ -1,10 +1,11 @@
 import { highlightActiveTab } from "./nav.js";
-import { getCurrentUser } from "./storage.js";
+import { requireRole } from "./storage.js";
 
-const currentUser = getCurrentUser();
+// This page (modules.html) is tutor-only — applying to tutor a module isn't
+// a concept that applies to other roles.
+const currentUser = requireRole("tutor");
 if (!currentUser) {
-  window.location.href = "login.html";
-  throw new Error("Not logged in");
+  throw new Error("Not authorized");
 }
 
 highlightActiveTab();
@@ -20,9 +21,7 @@ const courseSelect = document.getElementById("apply-course-select");
 const courseMeta = document.getElementById("apply-course-meta");
 const yearSelect = document.getElementById("apply-year-select");
 const markInput = document.getElementById("apply-mark-input");
-const availabilitySelect = document.getElementById(
-  "apply-availability-select",
-);
+const availabilitySelect = document.getElementById("apply-availability-select");
 const availabilityLabel = document.getElementById("apply-availability-label");
 const applicationsListEl = document.getElementById("applications-list");
 const applicationsItemsEl = document.getElementById("applications-items");

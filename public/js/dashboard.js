@@ -1,5 +1,17 @@
 import { highlightActiveTab } from "./nav.js";
-import { getWeekStart, getWeekTotal, todayStr } from "./storage.js";
+import {
+  getWeekStart,
+  getWeekTotal,
+  todayStr,
+  requireRole,
+} from "./storage.js";
+
+// This page (dashboard.html) is tutor-only. Without this, any signed-in
+// user (e.g. a student volunteer who wandered in via a stale nav link) could
+// land here and see a tutor's dashboard instead of being sent back to theirs.
+if (!requireRole("tutor")) {
+  throw new Error("Not authorized");
+}
 
 const WEEKLY_HOUR_LIMIT = 6;
 
@@ -203,6 +215,59 @@ function renderUpcomingSessions(sessions) {
   nextSessionSublabelEl.textContent = `${next.courseCode} · ${describeDaysAway(next.daysAway)}`;
 }
 
+// ---------- guided tour ----------
+
+const TUTOR_TOUR_STEPS = [
+  {
+    selector: ".card:has(#welcome-heading)",
+    title: "Welcome",
+    body: "Your tutoring hub — log hours for the week, review timesheets, and keep an eye on your weekly limit from here.",
+    placement: "bottom",
+  },
+  {
+    selector: ".card:has(#apply-to-tutor-btn)",
+    title: "Apply to tutor a subject",
+    body: "Pick a course that needs tutors, confirm your mark and availability, and it'll go to the organiser board for approval. Track the status of your applications right here once you've applied.",
+    placement: "bottom",
+  },
+  {
+    selector: ".card:has(#excuse-btn)",
+    title: "Excuse yourself from a session",
+    body: "Can't make a tutorial? Let the organiser know which session and why — they can find cover if needed.",
+    placement: "bottom",
+  },
+  {
+    selector: ".stat-grid",
+    title: "Your week at a glance",
+    body: "Hours worked so far this week, how many you have left before your weekly limit, and your next upcoming session.",
+    placement: "top",
+  },
+  {
+    selector: ".tile-grid",
+    title: "Quick links",
+    body: "Jump straight to logging hours, reviewing timesheets, or your calendar — where your imported class schedule lives, with support for cancelling or editing a single class occurrence.",
+    placement: "top",
+  },
+  {
+    selector: ".tab-nav",
+    title: "Get around",
+    body: "These tabs are always here at the top, wherever you are in the app.",
+    placement: "bottom",
+  },
+];
+
+const tourLink = document.getElementById("tour-link");
+if (tourLink) {
+  tourLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.Onboarding?.start(TUTOR_TOUR_STEPS, {
+      tourId: "tutor-dashboard",
+      userId: getCurrentUser()?.id,
+      force: true,
+    });
+  });
+}
+
 (async function initUpcomingSessions() {
   const user = getCurrentUser();
   if (user) {
@@ -212,6 +277,11 @@ function renderUpcomingSessions(sessions) {
       fetchMyExcusals(user.id),
     ]);
   }
+
+  window.Onboarding?.start(TUTOR_TOUR_STEPS, {
+    tourId: "tutor-dashboard",
+    userId: user?.id,
+  });
 })();
 
 // ---------- excuse yourself from a session ----------
