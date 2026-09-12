@@ -26,8 +26,99 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
+// GET /api/tutors/workload — every tutor's assigned hours (summed from their
+// approved courses) against their weekly hour cap, for the workload spread
+// view. Registered before /:id so "workload" isn't swallowed as a tutor id.
+router.get("/workload", async (req, res) => {
+  try {
+    const { data: tutors, error: tutorsError } = await supabase
+      .from("tutors")
+      .select("id, name, weekly_hour_cap")
+      .order("name");
+
+    if (tutorsError) {
+      console.error("Workload: failed to load tutors:", tutorsError);
+      return res.status(500).json({ error: tutorsError.message });
+    }
+
+    const { data: approvals, error: approvalsError } = await supabase
+      .from("tutor_subject_preference")
+      .select("tutor_id, courses(course_code, course_name, hours_per_week)")
+      .eq("status", "approved");
+
+    if (approvalsError) {
+      console.error("Workload: failed to load approvals:", approvalsError);
+      return res.status(500).json({ error: approvalsError.message });
+    }
+
+    const coursesByTutor = {};
+    (approvals || []).forEach((a) => {
+      // The embedded course can come back as a single object or (depending
+      // on how the foreign key is set up) an array with one entry — handle
+      // both instead of assuming one shape.
+      const course = Array.isArray(a.courses) ? a.courses[0] : a.courses;
+      if (!course) return;
+      if (!coursesByTutor[a.tutor_id]) coursesByTutor[a.tutor_id] = [];
+      coursesByTutor[a.tutor_id].push({
+        course_code: course.course_code,
+        course_name: course.course_name,
+        hours_per_week: course.hours_per_week || 0,
+      });
+    });
+
+    const workload = (tutors || []).map((t) => {
+      const courses = coursesByTutor[t.id] || [];
+      return {
+        id: t.id,
+        name: t.name,
+        weeklyHourCap: t.weekly_hour_cap,
+        assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
+        courses,
+      };
+    });
+
+    res.json(workload);
+  } catch (err) {
+    console.error("Workload endpoint crashed:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /api/tutors/bulk — update a field across all tutors at once.
+// Used by the global settings card to set the weekly hour cap for everyone.
+router.put("/bulk", async (req, res) => {
+  const { weekly_hour_cap } = req.body;
+  if (weekly_hour_cap == null) {
+    return res.status(400).json({ error: "weekly_hour_cap is required" });
+  }
+
+  const { data: tutors, error: fetchErr } = await supabase
+    .from("tutors")
+    .select("id");
+
+  if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+
+  if (!tutors || tutors.length === 0) return res.json({ updated: 0 });
+
+  const { error: updateErr } = await supabase
+    .from("tutors")
+    .update({ weekly_hour_cap })
+    .neq("id", "00000000-0000-0000-0000-000000000000"); // update all rows
+
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  res.json({ updated: tutors.length });
+});
+
+// Simple UUID check so non-UUID path segments get a clean 404 instead of
+// a cryptic Postgres error.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /api/tutors/:id — a single tutor
 router.get("/:id", async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Tutor not found" });
+  }
   const { data, error } = await supabase
     .from("tutors")
     .select("*")
@@ -44,14 +135,8 @@ router.get("/:id", async (req, res) => {
 
 // POST /api/tutors — add a new tutor
 router.post("/", async (req, res) => {
-  const {
-    student_number,
-    email,
-    name,
-    hourly_rate,
-    academic_level,
-    weekly_hour_cap,
-  } = req.body;
+  const { student_number, email, name, academic_level, weekly_hour_cap } =
+    req.body;
 
   const { data, error } = await supabase
     .from("tutors")
@@ -59,7 +144,6 @@ router.post("/", async (req, res) => {
       student_number,
       email,
       name,
-      hourly_rate,
       academic_level,
       weekly_hour_cap,
     })
@@ -72,14 +156,8 @@ router.post("/", async (req, res) => {
 
 // PUT /api/tutors/:id — edit an existing tutor
 router.put("/:id", async (req, res) => {
-  const {
-    student_number,
-    email,
-    name,
-    hourly_rate,
-    academic_level,
-    weekly_hour_cap,
-  } = req.body;
+  const { student_number, email, name, academic_level, weekly_hour_cap } =
+    req.body;
 
   const { data, error } = await supabase
     .from("tutors")
@@ -87,7 +165,6 @@ router.put("/:id", async (req, res) => {
       student_number,
       email,
       name,
-      hourly_rate,
       academic_level,
       weekly_hour_cap,
     })
@@ -158,35 +235,42 @@ router.get("/:id/assignment-check", async (req, res) => {
     return res.status(400).json({ error: "courseId is required" });
   }
 
-  const { data: tutor, error: tutorError } = await supabase
-    .from("tutors")
-    .select("weekly_hour_cap")
-    .eq("id", tutorId)
-    .single();
+  // These three don't depend on each other's results — only on tutorId and
+  // courseId, both already known from the request — so fire them together
+  // instead of paying for three sequential round trips.
+  const [
+    { data: tutor, error: tutorError },
+    { data: course, error: courseError },
+    { data: otherApprovals, error: approvalsError },
+  ] = await Promise.all([
+    supabase
+      .from("tutors")
+      .select("weekly_hour_cap")
+      .eq("id", tutorId)
+      .single(),
+    supabase
+      .from("courses")
+      .select("Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week")
+      .eq("id", courseId)
+      .single(),
+    // Tutor's other approved courses (for both course-vs-course clashes and workload)
+    supabase
+      .from("tutor_subject_preference")
+      .select(
+        "course_id, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
+      )
+      .eq("tutor_id", tutorId)
+      .eq("status", "approved")
+      .neq("course_id", courseId),
+  ]);
 
   if (tutorError || !tutor) {
     return res.status(404).json({ error: "Tutor not found" });
   }
 
-  const { data: course, error: courseError } = await supabase
-    .from("courses")
-    .select("Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week")
-    .eq("id", courseId)
-    .single();
-
   if (courseError || !course) {
     return res.status(404).json({ error: "Course not found" });
   }
-
-  // Tutor's other approved courses (for both course-vs-course clashes and workload)
-  const { data: otherApprovals, error: approvalsError } = await supabase
-    .from("tutor_subject_preference")
-    .select(
-      "course_id, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
-    )
-    .eq("tutor_id", tutorId)
-    .eq("status", "approved")
-    .neq("course_id", courseId);
 
   if (approvalsError) {
     return res.status(500).json({ error: approvalsError.message });

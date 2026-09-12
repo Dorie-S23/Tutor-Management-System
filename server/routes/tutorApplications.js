@@ -12,6 +12,38 @@ const LEVEL_RANK = {
   phd: 6,
 };
 
+function toMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function overlaps(startA, endA, startB, endB) {
+  return startA < endB && startB < endA;
+}
+
+// Every scheduled session (Tutorial and/or Lab) a course row carries.
+function courseSessions(course) {
+  const sessions = [];
+  if (course.Day_of_tut && course.tutor_start_time && course.tutor_end_time) {
+    sessions.push({
+      type: "Tutorial",
+      day: course.Day_of_tut,
+      start: toMinutes(course.tutor_start_time),
+      end: toMinutes(course.tutor_end_time),
+    });
+  }
+  if (course.Day_of_lab && course.lab_start_time && course.lab_end_time) {
+    sessions.push({
+      type: "Lab",
+      day: course.Day_of_lab,
+      start: toMinutes(course.lab_start_time),
+      end: toMinutes(course.lab_end_time),
+    });
+  }
+  return sessions;
+}
+
 // ============================================================
 // GET /api/tutor-applications
 //
@@ -37,7 +69,12 @@ router.get("/", async (req, res) => {
         hours_per_week,
         Day_of_tut,
         tutor_start_time,
-        tutor_end_time
+        tutor_end_time,
+        venues,
+        Day_of_lab,
+        lab_start_time,
+        lab_end_time,
+        lab_venues
       ),
       tutors(
         name,
@@ -123,24 +160,50 @@ router.get("/", async (req, res) => {
       const available = application.Availability === true;
 
       // --------------------------------------------------------
-      // Weekly workload
+      // Weekly workload + timetable clash detection
       // --------------------------------------------------------
+      //
+      // The workload check (hours from the tutor's other approved courses)
+      // and the "clashes with courses already taught" check both read the
+      // exact same rows — tutor_subject_preference for this tutor, approved,
+      // excluding this course — just with different columns off the joined
+      // course. One query serves both, fired alongside the busy-times query
+      // instead of three sequential round trips.
 
       let currentAssignedHours = 0;
       let hoursRemaining = Infinity;
       let projectedHours = 0;
       let weeklyHourCap = tutor?.weekly_hour_cap ?? null;
 
-      const { data: approvedApplications, error: approvedError } =
-        await supabase
+      const courseDay = course?.Day_of_tut;
+      const courseStart = toMinutes(course?.tutor_start_time);
+      const courseEnd = toMinutes(course?.tutor_end_time);
+      const courseIsScheduled =
+        courseDay && courseStart != null && courseEnd != null;
+
+      const [
+        { data: otherApprovedCourses, error: otherApprovedError },
+        busyTimesResult,
+      ] = await Promise.all([
+        supabase
           .from("tutor_subject_preference")
-          .select("courses(hours_per_week)")
+          .select(
+            "courses(course_code, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
+          )
           .eq("tutor_id", tutorId)
           .eq("status", "approved")
-          .neq("course_id", application.course_id);
+          .neq("course_id", application.course_id),
+        // Only worth fetching when the course actually has a schedule to clash against.
+        courseIsScheduled
+          ? supabase
+              .from("tutor_busy_times")
+              .select("title, day_of_week, start_time, end_time")
+              .eq("tutor_id", tutorId)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
-      if (!approvedError) {
-        currentAssignedHours = (approvedApplications || []).reduce(
+      if (!otherApprovedError) {
+        currentAssignedHours = (otherApprovedCourses || []).reduce(
           (sum, item) => {
             return sum + Number(item.courses?.hours_per_week || 0);
           },
@@ -159,24 +222,11 @@ router.get("/", async (req, res) => {
         );
       }
 
-      // --------------------------------------------------------
-      // Timetable clash detection
-      // --------------------------------------------------------
-
       let timetableClash = false;
 
-      const courseDay = course?.Day_of_tut;
-
-      const courseStart = toMinutes(course?.tutor_start_time);
-      const courseEnd = toMinutes(course?.tutor_end_time);
-
-      // Only perform clash checking when the course has a schedule.
-      if (courseDay && courseStart != null && courseEnd != null) {
+      if (courseIsScheduled) {
         // Check the tutor's own busy times
-        const { data: busyTimes, error: busyTimesError } = await supabase
-          .from("tutor_busy_times")
-          .select("title, day_of_week, start_time, end_time")
-          .eq("tutor_id", tutorId);
+        const { data: busyTimes, error: busyTimesError } = busyTimesResult;
 
         if (!busyTimesError && busyTimes) {
           for (const busy of busyTimes) {
@@ -198,44 +248,25 @@ router.get("/", async (req, res) => {
         // Check clashes with courses the tutor already teaches
         // ------------------------------------------------------
 
-        if (!timetableClash) {
-          const { data: otherCourses, error: otherCoursesError } =
-            await supabase
-              .from("tutor_subject_preference")
-              .select(
-                `
-                courses(
-                  course_code,
-                  Day_of_tut,
-                  tutor_start_time,
-                  tutor_end_time
-                )
-                `,
-              )
-              .eq("tutor_id", tutorId)
-              .eq("status", "approved")
-              .neq("course_id", application.course_id);
+        if (!timetableClash && !otherApprovedError) {
+          for (const other of otherApprovedCourses || []) {
+            const otherCourse = other.courses;
 
-          if (!otherCoursesError && otherCourses) {
-            for (const other of otherCourses) {
-              const otherCourse = other.courses;
+            if (!otherCourse || otherCourse.Day_of_tut !== courseDay) {
+              continue;
+            }
 
-              if (!otherCourse || otherCourse.Day_of_tut !== courseDay) {
-                continue;
-              }
+            const otherStart = toMinutes(otherCourse.tutor_start_time);
 
-              const otherStart = toMinutes(otherCourse.tutor_start_time);
+            const otherEnd = toMinutes(otherCourse.tutor_end_time);
 
-              const otherEnd = toMinutes(otherCourse.tutor_end_time);
-
-              if (
-                otherStart != null &&
-                otherEnd != null &&
-                overlaps(courseStart, courseEnd, otherStart, otherEnd)
-              ) {
-                timetableClash = true;
-                break;
-              }
+            if (
+              otherStart != null &&
+              otherEnd != null &&
+              overlaps(courseStart, courseEnd, otherStart, otherEnd)
+            ) {
+              timetableClash = true;
+              break;
             }
           }
         }
@@ -415,7 +446,9 @@ router.post("/", async (req, res) => {
 
   const { data: course, error: courseError } = await supabase
     .from("courses")
-    .select("course_code, course_name, course_level")
+    .select(
+      "course_code, course_name, course_level, Day_of_tut, tutor_start_time, tutor_end_time, Day_of_lab, lab_start_time, lab_end_time",
+    )
     .eq("id", courseId)
     .single();
 
@@ -471,6 +504,45 @@ router.post("/", async (req, res) => {
     return res.status(409).json({
       error: `You've already applied to tutor ${course.course_code}.`,
     });
+  }
+
+  // A tutor can't be double-booked across two modules they tutor — check
+  // this course's Tutorial/Lab against every module they're already
+  // approved to tutor, regardless of venue (they can't be in two places at
+  // once even if the rooms differ — that's a separate, venue-only check
+  // done when the course itself is scheduled).
+  const newSessions = courseSessions(course);
+
+  if (newSessions.length > 0) {
+    const { data: approvedApplications, error: approvedError } = await supabase
+      .from("tutor_subject_preference")
+      .select(
+        "courses(course_code, Day_of_tut, tutor_start_time, tutor_end_time, Day_of_lab, lab_start_time, lab_end_time)",
+      )
+      .eq("tutor_id", tutorId)
+      .eq("status", "approved");
+
+    if (approvedError) {
+      return res.status(500).json({ error: approvedError.message });
+    }
+
+    for (const approved of approvedApplications || []) {
+      const otherCourse = approved.courses;
+      if (!otherCourse) continue;
+
+      for (const mine of newSessions) {
+        for (const other of courseSessions(otherCourse)) {
+          if (
+            mine.day === other.day &&
+            overlaps(mine.start, mine.end, other.start, other.end)
+          ) {
+            return res.status(409).json({
+              error: `Your ${mine.type} for ${course.course_code} clashes with your ${other.type} for ${otherCourse.course_code} (${mine.day}) — you're already approved to tutor that module at an overlapping time.`,
+            });
+          }
+        }
+      }
+    }
   }
 
   const { data, error } = await supabase
@@ -821,6 +893,52 @@ router.patch("/:id", async (req, res) => {
   }
 
   res.json(data);
+});
+
+// DELETE /api/tutor-applications/:id — a tutor withdraws their own application.
+// Keeps the course's no_of_tutors_assigned counter in sync if it was approved.
+router.delete("/:id", async (req, res) => {
+  const { data: application, error: applicationError } = await supabase
+    .from("tutor_subject_preference")
+    .select("id, status, course_id")
+    .eq("id", req.params.id)
+    .single();
+
+  if (applicationError || !application) {
+    return res.status(404).json({ error: "Application not found" });
+  }
+
+  if (application.status === "approved") {
+    const { data: course, error: courseError } = await supabase
+      .from("courses")
+      .select("no_of_tutors_assigned")
+      .eq("id", application.course_id)
+      .single();
+
+    if (courseError || !course) {
+      return res.status(404).json({ error: "Course not found" });
+    }
+
+    const { error: bumpError } = await supabase
+      .from("courses")
+      .update({
+        no_of_tutors_assigned: Math.max(
+          (course.no_of_tutors_assigned ?? 0) - 1,
+          0,
+        ),
+      })
+      .eq("id", application.course_id);
+
+    if (bumpError) return res.status(500).json({ error: bumpError.message });
+  }
+
+  const { error } = await supabase
+    .from("tutor_subject_preference")
+    .delete()
+    .eq("id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
 });
 
 module.exports = router;

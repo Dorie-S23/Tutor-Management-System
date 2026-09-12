@@ -3,17 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StudyConnect | Calendar</title>
-    <link rel="stylesheet" href="../css/style.css" />
+    <title>Calendar | Tutor Management System</title>
+    <link rel="stylesheet" href="../css/global.css" />
   </head>
 
-  <body>
-    <header>
-      <nav aria-label="Main navigation">
+  <body class="tutor-app">
+    <header class="app-header">
+      <h1>Calendar</h1>
+      <nav class="tab-nav">
         <a href="dashboard.html">Dashboard</a>
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html" aria-current="page">Calendar</a>
         <a href="timesheets.html">Timesheets</a>
+        <a href="modules.html">Module Application</a>
         <a href="#" id="logout-button">Logout</a>
       </nav>
     </header>
@@ -95,6 +97,53 @@
         </div>
       </div>
 
+      <div class="card" id="add-class-card" hidden>
+        <h2>Manually add a class</h2>
+        <p class="card-hint">
+          Pick a date, then fill in the details below. It'll be added just to
+          that day on the calendar.
+        </p>
+        <form id="add-class-form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="add-class-date">Date</label>
+              <input type="date" id="add-class-date" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-subject">Subject</label>
+              <input
+                type="text"
+                id="add-class-subject"
+                placeholder="e.g. COMS2011A"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="add-class-start">Start time</label>
+              <input type="time" id="add-class-start" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-end">End time</label>
+              <input type="time" id="add-class-end" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-venue">Venue</label>
+              <input type="text" id="add-class-venue" placeholder="e.g. FNB1" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Add class</button>
+              <button
+                type="button"
+                id="cancel-add-class-btn"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
       <div class="card">
         <div class="calendar-nav">
           <button type="button" id="prev-month-btn" class="btn-secondary">
@@ -106,6 +155,9 @@
           </button>
         </div>
         <div class="form-actions" id="clear-classes-row">
+          <button type="button" id="add-class-btn" class="btn-primary">
+            + Add class
+          </button>
           <button type="button" id="clear-classes-btn" class="btn-danger">
             Clear class times
           </button>
