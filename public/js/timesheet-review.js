@@ -1,6 +1,7 @@
 const submissionListEl = document.getElementById("submissionList");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 const statusFilterEl = document.getElementById("statusFilter");
+const exportPayrollBtn = document.getElementById("exportPayrollBtn");
 
 function initials(name) {
   return (name || "?")
@@ -172,6 +173,29 @@ function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+async function exportPayroll() {
+  try {
+    const res = await fetch("/api/timesheets/payroll-export");
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Couldn't export payroll.");
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payroll-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
 statusFilterEl.addEventListener("change", loadSubmissions);
+exportPayrollBtn.addEventListener("click", exportPayroll);
 
 loadSubmissions();

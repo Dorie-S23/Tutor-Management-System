@@ -194,7 +194,7 @@ const VOLUNTEER_TOUR_STEPS = [
   {
     selector: "#courseList",
     title: "Modules you can tutor",
-    body: "Courses currently looking for volunteers show up here. Click \"Volunteer\" on one, enter the mark you got in that module, and submit — an organiser will review it.",
+    body: 'Courses currently looking for volunteers show up here. Click "Volunteer" on one, enter the mark you got in that module, and submit — an organiser will review it.',
     placement: "top",
   },
   {

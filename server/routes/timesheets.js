@@ -94,6 +94,82 @@ router.post("/", async (req, res) => {
   res.status(201).json(data);
 });
 
+// GET /api/timesheets/payroll-export — CSV of every approved timesheet, ready
+// for payroll: tutor identity, hours, rate and amount owed. Joins tutors
+// separately (rather than a PostgREST embed) since timesheets only has an FK
+// to users, even though tutors shares the same id. Read-only — doesn't mark
+// anything as paid.
+router.get("/payroll-export", async (req, res) => {
+  const { data: timesheets, error: timesheetsError } = await supabase
+    .from("timesheets")
+    .select("user_id, week_start, total_hours, reviewed_at")
+    .eq("status", "approved")
+    .order("week_start");
+
+  if (timesheetsError) {
+    return res.status(500).json({ error: timesheetsError.message });
+  }
+  if (timesheets.length === 0) {
+    return res.status(404).json({ error: "No approved timesheets to export" });
+  }
+
+  const tutorIds = [...new Set(timesheets.map((t) => t.user_id))];
+
+  const { data: tutors, error: tutorsError } = await supabase
+    .from("tutors")
+    .select("id, name, student_number, email, hourly_rate")
+    .in("id", tutorIds);
+
+  if (tutorsError) return res.status(500).json({ error: tutorsError.message });
+
+  const tutorById = new Map(tutors.map((t) => [t.id, t]));
+
+  const escapeCsv = (value) => {
+    const str = value == null ? "" : String(value);
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+
+  const header = [
+    "Tutor name",
+    "Student number",
+    "Email",
+    "Week starting",
+    "Hours",
+    "Hourly rate",
+    "Amount",
+    "Approved at",
+  ];
+
+  const rows = timesheets.map((t) => {
+    const tutor = tutorById.get(t.user_id);
+    const rate = tutor?.hourly_rate;
+    const amount =
+      rate != null ? (Number(t.total_hours) * Number(rate)).toFixed(2) : "";
+
+    return [
+      tutor?.name ?? "Unknown",
+      tutor?.student_number ?? "",
+      tutor?.email ?? "",
+      t.week_start,
+      t.total_hours,
+      rate ?? "",
+      amount,
+      t.reviewed_at ?? "",
+    ];
+  });
+
+  const csv = [header, ...rows]
+    .map((row) => row.map(escapeCsv).join(","))
+    .join("\r\n");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="payroll-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+  );
+  res.send(csv);
+});
+
 // PATCH /api/timesheets/:userId/:weekStart — organiser approves/rejects a submission
 router.patch("/:userId/:weekStart", async (req, res) => {
   const { status } = req.body ?? {};
