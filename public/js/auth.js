@@ -75,7 +75,7 @@ if (registerForm) {
 
     if (
       !email.toLowerCase().endsWith("@wits.ac.za") &&
-      !email.toLowerCase.endsWith("@students.wits.ac.za")
+      !email.toLowerCase().endsWith("@students.wits.ac.za")
     ) {
       message.textContent = "Please use a Wits email address.";
 
