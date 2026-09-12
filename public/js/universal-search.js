@@ -122,9 +122,7 @@ if (searchInput && resultsEl) {
     resultsEl.hidden = false;
   }
 
-  searchInput.addEventListener("input", () =>
-    renderResults(searchInput.value),
-  );
+  searchInput.addEventListener("input", () => renderResults(searchInput.value));
   searchInput.addEventListener("focus", () => {
     if (searchInput.value.trim()) renderResults(searchInput.value);
   });
