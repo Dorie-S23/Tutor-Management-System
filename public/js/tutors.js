@@ -5,9 +5,9 @@ const ACADEMIC_LEVEL_LABELS = {
   phd: "PhD",
 };
 
-// Role-based hourly rates (ZAR). Stored in localStorage so organisers can
-// adjust them from the settings card without touching code.
-const RATES_KEY = "tms_role_rates";
+// Default hourly rates (ZAR) per academic level — used as seed values for
+// the settings card when no tutors exist yet. Once tutors are in the
+// database, their actual hourly_rate is the source of truth.
 const DEFAULT_RATES = {
   third_year: 120,
   honours: 150,
@@ -15,18 +15,42 @@ const DEFAULT_RATES = {
   phd: 200,
 };
 
-function getRoleRates() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(RATES_KEY));
-    if (stored && typeof stored === "object") {
-      return { ...DEFAULT_RATES, ...stored };
+// Build a { level: rate } map from the tutors currently loaded from the DB.
+// Falls back to DEFAULT_RATES for levels with no tutors yet.
+function extractRatesFromTutors(tutors) {
+  const rates = { ...DEFAULT_RATES };
+  tutors.forEach((t) => {
+    if (t.academic_level && t.hourly_rate != null) {
+      rates[t.academic_level] = t.hourly_rate;
     }
-  } catch {}
-  return { ...DEFAULT_RATES };
+  });
+  return rates;
 }
 
-function saveRoleRates(rates) {
-  localStorage.setItem(RATES_KEY, JSON.stringify(rates));
+// ── Form validation ──────────────────────────────────────────
+const VALID_LEVELS = Object.keys(ACADEMIC_LEVEL_LABELS);
+const WITS_EMAIL_RE = /@(wits\.ac\.za|students\.wits\.ac\.za)$/i;
+const STUDENT_NUM_RE = /^\d{5,10}$/;
+
+function validateForm({ name, student_number, email, academic_level }) {
+  const errors = [];
+
+  if (!name) errors.push("Name is required.");
+  else if (name.length < 2) errors.push("Name must be at least 2 characters.");
+
+  if (!student_number) errors.push("Student number is required.");
+  else if (!STUDENT_NUM_RE.test(student_number))
+    errors.push("Student number must be 5–10 digits.");
+
+  if (!email) errors.push("Email is required to create a tutor account.");
+  else if (!WITS_EMAIL_RE.test(email))
+    errors.push("Email must end with @wits.ac.za or @students.wits.ac.za.");
+
+  if (!academic_level) errors.push("Please select an academic level.");
+  else if (!VALID_LEVELS.includes(academic_level))
+    errors.push("Invalid academic level.");
+
+  return errors;
 }
 
 const GLOBAL_CAP_KEY = "tms_global_weekly_cap";
@@ -64,7 +88,9 @@ async function loadTutors() {
     showToast(data.error || "Failed to load tutors");
     return;
   }
+  window.__tutorsCache = data;
   renderTutors(data);
+  initRateFields(data);
 }
 
 function renderTutors(tutors) {
@@ -73,8 +99,7 @@ function renderTutors(tutors) {
 
   tutors.forEach((tutor) => {
     const level = ACADEMIC_LEVEL_LABELS[tutor.academic_level] || "";
-    const rates = getRoleRates();
-    const rate = rates[tutor.academic_level];
+    const rate = tutor.hourly_rate;
     const rateLabel = rate != null ? `R${rate}/h` : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -179,12 +204,34 @@ async function deleteTutor(tutor) {
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
+  const nameVal = nameEl.value.trim();
+  const studentNumVal = studentNumberEl.value.trim();
+  const emailVal = emailEl.value.trim();
+  const level = academicLevelEl.value || null;
+
+  // Run client-side validation (skip when editing — email/auth already exists)
+  const isEditing = !!tutorIdEl.value;
+  if (!isEditing) {
+    const errors = validateForm({
+      name: nameVal,
+      student_number: studentNumVal,
+      email: emailVal,
+      academic_level: level,
+    });
+    if (errors.length) {
+      errors.forEach((e) => showToast(e));
+      return;
+    }
+  }
+
+  const rates = extractRatesFromTutors(window.__tutorsCache || []);
   const payload = {
-    name: nameEl.value.trim(),
-    student_number: studentNumberEl.value.trim(),
-    email: emailEl.value.trim() || null,
-    academic_level: academicLevelEl.value || null,
+    name: nameVal,
+    student_number: studentNumVal,
+    email: emailVal || null,
+    academic_level: level,
     weekly_hour_cap: getGlobalCap(),
+    hourly_rate: level ? (rates[level] ?? null) : null,
   };
 
   const id = tutorIdEl.value;
@@ -259,24 +306,43 @@ function showToast(message) {
 }
 
 // ── Role rates (editable) ────────────────────────────────────────────
-function initRateFields() {
-  const rates = getRoleRates();
+function initRateFields(tutors) {
+  const rates = tutors ? extractRatesFromTutors(tutors) : { ...DEFAULT_RATES };
   document.querySelectorAll(".rate-input").forEach((input) => {
     const level = input.dataset.level;
     if (rates[level] != null) input.value = rates[level];
   });
 }
 
-document.getElementById("saveRatesBtn").addEventListener("click", () => {
+document.getElementById("saveRatesBtn").addEventListener("click", async () => {
   const rates = {};
   document.querySelectorAll(".rate-input").forEach((input) => {
     const level = input.dataset.level;
     const val = Number(input.value);
     rates[level] = Number.isFinite(val) && val >= 0 ? val : 0;
   });
-  saveRoleRates(rates);
-  showToast("Hourly rates saved.");
-  loadTutors();
+
+  const btn = document.getElementById("saveRatesBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving\u2026";
+  try {
+    const res = await fetch("/api/tutors/bulk-rates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rates }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to save rates");
+    showToast(
+      `Rates saved — updated ${data.updated} tutor${data.updated !== 1 ? "s" : ""}.`,
+    );
+    loadTutors();
+  } catch (err) {
+    showToast(err.message || "Failed to save rates.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save rates";
+  }
 });
 
 // Boot

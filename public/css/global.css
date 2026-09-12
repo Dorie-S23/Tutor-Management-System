@@ -120,13 +120,7 @@ button {
   gap: 28px;
 }
 
-.board-header #logout-button {
-  position: absolute;
-  top: 64px;
-  right: clamp(20px, 4vw, 48px);
-  transform: translateY(-50%);
-  z-index: 20;
-}
+/* logout button flows inline with header-actions */
 
 @media (max-width: 860px) {
   .board-header {

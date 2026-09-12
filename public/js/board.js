@@ -1075,6 +1075,82 @@ document.querySelectorAll('input[type="number"]').forEach((el) => {
   el.addEventListener("wheel", () => el.blur(), { passive: true });
 });
 
+// ---------- guided tour ----------
+
+// board.js has no login/session guard of its own today, so this reads the
+// same sessionStorage "user" key storage.js's getCurrentUser() uses,
+// rather than assuming a currentUser variable exists here.
+function getSessionUserId() {
+  try {
+    const raw = sessionStorage.getItem("user");
+    return raw ? JSON.parse(raw).id : "anon";
+  } catch {
+    return "anon";
+  }
+}
+
+const ORGANISER_TOUR_STEPS = [
+  {
+    selector: ".header-right",
+    title: "Your snapshot",
+    body: "At a glance: how many courses are fully staffed and how many tutors are on the roll.",
+    placement: "bottom",
+  },
+  {
+    selector: "#courseSearch",
+    title: "Find a course",
+    body: "Search by course code or name to jump straight to it.",
+    placement: "bottom",
+  },
+  {
+    selector: ".shortfall-toggle",
+    title: "Spot the gaps",
+    body: "Toggle this to show only short-staffed courses, worst shortfall first — handy when you are trying to close gaps quickly.",
+    placement: "bottom",
+  },
+  {
+    selector: "#addCourseBtn",
+    title: "Add a course",
+    body: "New course to staff? Add it here with its code, department, hours needed, and session time.",
+    placement: "bottom",
+  },
+  {
+    selector: "#courseList",
+    title: "Pick a course",
+    body: "Click any course to see who is assigned, who has applied, who has volunteered, and any session excusals — approve or reject right from there.",
+    placement: "right",
+  },
+  {
+    selector: "a[href='tutors.html']",
+    title: "Manage tutors",
+    body: "The full tutor roster lives here — add, edit, or remove tutors, and set hourly rates and weekly hour caps.",
+    placement: "bottom",
+  },
+  {
+    selector: "a[href='timesheet-review.html']",
+    title: "Review timesheets",
+    body: "Logged hours from tutors show up here for you to review.",
+    placement: "bottom",
+  },
+  {
+    selector: "a[href='timetable.html']",
+    title: "Timetable",
+    body: "See every scheduled tutorial and lab session across all courses on a weekly grid — spot venue clashes at a glance.",
+    placement: "bottom",
+  },
+];
+
+const tourBtn = document.getElementById("tour-button");
+if (tourBtn) {
+  tourBtn.addEventListener("click", () => {
+    window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
+      tourId: "organiser-board",
+      userId: getSessionUserId(),
+      force: true,
+    });
+  });
+}
+
 // ---------- init ----------
 
 async function init() {
@@ -1092,6 +1168,12 @@ async function init() {
       openCourseModal(course);
     }
   }
+
+  // Auto-start the guided tour on first visit
+  window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
+    tourId: "organiser-board",
+    userId: getSessionUserId(),
+  });
 }
 
 init();
