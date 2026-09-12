@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="../css/global.css" />
   </head>
   <body>
-    <header class="board-header">
+    <header class="board-header board-header--brand">
       <hgroup class="header-left">
         <p class="eyebrow">
           <img src="../images/images.png" alt="" class="eyebrow-logo" />
@@ -28,7 +28,11 @@
         class="header-wits-logo"
       />
 
-      <div class="header-actions">
+      <button class="btn btn-danger" id="logout-button" type="button">
+        Logout
+      </button>
+
+      <div class="header-toolbar">
         <dl class="header-right">
           <dt class="stat-label">courses staffed</dt>
           <dd class="stat-value" id="statFilled">0 / 0</dd>
@@ -38,30 +42,32 @@
           <dd class="stat-value" id="statPending">0</dd>
         </dl>
 
-        <div class="universal-search">
-          <input
-            type="search"
-            id="universalSearchInput"
-            class="universal-search-input"
-            placeholder="Search courses, tutors, timesheets…"
-            aria-label="Universal search"
-          />
-          <ul
-            class="universal-search-results"
-            id="universalSearchResults"
-            hidden
-          ></ul>
-        </div>
+        <div class="header-actions">
+          <div class="universal-search">
+            <input
+              type="search"
+              id="universalSearchInput"
+              class="universal-search-input"
+              placeholder="Search courses, tutors, timesheets…"
+              aria-label="Universal search"
+            />
+            <ul
+              class="universal-search-results"
+              id="universalSearchResults"
+              hidden
+            ></ul>
+          </div>
 
-        <button class="btn btn-primary" id="obviousFillBtn" type="button">
-          Fill obvious assignments
-        </button>
-        <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
-        <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
-        <a class="btn btn-ghost" href="timetable.html">Timetable</a>
-        <button class="btn btn-ghost" id="tour-button" type="button">
-          Take the tour
-        </button>
+          <button class="btn btn-primary" id="obviousFillBtn" type="button">
+            Fill obvious assignments
+          </button>
+          <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
+          <a class="btn btn-ghost" href="timetable.html">Timetable</a>
+          <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
+          <button class="btn btn-ghost" id="tour-button" type="button">
+            Take the tour
+          </button>
+        </div>
       </div>
     </header>
 
