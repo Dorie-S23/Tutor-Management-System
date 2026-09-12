@@ -1,5 +1,10 @@
 import { highlightActiveTab } from "./nav.js";
-import { getWeekStart, getWeekTotal, todayStr, requireRole } from "./storage.js";
+import {
+  getWeekStart,
+  getWeekTotal,
+  todayStr,
+  requireRole,
+} from "./storage.js";
 
 // This page (dashboard.html) is tutor-only. Without this, any signed-in
 // user (e.g. a student volunteer who wandered in via a stale nav link) could
