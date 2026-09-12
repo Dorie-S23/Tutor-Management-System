@@ -195,7 +195,17 @@ function toDateStr(year, month, day) {
   return `${y}-${m}-${d}`;
 }
 
+// render() awaits a real fetch per day cell (getEntriesForDate), and it's
+// called twice in quick succession at load (once directly, once after
+// fetchCourseSessions resolves) plus again from prev/next/import handlers.
+// Without this guard, an older in-flight call resumes after a newer one has
+// already finished and keeps appending its own cells on top — doubling the
+// whole grid. Each call claims a token; any call that finds itself stale
+// after an await bails out instead of touching the DOM.
+let renderToken = 0;
+
 async function render() {
+  const token = ++renderToken;
   const monthStart = new Date(viewYear, viewMonth, 1);
   monthLabelEl.textContent = monthStart.toLocaleDateString(undefined, {
     month: "long",
@@ -304,6 +314,8 @@ async function render() {
     }
 
     const entries = await getEntriesForDate(cellDateStr);
+    if (token !== renderToken) return; // superseded by a newer render() call
+
     for (const entry of entries) {
       const pill = document.createElement("div");
       pill.className = "calendar-session-pill";

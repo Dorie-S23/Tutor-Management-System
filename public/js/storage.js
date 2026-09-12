@@ -152,10 +152,16 @@ export function todayStr() {
 
 // ---------- tutor profile (used to fill in the printable timesheet) ----------
 
-const PROFILE_KEY = "tutorHours.profile";
+// Namespaced by user id — a fixed key would leak one signed-in user's data
+// to whoever is signed in next on the same browser (localStorage is shared
+// across the whole origin, not per-session like sessionStorage).
+function profileKey() {
+  const user = getCurrentUser();
+  return `tutorHours.profile.${user ? user.id : "anon"}`;
+}
 
 export function getProfile() {
-  const raw = localStorage.getItem(PROFILE_KEY);
+  const raw = localStorage.getItem(profileKey());
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -165,17 +171,24 @@ export function getProfile() {
 }
 
 export function saveProfile(profile) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  localStorage.setItem(profileKey(), JSON.stringify(profile));
 }
 
 // ---------- recurring class schedule (imported from a timetable PDF) ----------
 // Each class recurs weekly on the same weekday from firstDate through endDate,
 // separate from logged hours so it never affects hours-worked totals.
 
-const SCHEDULE_KEY = "tutorHours.schedule";
+// Namespaced by user id for the same reason as profileKey() above — without
+// this, a tutor's added/imported classes show up on whichever account is
+// signed in next on the same browser (this is what caused a volunteer to
+// see a different tutor's course sessions on their calendar).
+function scheduleKey() {
+  const user = getCurrentUser();
+  return `tutorHours.schedule.${user ? user.id : "anon"}`;
+}
 
 function readSchedule() {
-  const raw = localStorage.getItem(SCHEDULE_KEY);
+  const raw = localStorage.getItem(scheduleKey());
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -186,7 +199,7 @@ function readSchedule() {
 }
 
 function writeSchedule(classes) {
-  localStorage.setItem(SCHEDULE_KEY, JSON.stringify(classes));
+  localStorage.setItem(scheduleKey(), JSON.stringify(classes));
 }
 
 export function getSchedule() {
@@ -249,10 +262,13 @@ export function clearSchedule() {
 // without touching the recurrence rule itself. Keyed by (classId, date) so
 // there's at most one exception per class per day.
 
-const SCHEDULE_EXCEPTIONS_KEY = "tutorHours.scheduleExceptions";
+function scheduleExceptionsKey() {
+  const user = getCurrentUser();
+  return `tutorHours.scheduleExceptions.${user ? user.id : "anon"}`;
+}
 
 function readExceptions() {
-  const raw = localStorage.getItem(SCHEDULE_EXCEPTIONS_KEY);
+  const raw = localStorage.getItem(scheduleExceptionsKey());
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -263,7 +279,7 @@ function readExceptions() {
 }
 
 function writeExceptions(exceptions) {
-  localStorage.setItem(SCHEDULE_EXCEPTIONS_KEY, JSON.stringify(exceptions));
+  localStorage.setItem(scheduleExceptionsKey(), JSON.stringify(exceptions));
 }
 
 export function getScheduleExceptions() {
