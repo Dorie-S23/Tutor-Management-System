@@ -1,10 +1,10 @@
 /* ============================================================
-   StudyConnect ΓÇö shared first-run guided tour.
+   StudyConnect — shared first-run guided tour.
 
    A small spotlight-and-tooltip walkthrough with no dependencies.
    Attaches window.Onboarding so it can be used from a classic
    <script> (board.js) or imported indirectly by an ES module
-   (studentview.js) ΓÇö both share the same window.
+   (studentview.js) — both share the same window.
 
    Usage:
      window.Onboarding.start(steps, { tourId, userId });
@@ -26,7 +26,7 @@
     try {
       localStorage.setItem(tourKey(tourId, userId), "done");
     } catch {
-      // localStorage unavailable (private browsing, etc.) ΓÇö tour will just
+      // localStorage unavailable (private browsing, etc.) — tour will just
       // show again next visit, which is a safe failure mode.
     }
   }
@@ -46,13 +46,13 @@
   function start(steps, { tourId, userId, force = false } = {}) {
     if (!tourId) throw new Error("Onboarding.start requires a tourId");
     if (!force && hasSeenTour(tourId, userId)) return;
-    if (activeTour) return; // a tour is already running ΓÇö don't stack them
+    if (activeTour) return; // a tour is already running — don't stack them
 
     const usable = steps.filter((s) =>
       isVisible(document.querySelector(s.selector)),
     );
     if (usable.length === 0) {
-      // Nothing on this page matched (e.g. wrong role, still loading) ΓÇö
+      // Nothing on this page matched (e.g. wrong role, still loading) —
       // don't mark it seen, so it can still show once content is ready.
       return;
     }
@@ -154,7 +154,7 @@
     const step = activeTour.steps[activeTour.index];
     const target = document.querySelector(step.selector);
     if (!isVisible(target)) {
-      // Target disappeared (role-hidden element, layout change) ΓÇö skip it
+      // Target disappeared (role-hidden element, layout change) — skip it
       // rather than spotlighting nothing.
       next();
       return;

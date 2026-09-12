@@ -182,9 +182,78 @@ function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+// ---------- guided tour ----------
+
+const VOLUNTEER_TOUR_STEPS = [
+  {
+    selector: "section[aria-labelledby='stats-heading']",
+    title: "Your hours",
+    body: "Total hours you've volunteered tutoring so far, pulled from your logged sessions.",
+    placement: "bottom",
+  },
+  {
+    selector: "#courseList",
+    title: "Modules you can tutor",
+    body: 'Courses currently looking for volunteers show up here. Click "Volunteer" on one, enter the mark you got in that module, and submit — an organiser will review it.',
+    placement: "top",
+  },
+  {
+    selector: "section[aria-labelledby='pending-heading']",
+    title: "Awaiting approval",
+    body: "Modules you've applied for sit here until an organiser approves or rejects them.",
+    placement: "top",
+  },
+  {
+    selector: "section[aria-labelledby='sessions-heading']",
+    title: "Upcoming sessions",
+    body: "Once you're approved for a module, your scheduled tutoring sessions will appear here.",
+    placement: "top",
+  },
+  {
+    selector: "a[href='my-sessions.html']",
+    title: "My Sessions",
+    body: "A full view of your tutoring sessions, past and upcoming.",
+    placement: "bottom",
+  },
+  {
+    selector: "a[href='log-hours.html']",
+    title: "Log Hours",
+    body: "After a session, log the hours you spent tutoring here.",
+    placement: "bottom",
+  },
+  {
+    selector: "a[href='student_calender.html']",
+    title: "Calendar",
+    body: "See your sessions laid out by date.",
+    placement: "bottom",
+  },
+];
+
+const tourLink = document.getElementById("tour-link");
+if (tourLink) {
+  tourLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
+      tourId: "volunteer-dashboard",
+      userId: currentUser.id,
+      force: true,
+    });
+  });
+}
+
 // ---------- init ----------
 
 upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
-renderHoursVolunteered();
-renderCourses();
-renderPendingApplications();
+
+(async () => {
+  await Promise.all([
+    renderHoursVolunteered(),
+    renderCourses(),
+    renderPendingApplications(),
+  ]);
+
+  window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
+    tourId: "volunteer-dashboard",
+    userId: currentUser.id,
+  });
+})();

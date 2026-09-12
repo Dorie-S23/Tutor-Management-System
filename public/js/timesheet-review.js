@@ -1,6 +1,7 @@
 const submissionListEl = document.getElementById("submissionList");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 const statusFilterEl = document.getElementById("statusFilter");
+const exportPayrollBtn = document.getElementById("exportPayrollBtn");
 
 function initials(name) {
   return (name || "?")
@@ -49,6 +50,20 @@ async function loadSubmissions() {
   }
 
   rows.forEach((sub) => renderSubmission(sub));
+
+  applyHighlight();
+}
+
+function applyHighlight() {
+  const highlightKey = new URLSearchParams(window.location.search).get(
+    "highlight",
+  );
+  if (!highlightKey) return;
+  const row = submissionListEl.querySelector(`li[data-key="${highlightKey}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.add("search-highlight");
+  setTimeout(() => row.classList.remove("search-highlight"), 2000);
 }
 
 function renderSubmission(sub) {
@@ -57,6 +72,7 @@ function renderSubmission(sub) {
   const status = (sub.status || "pending").toLowerCase();
 
   const li = document.createElement("li");
+  li.dataset.key = `${sub.user_id}_${sub.week_start}`;
   const row = document.createElement("div");
   row.className = "tutor-row";
   row.innerHTML = `
@@ -172,6 +188,35 @@ function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+async function exportPayroll() {
+  try {
+    const res = await fetch("/api/timesheets/payroll-export");
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Couldn't export payroll.");
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payroll-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
 statusFilterEl.addEventListener("change", loadSubmissions);
+exportPayrollBtn.addEventListener("click", exportPayroll);
+
+// A search deep-link's target row might not be "pending" — default to
+// showing all statuses so it isn't hidden by the default filter.
+if (new URLSearchParams(window.location.search).get("highlight")) {
+  statusFilterEl.value = "";
+}
 
 loadSubmissions();

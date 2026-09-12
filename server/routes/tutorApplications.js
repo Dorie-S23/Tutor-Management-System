@@ -317,8 +317,31 @@ router.get("/", async (req, res) => {
         score += Math.min(Math.max(workloadRatio, 0), 1) * 10;
       }
 
+      // --------------------------------------------------------
+      // Override info — was this approval pushed through past a
+      // blocking rule? Only relevant once approved.
+      // --------------------------------------------------------
+
+      let overrideInfo = null;
+
+      if (application.status === "approved") {
+        const { data: overrides } = await supabase
+          .from("allocation_overrides")
+          .select("rule_overridden, reason, created_at")
+          .eq("tutor_id", tutorId)
+          .eq("course_id", application.course_id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (overrides && overrides.length > 0) {
+          overrideInfo = overrides[0];
+        }
+      }
+
       return {
         ...application,
+
+        overrideInfo,
 
         ranking: {
           score: Number(score.toFixed(2)),
@@ -544,6 +567,142 @@ router.post("/", async (req, res) => {
   res.status(201).json(data);
 });
 
+// GET /api/tutor-applications/obvious-fill — pending applications that can be
+// approved with no judgment call: the tutor's mark clears the course's bar,
+// they're free at the tutorial time, and there aren't more such applicants
+// than the course has open slots (so nobody has to be picked over anybody
+// else). Courses with no eligible applicant, or more eligible applicants
+// than slots, are left out — those need an organiser's judgment.
+router.get("/obvious-fill", async (req, res) => {
+  const { data: courses, error: coursesError } = await supabase
+    .from("courses")
+    .select(
+      "id, course_code, course_name, min_mark, tutors_needed, no_of_tutors_assigned",
+    );
+
+  if (coursesError)
+    return res.status(500).json({ error: coursesError.message });
+
+  const { data: applications, error: applicationsError } = await supabase
+    .from("tutor_subject_preference")
+    .select("id, course_id, tutor_mark, Availability, Tutor_name")
+    .eq("status", "pending");
+
+  if (applicationsError)
+    return res.status(500).json({ error: applicationsError.message });
+
+  const groups = [];
+
+  for (const course of courses) {
+    const remainingSlots =
+      (course.tutors_needed ?? 0) - (course.no_of_tutors_assigned ?? 0);
+    if (remainingSlots <= 0) continue;
+
+    const eligible = applications.filter(
+      (app) =>
+        app.course_id === course.id &&
+        typeof app.tutor_mark === "number" &&
+        app.tutor_mark >= course.min_mark &&
+        app.Availability === true,
+    );
+
+    if (eligible.length === 0 || eligible.length > remainingSlots) continue;
+
+    groups.push({
+      course: {
+        id: course.id,
+        code: course.course_code,
+        name: course.course_name,
+      },
+      applications: eligible.map((app) => ({
+        id: app.id,
+        tutorName: app.Tutor_name,
+        mark: app.tutor_mark,
+      })),
+    });
+  }
+
+  res.json(groups);
+});
+
+// POST /api/tutor-applications/bulk-approve — approve several applications in
+// one action. Runs the same eligibility/capacity checks a single PATCH would,
+// one row at a time (not in parallel) so two applications for the same course
+// can't both slip past its capacity in a race.
+router.post("/bulk-approve", async (req, res) => {
+  const { applicationIds } = req.body ?? {};
+  if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
+    return res
+      .status(400)
+      .json({ error: "applicationIds must be a non-empty array" });
+  }
+
+  const results = [];
+
+  for (const id of applicationIds) {
+    const { data: application, error: applicationError } = await supabase
+      .from("tutor_subject_preference")
+      .select("id, status, course_id, Tutor_name")
+      .eq("id", id)
+      .single();
+
+    if (applicationError || !application) {
+      results.push({ id, success: false, error: "Application not found" });
+      continue;
+    }
+
+    if (application.status === "approved") {
+      results.push({ id, success: true, name: application.Tutor_name });
+      continue;
+    }
+
+    const { data: course, error: courseError } = await supabase
+      .from("courses")
+      .select("no_of_tutors_assigned, tutors_needed")
+      .eq("id", application.course_id)
+      .single();
+
+    if (courseError || !course) {
+      results.push({ id, success: false, error: "Course not found" });
+      continue;
+    }
+
+    const next = (course.no_of_tutors_assigned ?? 0) + 1;
+    if (next > course.tutors_needed) {
+      results.push({
+        id,
+        success: false,
+        error: "This course already has all the tutors it needs",
+      });
+      continue;
+    }
+
+    const { error: bumpError } = await supabase
+      .from("courses")
+      .update({ no_of_tutors_assigned: next })
+      .eq("id", application.course_id);
+
+    if (bumpError) {
+      results.push({ id, success: false, error: bumpError.message });
+      continue;
+    }
+
+    const { error: updateError } = await supabase
+      .from("tutor_subject_preference")
+      .update({ status: "approved" })
+      .eq("id", id);
+
+    if (updateError) {
+      results.push({ id, success: false, error: updateError.message });
+      continue;
+    }
+
+    results.push({ id, success: true, name: application.Tutor_name });
+  }
+
+  res.json({ results });
+});
+
 // ============================================================
 // PATCH /api/tutor-applications/:id
 //
@@ -553,13 +712,30 @@ router.post("/", async (req, res) => {
 const VALID_STATUSES = ["pending", "approved", "rejected"];
 
 router.patch("/:id", async (req, res) => {
-  const { status } = req.body ?? {};
+  const { status, override, organiserId, reason } = req.body ?? {};
 
   if (!VALID_STATUSES.includes(status)) {
     return res.status(400).json({
       error: "status must be pending, approved or rejected",
     });
   }
+
+  const overrideRequested = override === true;
+
+  if (overrideRequested) {
+    if (!organiserId) {
+      return res.status(400).json({
+        error: "organiserId is required to record an override",
+      });
+    }
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        error: "A reason is required to record an override",
+      });
+    }
+  }
+
+  const bypassedRules = [];
 
   const { data: application, error: applicationError } = await supabase
     .from("tutor_subject_preference")
@@ -594,8 +770,14 @@ router.patch("/:id", async (req, res) => {
       (course.no_of_tutors_assigned ?? 0) + (willBeApproved ? 1 : -1);
 
     if (willBeApproved && next > course.tutors_needed) {
-      return res.status(409).json({
-        error: "This course already has all the tutors it needs",
+      if (!overrideRequested) {
+        return res.status(409).json({
+          error: "This course already has all the tutors it needs",
+        });
+      }
+      bypassedRules.push({
+        rule_overridden: "course_capacity",
+        detail: `Would be ${next}/${course.tutors_needed} tutors assigned`,
       });
     }
 
@@ -637,8 +819,14 @@ router.patch("/:id", async (req, res) => {
           currentAssignedHours + (course.hours_per_week || 0);
 
         if (projectedHours > tutor.weekly_hour_cap) {
-          return res.status(409).json({
-            error: `This would put the tutor at ${projectedHours} hrs/week, over their ${tutor.weekly_hour_cap} hr cap`,
+          if (!overrideRequested) {
+            return res.status(409).json({
+              error: `This would put the tutor at ${projectedHours} hrs/week, over their ${tutor.weekly_hour_cap} hr cap`,
+            });
+          }
+          bypassedRules.push({
+            rule_overridden: "weekly_hour_cap",
+            detail: `Would put tutor at ${projectedHours}/${tutor.weekly_hour_cap} hrs/week`,
           });
         }
       }
@@ -682,6 +870,26 @@ router.patch("/:id", async (req, res) => {
     return res.status(500).json({
       error: error.message,
     });
+  }
+
+  if (bypassedRules.length > 0) {
+    const { error: overrideError } = await supabase
+      .from("allocation_overrides")
+      .insert(
+        bypassedRules.map((r) => ({
+          organiser_id: organiserId,
+          tutor_id: application.tutor_id,
+          course_id: application.course_id,
+          rule_overridden: r.rule_overridden,
+          reason: `${reason.trim()} (${r.detail})`,
+        })),
+      );
+
+    if (overrideError) {
+      return res.status(500).json({
+        error: `The approval went through, but the override reason couldn't be saved: ${overrideError.message}`,
+      });
+    }
   }
 
   res.json(data);

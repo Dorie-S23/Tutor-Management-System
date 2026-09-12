@@ -93,6 +93,18 @@ async function loadTutors() {
   initRateFields(data);
 }
 
+function applyHighlight() {
+  const highlightId = new URLSearchParams(window.location.search).get(
+    "highlight",
+  );
+  if (!highlightId) return;
+  const row = tableBody.querySelector(`tr[data-tutor-id="${highlightId}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.add("search-highlight");
+  setTimeout(() => row.classList.remove("search-highlight"), 2000);
+}
+
 function renderTutors(tutors) {
   tableBody.innerHTML = "";
   emptyCopyEl.hidden = tutors.length > 0;
@@ -102,6 +114,7 @@ function renderTutors(tutors) {
     const rate = tutor.hourly_rate;
     const rateLabel = rate != null ? `R${rate}/h` : "";
     const tr = document.createElement("tr");
+    tr.dataset.tutorId = tutor.id;
     tr.innerHTML = `
       <td>${tutor.name || ""}</td>
       <td>${tutor.student_number || ""}</td>
@@ -120,6 +133,8 @@ function renderTutors(tutors) {
     );
     tableBody.appendChild(tr);
   });
+
+  applyHighlight();
 }
 
 async function loadWorkload() {

@@ -6,6 +6,8 @@ let activeCourseId = null;
 let tutorCount = 0; // total tutors in the system, for the header stat
 let volunteerCounts = {}; // course_id -> number of approved volunteers
 let shortfallOnly = false; // when true, course rail shows only short-staffed courses, worst-first
+let pendingApplicationCounts = {}; // course_id -> number of pending tutor applications
+let pendingVolunteerCounts = {}; // course_id -> number of pending student volunteers
 
 // ---------- data loading ----------
 
@@ -184,6 +186,53 @@ async function fetchTutorCount() {
   statTutorsEl.textContent = tutorCount;
 }
 
+// No dedicated "pending applications across all courses" endpoint exists,
+// so this fetches per-course the same way renderApplicants() already does,
+// just for every course at once, and keeps only the counts.
+async function fetchPendingApplicationCounts() {
+  if (COURSES.length === 0) {
+    pendingApplicationCounts = {};
+    renderCourseList();
+    return;
+  }
+  try {
+    const results = await Promise.all(
+      COURSES.map(async (course) => {
+        const res = await fetch(
+          `/api/tutor-applications?courseId=${course.id}`,
+        );
+        const rows = await res.json();
+        if (!res.ok)
+          throw new Error(rows.error || "Failed to load applications");
+        const pending = rows.filter(
+          (a) => (a.status || "pending").toLowerCase() === "pending",
+        ).length;
+        return [course.id, pending];
+      }),
+    );
+    pendingApplicationCounts = Object.fromEntries(results);
+  } catch (err) {
+    // Fails open, same as the rest of the board: badges just show 0 rather
+    // than blocking the page if one course's fetch has a hiccup.
+    pendingApplicationCounts = {};
+  }
+  renderCourseList();
+}
+
+// Assumes /api/course-volunteers/counts accepts status=pending the same
+// way it already accepts status=approved (see fetchVolunteerCounts above).
+async function fetchPendingVolunteerCounts() {
+  try {
+    const res = await fetch("/api/course-volunteers/counts?status=pending");
+    const counts = await res.json();
+    if (!res.ok) throw new Error(counts.error || "Failed to load volunteers");
+    pendingVolunteerCounts = counts;
+  } catch (err) {
+    pendingVolunteerCounts = {};
+  }
+  renderCourseList();
+}
+
 // ---------- helpers ----------
 
 function initials(name) {
@@ -202,9 +251,19 @@ const courseSearchEl = document.getElementById("courseSearch");
 const shortfallToggleEl = document.getElementById("shortfallToggle");
 const statFilledEl = document.getElementById("statFilled");
 const statTutorsEl = document.getElementById("statTutors");
+const statPendingEl = document.getElementById("statPending");
 
 function shortfall(course) {
   return course.tutorsNeeded ? course.tutorsNeeded - course.tutorsAssigned : 0;
+}
+
+// Total items on this course awaiting an organiser's decision: pending
+// tutor applications + pending student volunteers.
+function pendingCount(course) {
+  return (
+    (pendingApplicationCounts[course.id] || 0) +
+    (pendingVolunteerCounts[course.id] || 0)
+  );
 }
 
 function renderCourseList() {
@@ -213,6 +272,10 @@ function renderCourseList() {
     (c) => c.tutorsNeeded && c.tutorsAssigned >= c.tutorsNeeded,
   ).length;
   statFilledEl.textContent = `${filled} / ${COURSES.length}`;
+
+  const totalPending = COURSES.reduce((sum, c) => sum + pendingCount(c), 0);
+  statPendingEl.textContent = totalPending;
+  statPendingEl.classList.toggle("stat-value--attention", totalPending > 0);
 
   courseListEl.innerHTML = "";
 
@@ -233,25 +296,104 @@ function renderCourseList() {
     const li = document.createElement("li");
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
+    const pending = pendingCount(course);
 
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className =
       "course-card" + (course.id === activeCourseId ? " active" : "");
     btn.setAttribute("aria-pressed", course.id === activeCourseId);
+    // Roving tabindex: only the active card (or the first, if none is active
+    // yet) sits in the page's Tab order — Up/Down/Home/End move between the
+    // rest, so an organiser paging through many courses isn't tabbing past
+    // every single one to get anywhere else on the page.
+    btn.tabIndex = course.id === activeCourseId ? 0 : -1;
+    btn.dataset.courseId = String(course.id);
     btn.innerHTML = `
         <span class="course-code">${course.code}</span>
         <span class="course-name">${course.name}</span>
         <div class="card-foot">
           <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned, ${volunteerCounts[course.id] ?? 0} volunteered</span>
           <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : shortfall(course) > 0 ? `Short ${shortfall(course)}` : "Open"}</span>
+          ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
         </div>
       `;
-    btn.addEventListener("click", () => selectCourse(course.id));
+    btn.addEventListener("click", () => {
+      selectCourse(course.id);
+      // selectCourse() rebuilds this whole list, destroying the button that
+      // was just clicked — without this, focus silently falls back to
+      // <body> and the next arrow-key press just scrolls the page instead
+      // of reaching the keydown handler below.
+      focusCourseCard(course.id);
+    });
     li.appendChild(btn);
     courseListEl.appendChild(li);
   });
+
+  const cards = Array.from(courseListEl.querySelectorAll(".course-card"));
+  if (cards.length && !cards.some((c) => c.tabIndex === 0)) {
+    cards[0].tabIndex = 0;
+  }
 }
+
+function focusCourseCard(courseId) {
+  const card = courseListEl.querySelector(
+    `.course-card[data-course-id="${CSS.escape(String(courseId))}"]`,
+  );
+  if (card) card.focus();
+}
+
+function isTypingInField() {
+  const active = document.activeElement;
+  return !!(
+    active &&
+    (active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.isContentEditable)
+  );
+}
+
+// Listens on the whole page, not just the course list, so Up/Down/Home/End
+// navigate courses no matter where focus currently is (including nowhere,
+// e.g. right after a mouse click elsewhere) — the only thing that opts out
+// is actually typing into a text field, where arrow keys should do their
+// normal job of moving the cursor.
+document.addEventListener("keydown", (event) => {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+  if (isTypingInField()) return;
+
+  const cards = Array.from(courseListEl.querySelectorAll(".course-card"));
+  if (cards.length === 0) return;
+
+  const currentIndex = cards.findIndex(
+    (c) => c.dataset.courseId === String(activeCourseId),
+  );
+
+  let targetIndex;
+  switch (event.key) {
+    case "ArrowDown":
+      targetIndex =
+        currentIndex < 0 ? 0 : Math.min(currentIndex + 1, cards.length - 1);
+      break;
+    case "ArrowUp":
+      targetIndex = currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0);
+      break;
+    case "Home":
+      targetIndex = 0;
+      break;
+    case "End":
+      targetIndex = cards.length - 1;
+      break;
+  }
+
+  event.preventDefault();
+  const targetCourseId = cards[targetIndex].dataset.courseId;
+  const targetCourse = COURSES.find((c) => String(c.id) === targetCourseId);
+  if (!targetCourse) return;
+
+  selectCourse(targetCourse.id);
+  focusCourseCard(targetCourse.id);
+});
 
 // ---------- rendering: detail pane ----------
 
@@ -415,6 +557,9 @@ async function renderApplicants(course) {
     const availabilityStamp = app.Availability
       ? `<span class="stamp ok">Free at tutorial time</span>`
       : `<span class="stamp blocked">Not free at tutorial time</span>`;
+    const overrideStamp = app.overrideInfo
+      ? `<span class="stamp warn">Overridden: ${app.overrideInfo.reason}</span>`
+      : "";
 
     const li = document.createElement("li");
     const row = document.createElement("div");
@@ -431,6 +576,7 @@ async function renderApplicants(course) {
         ${availabilityStamp}
         ${buildClashStamp(check)}
         ${buildWorkloadStamp(check)}
+        ${overrideStamp}
       </span>
       <span class="status-pill ${status}">${status}</span>
       <span class="applicant-actions"></span>
@@ -440,6 +586,10 @@ async function renderApplicants(course) {
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
     const overCap = check?.workload?.overCap;
+    const blockReason =
+      (isFull && "This course already has all the tutors it needs") ||
+      (overCap &&
+        `This would put ${name} at ${check.workload.projectedHours} hrs/week, over their ${check.workload.weeklyHourCap} hr cap`);
 
     if (status === "pending") {
       actionsEl.appendChild(
@@ -455,11 +605,16 @@ async function renderApplicants(course) {
             }
             setApplicationStatus(course, app, "approved", name);
           },
-          (isFull && "This course already has all the tutors it needs") ||
-            (overCap &&
-              `This would put ${name} at ${check.workload.projectedHours} hrs/week, over their ${check.workload.weeklyHourCap} hr cap`),
+          blockReason,
         ),
       );
+      if (blockReason) {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Override", "override", () =>
+            openOverrideModal(course, app, name, blockReason),
+          ),
+        );
+      }
       actionsEl.appendChild(
         makeApplicantActionBtn("Reject", "", () =>
           setApplicationStatus(course, app, "rejected", name),
@@ -499,6 +654,7 @@ function makeApplicantActionBtn(label, variant, onClick, disabledTitle) {
 }
 
 async function setApplicationStatus(course, app, status, name) {
+  const previousStatus = (app.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/tutor-applications/${app.id}`, {
       method: "PATCH",
@@ -516,11 +672,103 @@ async function setApplicationStatus(course, app, status, name) {
       pending: `${name} moved back to pending`,
     };
     showToast(messages[status] || "Application updated.");
+
+    // Update the pending badge locally instead of re-fetching every
+    // course's applications again just to recompute one count.
+    const wasPending = previousStatus === "pending";
+    const isPending = status === "pending";
+    if (wasPending !== isPending) {
+      const current = pendingApplicationCounts[course.id] || 0;
+      pendingApplicationCounts[course.id] = Math.max(
+        0,
+        current + (isPending ? 1 : -1),
+      );
+    }
+
     await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
 }
+
+// ---------- override modal ----------
+
+let pendingOverride = null; // { course, app, name } for whichever row opened the modal
+
+const overrideModal = document.getElementById("overrideModal");
+const overrideForm = document.getElementById("overrideForm");
+const overrideFormError = document.getElementById("overrideFormError");
+const overrideModalContext = document.getElementById("overrideModalContext");
+const overrideReasonInput = document.getElementById("overrideReasonInput");
+const overrideSubmitBtn = document.getElementById("overrideSubmitBtn");
+
+function openOverrideModal(course, app, name, blockReason) {
+  pendingOverride = { course, app, name };
+  overrideForm.reset();
+  overrideFormError.hidden = true;
+  overrideModalContext.textContent = `${blockReason}. Approving ${name} for ${course.code} anyway will be recorded against your account with the reason below.`;
+  overrideModal.showModal();
+  overrideReasonInput.focus();
+}
+
+function closeOverrideModal() {
+  overrideModal.close();
+  pendingOverride = null;
+}
+
+document
+  .getElementById("overrideModalCloseBtn")
+  .addEventListener("click", closeOverrideModal);
+document
+  .getElementById("overrideCancelBtn")
+  .addEventListener("click", closeOverrideModal);
+overrideModal.addEventListener("click", (e) => {
+  if (e.target === overrideModal) closeOverrideModal();
+});
+
+overrideForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  overrideFormError.hidden = true;
+  if (!pendingOverride) return;
+
+  const { course, app, name } = pendingOverride;
+  const reason = overrideReasonInput.value.trim();
+
+  overrideSubmitBtn.disabled = true;
+  overrideSubmitBtn.textContent = "Approving…";
+
+  try {
+    const res = await fetch(`/api/tutor-applications/${app.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "approved",
+        override: true,
+        organiserId: getSessionUserId(),
+        reason,
+      }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      overrideFormError.textContent =
+        body.error || "Couldn't override that rule.";
+      overrideFormError.hidden = false;
+      return;
+    }
+
+    closeOverrideModal();
+    showToast(`${name} approved for ${course.code} (override recorded)`);
+    await fetchCourses();
+  } catch (err) {
+    overrideFormError.textContent =
+      "Network error — couldn't reach the server.";
+    overrideFormError.hidden = false;
+  } finally {
+    overrideSubmitBtn.disabled = false;
+    overrideSubmitBtn.textContent = "Approve with override";
+  }
+});
 
 // ---------- session excusals ----------
 
@@ -659,6 +907,7 @@ async function renderVolunteers(course) {
 }
 
 async function setVolunteerStatus(course, vol, status, name) {
+  const previousStatus = (vol.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/course-volunteers/${vol.id}`, {
       method: "PATCH",
@@ -676,8 +925,20 @@ async function setVolunteerStatus(course, vol, status, name) {
       pending: `${name} moved back to pending`,
     };
     showToast(messages[status] || "Volunteer updated.");
+
+    const wasPending = previousStatus === "pending";
+    const isPending = status === "pending";
+    if (wasPending !== isPending) {
+      const current = pendingVolunteerCounts[course.id] || 0;
+      pendingVolunteerCounts[course.id] = Math.max(
+        0,
+        current + (isPending ? 1 : -1),
+      );
+    }
+
     renderVolunteers(course);
     fetchVolunteerCounts();
+    renderCourseList();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
@@ -692,6 +953,132 @@ function renderAssignmentCard(course) {
     ? `<p class="empty-copy">This course is fully staffed — ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
     : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "—"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
 }
+
+// ---------- bulk-fill obvious assignments ----------
+
+const obviousFillBtn = document.getElementById("obviousFillBtn");
+const obviousFillModal = document.getElementById("obviousFillModal");
+const obviousFillList = document.getElementById("obviousFillList");
+const obviousFillEmpty = document.getElementById("obviousFillEmpty");
+const obviousFillHint = document.getElementById("obviousFillHint");
+const obviousFillConfirmBtn = document.getElementById("obviousFillConfirmBtn");
+
+function closeObviousFillModal() {
+  obviousFillModal.close();
+}
+
+async function openObviousFillModal() {
+  obviousFillList.innerHTML = "";
+  obviousFillEmpty.hidden = true;
+  obviousFillHint.textContent = "Loading…";
+  obviousFillConfirmBtn.hidden = false;
+  obviousFillConfirmBtn.disabled = true;
+  obviousFillModal.showModal();
+
+  let groups = [];
+  try {
+    const res = await fetch("/api/tutor-applications/obvious-fill");
+    groups = await res.json();
+    if (!res.ok)
+      throw new Error(groups.error || "Failed to load obvious fills");
+  } catch (err) {
+    obviousFillHint.textContent = "Couldn't load obvious fills — try again.";
+    return;
+  }
+
+  const totalApplications = groups.reduce(
+    (sum, g) => sum + g.applications.length,
+    0,
+  );
+
+  if (totalApplications === 0) {
+    obviousFillHint.textContent = "";
+    obviousFillEmpty.hidden = false;
+    obviousFillConfirmBtn.hidden = true;
+    return;
+  }
+
+  obviousFillHint.textContent = `${totalApplications} application${totalApplications === 1 ? "" : "s"} across ${groups.length} course${groups.length === 1 ? "" : "s"} can be filled without any judgment call — uncheck anything you'd rather decide yourself.`;
+
+  groups.forEach((group) => {
+    const heading = document.createElement("li");
+    heading.className = "obvious-fill-course-head";
+    heading.textContent = `${group.course.code} — ${group.course.name}`;
+    obviousFillList.appendChild(heading);
+
+    group.applications.forEach((app) => {
+      const li = document.createElement("li");
+      const row = document.createElement("label");
+      row.className = "tutor-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <input type="checkbox" class="obvious-fill-check" data-id="${app.id}" checked>
+        <span class="name-block">
+          <span class="name">${app.tutorName || "Unknown"}</span>
+        </span>
+        <span class="stamp-row">
+          <span class="stamp ok">Mark ${app.mark}</span>
+        </span>
+      `;
+      li.appendChild(row);
+      obviousFillList.appendChild(li);
+    });
+  });
+
+  obviousFillConfirmBtn.disabled = false;
+}
+
+obviousFillBtn.addEventListener("click", openObviousFillModal);
+document
+  .getElementById("obviousFillCloseBtn")
+  .addEventListener("click", closeObviousFillModal);
+document
+  .getElementById("obviousFillCancelBtn")
+  .addEventListener("click", closeObviousFillModal);
+obviousFillModal.addEventListener("click", (e) => {
+  if (e.target === obviousFillModal) closeObviousFillModal();
+});
+
+obviousFillConfirmBtn.addEventListener("click", async () => {
+  const ids = Array.from(
+    obviousFillList.querySelectorAll(".obvious-fill-check:checked"),
+  ).map((cb) => cb.dataset.id);
+
+  if (ids.length === 0) {
+    closeObviousFillModal();
+    return;
+  }
+
+  obviousFillConfirmBtn.disabled = true;
+  obviousFillConfirmBtn.textContent = "Approving…";
+
+  try {
+    const res = await fetch("/api/tutor-applications/bulk-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicationIds: ids }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't fill those assignments.");
+      return;
+    }
+    const failed = body.results.filter((r) => !r.success);
+    const succeeded = body.results.length - failed.length;
+    showToast(
+      failed.length === 0
+        ? `${succeeded} assignment${succeeded === 1 ? "" : "s"} filled.`
+        : `${succeeded} filled, ${failed.length} couldn't be — something changed since you opened this.`,
+    );
+    closeObviousFillModal();
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    obviousFillConfirmBtn.disabled = false;
+    obviousFillConfirmBtn.textContent = "Approve selected";
+  }
+});
 
 // ---------- add / edit course modal ----------
 
@@ -1068,6 +1455,15 @@ shortfallToggleEl.addEventListener("change", () => {
   renderCourseList();
 });
 
+// "/" jumps to the course search from anywhere on the page, unless the
+// organiser is already typing into a field (so it doesn't hijack real input).
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "/") return;
+  if (isTypingInField()) return;
+  event.preventDefault();
+  courseSearchEl.focus();
+});
+
 // ---------- misc ----------
 
 // prevent accidental scroll-to-change on number fields (min mark / hours per week)
@@ -1093,7 +1489,13 @@ const ORGANISER_TOUR_STEPS = [
   {
     selector: ".header-right",
     title: "Your snapshot",
-    body: "At a glance: how many courses are fully staffed and how many tutors are on the roll.",
+    body: "At a glance: how many courses are fully staffed, how many tutors are on the roll, and how many applications or volunteers still need a decision.",
+    placement: "bottom",
+  },
+  {
+    selector: "#statPending",
+    title: "Needs review",
+    body: 'This counts every pending tutor application and student volunteer across all courses. Courses with something waiting also get a "to review" badge in the list on the left.',
     placement: "bottom",
   },
   {
@@ -1105,7 +1507,7 @@ const ORGANISER_TOUR_STEPS = [
   {
     selector: ".shortfall-toggle",
     title: "Spot the gaps",
-    body: "Toggle this to show only short-staffed courses, worst shortfall first — handy when you are trying to close gaps quickly.",
+    body: "Toggle this to show only short-staffed courses, worst shortfall first — handy when you're trying to close gaps quickly.",
     placement: "bottom",
   },
   {
@@ -1117,7 +1519,7 @@ const ORGANISER_TOUR_STEPS = [
   {
     selector: "#courseList",
     title: "Pick a course",
-    body: "Click any course to see who is assigned, who has applied, who has volunteered, and any session excusals — approve or reject right from there.",
+    body: "Click any course to see who's assigned, who's applied, who's volunteered, and any session excusals — approve or reject right from there.",
     placement: "right",
   },
   {
@@ -1130,12 +1532,6 @@ const ORGANISER_TOUR_STEPS = [
     selector: "a[href='timesheet-review.html']",
     title: "Review timesheets",
     body: "Logged hours from tutors show up here for you to review.",
-    placement: "bottom",
-  },
-  {
-    selector: "a[href='timetable.html']",
-    title: "Timetable",
-    body: "See every scheduled tutorial and lab session across all courses on a weekly grid — spot venue clashes at a glance.",
     placement: "bottom",
   },
 ];
@@ -1157,10 +1553,21 @@ async function init() {
   await fetchCourses();
   fetchTutorCount();
   fetchVolunteerCounts();
+  fetchPendingApplicationCounts();
+  fetchPendingVolunteerCounts();
+
+  const params = new URLSearchParams(location.search);
+
+  // Deep link from the universal search box (?course=<id>)
+  const courseParam = params.get("course");
+  if (courseParam) {
+    const course = COURSES.find((c) => String(c.id) === courseParam);
+    if (course) selectCourse(course.id);
+  }
 
   // Arriving from the timetable grid with ?edit=<courseId> jumps straight to
   // that course's edit modal, so a session block there is a one-click edit.
-  const editId = Number(new URLSearchParams(location.search).get("edit"));
+  const editId = Number(params.get("edit"));
   if (Number.isInteger(editId) && editId > 0) {
     const course = COURSES.find((c) => c.id === editId);
     if (course) {
@@ -1169,7 +1576,6 @@ async function init() {
     }
   }
 
-  // Auto-start the guided tour on first visit
   window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
     tourId: "organiser-board",
     userId: getSessionUserId(),
