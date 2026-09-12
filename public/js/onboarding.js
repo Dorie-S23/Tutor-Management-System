@@ -48,7 +48,9 @@
     if (!force && hasSeenTour(tourId, userId)) return;
     if (activeTour) return; // a tour is already running — don't stack them
 
-    const usable = steps.filter((s) => isVisible(document.querySelector(s.selector)));
+    const usable = steps.filter((s) =>
+      isVisible(document.querySelector(s.selector)),
+    );
     if (usable.length === 0) {
       // Nothing on this page matched (e.g. wrong role, still loading) —
       // don't mark it seen, so it can still show once content is ready.
@@ -61,7 +63,9 @@
 
   function teardown() {
     document
-      .querySelectorAll(".onboarding-backdrop, .onboarding-ring, .onboarding-tooltip")
+      .querySelectorAll(
+        ".onboarding-backdrop, .onboarding-ring, .onboarding-tooltip",
+      )
       .forEach((el) => el.remove());
     window.removeEventListener("resize", renderStep);
     document.removeEventListener("keydown", onKeydown);
@@ -130,8 +134,14 @@
         left = rect.left;
     }
 
-    top = Math.max(margin, Math.min(top, window.innerHeight - ttRect.height - margin));
-    left = Math.max(margin, Math.min(left, window.innerWidth - ttRect.width - margin));
+    top = Math.max(
+      margin,
+      Math.min(top, window.innerHeight - ttRect.height - margin),
+    );
+    left = Math.max(
+      margin,
+      Math.min(left, window.innerWidth - ttRect.width - margin),
+    );
 
     tooltip.style.top = `${top}px`;
     tooltip.style.left = `${left}px`;
@@ -199,7 +209,8 @@
 
     const stepCount = document.createElement("p");
     stepCount.textContent = `Step ${activeTour.index + 1} of ${activeTour.steps.length}`;
-    stepCount.style.cssText = "font-size:12px;color:#64748b;margin:0 0 8px;letter-spacing:0.02em;";
+    stepCount.style.cssText =
+      "font-size:12px;color:#64748b;margin:0 0 8px;letter-spacing:0.02em;";
 
     const title = document.createElement("h3");
     title.textContent = step.title;
@@ -207,10 +218,12 @@
 
     const body = document.createElement("p");
     body.textContent = step.body;
-    body.style.cssText = "margin:0 0 16px;font-size:14px;line-height:1.5;color:#334155;";
+    body.style.cssText =
+      "margin:0 0 16px;font-size:14px;line-height:1.5;color:#334155;";
 
     const actions = document.createElement("div");
-    actions.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:10px;";
+    actions.style.cssText =
+      "display:flex;justify-content:space-between;align-items:center;gap:10px;";
 
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
@@ -234,7 +247,8 @@
 
     const nextBtn = document.createElement("button");
     nextBtn.type = "button";
-    nextBtn.textContent = activeTour.index === activeTour.steps.length - 1 ? "Done" : "Next";
+    nextBtn.textContent =
+      activeTour.index === activeTour.steps.length - 1 ? "Done" : "Next";
     nextBtn.style.cssText =
       "padding:6px 16px;border-radius:6px;border:none;background:#2563eb;color:#fff;cursor:pointer;font-size:13px;font-weight:600;";
     nextBtn.addEventListener("click", next);
