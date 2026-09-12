@@ -29,6 +29,21 @@
         <dd class="stat-value" id="statPending">0</dd>
       </dl>
 
+      <div class="universal-search">
+        <input
+          type="search"
+          id="universalSearchInput"
+          class="universal-search-input"
+          placeholder="Search courses, tutors, timesheets…"
+          aria-label="Universal search"
+        />
+        <ul
+          class="universal-search-results"
+          id="universalSearchResults"
+          hidden
+        ></ul>
+      </div>
+
       <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
       <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
       <button class="btn btn-ghost" id="tour-button" type="button">
@@ -361,6 +376,7 @@
     </dialog>
 
     <script src="../js/onboarding.js"></script>
+    <script src="../js/universal-search.js"></script>
     <script src="../js/board.js"></script>
     <script src="../js/logout.js"></script>
   </body>

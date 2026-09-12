@@ -49,6 +49,20 @@ async function loadSubmissions() {
   }
 
   rows.forEach((sub) => renderSubmission(sub));
+
+  applyHighlight();
+}
+
+function applyHighlight() {
+  const highlightKey = new URLSearchParams(window.location.search).get(
+    "highlight",
+  );
+  if (!highlightKey) return;
+  const row = submissionListEl.querySelector(`li[data-key="${highlightKey}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.add("search-highlight");
+  setTimeout(() => row.classList.remove("search-highlight"), 2000);
 }
 
 function renderSubmission(sub) {
@@ -57,6 +71,7 @@ function renderSubmission(sub) {
   const status = (sub.status || "pending").toLowerCase();
 
   const li = document.createElement("li");
+  li.dataset.key = `${sub.user_id}_${sub.week_start}`;
   const row = document.createElement("div");
   row.className = "tutor-row";
   row.innerHTML = `
@@ -173,5 +188,11 @@ function showToast(message) {
 }
 
 statusFilterEl.addEventListener("change", loadSubmissions);
+
+// A search deep-link's target row might not be "pending" — default to
+// showing all statuses so it isn't hidden by the default filter.
+if (new URLSearchParams(window.location.search).get("highlight")) {
+  statusFilterEl.value = "";
+}
 
 loadSubmissions();

@@ -95,6 +95,78 @@ button {
   gap: 28px;
 }
 
+/* ---------- universal search ---------- */
+
+.universal-search {
+  position: relative;
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.universal-search-input {
+  width: 100%;
+}
+
+.universal-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.universal-search-results li a {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.universal-search-results li a:hover {
+  background: var(--navy-bg);
+}
+
+.universal-search-group {
+  padding: 6px 10px 2px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.universal-search-empty {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+@keyframes search-highlight-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  30% {
+    background: var(--amber-bg);
+  }
+}
+
+.search-highlight {
+  animation: search-highlight-flash 2s ease;
+}
+
 .header-stat {
   display: flex;
   flex-direction: column;
