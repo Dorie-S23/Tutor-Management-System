@@ -26,6 +26,7 @@ const dashboardNavLink = document.getElementById("dashboard-nav-link");
 const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
 const timesheetsNavLink = document.getElementById("timesheets-nav-link");
 const modulesNavLink = document.getElementById("modules-nav-link");
+const calendarNavLink = document.getElementById("calendar-nav-link");
 if (currentUser.role === "student") {
   if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
   // Timesheets is a tutor-only payroll claim, and applying to tutor a
@@ -33,6 +34,11 @@ if (currentUser.role === "student") {
   // volunteer.
   if (timesheetsNavLink) timesheetsNavLink.hidden = true;
   if (modulesNavLink) modulesNavLink.hidden = true;
+  // The plain Calendar link points at the tutor calendar — send a student
+  // volunteer to their own calendar instead, or every other link on that
+  // page (its own unpatched Dashboard link included) drops them straight
+  // into the tutor's app shell with no way back.
+  if (calendarNavLink) calendarNavLink.href = "student_calender.html";
 } else {
   // "My Sessions" is a student-volunteer concept (sessions they've
   // volunteered for) — hide it for anyone else (tutors, organisers,

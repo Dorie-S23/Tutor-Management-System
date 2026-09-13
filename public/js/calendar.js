@@ -27,9 +27,18 @@ highlightActiveTab();
 const isTutor = currentUser.role === "tutor";
 const importTimetableCard = document.getElementById("import-timetable-card");
 const clearClassesRow = document.getElementById("clear-classes-row");
+const dashboardNavLink = document.getElementById("dashboard-nav-link");
+const timesheetsNavLink = document.getElementById("timesheets-nav-link");
 if (!isTutor) {
   if (importTimetableCard) importTimetableCard.hidden = true;
   if (clearClassesRow) clearClassesRow.hidden = true;
+  // This page is the tutor's calendar — a student volunteer only ever lands
+  // here via log-hours.html's shared Calendar link before that page patches
+  // it. Without this, the Dashboard link here (unpatched) drops a student
+  // straight into the tutor dashboard with no way back.
+  if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
+  // Timesheets is a tutor-only payroll claim — no use to a student volunteer.
+  if (timesheetsNavLink) timesheetsNavLink.hidden = true;
 }
 
 // ---------- tutorial/lab sessions from the modules this tutor tutors ----------
