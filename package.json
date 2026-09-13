@@ -16,6 +16,12 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/my-docs/"
+    ],
+    "collectCoverageFrom": [
+      "public/js/**/*.js",
+      "server/routes/**/*.js",
+      "!**/*.test.js",
+      "!**/node_modules/**"
     ]
   },
   "repository": {
@@ -43,4 +49,5 @@
     "esbuild@0.28.1": true,
     "workerd@1.20260820.1": true
   }
+
 }
