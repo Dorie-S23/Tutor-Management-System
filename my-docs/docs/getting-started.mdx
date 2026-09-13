@@ -10,7 +10,6 @@ How to get the project running locally.
 
 - **Node.js 20+** and npm
 - Access to the project's **Supabase** project (URL + anon key) — ask a teammate, or point at your own Supabase project for local testing
-- *(Optional)* An **Anthropic API key** from [console.anthropic.com](https://console.anthropic.com) — only needed for the "import timetable PDF" feature on the calendar page; everything else runs fine without it
 
 ## 1. Clone and install
 
@@ -31,12 +30,10 @@ cp .env.example .env
 ```
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
-ANTHROPIC_API_KEY=
 PORT=3000
 ```
 
 - **`SUPABASE_URL`** / **`SUPABASE_ANON_KEY`** — from your Supabase project's **Settings → API**. The variable name matters: both `app.js` and `server/supabaseClient.js` read `SUPABASE_ANON_KEY` specifically — an `.env` with the older `SUPABASE_KEY` name will crash the server on startup with `Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables`.
-- **`ANTHROPIC_API_KEY`** — only required for timetable PDF parsing. Needs an active credit balance on the Console (**Plans & Billing**) to actually respond, not just a valid key.
 - **`PORT`** — defaults to `3000` if omitted.
 
 `.env` is gitignored and never committed — each teammate keeps their own.
@@ -88,8 +85,6 @@ Tutor-Management-System/
 │   └── auth.js                 # /api/auth/register, /api/auth/login (Supabase Auth)
 ├── server/
 │   ├── supabaseClient.js       # shared Supabase client used by server/routes/*
-│   ├── anthropicClient.js      # Anthropic client (lazily constructed)
-│   ├── timetableRoutes.js      # POST /api/timetable/parse — LLM-based PDF parsing
 │   └── routes/
 │       ├── courses.js
 │       ├── tutors.js
@@ -113,4 +108,3 @@ Tutor-Management-System/
 
 - **`Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables`** on startup — check the exact variable name in your `.env` matches `.env.example`. This has bitten the team before after a merge silently renamed the expected variable.
 - **Login returns `401 Invalid login credentials`** — either the account was never actually registered (go through `register.html` first), or the email/password doesn't match what was registered. Check the Supabase dashboard's **Authentication → Users** if you're not sure an account exists.
-- **Uploading a timetable PDF fails with a billing error** — `ANTHROPIC_API_KEY` needs a funded balance on the Console; the rest of the app works without it.

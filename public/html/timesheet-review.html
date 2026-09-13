@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Timesheet Review | Tutor Management System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
       rel="stylesheet"
@@ -12,16 +13,40 @@
     <link rel="stylesheet" href="../css/global.css" />
   </head>
   <body>
-    <header class="board-header">
+    <header class="board-header board-header--brand">
       <hgroup class="header-left">
         <p class="eyebrow">
+          <img src="../images/images.png" alt="" class="eyebrow-logo" />
           School of Computer Science &amp; Applied Mathematics
         </p>
         <h1>Timesheet Review</h1>
       </hgroup>
 
-      <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
-      <button class="btn btn-ghost" id="logout-button" type="button">
+      <img
+        src="../images/Wits-890x664.png"
+        alt="University of the Witwatersrand"
+        class="header-wits-logo"
+      />
+
+      <div class="header-actions">
+        <div class="universal-search">
+          <input
+            type="search"
+            id="universalSearchInput"
+            class="universal-search-input"
+            placeholder="Search courses, tutors, timesheets…"
+            aria-label="Universal search"
+          />
+          <ul
+            class="universal-search-results"
+            id="universalSearchResults"
+            hidden
+          ></ul>
+        </div>
+
+        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+      </div>
+      <button class="btn btn-danger" id="logout-button" type="button">
         Logout
       </button>
     </header>
@@ -37,6 +62,9 @@
               <option value="rejected">Rejected</option>
               <option value="">All</option>
             </select>
+            <button class="btn btn-ghost" id="exportPayrollBtn" type="button">
+              Export payroll (CSV)
+            </button>
           </header>
 
           <ul class="tutor-list" id="submissionList">
@@ -51,6 +79,7 @@
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+    <script src="../js/universal-search.js"></script>
     <script src="../js/timesheet-review.js"></script>
     <script src="../js/logout.js"></script>
   </body>

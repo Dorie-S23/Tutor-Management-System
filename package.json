@@ -9,7 +9,20 @@
     "deploy": "wrangler deploy",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/my-docs/"
+    ],
+    "collectCoverageFrom": [
+      "public/js/**/*.js",
+      "server/routes/**/*.js",
+      "!**/*.test.js",
+      "!**/node_modules/**"
+    ]
   },
   "repository": {
     "type": "git",
@@ -20,15 +33,16 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.70.0",
     "@supabase/supabase-js": "^2.112.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "multer": "^2.0.1"
+    "express": "^5.2.1"
   },
   "devDependencies": {
+    "jest": "^30.5.1",
+    "jsdom": "^26.1.0",
     "prettier": "3.9.6",
+    "supertest": "^7.2.2",
     "wrangler": "^4.125.0"
   },
   "allowScripts": {

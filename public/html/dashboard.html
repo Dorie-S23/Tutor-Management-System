@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard | Tutor Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="../css/global.css" />
   </head>
   <body class="tutor-app">
@@ -14,33 +20,19 @@
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html">Calendar</a>
         <a href="timesheets.html">Timesheets</a>
+        <a href="modules.html">Module Application</a>
+        <a href="#" id="tour-link">Take the tour</a>
         <a href="#" id="logout-button">Logout</a>
       </nav>
     </header>
 
     <main>
-      <div class="card">
+      <div class="card card--welcome">
         <h2 id="welcome-heading">Welcome</h2>
         <p>
           Use the sections below to log your tutoring hours for the week or
           review your timesheets.
         </p>
-      </div>
-
-      <div class="card">
-        <h2>Tutor a subject</h2>
-        <p>
-          Apply to tutor one of the courses that need tutors. We'll check your
-          mark and availability before it goes to the board.
-        </p>
-        <button class="btn-primary" id="apply-to-tutor-btn" type="button">
-          Apply to tutor a subject
-        </button>
-
-        <div id="applications-list" class="applications-list" hidden>
-          <h3>Your applications</h3>
-          <ul id="applications-items"></ul>
-        </div>
       </div>
 
       <div class="stat-grid">
@@ -53,9 +45,38 @@
           <span class="stat-value" id="stat-hours-remaining">0</span>
           <span class="stat-sublabel" id="stat-hours-sublabel"></span>
         </div>
-        <div class="stat-tile">
-          <span class="stat-label">Upcoming session</span>
-          <p class="upcoming-empty">Coming soon.</p>
+        <div class="stat-tile stat-tile--accent">
+          <span class="stat-label">Next session</span>
+          <span class="stat-value stat-value--session" id="stat-next-session"
+            >—</span
+          >
+          <span class="stat-sublabel" id="stat-next-session-sublabel"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Upcoming sessions</h2>
+        <p>Sessions from the modules you've been approved to tutor.</p>
+
+        <div id="upcoming-sessions-list" class="applications-list" hidden>
+          <ul id="upcoming-sessions-items"></ul>
+        </div>
+        <p class="upcoming-empty" id="upcoming-sessions-empty" hidden>
+          No upcoming sessions yet.
+          <a href="modules.html">Apply to tutor a module</a> to get scheduled.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Excuse yourself from a session</h2>
+        <p>Can't make a tutorial? Let the organiser know which one and why.</p>
+        <button class="btn-primary" id="excuse-btn" type="button">
+          Excuse yourself from a session
+        </button>
+
+        <div id="excusals-list" class="applications-list" hidden>
+          <h3>Your upcoming excusals</h3>
+          <ul id="excusals-items"></ul>
         </div>
       </div>
 
@@ -72,6 +93,10 @@
           <h3>Calendar</h3>
           <p>See your tutoring sessions laid out by month.</p>
         </a>
+        <a class="tile" href="modules.html">
+          <h3>Module Application</h3>
+          <p>Apply to tutor a module and track your applications.</p>
+        </a>
       </div>
     </main>
 
@@ -79,15 +104,15 @@
 
     <dialog
       class="modal"
-      id="apply-modal"
-      aria-labelledby="apply-modal-heading"
+      id="excuse-modal"
+      aria-labelledby="excuse-modal-heading"
     >
-      <form method="dialog" class="modal-form" id="apply-form">
+      <form method="dialog" class="modal-form" id="excuse-form">
         <header class="modal-head">
-          <h2 id="apply-modal-heading">Apply to tutor a subject</h2>
+          <h2 id="excuse-modal-heading">Excuse yourself from a session</h2>
           <button
             class="modal-close"
-            id="apply-modal-close-btn"
+            id="excuse-modal-close-btn"
             type="button"
             aria-label="Close"
           >
@@ -95,69 +120,51 @@
           </button>
         </header>
 
-        <p class="field-error" id="apply-form-error" hidden></p>
+        <p class="field-error" id="excuse-form-error" hidden></p>
 
         <label class="field">
           <span class="field-label">Course</span>
-          <select id="apply-course-select" name="course_id" required>
+          <select id="excuse-course-select" name="course_id" required>
             <option value="" disabled selected>Choose a course&hellip;</option>
           </select>
         </label>
 
-        <p class="course-meta" id="apply-course-meta" hidden></p>
-
         <label class="field">
-          <span class="field-label">Your year of study</span>
-          <select id="apply-year-select" name="academic_level" required>
-            <option value="" disabled selected>Select&hellip;</option>
-            <option value="second_year">2nd year</option>
-            <option value="third_year">3rd year</option>
-            <option value="honours">Honours</option>
-            <option value="masters">Masters</option>
-            <option value="phd">PhD</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Your mark for this subject</span>
+          <span class="field-label">Session date</span>
           <input
-            type="number"
-            id="apply-mark-input"
-            name="mark"
-            min="0"
-            max="100"
-            step="1"
-            placeholder="e.g. 75"
+            type="date"
+            id="excuse-date-input"
+            name="session_date"
             required
           />
         </label>
 
         <label class="field">
-          <span class="field-label" id="apply-availability-label"
-            >Are you free at the tutorial time?</span
-          >
-          <select id="apply-availability-select" name="availability" required>
-            <option value="" disabled selected>Select&hellip;</option>
-            <option value="true">Yes, I'm free then</option>
-            <option value="false">No, I'm not free then</option>
-          </select>
+          <span class="field-label">Reason (optional)</span>
+          <textarea
+            id="excuse-reason-input"
+            name="reason"
+            rows="2"
+            placeholder="e.g. clashing exam"
+          ></textarea>
         </label>
 
         <menu class="modal-actions">
           <li>
-            <button class="btn-secondary" id="apply-cancel-btn" type="button">
+            <button class="btn-secondary" id="excuse-cancel-btn" type="button">
               Cancel
             </button>
           </li>
           <li>
-            <button class="btn-primary" id="apply-submit-btn" type="submit">
-              Submit application
+            <button class="btn-primary" id="excuse-submit-btn" type="submit">
+              Excuse me from this session
             </button>
           </li>
         </menu>
       </form>
     </dialog>
 
+    <script src="../js/onboarding.js"></script>
     <script type="module" src="../js/dashboard.js"></script>
     <script src="../js/logout.js"></script>
   </body>

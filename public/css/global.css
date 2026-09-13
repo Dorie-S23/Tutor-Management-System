@@ -65,24 +65,49 @@ button {
 /* ---------- header ---------- */
 
 .board-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
   gap: 24px;
   padding: 28px clamp(20px, 4vw, 48px) 20px;
   border-bottom: 1px solid var(--line);
+  min-height: 168px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  justify-self: end;
+  gap: 28px;
 }
 
 .eyebrow {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: "Space Grotesk", sans-serif;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  margin-bottom: 6px;
+  margin: 0 0 6px;
+}
+
+.eyebrow-logo {
+  height: 72px;
+  width: auto;
+  flex-shrink: 0;
+  margin-left: 1px;
+}
+
+.header-wits-logo {
+  height: 88px;
+  width: auto;
+  justify-self: center;
 }
 
 .board-header h1 {
@@ -93,6 +118,186 @@ button {
 .header-right {
   display: flex;
   gap: 28px;
+}
+
+/* ---------- universal search ---------- */
+
+.universal-search {
+  position: relative;
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.universal-search-input {
+  width: 100%;
+}
+
+.universal-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.universal-search-results li a {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.universal-search-results li a:hover {
+  background: var(--navy-bg);
+}
+
+.universal-search-group {
+  padding: 6px 10px 2px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.universal-search-empty {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+@keyframes search-highlight-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  30% {
+    background: var(--amber-bg);
+  }
+}
+
+.search-highlight {
+  animation: search-highlight-flash 2s ease;
+}
+
+.board-header #logout-button {
+  position: absolute;
+  top: 64px;
+  right: clamp(20px, 4vw, 48px);
+  transform: translateY(-50%);
+  z-index: 20;
+}
+
+@media (max-width: 860px) {
+  .board-header {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    row-gap: 12px;
+  }
+
+  .header-actions {
+    justify-self: center;
+    justify-content: center;
+  }
+}
+
+/* ---------- coordinator header (board / tutors / timetable / timesheets) ----------
+   The Wits logo and the logout button are pulled out of normal flow and
+   centered/pinned against the full header width, so the snapshot stats and
+   every nav button can share the full width as one flex row underneath —
+   they only wrap onto a second line if the window is genuinely too narrow. */
+
+.board-header--brand {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  row-gap: 14px;
+}
+
+.board-header--brand .header-wits-logo {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.board-header--brand #logout-button {
+  position: absolute;
+  top: 72px;
+  right: clamp(20px, 4vw, 48px);
+  transform: translateY(-50%);
+}
+
+.board-header--brand .header-toolbar,
+.board-header--brand > .header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 20px 28px;
+  width: 100%;
+}
+
+.board-header--brand .header-toolbar .header-right {
+  margin-right: auto;
+  gap: 3px;
+}
+
+/* Keep each stat's label snug against its own value; the bigger gap moves to
+   before the next label instead, so "1 / 9" reads with "courses staffed". */
+.board-header--brand .header-toolbar .header-right dt:not(:first-child) {
+  margin-left: 25px;
+}
+
+/* Un-nest the actions wrapper so search + each nav button becomes its own
+   flex item in the toolbar row, wrapping individually instead of as a block. */
+.board-header--brand .header-toolbar .header-actions {
+  display: contents;
+}
+
+@media (max-width: 860px) {
+  .board-header--brand {
+    align-items: center;
+    text-align: center;
+  }
+
+  .board-header--brand .header-wits-logo {
+    position: static;
+    transform: none;
+    order: -3;
+  }
+
+  .board-header--brand .header-left {
+    order: -2;
+  }
+
+  .board-header--brand #logout-button {
+    position: static;
+    transform: none;
+    order: -1;
+  }
+
+  .board-header--brand .header-toolbar,
+  .board-header--brand > .header-actions {
+    justify-content: center;
+  }
+
+  .board-header--brand .header-toolbar .header-right {
+    margin-right: 0;
+  }
 }
 
 .header-stat {
@@ -173,6 +378,16 @@ input[type="search"]:focus-visible {
 
 .rail-head input[type="search"] {
   max-width: 150px;
+}
+
+.shortfall-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+  cursor: pointer;
 }
 
 .course-list {
@@ -287,6 +502,10 @@ input[type="search"]:focus-visible {
   gap: 6px;
 }
 
+.empty-state[hidden] {
+  display: none;
+}
+
 .empty-mark {
   font-family: "Fraunces", serif;
   font-size: 2rem;
@@ -301,14 +520,13 @@ input[type="search"]:focus-visible {
 }
 
 .detail-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 24px;
   padding-bottom: 18px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
 }
 
 .detail-head .course-code {
@@ -507,7 +725,6 @@ input[type="search"]:focus-visible {
   margin-left: auto;
 }
 
-/* the signature element: rubber-stamp style status chips */
 .stamp {
   display: inline-flex;
   align-items: center;
@@ -520,14 +737,7 @@ input[type="search"]:focus-visible {
   padding: 4px 8px;
   border-radius: 4px;
   border: 1.5px solid currentColor;
-  transform: rotate(-1.4deg);
   white-space: nowrap;
-}
-.tutor-row:nth-child(3n) .stamp {
-  transform: rotate(1.2deg);
-}
-.tutor-row:nth-child(3n + 1) .stamp {
-  transform: rotate(-1.8deg);
 }
 
 .stamp.ok {
@@ -612,6 +822,14 @@ input[type="search"]:focus-visible {
   border-color: var(--ink-faint);
 }
 
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
 .btn-small {
   font-size: 11.5px;
   padding: 5px 10px;
@@ -631,6 +849,13 @@ input[type="search"]:focus-visible {
 }
 .btn-small.approve:hover {
   background: var(--green-bg);
+}
+.btn-small.override {
+  color: var(--amber);
+  border-color: var(--amber-line);
+}
+.btn-small.override:hover {
+  background: var(--amber-bg);
 }
 .btn-small:disabled {
   opacity: 0.5;
@@ -659,6 +884,8 @@ input[type="search"]:focus-visible {
   border-radius: var(--radius);
   padding: 0;
   width: min(420px, 92vw);
+  max-height: min(640px, 90vh);
+  overflow-y: auto;
   box-shadow: 0 12px 32px rgba(30, 42, 46, 0.18);
   background: var(--panel);
   color: var(--ink);
@@ -666,6 +893,21 @@ input[type="search"]:focus-visible {
 
 .modal::backdrop {
   background: rgba(30, 42, 46, 0.45);
+}
+
+.modal-wide {
+  width: min(640px, 94vw);
+}
+
+.obvious-fill-course-head {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 10px 0 -2px;
+}
+.obvious-fill-course-head:first-child {
+  margin-top: 0;
 }
 
 .modal-form {
@@ -733,12 +975,54 @@ input[type="search"]:focus-visible {
   outline-offset: 1px;
 }
 
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.field-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.field-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+
+.field-subgroup[hidden] {
+  display: none;
+}
+
 .field-error {
   margin: 0;
   font-size: 12.5px;
   color: var(--red);
   background: var(--red-bg);
   border: 1px solid var(--red-line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.field-warning {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--amber);
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-line);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
@@ -787,7 +1071,7 @@ input[type="search"]:focus-visible {
 
 .tutors-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 24px;
   padding: 28px clamp(20px, 4vw, 48px);
   align-items: start;
@@ -796,6 +1080,235 @@ input[type="search"]:focus-visible {
 @media (max-width: 860px) {
   .tutors-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+.tutor-table-card,
+.workload-card {
+  grid-column: 1 / -1;
+}
+
+.workload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.workload-row {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.workload-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workload-bar-track {
+  position: relative;
+  background: var(--line-soft);
+  border-radius: 100px;
+  height: 22px;
+  overflow: visible;
+}
+
+.workload-bar-fill {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  border-radius: 100px;
+  background: var(--navy);
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.workload-bar-fill.warn {
+  background: var(--amber);
+}
+
+.workload-bar-fill.blocked {
+  background: var(--red);
+}
+
+.workload-bar-fill.no-cap {
+  background: var(--ink-faint);
+}
+
+.workload-pct {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  padding-right: 8px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.workload-pct--outside {
+  position: absolute;
+  left: 100%;
+  margin-left: 6px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.workload-hours {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Settings card ──────────────────────────────────────────────── */
+.settings-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-section {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.settings-section:first-of-type {
+  margin-top: 12px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.settings-sub {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+
+.settings-cap-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.settings-cap-row input {
+  width: 72px;
+  text-align: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 6px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--panel);
+}
+
+.settings-cap-unit {
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  color: var(--ink-soft);
+  flex: 1;
+}
+
+.btn-small-primary {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--navy);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.btn-small-primary:hover {
+  opacity: 0.85;
+}
+
+.btn-small-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rates-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.rates-table th {
+  text-align: left;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  padding: 6px 8px;
+  border-bottom: 1.5px solid var(--line-soft);
+}
+
+.rates-table td {
+  padding: 8px 8px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.rates-table tr:last-child td {
+  border-bottom: none;
+}
+
+.rate-value {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.rate-input {
+  width: 90px;
+  padding: 5px 8px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--panel);
+  text-align: right;
+}
+
+.rate-input:focus {
+  outline: none;
+  border-color: var(--navy);
+}
+
+.tutor-rate-badge {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
+  margin-left: 4px;
+}
+
+@media (max-width: 560px) {
+  .workload-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .workload-hours {
+    text-align: left;
   }
 }
 
@@ -889,6 +1402,136 @@ input[type="search"]:focus-visible {
 }
 .btn-small-neutral:hover {
   background: var(--line-soft);
+}
+
+/* ---------- weekly timetable grid (organiser) ---------- */
+
+.timetable-page {
+  display: block;
+  min-height: calc(100vh - 96px);
+}
+
+.timetable-legend {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+
+.legend-swatch.clash {
+  background: var(--red-bg);
+  border-color: var(--red);
+}
+
+.timetable-unscheduled {
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.timetable-grid-wrap {
+  overflow-x: auto;
+}
+
+.timetable-grid {
+  display: grid;
+  grid-template-columns: 64px repeat(7, minmax(110px, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel);
+  min-width: 820px;
+}
+
+.timetable-grid-header {
+  padding: 8px 4px;
+  text-align: center;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line-soft);
+}
+
+.timetable-time-label {
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: right;
+  padding: 2px 6px 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.timetable-cell-bg {
+  border-top: 1px solid var(--line-soft);
+  border-left: 1px solid var(--line-soft);
+}
+
+/* One per day, spanning every time-slot row — the positioning context so
+   overlapping sessions on the same day can sit side-by-side instead of
+   stacking on top of each other. */
+.timetable-day-overlay {
+  position: relative;
+}
+
+.timetable-session {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  display: block;
+}
+
+.timetable-session:hover {
+  filter: brightness(0.97);
+}
+
+.timetable-session.tutorial {
+  background: var(--navy-bg);
+  color: var(--navy);
+  border-color: var(--navy);
+}
+
+.timetable-session.clash {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.timetable-session .session-code {
+  font-weight: 700;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timetable-session .session-meta {
+  display: block;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- accessibility ---------- */
@@ -1324,8 +1967,32 @@ body.tutor-app {
 }
 
 .tutor-app .app-header {
+  position: relative;
   background: var(--ta-surface);
   border-bottom: 1px solid var(--ta-border);
+}
+
+/* Pulled out of the tab row into a button pinned to the header's
+   upper-right corner. #logout-button's id beats .tab-nav a's specificity,
+   so this cleanly overrides the plain-tab-link look below without !important. */
+.tutor-app #logout-button {
+  position: absolute;
+  top: 1.85rem;
+  right: 1.5rem;
+  display: inline-block;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--ta-danger);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ta-danger);
+}
+
+.tutor-app #logout-button:hover {
+  background: var(--ta-danger);
+  color: #fff;
 }
 
 .tutor-app .app-header h1 {
@@ -1353,6 +2020,10 @@ body.tutor-app {
   color: var(--ta-text);
 }
 
+.tutor-app .tab-nav a[hidden] {
+  display: none;
+}
+
 .tutor-app .tab-nav a.active {
   color: var(--ta-primary);
   border-bottom-color: var(--ta-primary);
@@ -1370,6 +2041,32 @@ body.tutor-app {
   border-radius: 8px;
   padding: 1.25rem;
   margin-bottom: 1.25rem;
+}
+
+.tutor-app .card--welcome {
+  background: linear-gradient(
+    135deg,
+    var(--ta-primary),
+    var(--ta-primary-hover)
+  );
+  border-color: transparent;
+  padding: 1.5rem 1.6rem;
+  box-shadow: 0 4px 14px rgba(52, 87, 213, 0.25);
+}
+
+.tutor-app .card--welcome h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #fff;
+  margin-bottom: 0.35rem;
+}
+
+.tutor-app .card--welcome p {
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
 }
 
 .tutor-app .form-grid {
@@ -1409,6 +2106,10 @@ body.tutor-app {
   display: flex;
   gap: 0.6rem;
   margin-top: 0.25rem;
+}
+
+.tutor-app .form-actions[hidden] {
+  display: none;
 }
 
 .tutor-app button {
@@ -1537,6 +2238,11 @@ body.tutor-app {
   gap: 0.3rem;
 }
 
+.tutor-app .stat-tile--accent {
+  background: #eef1fd;
+  border-color: #c3cdf5;
+}
+
 .tutor-app .stat-label {
   font-size: 0.8rem;
   font-weight: 600;
@@ -1546,8 +2252,20 @@ body.tutor-app {
 }
 
 .tutor-app .stat-value {
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 1.8rem;
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--ta-primary);
+  letter-spacing: -0.01em;
+}
+
+.tutor-app .stat-value--session {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ta-text);
+  letter-spacing: 0;
 }
 
 .tutor-app .stat-value.danger {
@@ -1702,6 +2420,15 @@ body.tutor-app {
   border-width: 2px;
 }
 
+.tutor-app .calendar-day-clickable {
+  cursor: pointer;
+}
+
+.tutor-app .calendar-day-clickable:hover {
+  border-color: var(--ta-primary);
+  background: var(--ta-bg);
+}
+
 .tutor-app .calendar-day-number {
   font-size: 0.85rem;
   font-weight: 600;
@@ -1722,6 +2449,20 @@ body.tutor-app {
   background: #fff;
   border: 1px solid var(--ta-primary);
   color: var(--ta-primary);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tutorial/Lab sessions sourced from the modules this tutor tutors — solid
+   per-course colour (set inline) to stand apart from the outlined personal-
+   schedule pills above and the solid-blue logged-hours pills below. */
+.tutor-app .calendar-course-pill {
+  border: 1px solid transparent;
+  font-weight: 600;
   font-size: 0.7rem;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
@@ -1776,7 +2517,14 @@ body.tutor-app {
 .tutor-app .card-hint {
   color: var(--ta-text-muted);
   font-size: 0.85rem;
-  margin: -0.5rem 0 1rem;
+  margin: 0.75rem 0 0;
+}
+
+/* Pull a hint tight against a heading it directly follows — doesn't apply
+   when a hint follows a form/table instead, where it needs breathing room. */
+.tutor-app .card h2 + .card-hint {
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
 }
 
 .tutor-app .claim-preview[hidden] {

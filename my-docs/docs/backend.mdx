@@ -15,15 +15,15 @@ A single hand-written Express API in front of Supabase — every request from th
 - **[Node.js](https://nodejs.org/)** — runtime.
 - **[Express 5](https://expressjs.com/)** — routing and middleware.
 - **[Supabase](https://supabase.com/)** (`@supabase/supabase-js`) — hosted Postgres for data storage, plus Supabase Auth for sign-up/sign-in (not a hand-rolled JWT system).
-- **[Anthropic API](https://console.anthropic.com)** (`@anthropic-ai/sdk`) — used by the timetable-PDF-import feature to extract class times from an uploaded PDF into structured JSON.
 - **[dotenv](https://www.npmjs.com/package/dotenv)** — loads `.env` locally (Cloudflare Workers gets its environment a different way, via `wrangler` secrets/vars — not covered by `dotenv` in production).
-- **[cors](https://www.npmjs.com/package/cors)**, **[multer](https://www.npmjs.com/package/multer)** — CORS headers and multipart/file-upload handling (used by the timetable PDF upload).
+- **[cors](https://www.npmjs.com/package/cors)** — CORS headers.
+
+The timetable-PDF-import feature (calendar page) runs entirely client-side — no backend route, no API key. `public/js/timetable-parser.js` loads [pdf.js](https://mozilla.github.io/pdf.js/) and [Tesseract.js](https://tesseract.projectnaptha.com/) from a CDN at parse time, renders the PDF to a bitmap in the browser, and OCRs it (these PDF exports have no embedded text layer — they're outlined shapes, not real text — so OCR is the only option). This was previously an LLM-based server route (first Anthropic, briefly prototyped with Gemini); it was rebuilt client-side-only after settling on not paying for or depending on a hosted API for this.
 
 ## Prerequisites
 
 - Node.js 20+
 - Access to the project's Supabase project (URL + anon key) — ask a teammate
-- *(Optional)* An Anthropic API key with a funded balance — only needed for timetable PDF parsing; everything else works without it
 
 ## Getting Started
 
@@ -31,12 +31,11 @@ Full setup steps (clone, install, `.env`, run) are in [Getting Started](./gettin
 
 Environment variables the server reads:
 
-| Variable | Required | Description |
-|---|---|---|
-| `SUPABASE_URL` | Yes | Your Supabase project's URL |
-| `SUPABASE_ANON_KEY` | Yes | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
-| `ANTHROPIC_API_KEY` | No | Only needed for timetable PDF parsing |
-| `PORT` | No | Defaults to `3000` |
+| Variable            | Required | Description                                                                                                                                                                                                |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`      | Yes      | Your Supabase project's URL                                                                                                                                                                                |
+| `SUPABASE_ANON_KEY` | Yes      | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
+| `PORT`              | No       | Defaults to `3000`                                                                                                                                                                                         |
 
 There's no separate migration or seed step — the Postgres schema (tables, columns, constraints) is managed directly in the Supabase dashboard's SQL editor, not via migration files in this repo.
 
@@ -56,8 +55,6 @@ routes/
 └── auth.js                 # /api/auth/register, /login, /google, /google/register
 server/
 ├── supabaseClient.js       # Supabase client shared by everything under server/routes/
-├── anthropicClient.js      # Anthropic client, constructed lazily
-├── timetableRoutes.js      # POST /api/timetable/parse — LLM-based PDF parsing
 └── routes/
     ├── courses.js           # /api/courses — CRUD + tutor-assignment counter
     ├── tutors.js             # /api/tutors
@@ -118,6 +115,7 @@ npm run deploy      # wrangler deploy — ships to Cloudflare Workers
 In the Workers build, static files in `public/` are served by Cloudflare's assets layer (configured in `wrangler.toml`) instead of `express.static`.
 
 CI runs on **Gitea Actions** (`.gitea/workflows/`), not GitLab CI — `sdp.ms.wits.ac.za` is a self-hosted Gitea instance, so the `.gitlab-ci.yml` file in the repo root is inert and never runs; ignore it. Three workflows run on push to `main`:
+
 - `format.yml` — Prettier check (`npm run format:check`) on every push.
 - `deploy.yml` — deploys the app itself to Cloudflare Workers via `wrangler deploy`.
 - `docs-deploy.yml` — builds this documentation site and deploys it to Cloudflare Pages via `wrangler pages deploy`, only when something under `my-docs/` changes.

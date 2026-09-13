@@ -7,11 +7,11 @@ const app = express();
 const authRoutes = require("./routes/auth");
 const coursesRoutes = require("./server/routes/courses");
 const tutorsRoutes = require("./server/routes/tutors");
-const timetableRoutes = require("./server/timetableRoutes");
 const hourEntriesRoutes = require("./server/routes/hourEntries");
 const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
 const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
 const timesheetsRoutes = require("./server/routes/timesheets");
+const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
 
 // Supabase client
 const supabase = createClient(
@@ -65,9 +65,6 @@ app.use("/api/courses", coursesRoutes);
 // Tutor management routes
 app.use("/api/tutors", tutorsRoutes);
 
-// Timetable parsing routes
-app.use("/api", timetableRoutes);
-
 // Student volunteer hour logging + course volunteering
 app.use("/api/hour-entries", hourEntriesRoutes);
 app.use("/api/course-volunteers", courseVolunteersRoutes);
@@ -77,5 +74,8 @@ app.use("/api/tutor-applications", tutorApplicationsRoutes);
 
 // Timesheet submission + organiser sign-off
 app.use("/api/timesheets", timesheetsRoutes);
+
+// Tutor self-excusal from a scheduled session
+app.use("/api/session-excusals", sessionExcusalsRoutes);
 
 module.exports = app;

@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { DAY_NAMES } = require("../dayNames");
@@ -26,8 +27,120 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
+// GET /api/tutors/workload — every tutor's assigned hours (summed from their
+// approved courses) against their weekly hour cap, for the workload spread
+// view. Registered before /:id so "workload" isn't swallowed as a tutor id.
+router.get("/workload", async (req, res) => {
+  try {
+    const { data: tutors, error: tutorsError } = await supabase
+      .from("tutors")
+      .select("id, name, weekly_hour_cap")
+      .order("name");
+
+    if (tutorsError) {
+      console.error("Workload: failed to load tutors:", tutorsError);
+      return res.status(500).json({ error: tutorsError.message });
+    }
+
+    const { data: approvals, error: approvalsError } = await supabase
+      .from("tutor_subject_preference")
+      .select("tutor_id, courses(course_code, course_name, hours_per_week)")
+      .eq("status", "approved");
+
+    if (approvalsError) {
+      console.error("Workload: failed to load approvals:", approvalsError);
+      return res.status(500).json({ error: approvalsError.message });
+    }
+
+    const coursesByTutor = {};
+    (approvals || []).forEach((a) => {
+      // The embedded course can come back as a single object or (depending
+      // on how the foreign key is set up) an array with one entry — handle
+      // both instead of assuming one shape.
+      const course = Array.isArray(a.courses) ? a.courses[0] : a.courses;
+      if (!course) return;
+      if (!coursesByTutor[a.tutor_id]) coursesByTutor[a.tutor_id] = [];
+      coursesByTutor[a.tutor_id].push({
+        course_code: course.course_code,
+        course_name: course.course_name,
+        hours_per_week: course.hours_per_week || 0,
+      });
+    });
+
+    const workload = (tutors || []).map((t) => {
+      const courses = coursesByTutor[t.id] || [];
+      return {
+        id: t.id,
+        name: t.name,
+        weeklyHourCap: t.weekly_hour_cap,
+        assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
+        courses,
+      };
+    });
+
+    res.json(workload);
+  } catch (err) {
+    console.error("Workload endpoint crashed:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /api/tutors/bulk — update a field across all tutors at once.
+// Used by the global settings card to set the weekly hour cap for everyone.
+router.put("/bulk", async (req, res) => {
+  const { weekly_hour_cap } = req.body;
+  if (weekly_hour_cap == null) {
+    return res.status(400).json({ error: "weekly_hour_cap is required" });
+  }
+
+  const { data: tutors, error: fetchErr } = await supabase
+    .from("tutors")
+    .select("id");
+
+  if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+
+  if (!tutors || tutors.length === 0) return res.json({ updated: 0 });
+
+  const { error: updateErr } = await supabase
+    .from("tutors")
+    .update({ weekly_hour_cap })
+    .neq("id", "00000000-0000-0000-0000-000000000000"); // update all rows
+
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  res.json({ updated: tutors.length });
+});
+
+// Simple UUID check so non-UUID path segments get a clean 404 instead of
+// a cryptic Postgres error.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// POST /api/tutors/bulk-rates — update hourly_rate per academic level.
+// The organiser edits rates in the settings card and clicks "Save rates";
+// this writes the new rate to every tutor at each level.
+router.post("/bulk-rates", async (req, res) => {
+  const { rates } = req.body;
+  if (!rates || typeof rates !== "object") {
+    return res.status(400).json({ error: "rates object is required" });
+  }
+
+  let totalUpdated = 0;
+  for (const [level, rate] of Object.entries(rates)) {
+    const { error, count } = await supabase
+      .from("tutors")
+      .update({ hourly_rate: rate })
+      .eq("academic_level", level);
+    if (error) return res.status(500).json({ error: error.message });
+    totalUpdated += count || 0;
+  }
+  res.json({ updated: totalUpdated });
+});
+
 // GET /api/tutors/:id — a single tutor
 router.get("/:id", async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(404).json({ error: "Tutor not found" });
+  }
   const { data, error } = await supabase
     .from("tutors")
     .select("*")
@@ -42,32 +155,144 @@ router.get("/:id", async (req, res) => {
   res.json(data);
 });
 
-// POST /api/tutors — add a new tutor
+// POST /api/tutors — add a new tutor.
+// The tutors.id column is a foreign key into auth.users, so creating a tutor
+// requires first creating an auth account. We generate a temporary password;
+// the tutor will be prompted to change it on first login.
 router.post("/", async (req, res) => {
   const {
     student_number,
     email,
     name,
-    hourly_rate,
     academic_level,
     weekly_hour_cap,
+    hourly_rate,
   } = req.body;
 
-  const { data, error } = await supabase
+  // ── Input validation ─────────────────────────────────────────
+  const VALID_LEVELS = ["third_year", "honours", "masters", "phd"];
+  const WITS_EMAIL_RE = /@(wits\.ac\.za|students\.wits\.ac\.za)$/i;
+  const errors = [];
+
+  if (!name || !name.trim()) errors.push("Name is required.");
+  else if (name.trim().length < 2)
+    errors.push("Name must be at least 2 characters.");
+
+  if (!student_number || !String(student_number).trim())
+    errors.push("Student number is required.");
+  else if (!/^\d{5,10}$/.test(String(student_number).trim()))
+    errors.push("Student number must be 5–10 digits.");
+
+  if (!email || !email.trim())
+    errors.push("Email is required to create a tutor account.");
+  else if (!WITS_EMAIL_RE.test(email.trim()))
+    errors.push("Email must end with @wits.ac.za or @students.wits.ac.za.");
+
+  if (!academic_level) errors.push("Academic level is required.");
+  else if (!VALID_LEVELS.includes(academic_level))
+    errors.push(
+      "Invalid academic level. Must be one of: " + VALID_LEVELS.join(", "),
+    );
+
+  if (
+    weekly_hour_cap != null &&
+    (isNaN(weekly_hour_cap) || weekly_hour_cap < 0)
+  )
+    errors.push("Weekly hour cap must be a non-negative number.");
+
+  if (hourly_rate != null && (isNaN(hourly_rate) || hourly_rate < 0))
+    errors.push("Hourly rate must be a non-negative number.");
+
+  if (errors.length) {
+    return res.status(400).json({ error: errors.join(" ") });
+  }
+
+  // Check for duplicate student number
+  const { data: existingStudent } = await supabase
+    .from("tutors")
+    .select("id")
+    .eq("student_number", String(student_number).trim())
+    .maybeSingle();
+  if (existingStudent) {
+    return res
+      .status(409)
+      .json({ error: "A tutor with this student number already exists." });
+  }
+
+  // Check for duplicate email across all user accounts (not just tutors).
+  // An email in the users table means an auth account already exists for it,
+  // so signUp would fail anyway — catch it early with a clear message.
+  const { data: existingEmail } = await supabase
+    .from("users")
+    .select("id")
+    .eq("email", email.trim())
+    .maybeSingle();
+  if (existingEmail) {
+    return res
+      .status(409)
+      .json({ error: "An account with this email already exists." });
+  }
+
+  // 1. Create the auth user with a temporary password
+  const tempPassword = crypto.randomBytes(12).toString("base64url");
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password: tempPassword,
+  });
+
+  if (authError) {
+    // If the email already exists in auth, give a clear message
+    const isDuplicate = /already|registered|exists/i.test(authError.message);
+    if (isDuplicate) {
+      return res.status(409).json({
+        error:
+          "An account with this email already exists. Use a different email address.",
+      });
+    }
+    return res.status(400).json({ error: authError.message });
+  }
+
+  const userId = authData.user?.id;
+  if (!userId) {
+    return res.status(400).json({ error: "Auth user was not created." });
+  }
+
+  // 2. Insert into the users table (matches auth.js registration flow)
+  const { error: userError } = await supabase.from("users").insert({
+    id: userId,
+    email,
+    name,
+    role: "tutor",
+  });
+
+  if (userError) {
+    return res.status(500).json({
+      error:
+        "Auth user created, but users table insert failed: " +
+        userError.message,
+    });
+  }
+
+  // 3. Insert into the tutors table
+  const { data: tutor, error: tutorError } = await supabase
     .from("tutors")
     .insert({
+      id: userId,
       student_number,
       email,
       name,
-      hourly_rate,
       academic_level,
       weekly_hour_cap,
+      hourly_rate: hourly_rate ?? null,
     })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.status(201).json(data);
+  if (tutorError) {
+    return res.status(500).json({ error: tutorError.message });
+  }
+
+  res.status(201).json(tutor);
 });
 
 // PUT /api/tutors/:id — edit an existing tutor
@@ -76,9 +301,9 @@ router.put("/:id", async (req, res) => {
     student_number,
     email,
     name,
-    hourly_rate,
     academic_level,
     weekly_hour_cap,
+    hourly_rate,
   } = req.body;
 
   const { data, error } = await supabase
@@ -87,9 +312,9 @@ router.put("/:id", async (req, res) => {
       student_number,
       email,
       name,
-      hourly_rate,
       academic_level,
       weekly_hour_cap,
+      hourly_rate: hourly_rate ?? null,
     })
     .eq("id", req.params.id)
     .select()
@@ -124,8 +349,7 @@ router.put("/:id/busy-times", async (req, res) => {
     .delete()
     .eq("tutor_id", req.params.id);
 
-  if (deleteError)
-    return res.status(500).json({ error: deleteError.message });
+  if (deleteError) return res.status(500).json({ error: deleteError.message });
 
   if (classes.length === 0) return res.json([]);
 
@@ -159,35 +383,42 @@ router.get("/:id/assignment-check", async (req, res) => {
     return res.status(400).json({ error: "courseId is required" });
   }
 
-  const { data: tutor, error: tutorError } = await supabase
-    .from("tutors")
-    .select("weekly_hour_cap")
-    .eq("id", tutorId)
-    .single();
+  // These three don't depend on each other's results — only on tutorId and
+  // courseId, both already known from the request — so fire them together
+  // instead of paying for three sequential round trips.
+  const [
+    { data: tutor, error: tutorError },
+    { data: course, error: courseError },
+    { data: otherApprovals, error: approvalsError },
+  ] = await Promise.all([
+    supabase
+      .from("tutors")
+      .select("weekly_hour_cap")
+      .eq("id", tutorId)
+      .single(),
+    supabase
+      .from("courses")
+      .select("Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week")
+      .eq("id", courseId)
+      .single(),
+    // Tutor's other approved courses (for both course-vs-course clashes and workload)
+    supabase
+      .from("tutor_subject_preference")
+      .select(
+        "course_id, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
+      )
+      .eq("tutor_id", tutorId)
+      .eq("status", "approved")
+      .neq("course_id", courseId),
+  ]);
 
   if (tutorError || !tutor) {
     return res.status(404).json({ error: "Tutor not found" });
   }
 
-  const { data: course, error: courseError } = await supabase
-    .from("courses")
-    .select("Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week")
-    .eq("id", courseId)
-    .single();
-
   if (courseError || !course) {
     return res.status(404).json({ error: "Course not found" });
   }
-
-  // Tutor's other approved courses (for both course-vs-course clashes and workload)
-  const { data: otherApprovals, error: approvalsError } = await supabase
-    .from("tutor_subject_preference")
-    .select(
-      "course_id, courses(course_code, course_name, Day_of_tut, tutor_start_time, tutor_end_time, hours_per_week)",
-    )
-    .eq("tutor_id", tutorId)
-    .eq("status", "approved")
-    .neq("course_id", courseId);
 
   if (approvalsError) {
     return res.status(500).json({ error: approvalsError.message });
@@ -200,7 +431,8 @@ router.get("/:id/assignment-check", async (req, res) => {
   const courseDay = DAY_NAMES.indexOf(course.Day_of_tut);
   const courseStart = toMinutes(course.tutor_start_time);
   const courseEnd = toMinutes(course.tutor_end_time);
-  const courseIsScheduled = courseDay !== -1 && courseStart != null && courseEnd != null;
+  const courseIsScheduled =
+    courseDay !== -1 && courseStart != null && courseEnd != null;
 
   if (courseIsScheduled) {
     const { data: busyTimes, error: busyTimesError } = await supabase
@@ -214,7 +446,12 @@ router.get("/:id/assignment-check", async (req, res) => {
     }
 
     busyTimeClashes = busyTimes.filter((b) =>
-      overlaps(courseStart, courseEnd, toMinutes(b.start_time), toMinutes(b.end_time)),
+      overlaps(
+        courseStart,
+        courseEnd,
+        toMinutes(b.start_time),
+        toMinutes(b.end_time),
+      ),
     );
 
     courseClashes = (otherApprovals || [])

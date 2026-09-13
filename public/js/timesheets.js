@@ -7,7 +7,14 @@ import {
   todayStr,
   getWeekStart,
   getWeekTotal,
+  requireRole,
 } from "./storage.js";
+
+// This page (timesheets.html) is tutor-only — a payroll claim for hours
+// tutored. Without this, any signed-in user could land here directly.
+if (!requireRole("tutor")) {
+  throw new Error("Not authorized");
+}
 
 highlightActiveTab();
 

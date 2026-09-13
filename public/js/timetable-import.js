@@ -1,6 +1,6 @@
 import { addScheduleClasses } from "./storage.js";
 import {
-  parseTimetableViaApi,
+  parseTimetablePdf,
   parseTimetableJson,
   firstOccurrenceOnOrAfter,
 } from "./timetable-parser.js";
@@ -86,10 +86,13 @@ parseBtn.addEventListener("click", async () => {
   }
 
   reviewSection.hidden = true;
+  parseBtn.disabled = true;
   setStatus("Reading PDF…");
 
   try {
-    const classes = await parseTimetableViaApi(file);
+    const classes = await parseTimetablePdf(file, (message) =>
+      setStatus(message),
+    );
     parsedClasses = classes.map((cls) => ({
       ...cls,
       firstDate: firstOccurrenceOnOrAfter(
@@ -110,6 +113,8 @@ parseBtn.addEventListener("click", async () => {
     );
   } catch (err) {
     setStatus(err.message || "Could not read that PDF.", true);
+  } finally {
+    parseBtn.disabled = false;
   }
 });
 

@@ -4,7 +4,21 @@
    Persisted to localStorage until this is wired to Supabase.
    ============================================================ */
 
-const PROFILE_KEY = "studentVolunteer.profile";
+// Namespaced by user id — a fixed key would leak one signed-in student's
+// profile to whoever is signed in next on the same browser (localStorage is
+// shared across the whole origin, not per-session like sessionStorage).
+function currentUserId() {
+  try {
+    const raw = sessionStorage.getItem("user");
+    return raw ? JSON.parse(raw).id : "anon";
+  } catch {
+    return "anon";
+  }
+}
+
+function profileKey() {
+  return `studentVolunteer.profile.${currentUserId()}`;
+}
 
 const DEFAULT_PROFILE = {
   fullName: "Dorsa",
@@ -22,7 +36,7 @@ const subjectCheckboxes = Array.from(
 );
 
 function loadProfile() {
-  const raw = localStorage.getItem(PROFILE_KEY);
+  const raw = localStorage.getItem(profileKey());
   if (!raw) return DEFAULT_PROFILE;
   try {
     return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
@@ -50,7 +64,7 @@ form.addEventListener("submit", (e) => {
       .map((cb) => cb.value),
     bio: bioEl.value.trim(),
   };
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  localStorage.setItem(profileKey(), JSON.stringify(profile));
   showToast("Profile saved");
 });
 

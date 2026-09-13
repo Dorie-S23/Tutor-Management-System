@@ -1,100 +1,176 @@
-
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StudyConnect | Calendar</title>
-    <link rel="stylesheet" href="../css/style.css">
-</head>
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
 
-<body>
-
+  <body data-page-role="student">
     <header>
-
-        <nav aria-label="Main navigation">
-            <a href="StudentView.html">Dashboard</a>
-            <a href="my-sessions.html">My Sessions</a>
-            <a href="log-hours.html">Log Hours</a>
-            <a href="student_calender.html" aria-current="page">Calendar</a>
-            <a href="#">Messages</a>
-            <a href="profile.html">Profile</a>
-            <a href="#" id="logout-button">Logout</a>
-        </nav>
+      <nav aria-label="Main navigation">
+        <a href="StudentView.html">Dashboard</a>
+        <a href="my-sessions.html">My Sessions</a>
+        <a href="log-hours.html">Log Hours</a>
+        <a href="student_calender.html" aria-current="page">Calendar</a>
+        <a href="#">Messages</a>
+        <a href="profile.html">Profile</a>
+        <a href="#" id="logout-button">Logout</a>
+      </nav>
     </header>
 
-  <main>
-    <div class="card">
-      <h2>Import timetable</h2>
-      <p class="card-hint">Upload your Wits "My Class Schedule" PDF export to add your classes to the calendar. They'll repeat weekly until the date you choose below.</p>
-      <div class="form-grid">
-        <div class="form-field">
-          <label for="timetable-file">Timetable PDF</label>
-          <input type="file" id="timetable-file" accept="application/pdf" />
+    <main>
+      <div class="card">
+        <h2>Import timetable</h2>
+        <p class="card-hint">
+          Upload your Wits "My Class Schedule" PDF export to add your classes to
+          the calendar. They'll repeat weekly until the date you choose below.
+        </p>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="timetable-file">Timetable PDF</label>
+            <input type="file" id="timetable-file" accept="application/pdf" />
+          </div>
+          <div class="form-field">
+            <label for="semester-start">Classes start on</label>
+            <input type="date" id="semester-start" />
+          </div>
+          <div class="form-field">
+            <label for="semester-end">Repeat weekly until</label>
+            <input type="date" id="semester-end" />
+          </div>
+          <div class="form-actions">
+            <button type="button" id="parse-timetable-btn" class="btn-primary">
+              Parse PDF
+            </button>
+          </div>
         </div>
-        <div class="form-field">
-          <label for="semester-start">Classes start on</label>
-          <input type="date" id="semester-start" />
-        </div>
-        <div class="form-field">
-          <label for="semester-end">Repeat weekly until</label>
-          <input type="date" id="semester-end" />
-        </div>
-        <div class="form-actions">
-          <button type="button" id="parse-timetable-btn" class="btn-primary">Parse PDF</button>
-        </div>
-      </div>
-      <details class="paste-fallback">
-        <summary>Or paste timetable data instead</summary>
-        <p class="card-hint">For PDFs with no extractable text (image/scanned exports), paste a JSON array of classes here.</p>
-        <div class="form-field full-width">
-          <label for="timetable-json">Timetable JSON</label>
-          <textarea id="timetable-json" rows="8" placeholder='[{"title":"MATH 2016A - E Lecture","dayName":"Monday","firstDate":"2026-08-10","startTime":"10:15","endTime":"12:00","venue":"OS1/U1/OS4"}]'></textarea>
-        </div>
-        <div class="form-actions">
-          <button type="button" id="parse-json-btn" class="btn-secondary">Use pasted data</button>
-        </div>
-      </details>
+        <details class="paste-fallback">
+          <summary>Or paste timetable data instead</summary>
+          <p class="card-hint">
+            For PDFs with no extractable text (image/scanned exports), paste a
+            JSON array of classes here.
+          </p>
+          <div class="form-field full-width">
+            <label for="timetable-json">Timetable JSON</label>
+            <textarea
+              id="timetable-json"
+              rows="8"
+              placeholder='[{"title":"MATH 2016A - E Lecture","dayName":"Monday","firstDate":"2026-08-10","startTime":"10:15","endTime":"12:00","venue":"OS1/U1/OS4"}]'
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="parse-json-btn" class="btn-secondary">
+              Use pasted data
+            </button>
+          </div>
+        </details>
 
-      <p id="timetable-status" class="card-hint" hidden></p>
+        <p id="timetable-status" class="card-hint" hidden></p>
 
-      <div id="timetable-review" hidden>
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>Day</th>
-              <th>Time</th>
-              <th>Class</th>
-              <th>Venue</th>
-            </tr>
-          </thead>
-          <tbody id="timetable-review-body"></tbody>
-        </table>
-        <div class="form-actions">
-          <button type="button" id="save-timetable-btn" class="btn-primary">Add selected to calendar</button>
-          <button type="button" id="cancel-timetable-btn" class="btn-secondary">Cancel</button>
+        <div id="timetable-review" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Day</th>
+                <th>Time</th>
+                <th>Class</th>
+                <th>Venue</th>
+              </tr>
+            </thead>
+            <tbody id="timetable-review-body"></tbody>
+          </table>
+          <div class="form-actions">
+            <button type="button" id="save-timetable-btn" class="btn-primary">
+              Add selected to calendar
+            </button>
+            <button
+              type="button"
+              id="cancel-timetable-btn"
+              class="btn-secondary"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <div class="calendar-nav">
-        <button type="button" id="prev-month-btn" class="btn-secondary">&larr; Prev</button>
-        <h2 id="calendar-month-label"></h2>
-        <button type="button" id="next-month-btn" class="btn-secondary">Next &rarr;</button>
+      <div class="card" id="add-class-card" hidden>
+        <h2>Manually add a class</h2>
+        <p class="card-hint">
+          Pick a date, then fill in the details below. It'll be added just to
+          that day on the calendar.
+        </p>
+        <form id="add-class-form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="add-class-date">Date</label>
+              <input type="date" id="add-class-date" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-subject">Subject</label>
+              <input
+                type="text"
+                id="add-class-subject"
+                placeholder="e.g. COMS2011A"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="add-class-start">Start time</label>
+              <input type="time" id="add-class-start" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-end">End time</label>
+              <input type="time" id="add-class-end" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-venue">Venue</label>
+              <input type="text" id="add-class-venue" placeholder="e.g. FNB1" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Add class</button>
+              <button
+                type="button"
+                id="cancel-add-class-btn"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
-      <div class="form-actions">
-        <button type="button" id="clear-classes-btn" class="btn-danger">Clear class times</button>
-      </div>
-      <div class="calendar-weekdays">
-        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
-      </div>
-      <div class="calendar-grid" id="calendar-grid"></div>
-    </div>
-  </main>
 
-  <script type="module" src="../js/calendar.js"></script>
-  <script type="module" src="../js/timetable-import.js"></script>
-  <script src="../js/logout.js"></script>
-</body>
+      <div class="card">
+        <div class="calendar-nav">
+          <button type="button" id="prev-month-btn" class="btn-secondary">
+            &larr; Prev
+          </button>
+          <h2 id="calendar-month-label"></h2>
+          <button type="button" id="next-month-btn" class="btn-secondary">
+            Next &rarr;
+          </button>
+        </div>
+        <div class="form-actions" id="clear-classes-row">
+          <button type="button" id="add-class-btn" class="btn-primary">
+            + Add class
+          </button>
+          <button type="button" id="clear-classes-btn" class="btn-danger">
+            Clear class times
+          </button>
+        </div>
+        <div class="calendar-weekdays">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span
+          ><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+      </div>
+    </main>
+
+    <script type="module" src="../js/calendar.js"></script>
+    <script type="module" src="../js/timetable-import.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
 </html>

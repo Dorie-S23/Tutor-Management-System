@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tutor Allocation Board</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
       rel="stylesheet"
@@ -12,26 +13,62 @@
     <link rel="stylesheet" href="../css/global.css" />
   </head>
   <body>
-    <header class="board-header">
+    <header class="board-header board-header--brand">
       <hgroup class="header-left">
         <p class="eyebrow">
+          <img src="../images/images.png" alt="" class="eyebrow-logo" />
           School of Computer Science &amp; Applied Mathematics
         </p>
         <h1>Tutor Allocation Board</h1>
       </hgroup>
 
-      <dl class="header-right">
-        <dt class="stat-label">courses staffed</dt>
-        <dd class="stat-value" id="statFilled">0 / 0</dd>
-        <dt class="stat-label">tutors on the roll</dt>
-        <dd class="stat-value" id="statTutors">0</dd>
-      </dl>
+      <img
+        src="../images/Wits-890x664.png"
+        alt="University of the Witwatersrand"
+        class="header-wits-logo"
+      />
 
-      <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
-      <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
-      <button class="btn btn-ghost" id="logout-button" type="button">
+      <button class="btn btn-danger" id="logout-button" type="button">
         Logout
       </button>
+
+      <div class="header-toolbar">
+        <dl class="header-right">
+          <dt class="stat-label">courses staffed</dt>
+          <dd class="stat-value" id="statFilled">0 / 0</dd>
+          <dt class="stat-label">tutors on the roll</dt>
+          <dd class="stat-value" id="statTutors">0</dd>
+          <dt class="stat-label">needs review</dt>
+          <dd class="stat-value" id="statPending">0</dd>
+        </dl>
+
+        <div class="header-actions">
+          <div class="universal-search">
+            <input
+              type="search"
+              id="universalSearchInput"
+              class="universal-search-input"
+              placeholder="Search courses, tutors, timesheets…"
+              aria-label="Universal search"
+            />
+            <ul
+              class="universal-search-results"
+              id="universalSearchResults"
+              hidden
+            ></ul>
+          </div>
+
+          <button class="btn btn-primary" id="obviousFillBtn" type="button">
+            Fill obvious assignments
+          </button>
+          <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
+          <a class="btn btn-ghost" href="timetable.html">Timetable</a>
+          <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
+          <button class="btn btn-ghost" id="tour-button" type="button">
+            Take the tour
+          </button>
+        </div>
+      </div>
     </header>
 
     <main class="board-layout">
@@ -48,6 +85,10 @@
             />
           </search>
         </header>
+        <label class="shortfall-toggle">
+          <input type="checkbox" id="shortfallToggle" />
+          Show short-staffed courses only
+        </label>
         <button
           class="btn btn-primary btn-full"
           id="addCourseBtn"
@@ -99,6 +140,13 @@
               >
                 Edit course
               </button>
+              <button
+                class="btn btn-danger btn-small-pad"
+                id="deleteCourseBtn"
+                type="button"
+              >
+                Delete course
+              </button>
             </div>
           </header>
 
@@ -121,6 +169,24 @@
             </ul>
             <p class="empty-copy" id="applicantsEmpty" hidden>
               No tutors have applied for this course yet.
+            </p>
+          </section>
+
+          <section class="assign-panel" aria-labelledby="excusalsHeading">
+            <header class="assign-panel-head">
+              <h3 id="excusalsHeading">Session Excusals</h3>
+            </header>
+
+            <p class="hint">
+              Tutors who've excused themselves from an upcoming session on this
+              course — find cover if you need to.
+            </p>
+
+            <ul class="tutor-list" id="excusalList">
+              <!-- injected -->
+            </ul>
+            <p class="empty-copy" id="excusalsEmpty" hidden>
+              No excusals recorded for this course.
             </p>
           </section>
 
@@ -164,8 +230,6 @@
             &times;
           </button>
         </header>
-
-        <p class="field-error" id="addCourseError" hidden></p>
 
         <label class="field">
           <span class="field-label">Course code</span>
@@ -242,25 +306,94 @@
           />
         </label>
 
-        <label class="field">
-          <span class="field-label">Day of tutoring</span>
-          <input
-            type="text"
-            id="dayOfTutInput"
-            name="day_of_tut"
-            placeholder="e.g. Monday"
-          />
-        </label>
+        <div class="field-group">
+          <label class="field-checkbox">
+            <input type="checkbox" id="hasTutorialInput" />
+            <span>Tutorials</span>
+          </label>
 
-        <label class="field">
-          <span class="field-label">Tutor session start time</span>
-          <input type="time" id="tutorStartTimeInput" name="tutor_start_time" />
-        </label>
+          <div id="tutorialFields" class="field-subgroup" hidden>
+            <label class="field">
+              <span class="field-label">Day of tutorial</span>
+              <select id="dayOfTutInput" name="day_of_tut">
+                <option value="">Select a day</option>
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+              </select>
+            </label>
 
-        <label class="field">
-          <span class="field-label">Tutor session end time</span>
-          <input type="time" id="tutorEndTimeInput" name="tutor_end_time" />
-        </label>
+            <label class="field">
+              <span class="field-label">Tutorial start time</span>
+              <input
+                type="time"
+                id="tutorStartTimeInput"
+                name="tutor_start_time"
+              />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Tutorial end time</span>
+              <input type="time" id="tutorEndTimeInput" name="tutor_end_time" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Tutorial venue</span>
+              <input
+                type="text"
+                id="venuesInput"
+                name="venues"
+                placeholder="e.g. FNB1"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-checkbox">
+            <input type="checkbox" id="hasLabInput" />
+            <span>Labs</span>
+          </label>
+
+          <div id="labFields" class="field-subgroup" hidden>
+            <label class="field">
+              <span class="field-label">Day of lab</span>
+              <select id="dayOfLabInput" name="day_of_lab">
+                <option value="">Select a day</option>
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Lab start time</span>
+              <input type="time" id="labStartTimeInput" name="lab_start_time" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Lab end time</span>
+              <input type="time" id="labEndTimeInput" name="lab_end_time" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Lab venue</span>
+              <input
+                type="text"
+                id="labVenuesInput"
+                name="lab_venues"
+                placeholder="e.g. FNB2"
+              />
+            </label>
+          </div>
+        </div>
+
+        <p class="field-warning" id="courseClashWarning" hidden></p>
+        <p class="field-error" id="addCourseError" hidden></p>
 
         <menu class="modal-actions">
           <li>
@@ -281,6 +414,157 @@
       </form>
     </dialog>
 
+    <dialog
+      class="modal"
+      id="overrideModal"
+      aria-labelledby="overrideModalHeading"
+    >
+      <form method="dialog" class="modal-form" id="overrideForm">
+        <header class="modal-head">
+          <h2 id="overrideModalHeading">Override and approve</h2>
+          <button
+            class="modal-close"
+            id="overrideModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="overrideFormError" hidden></p>
+
+        <p class="hint" id="overrideModalContext"></p>
+
+        <label class="field">
+          <span class="field-label">Reason for the override</span>
+          <textarea
+            id="overrideReasonInput"
+            name="reason"
+            rows="3"
+            required
+            placeholder="e.g. Strongest applicant available this term, worth the exception"
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="overrideCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="overrideSubmitBtn"
+              type="submit"
+            >
+              Approve with override
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog
+      class="modal modal-wide"
+      id="obviousFillModal"
+      aria-labelledby="obviousFillHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="obviousFillHeading">Fill obvious assignments</h2>
+          <button
+            class="modal-close"
+            id="obviousFillCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="obviousFillHint"></p>
+
+        <ul class="tutor-list" id="obviousFillList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="obviousFillEmpty" hidden>
+          No pending application is an obvious fill right now — every open
+          course either has no eligible applicant, or more eligible applicants
+          than open slots.
+        </p>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="obviousFillCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="obviousFillConfirmBtn"
+              type="button"
+            >
+              Approve selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <dialog
+      class="modal"
+      id="deleteCourseModal"
+      aria-labelledby="deleteCourseHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="deleteCourseHeading">Delete course</h2>
+          <button
+            class="modal-close"
+            id="deleteCourseCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="deleteCourseError" hidden></p>
+
+        <p id="deleteCourseMessage"></p>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="deleteCourseCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-danger"
+              id="deleteCourseConfirmBtn"
+              type="button"
+            >
+              Delete course
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <script src="../js/onboarding.js"></script>
+    <script src="../js/universal-search.js"></script>
     <script src="../js/board.js"></script>
     <script src="../js/logout.js"></script>
   </body>

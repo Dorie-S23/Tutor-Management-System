@@ -13,6 +13,31 @@ export function getCurrentUser() {
   }
 }
 
+// Where each role lands after login (mirrors the switch in auth.js).
+const ROLE_HOME = {
+  student: "StudentView.html",
+  tutor: "dashboard.html",
+  educator: "educator.html",
+  organiser: "board.html",
+};
+
+// Guards a role-specific page: sends a signed-out visitor to login, and
+// sends a signed-in visitor of the *wrong* role back to their own home page
+// instead of letting them view (and act on) a page built for another role.
+// Call this at the top of a page's script, before anything else runs.
+export function requireRole(allowedRole) {
+  const user = getCurrentUser();
+  if (!user) {
+    window.location.href = "login.html";
+    return null;
+  }
+  if (user.role !== allowedRole) {
+    window.location.href = ROLE_HOME[user.role] || "login.html";
+    return null;
+  }
+  return user;
+}
+
 function fromApiEntry(row) {
   return {
     id: row.id,
@@ -152,10 +177,16 @@ export function todayStr() {
 
 // ---------- tutor profile (used to fill in the printable timesheet) ----------
 
-const PROFILE_KEY = "tutorHours.profile";
+// Namespaced by user id — a fixed key would leak one signed-in user's data
+// to whoever is signed in next on the same browser (localStorage is shared
+// across the whole origin, not per-session like sessionStorage).
+function profileKey() {
+  const user = getCurrentUser();
+  return `tutorHours.profile.${user ? user.id : "anon"}`;
+}
 
 export function getProfile() {
-  const raw = localStorage.getItem(PROFILE_KEY);
+  const raw = localStorage.getItem(profileKey());
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -165,17 +196,24 @@ export function getProfile() {
 }
 
 export function saveProfile(profile) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  localStorage.setItem(profileKey(), JSON.stringify(profile));
 }
 
 // ---------- recurring class schedule (imported from a timetable PDF) ----------
 // Each class recurs weekly on the same weekday from firstDate through endDate,
 // separate from logged hours so it never affects hours-worked totals.
 
-const SCHEDULE_KEY = "tutorHours.schedule";
+// Namespaced by user id for the same reason as profileKey() above — without
+// this, a tutor's added/imported classes show up on whichever account is
+// signed in next on the same browser (this is what caused a volunteer to
+// see a different tutor's course sessions on their calendar).
+function scheduleKey() {
+  const user = getCurrentUser();
+  return `tutorHours.schedule.${user ? user.id : "anon"}`;
+}
 
 function readSchedule() {
-  const raw = localStorage.getItem(SCHEDULE_KEY);
+  const raw = localStorage.getItem(scheduleKey());
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -186,7 +224,7 @@ function readSchedule() {
 }
 
 function writeSchedule(classes) {
-  localStorage.setItem(SCHEDULE_KEY, JSON.stringify(classes));
+  localStorage.setItem(scheduleKey(), JSON.stringify(classes));
 }
 
 export function getSchedule() {
@@ -222,19 +260,129 @@ export function addScheduleClasses(classes) {
 
 export function deleteScheduleClass(id) {
   writeSchedule(readSchedule().filter((c) => c.id !== id));
+  writeExceptions(readExceptions().filter((e) => e.classId !== id));
+  syncScheduleToServer();
+}
+
+// Updates the base fields of a recurring class (title, dayOfWeek, startTime,
+// endTime, venue, firstDate, endDate). Affects every future occurrence that
+// hasn't been individually overridden.
+export function updateScheduleClass(id, changes) {
+  const schedule = readSchedule().map((c) =>
+    c.id === id ? { ...c, ...changes } : c,
+  );
+  writeSchedule(schedule);
   syncScheduleToServer();
 }
 
 export function clearSchedule() {
   writeSchedule([]);
+  writeExceptions([]);
   syncScheduleToServer();
+}
+
+// ---------- exceptions to the recurring schedule ----------
+// A single occurrence of a recurring class can be cancelled (e.g. a public
+// holiday) or modified (e.g. moved to a different time/venue for one week)
+// without touching the recurrence rule itself. Keyed by (classId, date) so
+// there's at most one exception per class per day.
+
+function scheduleExceptionsKey() {
+  const user = getCurrentUser();
+  return `tutorHours.scheduleExceptions.${user ? user.id : "anon"}`;
+}
+
+function readExceptions() {
+  const raw = localStorage.getItem(scheduleExceptionsKey());
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeExceptions(exceptions) {
+  localStorage.setItem(scheduleExceptionsKey(), JSON.stringify(exceptions));
+}
+
+export function getScheduleExceptions() {
+  return readExceptions();
+}
+
+// Cancels a single occurrence of a recurring class on the given date.
+export function cancelScheduleOccurrence(classId, dateStr) {
+  const exceptions = readExceptions().filter(
+    (e) => !(e.classId === classId && e.date === dateStr),
+  );
+  exceptions.push({ classId, date: dateStr, type: "cancelled" });
+  writeExceptions(exceptions);
+}
+
+// Overrides one or more fields (startTime, endTime, venue, title) for a
+// single occurrence, leaving every other occurrence untouched.
+export function modifyScheduleOccurrence(classId, dateStr, overrides) {
+  const exceptions = readExceptions().filter(
+    (e) => !(e.classId === classId && e.date === dateStr),
+  );
+  exceptions.push({ classId, date: dateStr, type: "modified", overrides });
+  writeExceptions(exceptions);
+}
+
+// Removes any exception for this occurrence, reverting it back to the
+// normal recurring class.
+export function clearScheduleException(classId, dateStr) {
+  writeExceptions(
+    readExceptions().filter(
+      (e) => !(e.classId === classId && e.date === dateStr),
+    ),
+  );
+}
+
+// getScheduleForDate hides cancelled occurrences entirely, so the calendar
+// UI needs a separate lookup to show *something* clickable in their place
+// (otherwise a cancelled class silently vanishes with no way to undo it).
+export function getCancelledOccurrencesForDate(dateStr) {
+  const exceptions = readExceptions().filter(
+    (e) => e.date === dateStr && e.type === "cancelled",
+  );
+  if (exceptions.length === 0) return [];
+
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const weekday = new Date(y, m - 1, d).getDay();
+  const classes = readSchedule().filter(
+    (c) =>
+      c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate,
+  );
+
+  return exceptions
+    .map((e) => classes.find((c) => c.id === e.classId))
+    .filter(Boolean);
 }
 
 export function getScheduleForDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const weekday = new Date(y, m - 1, d).getDay();
-  return readSchedule().filter(
+  const classes = readSchedule().filter(
     (c) =>
       c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate,
   );
+
+  const exceptions = readExceptions();
+  if (exceptions.length === 0) return classes;
+
+  return classes
+    .map((c) => {
+      const exception = exceptions.find(
+        (e) => e.classId === c.id && e.date === dateStr,
+      );
+      if (!exception) return c;
+      if (exception.type === "cancelled") return null;
+      if (exception.type === "modified") {
+        return { ...c, ...exception.overrides, isModifiedOccurrence: true };
+      }
+      return c;
+    })
+    .filter(Boolean);
 }
