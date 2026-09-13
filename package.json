@@ -16,6 +16,12 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/my-docs/"
+    ],
+    "collectCoverageFrom": [
+      "public/js/**/*.js",
+      "server/routes/**/*.js",
+      "!**/*.test.js",
+      "!**/node_modules/**"
     ]
   },
   "repository": {
