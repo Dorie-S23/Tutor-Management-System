@@ -4,7 +4,7 @@ sidebar_position: 5.8
 
 # External Services
 
-Every third-party service and CDN this app actually talks to, and what (if anything) it needs a credential for.
+Every third-party service and CDN this app actually talks to: why it was chosen and how the integration actually works.
 
 ## Overview
 
@@ -12,47 +12,86 @@ Four external services are in active use — one database/auth backend, one indi
 
 ## Supabase — database + auth
 
-The app's only backend-as-a-service dependency. Covered in detail in [Backend](./backend.mdx), so only a summary here.
+The app's only backend-as-a-service dependency, and the one everything else is built around. Full env-var/config detail is in [Backend](./backend.mdx); this section covers the rationale and mechanics.
 
-- **What for:** hosted Postgres (all app data) and Supabase Auth (sign-up/sign-in, including Google OAuth — see below).
-- **Credentials:** `SUPABASE_URL` + `SUPABASE_ANON_KEY` (env vars).
-- **Where it's instantiated** — four separate client instances, all pointed at the same project:
+### Why it's suitable
+
+- **One product instead of three.** A managed Postgres database, a REST API in front of it, and a full auth system (email/password + OAuth) ship as one service — this is a small team building a full-stack app on a deadline, not standing up its own database server, writing its own JWT/session logic, or running its own OAuth flow.
+- **A real relational database, not a document store bolted onto a BaaS.** The domain (tutors, courses, applications, timesheets, approvals with foreign keys between all of them) is inherently relational — Postgres's constraints and joins fit it directly, rather than working around a NoSQL model.
+- **A generous free tier**, appropriate for a student project with no production budget.
+- **One SDK, two environments.** `@supabase/supabase-js` works identically in Node (server-side) and in a plain `<script>` tag in the browser (client-side), which matters here since the frontend has no bundler — see `public/html/google-callback.html`, where it's loaded straight from jsdelivr with no build step.
+
+### How it works
+
+- The client is instantiated with `createClient(SUPABASE_URL, SUPABASE_ANON_KEY)` — **four separate times**, all pointed at the same project:
   - `app.js:17-27` — server-side client, attached to every request as `req.supabase`
   - `server/supabaseClient.js` — a second server-side client, imported by everything under `server/routes/*`
-  - `routes/auth.js:405-417` — a third, built per-request with the caller's access token, to verify Google sign-ins
-  - `public/html/google-callback.html` — a client-side client, loaded from `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`, with the URL/anon key inline in the HTML
+  - `routes/auth.js:405-417` — a third, built per-request with the _caller's_ access token instead of the anon key, specifically to verify Google sign-ins server-side
+  - `public/html/google-callback.html` — a client-side instance, loaded from `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`, with the URL/anon key inline in the HTML
+- Every `server/routes/*.js` file talks to Postgres through the JS query builder (`supabase.from("table").select()/.insert()/.update()/.delete()`, with `.eq()`/`.neq()`/`.in()`/`.order()`/`.single()` etc.) — this compiles down to calls against Supabase's auto-generated PostgREST API, so the app never writes raw SQL.
+- Auth (`routes/auth.js`) uses Supabase's own user table and session tokens for email/password sign-up and login — the app doesn't store or hash passwords itself.
+- **Caveat, not a strength:** Row Level Security is currently disabled on every table (flagged as an open item in [Backend](./backend.mdx#deployment)), so the suitability of "PostgREST auto-generates a REST API" cuts both ways — it's convenient, but it also means the anon key currently grants direct read/write to everything unless RLS gets turned back on.
 
 ## Google OAuth — via Supabase, not a direct integration
 
-"Continue with Google" doesn't talk to any `accounts.google.com` / `googleapis.com` endpoint directly, and there's no Google Identity Services script anywhere in the repo. It's entirely proxied through Supabase Auth:
+### Why it's suitable
 
-- `public/js/auth.js` — the button just navigates to `/api/auth/google` (an internal route).
-- `routes/auth.js` (`GET /api/auth/google`) — calls `req.supabase.auth.signInWithOAuth({ provider: "google" })`, which redirects the browser to Google's consent screen.
-- `public/html/google-callback.html` — exchanges the returned OAuth code for a session via `supabaseClient.auth.exchangeCodeForSession(code)`.
-- `routes/auth.js` (`POST /api/auth/google/register`) — verifies the resulting Supabase access token via `authenticatedSupabase.auth.getUser(accessToken)`.
+- Wits students and staff already have Google-backed accounts, so "Continue with Google" removes a step (choosing yet another password) for the exact audience this app is built for.
+- Delegating the actual OAuth2 dance to Supabase avoids implementing the authorization-code flow — redirect, state/PKCE handling, code-for-token exchange, verifying Google's signed tokens — by hand. That flow is easy to get subtly wrong in ways that are security bugs, not just UX bugs, so reusing Supabase's already-audited implementation is the safer choice for a small team.
+- No separate Google Cloud credential has to be managed in this repo's own config — it lives in the Supabase project dashboard instead, one fewer secret to keep track of here.
 
-No credential for Google itself lives in this repo — a Google OAuth client ID/secret, if one exists, is configured inside the Supabase project dashboard.
+### How it works
+
+There's no direct call to `accounts.google.com` or any `googleapis.com` endpoint anywhere in this codebase, and no Google Identity Services script — the whole flow is proxied through Supabase Auth:
+
+1. `public/js/auth.js` — the "Continue with Google" button just navigates the browser to `/api/auth/google` (an internal route, not Google).
+2. `routes/auth.js` (`GET /api/auth/google`) — calls `req.supabase.auth.signInWithOAuth({ provider: "google" })`. Supabase returns a Google consent-screen URL; the server redirects the browser there.
+3. The user approves on Google's own page. Google redirects back to a Supabase-managed callback, which Supabase turns into an authorization code and hands off to this app's own `public/html/google-callback.html`.
+4. `google-callback.html` calls `supabaseClient.auth.exchangeCodeForSession(code)` — this is the actual code-for-session exchange, but it's a call _to Supabase_, not to Google; Supabase holds the Google client secret and does the real token exchange behind the scenes.
+5. `routes/auth.js` (`POST /api/auth/google/register`) then verifies the resulting Supabase access token via `authenticatedSupabase.auth.getUser(accessToken)` before creating this app's own `users`/`organisers`/etc. row for a first-time Google sign-in.
 
 ## Google Fonts
 
-CDN font delivery — Fraunces, Space Grotesk, Inter, IBM Plex Mono — via `<link rel="preconnect">` + `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...">` pairs on most pages under `public/html/` (already noted in [Frontend → Tech Stack](./frontend.mdx#tech-stack)). No credential required.
+### Why it's suitable
+
+The frontend has no build step and no bundler (see [Frontend](./frontend.mdx)), so self-hosting font files would mean manually managing `@font-face` declarations and static assets for four typefaces. Google Fonts' CDN does that for free, with far better cache-hit odds across visitors' browsers than a self-hosted file would get, and no license/hosting management on the app's side.
+
+### How it works
+
+Each page that needs custom typography (most of `public/html/`) carries a `<link rel="preconnect">` (opens the connection early) plus a `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...">` for Fraunces, Space Grotesk, Inter, and IBM Plex Mono. That stylesheet response is itself just `@font-face` rules pointing at `.woff2` files on `fonts.gstatic.com`; the browser fetches whichever weights/styles the page's CSS actually uses. No credential, no API call from the app's own code — it's a static asset fetch.
 
 ## jsdelivr CDN — pdf.js and Tesseract.js
 
-The timetable-PDF-import feature (calendar page) runs entirely client-side, no backend route or API key involved. `public/js/timetable-parser.js` lazy-loads two libraries from jsdelivr at parse time:
+### Why it's suitable
 
-```js
-const PDFJS_URL =
-  "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.min.mjs";
-const TESSERACT_URL =
-  "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.esm.min.js";
-```
+This is the interesting one, and it replaced an earlier LLM-based approach (see below) specifically because it's a better fit:
 
-pdf.js renders the imported PDF to a bitmap in the browser; Tesseract.js then OCRs it. OCR is necessary rather than reading embedded text because these particular PDF exports have no real text layer — they're outlined shapes. No credential required.
+- **The source PDFs leave no other option than OCR.** Wits's exported "My Class Schedule" PDFs are a print-to-PDF of a rendered grid — every character is an outlined shape (a path), not a `Tj` text-drawing operator, so there's no embedded text layer to read directly. Rendering to a bitmap and running OCR is the only way to recover the text at all, whether that OCR runs client- or server-side.
+- **Running it client-side avoids paying for or depending on a hosted API** for something that doesn't need one — no per-request cost, no API key to provision or leak, and it keeps working even if a hosted OCR/LLM vendor changes pricing or goes down.
+- **Privacy**: the PDF (which contains a student's real class schedule) never leaves the browser — nothing is uploaded anywhere.
+- **Both libraries are the standard, actively-maintained choice for their job**, not a niche pick: pdf.js is Mozilla's own PDF renderer (the same engine Firefox uses to display PDFs in-tab), and Tesseract.js is a WebAssembly port of the long-established Tesseract OCR engine, built specifically to run OCR inside a browser tab.
+- **Loading from jsdelivr instead of bundling them** keeps the no-build-step frontend simple — one `import()` statement instead of a bundler config — while jsdelivr's CDN caching means most visitors already have these exact pinned versions cached from some other site.
+
+### How it works
+
+The whole pipeline lives in `public/js/timetable-parser.js`, invoked when a user uploads a timetable PDF on the calendar page:
+
+1. **Lazy load.** `loadPdfjs()` / `loadTesseract()` dynamically `import()` the libraries from jsdelivr only when a PDF is actually being parsed — pages that never touch this feature never pay for the download.
+   ```js
+   const PDFJS_URL =
+     "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.min.mjs";
+   const TESSERACT_URL =
+     "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.esm.min.js";
+   ```
+2. **Render.** The uploaded `File` is read into a `Uint8Array` and handed to `pdfjsLib.getDocument({ data })`. For each page, `renderPageToCanvas()` draws it onto an in-memory `<canvas>` at 3x scale (`RENDER_SCALE = 3`) — upscaling measurably improves OCR accuracy on small grid text.
+3. **OCR.** A `Tesseract.createWorker("eng")` worker is created once and reused across every page. `extractWords()` calls `worker.recognize(canvas, {}, { blocks: true, text: true })`, which returns each recognized word with its bounding box (`x0/y0/x1/y1`), not just a flat text blob.
+4. **Reconstruct the grid.** `parseGridWords()` uses those word positions — not the text alone — to work out which words share a row/column, i.e. to rebuild the timetable's grid structure (day columns, time rows, class blocks) purely from geometry. `mergeEntries()` then folds adjacent OCR'd fragments of the same class back into single entries.
+5. **Output.** The function returns a plain array of `{ title, dayName, dayOfWeek, startTime, endTime, venue }` objects — the rest of the app (busy-times import) treats this exactly like any other structured input, with no awareness that OCR was involved.
+6. The Tesseract worker is explicitly `terminate()`d in a `finally` block once every page is processed, freeing the WASM worker thread.
 
 ## Removed: LLM-based timetable parsing
 
-An earlier version of the timetable-import feature called a hosted LLM API server-side — first Anthropic, briefly swapped for Gemini — instead of the current client-side pdf.js/Tesseract approach. It's fully gone from the code as of this branch:
+An earlier version of this same feature called a hosted LLM API server-side — first Anthropic, briefly swapped for Gemini — instead of the current client-side pdf.js/Tesseract approach. It's fully gone from the code as of this branch:
 
 - `server/timetableRoutes.js`, `server/anthropicClient.js`, and `server/geminiClient.js` don't exist in `HEAD`.
 - `app.js` doesn't require or mount any timetable/Anthropic/Gemini route.
