@@ -42,11 +42,13 @@
   --ifm-font-color-base: var(--tutorx-navy-ink);
   --ifm-heading-color: var(--tutorx-navy-ink);
 
-  --ifm-font-family-base: "Space Grotesk", -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ifm-font-family-base:
+    "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   --ifm-font-family-heading: var(--ifm-font-family-base);
-  --ifm-font-family-monospace: "SFMono-Regular", Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+  --ifm-font-family-monospace:
+    "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
 
   --ifm-global-radius: 4px;
 

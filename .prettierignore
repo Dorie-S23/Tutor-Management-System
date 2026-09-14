@@ -1,3 +1,9 @@
 # Ignore artifacts:
 build
 coverage
+.docusaurus
+
+# Lockfiles are machine-generated and npm's own formatting (multi-line
+# cpu/os arrays) differs from prettier's — checking them just fights npm.
+# Matches package-lock.json at any depth, my-docs included.
+package-lock.json
