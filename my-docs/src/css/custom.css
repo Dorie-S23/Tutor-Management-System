@@ -1,30 +1,178 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * TutorX documentation theme.
+ *
+ * Palette and typography mirror the TutorX identity: navy ink surfaces,
+ * magenta accents, pink highlights, a paper background, Space Grotesk type,
+ * and flat panels with 4px corners and warm hairline borders.
  */
 
-/* You can override the default Infima variables here. */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+/* --------------------------------------------------------------------------
+ * Brand tokens
+ * ------------------------------------------------------------------------ */
+
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --tutorx-navy: #4a1d6e;
+  --tutorx-navy-ink: #2b0f42;
+  --tutorx-gold: #d6247e;
+  --tutorx-pink: #f2a6c9;
+  --tutorx-paper: #fbf7fa;
+  --tutorx-slate: #8a719e;
+  --tutorx-cream: #f3f0e8;
+  --tutorx-border: #e7e2d8;
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+/* --------------------------------------------------------------------------
+ * Light theme (Infima overrides)
+ * ------------------------------------------------------------------------ */
+
+:root {
+  --ifm-color-primary: #d6247e;
+  --ifm-color-primary-dark: #c22071;
+  --ifm-color-primary-darker: #b61e6a;
+  --ifm-color-primary-darkest: #921a53;
+  --ifm-color-primary-light: #da3a8b;
+  --ifm-color-primary-lighter: #dc4490;
+  --ifm-color-primary-lightest: #e567a4;
+
+  --ifm-background-color: var(--tutorx-paper);
+  --ifm-background-surface-color: #ffffff;
+
+  --ifm-font-color-base: var(--tutorx-navy-ink);
+  --ifm-heading-color: var(--tutorx-navy-ink);
+
+  --ifm-font-family-base: "Space Grotesk", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ifm-font-family-heading: var(--ifm-font-family-base);
+  --ifm-font-family-monospace: "SFMono-Regular", Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+
+  --ifm-global-radius: 4px;
+
+  --ifm-link-color: var(--ifm-color-primary);
+  --ifm-link-hover-color: var(--ifm-color-primary-darker);
+
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-navbar-link-color: var(--tutorx-navy-ink);
+  --ifm-navbar-link-hover-color: var(--ifm-color-primary);
+  --ifm-navbar-shadow: none;
+
+  --ifm-menu-color-active: var(--ifm-color-primary);
+  --ifm-menu-color-background-active: rgba(214, 36, 126, 0.08);
+  --ifm-menu-color-background-hover: rgba(74, 29, 110, 0.06);
+
+  --ifm-toc-border-color: var(--tutorx-border);
+  --ifm-table-border-color: var(--tutorx-border);
+
+  --ifm-footer-background-color: var(--tutorx-navy-ink);
+  --ifm-footer-color: var(--tutorx-cream);
+  --ifm-footer-title-color: var(--tutorx-cream);
+  --ifm-footer-link-color: var(--tutorx-pink);
+  --ifm-footer-link-hover-color: #ffffff;
+
+  --ifm-code-font-size: 95%;
+  --ifm-code-background: rgba(74, 29, 110, 0.08);
+
+  --docusaurus-highlighted-code-line-bg: rgba(214, 36, 126, 0.12);
+}
+
+/* --------------------------------------------------------------------------
+ * Dark theme (Infima overrides)
+ * ------------------------------------------------------------------------ */
+
 [data-theme="dark"] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --tutorx-slate: #b9a1cd;
+  --tutorx-border: #41205d;
+
+  --ifm-color-primary: #f2a6c9;
+  --ifm-color-primary-dark: #ef9bc1;
+  --ifm-color-primary-darker: #ee95bd;
+  --ifm-color-primary-darkest: #e97fae;
+  --ifm-color-primary-light: #f3b0d0;
+  --ifm-color-primary-lighter: #f4b4d2;
+  --ifm-color-primary-lightest: #f7c3dd;
+
+  --ifm-background-color: #190a2a;
+  --ifm-background-surface-color: var(--tutorx-navy-ink);
+
+  --ifm-font-color-base: var(--tutorx-cream);
+  --ifm-heading-color: var(--tutorx-cream);
+  --ifm-font-color-base-inverse: var(--tutorx-navy-ink);
+
+  --ifm-link-color: var(--tutorx-pink);
+  --ifm-link-hover-color: #ffffff;
+
+  --ifm-navbar-background-color: var(--tutorx-navy-ink);
+  --ifm-navbar-link-color: var(--tutorx-cream);
+  --ifm-navbar-link-hover-color: var(--tutorx-pink);
+
+  --ifm-menu-color-active: var(--tutorx-pink);
+  --ifm-menu-color-background-active: rgba(242, 166, 201, 0.12);
+  --ifm-menu-color-background-hover: rgba(242, 166, 201, 0.07);
+
+  --ifm-footer-background-color: #160826;
+  --ifm-footer-color: #d9cde3;
+  --ifm-footer-link-color: var(--tutorx-pink);
+
+  --ifm-code-background: rgba(242, 166, 201, 0.14);
+
+  --docusaurus-highlighted-code-line-bg: rgba(242, 166, 201, 0.16);
+}
+
+/* --------------------------------------------------------------------------
+ * Components
+ * ------------------------------------------------------------------------ */
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Flat panel navbar with a warm hairline instead of the default shadow */
+.navbar {
+  border-bottom: 1px solid var(--tutorx-border);
+}
+
+.navbar__title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.menu__link {
+  border-radius: 4px;
+}
+
+code {
+  border-radius: 3px;
+}
+
+/* Code blocks read as brand panels */
+div[class*="codeBlockContainer"] {
+  border: 1px solid var(--tutorx-border);
+  border-radius: 4px;
+}
+
+.markdown blockquote {
+  border-color: var(--tutorx-pink);
+}
+
+.pagination-nav__link {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--tutorx-border);
+  border-radius: 4px;
+  transition: border-color var(--ifm-transition-fast) ease;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--tutorx-pink);
 }
