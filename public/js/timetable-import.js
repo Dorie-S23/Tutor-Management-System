@@ -1,7 +1,6 @@
 import { addScheduleClasses } from "./storage.js";
 import {
   parseTimetablePdf,
-  parseTimetableJson,
   firstOccurrenceOnOrAfter,
 } from "./timetable-parser.js";
 
@@ -9,8 +8,6 @@ const fileInput = document.getElementById("timetable-file");
 const semesterStartInput = document.getElementById("semester-start");
 const semesterEndInput = document.getElementById("semester-end");
 const parseBtn = document.getElementById("parse-timetable-btn");
-const jsonInput = document.getElementById("timetable-json");
-const parseJsonBtn = document.getElementById("parse-json-btn");
 const statusEl = document.getElementById("timetable-status");
 const reviewSection = document.getElementById("timetable-review");
 const reviewBody = document.getElementById("timetable-review-body");
@@ -18,6 +15,17 @@ const saveBtn = document.getElementById("save-timetable-btn");
 const cancelBtn = document.getElementById("cancel-timetable-btn");
 
 let parsedClasses = [];
+
+let toastTimer = null;
+function showToast(message, type = "success") {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("toast--success", "toast--danger");
+  el.classList.add(`toast--${type}`, "show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -118,29 +126,6 @@ parseBtn.addEventListener("click", async () => {
   }
 });
 
-parseJsonBtn.addEventListener("click", () => {
-  reviewSection.hidden = true;
-
-  if (!jsonInput.value.trim()) {
-    setStatus("Paste some timetable JSON first.", true);
-    return;
-  }
-
-  try {
-    parsedClasses = parseTimetableJson(jsonInput.value);
-    if (parsedClasses.length === 0) {
-      setStatus("That JSON array was empty.", true);
-      return;
-    }
-    renderReview();
-    setStatus(
-      `Loaded ${parsedClasses.length} class${parsedClasses.length === 1 ? "" : "es"} — check them below before adding.`,
-    );
-  } catch (err) {
-    setStatus(err.message || "Could not read that JSON.", true);
-  }
-});
-
 saveBtn.addEventListener("click", () => {
   const endDate = semesterEndInput.value;
   if (!endDate) {
@@ -171,6 +156,9 @@ saveBtn.addEventListener("click", () => {
   );
 
   setStatus(
+    `Added ${selected.length} class${selected.length === 1 ? "" : "es"} to your calendar.`,
+  );
+  showToast(
     `Added ${selected.length} class${selected.length === 1 ? "" : "es"} to your calendar.`,
   );
   reviewSection.hidden = true;

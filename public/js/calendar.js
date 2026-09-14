@@ -126,6 +126,40 @@ async function fetchCourseSessions() {
   } catch {
     courseSessions = [];
   }
+  renderCourseColorKey();
+}
+
+// One chip per course actually appearing on the calendar (tutorial/lab
+// pills use a different colour per course, cycling through COURSE_COLORS —
+// this just explains which is which), rather than every course the tutor
+// could possibly be assigned regardless of whether it shows up here.
+const courseColorKeyEl = document.getElementById("course-color-key");
+
+function renderCourseColorKey() {
+  if (!courseColorKeyEl) return;
+
+  const courses = new Map();
+  for (const s of courseSessions) {
+    if (!courses.has(s.courseId)) courses.set(s.courseId, s.courseCode);
+  }
+
+  courseColorKeyEl.innerHTML = "";
+  if (courses.size === 0) {
+    courseColorKeyEl.hidden = true;
+    return;
+  }
+
+  for (const [courseId, courseCode] of courses) {
+    const palette = courseColor(courseId);
+    const chip = document.createElement("span");
+    chip.className = "course-color-chip";
+    chip.style.background = palette.bg;
+    chip.style.borderColor = palette.border;
+    chip.style.color = palette.text;
+    chip.textContent = courseCode;
+    courseColorKeyEl.appendChild(chip);
+  }
+  courseColorKeyEl.hidden = false;
 }
 
 const monthLabelEl = document.getElementById("calendar-month-label");
@@ -143,6 +177,59 @@ const addClassStartInput = document.getElementById("add-class-start");
 const addClassEndInput = document.getElementById("add-class-end");
 const addClassVenueInput = document.getElementById("add-class-venue");
 const cancelAddClassBtn = document.getElementById("cancel-add-class-btn");
+
+// ---------- toast ----------
+
+let toastTimer = null;
+function showToast(message, type = "success") {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("toast--success", "toast--danger");
+  el.classList.add(`toast--${type}`, "show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+// ---------- confirm dialog ----------
+
+// Replaces the browser's native confirm() with an in-app dialog matching the
+// rest of the UI, since the native one can't be styled at all. Resolves true
+// on "Confirm", false on "Cancel" or Escape/backdrop dismissal.
+const confirmModal = document.getElementById("confirm-modal");
+const confirmModalMessage = document.getElementById("confirm-modal-message");
+const confirmModalConfirmBtn = document.getElementById(
+  "confirm-modal-confirm-btn",
+);
+const confirmModalCancelBtn = document.getElementById(
+  "confirm-modal-cancel-btn",
+);
+
+function showConfirm(message, confirmLabel = "Confirm") {
+  return new Promise((resolve) => {
+    confirmModalMessage.textContent = message;
+    confirmModalConfirmBtn.textContent = confirmLabel;
+    confirmModal.showModal();
+
+    function settle(result) {
+      confirmModal.close();
+      confirmModalConfirmBtn.removeEventListener("click", onConfirm);
+      confirmModalCancelBtn.removeEventListener("click", onCancel);
+      confirmModal.removeEventListener("cancel", onCancel);
+      resolve(result);
+    }
+    function onConfirm() {
+      settle(true);
+    }
+    function onCancel() {
+      settle(false);
+    }
+
+    confirmModalConfirmBtn.addEventListener("click", onConfirm);
+    confirmModalCancelBtn.addEventListener("click", onCancel);
+    confirmModal.addEventListener("cancel", onCancel); // Escape key
+  });
+}
 
 function openAddClassForm(dateStr) {
   addClassDateInput.value = dateStr || todayStr();
@@ -182,6 +269,7 @@ if (canManageSchedule) {
     viewYear = y;
     viewMonth = m - 1;
     render();
+    showToast("Class added.");
   });
 }
 
@@ -420,6 +508,7 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
       clearScheduleException(cls.id, dateStr);
       closeModal();
       render();
+      showToast("Class restored.");
     });
     actions.appendChild(restoreBtn);
 
@@ -534,6 +623,7 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
       });
       closeModal();
       render();
+      showToast("Saved for this day.");
     });
     occActions.appendChild(saveOccBtn);
 
@@ -545,6 +635,7 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
       cancelScheduleOccurrence(cls.id, dateStr);
       closeModal();
       render();
+      showToast("Class cancelled for this day.", "danger");
     });
     occActions.appendChild(cancelOccBtn);
 
@@ -557,6 +648,7 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
         clearScheduleException(cls.id, dateStr);
         closeModal();
         render();
+        showToast("Reverted to the recurring default.");
       });
       occActions.appendChild(revertBtn);
     }
@@ -592,6 +684,7 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
       });
       closeModal();
       render();
+      showToast("Recurring class updated.");
     });
     seriesActions.appendChild(saveSeriesBtn);
 
@@ -599,13 +692,17 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     deleteSeriesBtn.type = "button";
     deleteSeriesBtn.className = "btn-danger";
     deleteSeriesBtn.textContent = "Delete all future classes";
-    deleteSeriesBtn.addEventListener("click", () => {
+    deleteSeriesBtn.addEventListener("click", async () => {
       if (
-        confirm("Remove this recurring class and all its future occurrences?")
+        await showConfirm(
+          "Remove this recurring class and all its future occurrences?",
+          "Delete",
+        )
       ) {
         deleteScheduleClass(cls.id);
         closeModal();
         render();
+        showToast("Recurring class deleted.", "danger");
       }
     });
     seriesActions.appendChild(deleteSeriesBtn);
@@ -640,10 +737,17 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
   document.body.appendChild(overlay);
 }
 
-clearClassesBtn.addEventListener("click", () => {
-  if (!confirm("Remove all imported class times from the calendar?")) return;
+clearClassesBtn.addEventListener("click", async () => {
+  if (
+    !(await showConfirm(
+      "Remove all imported class times from the calendar?",
+      "Clear",
+    ))
+  )
+    return;
   clearSchedule();
   render();
+  showToast("All class times cleared.", "danger");
 });
 
 window.renderCalendar = render;

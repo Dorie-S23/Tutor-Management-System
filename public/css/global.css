@@ -1063,6 +1063,19 @@ input[type="search"]:focus-visible {
   transform: translate(-50%, 0);
 }
 
+/* Color by outcome — additions/saves read as positive, deletions/cancellations
+   as a heads-up, instead of every toast looking identical regardless of what
+   just happened. Defaults to the plain --ink background above when neither
+   modifier is present, so existing showToast(message) call sites elsewhere
+   are unaffected. */
+.toast.toast--success {
+  background: var(--green);
+}
+
+.toast.toast--danger {
+  background: var(--red);
+}
+
 /* ---------- tutors page ---------- */
 
 .header-left {
@@ -2101,6 +2114,19 @@ body.tutor-app {
   font-family: inherit;
 }
 
+/* Sized and bordered like the inputs beside it, but shaded to read as
+   display-only rather than another editable field. */
+.tutor-app .hours-readout {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--ta-border);
+  border-radius: 6px;
+  background: var(--ta-bg);
+  color: var(--ta-text);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .tutor-app .form-actions {
   grid-column: 1 / -1;
   display: flex;
@@ -2152,6 +2178,15 @@ body.tutor-app {
 .tutor-app .btn-danger:hover {
   background: var(--ta-danger);
   color: #fff;
+}
+
+/* .btn-danger's smaller size above is tuned for compact inline spots (a
+   table row's "Delete" link). In a modal's own action row it sits next to
+   a full-size .btn-secondary/.btn-primary, so it needs to match that size
+   instead or the two buttons look mismatched. */
+.tutor-app .modal-actions .btn-danger {
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
 }
 
 .tutor-app .btn-link {
@@ -2219,6 +2254,16 @@ body.tutor-app {
   color: var(--ta-danger);
   font-size: 0.85rem;
   margin: -0.25rem 0 0.75rem;
+}
+
+/* Sits inline in the log-hours form grid, right under the time fields it's
+   almost always complaining about, rather than off at the top of the card.
+   .full-width alone only spans the grid when paired with .form-field (see
+   above), so this repeats the grid-column span for a bare .form-error. */
+.tutor-app .form-error.full-width {
+  grid-column: 1 / -1;
+  text-align: center;
+  margin-top: 0;
 }
 
 .tutor-app .stat-grid {
@@ -2378,6 +2423,25 @@ body.tutor-app {
   font-size: 1.1rem;
 }
 
+/* Explains what each .calendar-course-pill colour means — one chip per
+   course actually showing on the calendar, using the exact same palette
+   lookup (courseColor()) so a chip's colour always matches its pills. */
+.tutor-app .course-color-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tutor-app .course-color-chip {
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 100px;
+}
+
 .tutor-app .calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -2469,30 +2533,6 @@ body.tutor-app {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tutor-app .paste-fallback {
-  margin: 0.75rem 0;
-}
-
-.tutor-app .paste-fallback summary + p.card-hint {
-  margin-top: 0.5rem;
-}
-
-.tutor-app .paste-fallback summary {
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--ta-primary);
-}
-
-.tutor-app .paste-fallback .form-field {
-  margin-top: 0.75rem;
-}
-
-.tutor-app #timetable-json {
-  font-family: "Courier New", monospace;
-  font-size: 0.8rem;
 }
 
 .tutor-app #timetable-debug-text {

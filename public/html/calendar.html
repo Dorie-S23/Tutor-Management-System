@@ -46,27 +46,6 @@
             </button>
           </div>
         </div>
-        <details class="paste-fallback">
-          <summary>Or paste timetable data instead</summary>
-          <p class="card-hint">
-            For PDFs with no extractable text (image/scanned exports), paste a
-            JSON array of classes here.
-          </p>
-          <div class="form-field full-width">
-            <label for="timetable-json">Timetable JSON</label>
-            <textarea
-              id="timetable-json"
-              rows="8"
-              placeholder='[{"title":"MATH 2016A - E Lecture","dayName":"Monday","firstDate":"2026-08-10","startTime":"10:15","endTime":"12:00","venue":"OS1/U1/OS4"}]'
-            ></textarea>
-          </div>
-          <div class="form-actions">
-            <button type="button" id="parse-json-btn" class="btn-secondary">
-              Use pasted data
-            </button>
-          </div>
-        </details>
-
         <p id="timetable-status" class="card-hint" hidden></p>
 
         <div id="timetable-review" hidden>
@@ -162,6 +141,7 @@
             Clear class times
           </button>
         </div>
+        <div class="course-color-key" id="course-color-key" hidden></div>
         <div class="calendar-weekdays">
           <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span
           ><span>Thu</span><span>Fri</span><span>Sat</span>
@@ -169,6 +149,41 @@
         <div class="calendar-grid" id="calendar-grid"></div>
       </div>
     </main>
+
+    <dialog
+      class="modal"
+      id="confirm-modal"
+      aria-labelledby="confirm-modal-heading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="confirm-modal-heading">Are you sure?</h2>
+        </header>
+        <p id="confirm-modal-message"></p>
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn-secondary"
+              id="confirm-modal-cancel-btn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn-danger"
+              id="confirm-modal-confirm-btn"
+              type="button"
+            >
+              Confirm
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
     <script type="module" src="../js/calendar.js"></script>
     <script type="module" src="../js/timetable-import.js"></script>

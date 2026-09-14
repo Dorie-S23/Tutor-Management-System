@@ -119,6 +119,39 @@
       </form>
     </dialog>
 
+    <dialog
+      class="modal"
+      id="confirm-modal"
+      aria-labelledby="confirm-modal-heading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="confirm-modal-heading">Are you sure?</h2>
+        </header>
+        <p id="confirm-modal-message"></p>
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn-secondary"
+              id="confirm-modal-cancel-btn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn-danger"
+              id="confirm-modal-confirm-btn"
+              type="button"
+            >
+              Confirm
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
     <script type="module" src="../js/modules.js"></script>
     <script src="../js/logout.js"></script>
   </body>
