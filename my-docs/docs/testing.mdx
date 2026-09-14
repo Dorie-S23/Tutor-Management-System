@@ -1,0 +1,115 @@
+---
+sidebar_position: 5.5
+---
+
+# Testing
+
+How the test suite is organized, how to run it, and the conventions to follow when adding to it.
+
+## Overview
+
+Unit/integration tests for the backend API routes and a handful of frontend scripts, run with Jest. There's no end-to-end/browser test runner (no Playwright/Cypress) — frontend coverage instead loads the real `.js`/`.html` source into a JSDOM environment and drives it directly.
+
+## Test Stack
+
+- **[Jest](https://jestjs.io/)** — test runner and assertion library. Config lives inline in `package.json` (no separate `jest.config.js`).
+- **[Supertest](https://www.npmjs.com/package/supertest)** — fires real HTTP requests at an Express app built in-memory, for backend route tests.
+- **[jsdom](https://github.com/jsdom/jsdom)** — used directly (not just via Jest's test environment) to load real frontend `.js`/`.html` files into a DOM for frontend tests.
+- **`server/testUtils/fakeSupabase.js`** — an in-memory stand-in for the Supabase query builder (see below). Not a general-purpose library, just enough to cover what this repo's routes actually call.
+
+## Running Tests
+
+```bash
+npm test                                  # run everything
+npx jest server/routes/tutors.test.js     # run a single file
+npx jest server/routes                    # run everything under a folder
+```
+
+:::info Not wired into CI yet
+None of the three Gitea Actions workflows (`format.yml`, `deploy.yml`, `docs-deploy.yml` — see [Backend → Deployment](./backend.mdx#deployment)) run `npm test`. Tests only run when someone runs them locally. Adding a `test.yml` workflow (or a step in an existing one) is an open gap, not a decision to leave it out.
+:::
+
+## Project Structure
+
+Tests are **co-located** with the file they test, not gathered in a separate `__tests__/` folder:
+
+```
+server/
+├── testUtils/
+│   └── fakeSupabase.js          # shared in-memory Supabase fake
+└── routes/
+    ├── tutors.js
+    ├── tutors.test.js            # sits right next to what it tests
+    ├── tutorApplications.js
+    ├── tutorApplications.test.js
+    ├── courseVolunteers.js
+    ├── courseVolunteers.test.js
+    ├── timesheets.js
+    └── timesheets.test.js
+public/js/
+├── storage.js
+├── storage.test.js
+├── board.js
+└── board.keyboard-nav.test.js     # named after the behaviour it covers, not just the source file
+```
+
+Naming: `<name>.test.js` mirrors the source file by default; when a test only covers one specific behaviour of a larger file, it's named after that behaviour instead (`board.keyboard-nav.test.js`, `auth.register-email.test.js`) rather than forcing everything into one `board.test.js`.
+
+## Backend Route Tests
+
+Pattern used by every `server/routes/*.test.js` file:
+
+1. Mock `../supabaseClient` **before** requiring the router (the router grabs the client at `require` time):
+
+   ```js
+   jest.mock("../supabaseClient", () => ({
+     from: (...args) => mockSupabase.from(...args),
+   }));
+   const tutorsRouter = require("./tutors");
+   ```
+
+2. Build a minimal Express app with just that router mounted, and hit it with Supertest:
+
+   ```js
+   function buildApp() {
+     const app = express();
+     app.use(express.json());
+     app.use("/api/tutors", tutorsRouter);
+     return app;
+   }
+   ```
+
+3. Reseed the in-memory tables in `beforeEach`, via `fakeSupabase`:
+
+   ```js
+   beforeEach(() => {
+     tables = { tutors: [], courses: [] };
+     mockSupabase = fakeSupabase(tables);
+   });
+   ```
+
+4. Assert on both the HTTP response **and** the table state afterwards (e.g. that a course's `no_of_tutors_assigned` counter actually moved), not just the status code.
+
+`fakeSupabase` supports `select` / `insert` (single row or an array, for bulk inserts) / `update` / `delete`, `eq` / `neq` / `in`, `order`, `single()` / `maybeSingle()`, and simulates Postgres's `23505` duplicate-key error for tables with declared unique constraints. It does **not** perform real relational joins — a `select("*, courses(hours_per_week)")` just returns whatever plain fields the row itself has, so a test that needs the joined shape back seeds the nested object directly on the row, e.g. `{ tutor_id: 1, courses: { hours_per_week: 3 } }`. If a route needs Supabase Auth (e.g. `tutors.js`'s `POST /` calls `supabase.auth.signUp`), stub that separately per test file — `fakeSupabase` doesn't provide it.
+
+## Frontend Script Tests
+
+Frontend files ship as plain browser scripts (some ES modules, some classic scripts) with no build step, so tests read the real source with `fs.readFileSync` and execute it in a JSDOM (`runScripts: "dangerously"`), then either drive real DOM events (`KeyboardEvent`, form `submit`) or call functions the script has attached to a `window.__test`-style hook, with `window.fetch` stubbed.
+
+## Coverage
+
+Organiser-facing backend routes are the best-covered area: `tutorApplications.js` (including the override/`allocation_overrides` bypass path), `courseVolunteers.js`, `timesheets.js`, and `tutors.js` all have route tests.
+
+Known gaps, in rough priority order:
+
+- **`server/routes/courses.js`** and **`server/routes/sessionExcusals.js`** — no test file at all.
+- **`public/js/board.js`** and **`public/js/timesheet-review.js`** — only `board.js`'s keyboard navigation is covered; the actual organiser workflows (approving applications/volunteers, the guided tour, the shortfall filter) aren't. `board.js` also has no `requireRole()` login guard of its own (noted in a comment at `public/js/board.js:1476`) — worth a regression test if that gets fixed.
+- **No CI test stage** (see the callout above).
+
+## Adding a New Test
+
+1. Pick the file you're testing and create `<name>.test.js` right next to it (or a behaviour-scoped name if you're only covering part of a larger file).
+2. For a backend route: copy the `jest.mock` + `buildApp()` + `beforeEach` boilerplate from an existing `server/routes/*.test.js` file, seed only the tables your route touches, and assert on response **and** table state.
+3. For a frontend script: copy the JSDOM-loading setup from `public/js/storage.test.js` or `public/js/board.keyboard-nav.test.js`, whichever is closer to a module vs. classic script.
+4. Run `npx jest <path-to-your-file>` while iterating, then `npm test` before committing.
+5. Run `npm run format` — Prettier formatting is enforced (`format:check` runs in CI; see [Backend → Deployment](./backend.mdx#deployment)).

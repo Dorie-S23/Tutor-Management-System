@@ -1,0 +1,69 @@
+---
+sidebar_position: 5.8
+---
+
+# External Services
+
+Every third-party service and CDN this app actually talks to, and what (if anything) it needs a credential for.
+
+## Overview
+
+Four external services are in active use — one database/auth backend, one indirect OAuth provider, and two CDN-hosted asset loads. Nothing else in the app makes an outbound call to a third party: no payment processor, no email/SMS provider, no analytics/tracking script, no AI/LLM API (there was one — see [Removed: LLM-based timetable parsing](#removed-llm-based-timetable-parsing) below).
+
+## Supabase — database + auth
+
+The app's only backend-as-a-service dependency. Covered in detail in [Backend](./backend.mdx), so only a summary here.
+
+- **What for:** hosted Postgres (all app data) and Supabase Auth (sign-up/sign-in, including Google OAuth — see below).
+- **Credentials:** `SUPABASE_URL` + `SUPABASE_ANON_KEY` (env vars).
+- **Where it's instantiated** — four separate client instances, all pointed at the same project:
+  - `app.js:17-27` — server-side client, attached to every request as `req.supabase`
+  - `server/supabaseClient.js` — a second server-side client, imported by everything under `server/routes/*`
+  - `routes/auth.js:405-417` — a third, built per-request with the caller's access token, to verify Google sign-ins
+  - `public/html/google-callback.html` — a client-side client, loaded from `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`, with the URL/anon key inline in the HTML
+
+## Google OAuth — via Supabase, not a direct integration
+
+"Continue with Google" doesn't talk to any `accounts.google.com` / `googleapis.com` endpoint directly, and there's no Google Identity Services script anywhere in the repo. It's entirely proxied through Supabase Auth:
+
+- `public/js/auth.js` — the button just navigates to `/api/auth/google` (an internal route).
+- `routes/auth.js` (`GET /api/auth/google`) — calls `req.supabase.auth.signInWithOAuth({ provider: "google" })`, which redirects the browser to Google's consent screen.
+- `public/html/google-callback.html` — exchanges the returned OAuth code for a session via `supabaseClient.auth.exchangeCodeForSession(code)`.
+- `routes/auth.js` (`POST /api/auth/google/register`) — verifies the resulting Supabase access token via `authenticatedSupabase.auth.getUser(accessToken)`.
+
+No credential for Google itself lives in this repo — a Google OAuth client ID/secret, if one exists, is configured inside the Supabase project dashboard.
+
+## Google Fonts
+
+CDN font delivery — Fraunces, Space Grotesk, Inter, IBM Plex Mono — via `<link rel="preconnect">` + `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...">` pairs on most pages under `public/html/` (already noted in [Frontend → Tech Stack](./frontend.mdx#tech-stack)). No credential required.
+
+## jsdelivr CDN — pdf.js and Tesseract.js
+
+The timetable-PDF-import feature (calendar page) runs entirely client-side, no backend route or API key involved. `public/js/timetable-parser.js` lazy-loads two libraries from jsdelivr at parse time:
+
+```js
+const PDFJS_URL =
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.min.mjs";
+const TESSERACT_URL =
+  "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.esm.min.js";
+```
+
+pdf.js renders the imported PDF to a bitmap in the browser; Tesseract.js then OCRs it. OCR is necessary rather than reading embedded text because these particular PDF exports have no real text layer — they're outlined shapes. No credential required.
+
+## Removed: LLM-based timetable parsing
+
+An earlier version of the timetable-import feature called a hosted LLM API server-side — first Anthropic, briefly swapped for Gemini — instead of the current client-side pdf.js/Tesseract approach. It's fully gone from the code as of this branch:
+
+- `server/timetableRoutes.js`, `server/anthropicClient.js`, and `server/geminiClient.js` don't exist in `HEAD`.
+- `app.js` doesn't require or mount any timetable/Anthropic/Gemini route.
+- Repo-wide search for `anthropic`/`gemini`/`openai` (excluding `node_modules`) turns up nothing in `server/` or `public/js/` — only historical mentions in these docs.
+
+:::info Dead env vars left behind — worth deleting
+Local `.env` still has a populated `GEMINI_API_KEY`, and `.dev.vars` has an empty `ANTHROPIC_API_KEY`. **Neither is read anywhere in the code** (only `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `PORT` are). Both files are gitignored and untracked, so this isn't a leaked credential in repo history — just unused local leftovers from the removed feature. Worth deleting (and rotating the Gemini key, since it's a real one) next time you're touching `.env`.
+:::
+
+## Everything else
+
+- All `fetch()` calls in `public/js/**` (storage.js, board.js, tutors.js, dashboard.js, etc.) hit this app's own `/api/...` routes — same-origin, not an external service.
+- No `axios` or `XMLHttpRequest` anywhere in the repo.
+- `package.json` dependencies are limited to `@supabase/supabase-js`, `cors`, `dotenv`, `express` (+ dev deps `jest`, `jsdom`, `prettier`, `supertest`, `wrangler`) — no payment, email/SMS, analytics, or AI SDK among them.

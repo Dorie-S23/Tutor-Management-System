@@ -1,7 +1,12 @@
 // A minimal stand-in for the @supabase/supabase-js query builder, backed by
 // plain in-memory arrays instead of Postgres. Only supports what this repo's
-// routes actually call (select/insert/update/delete, eq, in, order, single,
-// maybeSingle) — enough to unit-test route logic without a real database.
+// routes actually call (select/insert/update/delete, eq, neq, in, order,
+// single, maybeSingle) — enough to unit-test route logic without a real
+// database. Note: it does NOT perform real relational joins — a `select`
+// with an embedded table (e.g. "*, courses(hours_per_week)") just returns
+// whatever plain fields the row itself has, so tests that need a joined
+// shape back should seed the nested object directly on the row (e.g.
+// { tutor_id: 1, courses: { hours_per_week: 3 } }).
 //
 // Usage:
 //   const tables = { courses: [...seed rows...] };
@@ -29,9 +34,11 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
       let insertConflict = null;
 
       const matches = (row) =>
-        filters.every(([type, col, val]) =>
-          type === "in" ? val.includes(row[col]) : row[col] === val,
-        );
+        filters.every(([type, col, val]) => {
+          if (type === "in") return val.includes(row[col]);
+          if (type === "neq") return row[col] !== val;
+          return row[col] === val;
+        });
 
       function resolve(wantsSingle, allowNullSingle) {
         if (insertConflict) {
@@ -51,20 +58,38 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
 
         if (wantsSingle) {
           if (matched.length === 0) {
+            // PGRST116 is PostgREST's real code for ".single() matched zero
+            // rows" — routes that branch on it (e.g. update().select().single()
+            // to detect "no such id") need it present to hit their 404 path.
             return allowNullSingle
               ? { data: null, error: null }
-              : { data: null, error: { message: "Row not found" } };
+              : {
+                  data: null,
+                  error: { code: "PGRST116", message: "Row not found" },
+                };
           }
           return { data: { ...matched[0] }, error: null };
         }
-        return { data: matched.map((row) => ({ ...row })), error: null };
+        return {
+          data: matched.map((row) => ({ ...row })),
+          error: null,
+          count: matched.length,
+        };
       }
 
       const builder = {
         select: () => builder,
-        insert: (row) => {
-          const conflicts = constraints.some((cols) =>
-            rows.some((existing) => cols.every((c) => existing[c] === row[c])),
+        // Accepts either a single row object or (for a bulk insert, e.g.
+        // logging several allocation_overrides at once) an array of them.
+        insert: (rowOrRows) => {
+          const incoming = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
+
+          const conflicts = incoming.some((row) =>
+            constraints.some((cols) =>
+              rows.some((existing) =>
+                cols.every((c) => existing[c] === row[c]),
+              ),
+            ),
           );
           if (conflicts) {
             insertConflict = {
@@ -76,10 +101,25 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
             return builder;
           }
 
-          const inserted = { id: rows.length + 1, ...row };
-          rows.push(inserted);
+          // Based on the current max id rather than rows.length, so a
+          // delete-then-insert (e.g. replacing busy times) can't hand out an
+          // id that collides with a row that's still there.
+          let nextId = rows.reduce(
+            (max, r) => (typeof r.id === "number" && r.id > max ? r.id : max),
+            0,
+          );
+          const insertedRows = incoming.map((row) => {
+            nextId += 1;
+            const inserted = { id: nextId, ...row };
+            rows.push(inserted);
+            return inserted;
+          });
           filters.length = 0;
-          filters.push(["eq", "id", inserted.id]);
+          filters.push([
+            "in",
+            "id",
+            insertedRows.map((inserted) => inserted.id),
+          ]);
           pendingWrite = null;
           return builder;
         },
@@ -93,6 +133,10 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
         },
         eq: (column, value) => {
           filters.push(["eq", column, value]);
+          return builder;
+        },
+        neq: (column, value) => {
+          filters.push(["neq", column, value]);
           return builder;
         },
         in: (column, values) => {

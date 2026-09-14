@@ -1,11 +1,58 @@
+/**
+ * TutorX feature cards — flat panels with navy ink icon tiles,
+ * echoing the app icon from the brand sheet.
+ */
+
 .features {
-  display: flex;
-  align-items: center;
-  padding: 2rem 0;
-  width: 100%;
+  padding: 2rem 0 4.5rem;
 }
 
-.featureSvg {
-  height: 200px;
-  width: 200px;
+.featureCard {
+  height: 100%;
+  padding: 2rem 1.5rem;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--tutorx-border);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: border-color var(--ifm-transition-fast) ease;
+}
+
+.featureCard:hover {
+  border-color: var(--tutorx-pink);
+}
+
+.featureIcon {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 1.25rem;
+  border-radius: 14px;
+  background: var(--tutorx-navy-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.featureIcon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.iconStroke {
+  stroke: var(--tutorx-cream);
+}
+
+.iconAccent {
+  stroke: var(--tutorx-gold);
+}
+
+.featureTitle {
+  margin-bottom: 0.5rem;
+}
+
+.featureDescription {
+  margin-bottom: 0;
+  font-size: 0.95rem;
 }

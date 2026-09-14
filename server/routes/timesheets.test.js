@@ -21,8 +21,146 @@ function buildApp() {
 }
 
 beforeEach(() => {
-  tables = { timesheets: [], tutors: [] };
+  tables = { timesheets: [], tutors: [], users: [] };
   mockSupabase = fakeSupabase(tables);
+});
+
+describe("GET /api/timesheets", () => {
+  test("?status=pending returns the organiser's review queue, other statuses excluded", async () => {
+    tables.timesheets = [
+      {
+        user_id: "t1",
+        week_start: "2026-08-31",
+        status: "pending",
+        total_hours: 5,
+      },
+      {
+        user_id: "t2",
+        week_start: "2026-08-31",
+        status: "approved",
+        total_hours: 3,
+      },
+      {
+        user_id: "t3",
+        week_start: "2026-08-24",
+        status: "pending",
+        total_hours: 4,
+      },
+    ];
+
+    const res = await request(buildApp()).get("/api/timesheets?status=pending");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body.every((t) => t.status === "pending")).toBe(true);
+  });
+
+  test("returns everything when no filter is given", async () => {
+    tables.timesheets = [
+      {
+        user_id: "t1",
+        week_start: "2026-08-31",
+        status: "pending",
+        total_hours: 5,
+      },
+      {
+        user_id: "t2",
+        week_start: "2026-08-31",
+        status: "approved",
+        total_hours: 3,
+      },
+    ];
+
+    const res = await request(buildApp()).get("/api/timesheets");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+});
+
+describe("PATCH /api/timesheets/:userId/:weekStart", () => {
+  beforeEach(() => {
+    tables.timesheets = [
+      {
+        user_id: "t1",
+        week_start: "2026-08-31",
+        status: "pending",
+        total_hours: 5,
+        reviewed_at: null,
+      },
+    ];
+  });
+
+  test("rejects a status that isn't pending, approved or rejected", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "maybe" });
+
+    expect(res.status).toBe(400);
+    expect(tables.timesheets[0].status).toBe("pending");
+  });
+
+  test("approving sets status and stamps reviewed_at", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("approved");
+    expect(tables.timesheets[0].status).toBe("approved");
+    expect(tables.timesheets[0].reviewed_at).not.toBeNull();
+  });
+
+  test("rejecting also stamps reviewed_at", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "rejected" });
+
+    expect(res.status).toBe(200);
+    expect(tables.timesheets[0].reviewed_at).not.toBeNull();
+  });
+
+  test("resetting a reviewed timesheet back to pending clears reviewed_at", async () => {
+    tables.timesheets[0].status = "approved";
+    tables.timesheets[0].reviewed_at = "2026-09-01T10:00:00.000Z";
+
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "pending" });
+
+    expect(res.status).toBe(200);
+    expect(tables.timesheets[0].status).toBe("pending");
+    expect(tables.timesheets[0].reviewed_at).toBeNull();
+  });
+
+  test("returns 404 for a timesheet that doesn't exist", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/nobody/2026-08-31")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("Timesheet not found");
+  });
+
+  test("scopes the update to the exact user/week pair, leaving other weeks untouched", async () => {
+    tables.timesheets.push({
+      user_id: "t1",
+      week_start: "2026-08-24",
+      status: "pending",
+      total_hours: 3,
+      reviewed_at: null,
+    });
+
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    const otherWeek = tables.timesheets.find(
+      (t) => t.week_start === "2026-08-24",
+    );
+    expect(otherWeek.status).toBe("pending");
+  });
 });
 
 describe("GET /api/timesheets/payroll-export", () => {

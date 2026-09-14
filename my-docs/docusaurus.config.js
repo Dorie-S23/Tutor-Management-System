@@ -10,9 +10,9 @@ import { themes as prismThemes } from "prism-react-renderer";
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "Tutor Management System",
+  title: "TutorX",
   tagline: "Documentation for the Tutor Management System",
-  favicon: "img/favicon.ico",
+  favicon: "img/favicon.svg",
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -64,10 +64,11 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        title: "Tutor Management System",
+        title: "TutorX",
         logo: {
-          alt: "Tutor Management System Logo",
+          alt: "TutorX logo",
           src: "img/logo.svg",
+          srcDark: "img/logo-dark.svg",
         },
         items: [
           {
@@ -113,7 +114,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} Tutor Management System. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} TutorX — The DevDen.`,
       },
       prism: {
         theme: prismThemes.github,
