@@ -127,3 +127,67 @@ describe("POST /api/course-volunteers", () => {
     expect(tables.course_volunteers).toHaveLength(1);
   });
 });
+
+describe("PATCH /api/course-volunteers/:id", () => {
+  // req.params.id from the URL is always a string, so the seeded row's id
+  // has to be a string too — fakeSupabase does a strict === match and
+  // doesn't coerce types the way Postgrest does for a real integer column.
+  beforeEach(() => {
+    tables.course_volunteers = [
+      {
+        id: "1",
+        user_id: "student-1",
+        course_id: 1,
+        mark: 75,
+        status: "pending",
+      },
+    ];
+  });
+
+  test("rejects a status that isn't pending, approved or rejected", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "maybe" });
+
+    expect(res.status).toBe(400);
+    expect(tables.course_volunteers[0].status).toBe("pending");
+  });
+
+  test("an organiser approves a pending volunteer", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("approved");
+    expect(tables.course_volunteers[0].status).toBe("approved");
+  });
+
+  test("an organiser rejects a pending volunteer", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "rejected" });
+
+    expect(res.status).toBe(200);
+    expect(tables.course_volunteers[0].status).toBe("rejected");
+  });
+
+  test("an organiser can reset a decided volunteer back to pending", async () => {
+    tables.course_volunteers[0].status = "approved";
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "pending" });
+
+    expect(res.status).toBe(200);
+    expect(tables.course_volunteers[0].status).toBe("pending");
+  });
+
+  test("returns 404 for a volunteer row that doesn't exist", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/999")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(404);
+  });
+});
