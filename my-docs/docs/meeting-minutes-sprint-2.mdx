@@ -1,0 +1,105 @@
+---
+sidebar_position: 8
+---
+
+# Meeting Minutes — Sprint 2
+
+Record of team meetings for Sprint 2 (September 2026), kept as evidence of process for the course's Project Methodology requirement. All meetings were held online and recorded via AI transcription. These were originally called "Daily Scrums," but since they weren't held daily, they're recorded here as **standups** instead.
+
+**Team:** Mkateko Chauke (Scrum Master / Lead Developer), Tagona Danha (Authentication & Database), Mutsawashe Njowa (Developer / Documentation), Dorsa Shahrokh (Developer / Documentation)
+
+## Standup 1
+
+**Date:** Thursday, 3 September 2026, 5:06 PM · **Duration:** 16 min 35 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Mkateko:** flagged that the Gitea Actions runner keeps going offline, so merges to `main` stop auto-deploying — asked AI for a fix, which suggested keeping a laptop on permanently (impractical); course staff (Brandon) had announced a tutorial on setting up runners that might resolve it. Also noted local testing sometimes redirects to the last deployed build instead of local changes (suspected browser/history caching). Finished remaining Sprint 1 items and started Sprint 2 features.
+- **Tagona:** reviewed and planned out Sprint 2 tasks.
+- **Mutsawashe:** working on bulk-fill assignments and keyboard navigation for the allocation board; keyboard navigation believed working, finalising bulk-fill next.
+- **Dorsa:** catching up on Sprint 2 work; some recent changes not pushed yet.
+- Mkateko asked Dorsa about the self-excusal feature; she hadn't started it, and Mkateko had already implemented and was about to push his own version — agreed he'd push it rather than have both build it.
+- Discussed the planned client (Matthew) meeting: agreed the team wasn't ready to present yet, since there was no update on items he'd previously asked to be fixed — deferred.
+- Mkateko flagged the external API requirement (graded this sprint) as something the team still needed to pick up.
+- **Process reminder:** reiterated the Git methodology — branch only from `main` or `main_refactor2` (never an outdated branch), and resolve conflicts via pull request rather than a local `git merge`, since the team had lost marks in Sprint 1 for not using Git issues/PRs properly.
+- Mkateko encouraged using AI tools (naming Claude/Codex among others) to keep momentum on individual tasks, and reminded the team that feature implementation is only a fraction of the overall grade — documentation and process coordination make up the rest.
+
+**Decisions:** self-excusal feature comes from Mkateko's already-implemented version, not a duplicate from Dorsa; no client meeting this week; branches must come from `main`/`main_refactor2` and merge via PR going forward.
+
+**Action items:** Mkateko pushes the self-excusal feature; Mutsawashe finishes bulk-fill assignments; Dorsa continues her in-progress Sprint 2 work; team investigates external API options.
+
+## Standup 2
+
+**Date:** Friday, 4 September 2026, 5:04 PM · **Duration:** 7 min 49 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Tagona:** started ranked tutor suggestions (first assigned Sprint 2 task); asked whether it was okay to push directly to `main_refactor2` rather than a separate feature branch — approved by Mkateko.
+- **Mkateko:** no new progress in the prior 24 hours; continuing to plan out Sprint 2 tasks.
+- **Dorsa:** working on timetable import; blocked on choosing which external service/API to use (evaluating free-tier options); planned to move on to other tasks if it took too long. Mkateko offered to help look into options too.
+- **Mutsawashe:** finished keyboard navigation; still finalising bulk-fill assignments, targeting completion by Sunday; confirmed working on their long-named feature branch.
+- **Database:** Mkateko had asked Claude to help identify every table the whole project would plausibly need, and pre-created roughly 21 tables in Supabase directly, rather than growing the schema ad hoc — reasoning that the course's database-schema documentation requirement meant planning up front was worth it. Removed a redundant `tutor_preferences` table once a duplicate-purpose `tutor courses`-style table made it unnecessary.
+- Dorsa suggested using Supabase's built-in schema/relationship view as part of the database documentation; Mkateko agreed it can supplement the planned table list.
+
+**Decisions:** database schema planned up front (~21 tables) directly in Supabase, to double as schema documentation.
+
+**Action items:** Tagona continues ranked tutor suggestions on `main_refactor2`; Dorsa resolves which external API/service to use for timetable import; Mutsawashe finishes bulk-fill assignments by Sunday.
+
+## Standup 3
+
+**Date:** Tuesday, 8 September 2026, 5:02 PM · **Duration:** 9 min 49 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Tagona:** finished ranked tutor suggestions; implemented recurring availability exceptions (not fully confident it matches the intended behaviour); pushed both to `main_refactor2`; moving on to approval nudges next.
+- **Dorsa:** worked on the tutor dashboard; created a new branch (`feature/tutor-page`, sourced from `main`) to extend the organiser's core features — setting course subjects/rates and adding an organiser calendar view to cross-check against tutors' calendars; two or three tasks left to finish.
+- **Mkateko:** noticed Dorsa's features weren't appearing on the `main_refactor2` deployment, since her branch hadn't been merged in yet — flagged that all in-progress branches need merging into `main_refactor2` before they're visible there. Brought `main_refactor2` back up to date with `main` (merged twice, due to a documentation-deployment issue surfacing after the first merge). Traced a recurring deployment failure to incorrect Gitea Actions runner labels in the deploy/docs-deploy workflow YAML files and fixed it — deployment on merge to `main` is working again. Completed the shortfall view feature (1 of 5 assigned this sprint), four more to go, targeting completion within two days; next will move on to testing (as a group effort) and documentation ahead of Monday. Raised the need to schedule the client (Matthew) meeting before marking.
+- **Mutsawashe:** started writing tests for already-completed features; asked whether tests should live in a dedicated folder — agreed any consistent, organised approach was fine, so tests were kept colocated next to the route/script files they cover.
+
+**Decisions:** all branch work must land on `main_refactor2` before it reaches `main`; next standup set for Friday (Mkateko has a Friday-morning exam, so evening works better than Thursday).
+
+**Action items:** Dorsa merges `feature/tutor-page` into `main_refactor2` once ready and notifies the team; Mkateko continues remaining features plus testing/documentation; Mutsawashe continues writing tests for completed work.
+
+## Standup 4
+
+**Date:** Friday, 11 September 2026, 5:03 PM · **Duration:** 12 min 44 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Mutsawashe:** payroll export effectively complete, pending proper verification against the live system (confirmation expected the next morning); opened pull requests to land the work on `main_refactor2` — after discussing with Mkateko, retargeted from an initial PR against `main` directly to `main_refactor2` first, to be merged up to `main` later; continuing to add tests for recent tasks.
+- **Tagona:** finished all assigned Sprint 2 tasks except the budgeting feature (expected done the next day); pushed completed work to `main_refactor2`; will attempt to merge once budgeting is done. Also delivered two features beyond the original brief: an approval override with a required reason, and universal search.
+- **Mkateko:** down to one remaining task; weekend focus set on documentation and general fixes. Raised scheduling the client (Matthew) meeting and whether a same-evening Discord message was appropriate — team agreed to send it immediately rather than wait till morning.
+- **Dorsa:** almost done with her tasks; remaining work is testing, documentation, and recruiting outside testers for the app.
+- **Guided onboarding:** Tagona confirmed it's implemented for students/student volunteers, tutors, and organisers, and asked whether to extend it to educators too. The team agreed to drop the Educator role's scope for now — it isn't in the original project brief — and revisit only if time allows.
+- **Process reminder:** Mkateko clarified Tagona's pushes had been going to `main_refactor2`, not `main`, which is correct; reiterated the standing rule to always branch from `main`/`main_refactor2` and always merge via pull request rather than a local `git merge`, given the marks lost in Sprint 1 over this.
+- Mkateko flagged that some CI format-check failures on the workflow YAML files (previously fixed) had reappeared and would need investigating.
+- Discussed gathering informal user feedback via a Google/Microsoft form once the current features are deployed, given limited testing pools (friends, family) — undecided whether to give testers explicit instructions or let them explore the app unguided.
+
+**Decisions:** next standup moved to 12 PM the following day, given time pressure ahead of the Tuesday marking deadline.
+
+**Action items:** Mutsawashe confirms payroll export testing by the next morning; Tagona finishes and merges the budgeting feature; Mkateko and Dorsa continue remaining tasks, documentation, and arranging the client meeting; whole team reconvenes online at 12 PM the next day.
+
+## Standup 5
+
+**Date:** Saturday, 12 September 2026, 10:03 AM · **Duration:** 25 min 24 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+- **Mutsawashe:** no new features this session — wrote tests for every task completed this sprint.
+- **Dorsa:** ran Prettier across the whole codebase to fix a deployment failure caused by inconsistent formatting; held off starting the change-notifications feature pending a decision on whether it belongs in this sprint or the next.
+- **Mkateko:** no new features (two still outstanding: corrections & disputes, and overflow claim & approval); spent roughly two hours merging outstanding branches into one up-to-date build. Compiled a pre-Monday checklist ahead of the client meeting: a user-feedback Google Form (still needs an owner — asked the team to take it over, citing his own merge/integration workload), verifying every merged feature is actually live on the deployed app, confirming test coverage, and outstanding documentation (client meeting minutes, standup minutes, database schema, third-party code, testing, project methodology).
+- **Course rates / budget field:** identified duplicate, conflicting work on the same problem — Mkateko was about to add an hourly-rate field to the `courses` table (so an organiser sets a per-course pay rate, used to compute budget as rate × hours needed) while Dorsa had already built an hourly-rate concept days earlier, but stored only client-side/locally rather than as a real database column. Agreed to consolidate onto one real database field instead of two separate implementations; also flagged the existing `tutors.hourly_rate` column as likely redundant against the new course-level rate and agreed it should probably move to sit with whichever side actually sets the rate (organiser) — to be finalised directly between Mkateko and Dorsa.
+- **Gitea pull request limitation:** noted that, unlike GitHub, Gitea can't resolve merge conflicts in the browser — a conflicting PR just lists which files clash, and those still have to be resolved locally and pushed up. Reiterated: never merge a PR that still shows unresolved conflicts.
+- **Tagona:** no feature update this session; volunteered to draft the Google user-feedback form, keeping questions short and non-technical (e.g. ease of sign-in, onboarding experience, visual appeal) rather than in-depth, targeting a draft within the hour.
+- Mkateko raised how the team would demonstrate Prettier's formatting compliance for the code-quality requirement, since Prettier doesn't have an obvious dashboard equivalent to a code-coverage badge — left open, with Dorsa to research it.
+
+**Decisions:** target roughly 1:00–1:45 PM the same day to have the feedback form ready and begin informal user acceptance testing.
+
+**Action items:** Tagona drafts and circulates the Google Form within the hour; Dorsa researches how to document/demonstrate Prettier compliance, and finalises with Mkateko where the course rate field actually lives; everyone verifies their own features are present on the live deployed app.
+
+## Sprint 2 Progress So Far
+
+Sprint 2 was still in progress as of the last recorded standup (12 September 2026), with the client meeting and marking deadline still ahead. Status as reported at that point:
+
+| Area                 | Status                                                                                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Allocation board     | Bulk-fill assignments, keyboard navigation, ranked tutor suggestions, and shortfall view completed                                        |
+| Timesheets           | Payroll export completed, pending final verification; self-excusal feature completed                                                      |
+| Tutor pages          | Organiser core features (course subjects/rates, organiser calendar) built on a separate branch, pending merge                             |
+| Database             | Schema pre-planned (~21 tables) in Supabase; course-level pay-rate field still being reconciled between two implementations               |
+| CI/CD                | Gitea Actions runner-label bug (breaking auto-deploy on merge to `main`) identified and fixed                                             |
+| Extra features       | Approval override with reason, universal search, and guided onboarding (students, tutors, organisers) delivered beyond the original brief |
+| Outstanding features | Corrections & disputes, overflow claim & approval, budgeting/course-rate feature, change notifications                                    |
+| Testing              | Underway — tests added for several completed features this sprint                                                                         |
+| Documentation        | Outstanding at meeting-log time: standup minutes, database schema, third-party code, testing, project methodology                         |
+| User feedback        | Google Form planned, not yet sent; client (Matthew) meeting being scheduled for the Monday before marking                                 |
