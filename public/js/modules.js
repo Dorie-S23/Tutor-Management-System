@@ -31,11 +31,50 @@ let COURSES = [];
 let myApplications = [];
 let myAcademicLevel = null;
 
-function showToast(message) {
+function showToast(message, type = "success") {
   toastEl.textContent = message;
-  toastEl.classList.add("show");
+  toastEl.classList.remove("toast--success", "toast--danger");
+  toastEl.classList.add(`toast--${type}`, "show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 2600);
+}
+
+// Replaces the browser's native confirm() with an in-app dialog matching the
+// rest of the UI, since the native one can't be styled at all. Resolves true
+// on "Confirm", false on "Cancel" or Escape/backdrop dismissal.
+const confirmModal = document.getElementById("confirm-modal");
+const confirmModalMessage = document.getElementById("confirm-modal-message");
+const confirmModalConfirmBtn = document.getElementById(
+  "confirm-modal-confirm-btn",
+);
+const confirmModalCancelBtn = document.getElementById(
+  "confirm-modal-cancel-btn",
+);
+
+function showConfirm(message, confirmLabel = "Confirm") {
+  return new Promise((resolve) => {
+    confirmModalMessage.textContent = message;
+    confirmModalConfirmBtn.textContent = confirmLabel;
+    confirmModal.showModal();
+
+    function settle(result) {
+      confirmModal.close();
+      confirmModalConfirmBtn.removeEventListener("click", onConfirm);
+      confirmModalCancelBtn.removeEventListener("click", onCancel);
+      confirmModal.removeEventListener("cancel", onCancel);
+      resolve(result);
+    }
+    function onConfirm() {
+      settle(true);
+    }
+    function onCancel() {
+      settle(false);
+    }
+
+    confirmModalConfirmBtn.addEventListener("click", onConfirm);
+    confirmModalCancelBtn.addEventListener("click", onCancel);
+    confirmModal.addEventListener("cancel", onCancel); // Escape key
+  });
 }
 
 function formatSession(course) {
@@ -51,7 +90,7 @@ async function fetchCourses() {
     if (!res.ok) throw new Error(rows.error || "Failed to load modules");
     COURSES = rows;
   } catch {
-    showToast("Couldn't load modules from the database.");
+    showToast("Couldn't load modules from the database.", "danger");
     COURSES = [];
   }
 }
@@ -112,7 +151,13 @@ function renderApplicationsList() {
     cancelBtn.className = "btn-danger";
     cancelBtn.textContent = "Cancel";
     cancelBtn.addEventListener("click", async () => {
-      if (!confirm(`Cancel your application for ${label}?`)) return;
+      if (
+        !(await showConfirm(
+          `Cancel your application for ${label}?`,
+          "Cancel application",
+        ))
+      )
+        return;
 
       cancelBtn.disabled = true;
       try {
@@ -121,14 +166,17 @@ function renderApplicationsList() {
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          showToast(body.error || "Couldn't cancel that application.");
+          showToast(
+            body.error || "Couldn't cancel that application.",
+            "danger",
+          );
           cancelBtn.disabled = false;
           return;
         }
-        showToast("Application cancelled.");
+        showToast("Application cancelled.", "danger");
         await fetchMyApplications(currentUser.id);
       } catch {
-        showToast("Network error — couldn't reach the server.");
+        showToast("Network error — couldn't reach the server.", "danger");
         cancelBtn.disabled = false;
       }
     });

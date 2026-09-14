@@ -110,21 +110,30 @@ export async function deleteEntry(id) {
   entriesCache = null;
 }
 
-// Flags an entry with the same date, hours, task type and course code as an
-// existing one (ignoring the entry currently being edited, if any).
+// Flags an entry whose time range overlaps another one's on the same date —
+// nobody can be doing two different things (even a different task type or
+// course) at the same moment, so this ignores every other field on purpose.
+// "HH:MM" strings compare correctly as plain strings since they're
+// zero-padded, so no need to parse them into minutes. Two ranges overlap
+// when each one starts before the other ends; entries that are merely
+// back-to-back (one starts exactly when the other ends) don't count — e.g.
+// 10:00-12:00 and 12:00-13:00 coexist fine, but 11:30-13:03 overlaps both
+// (ignoring the entry currently being edited, if any).
 export async function findDuplicateEntry(
-  { date, hours, taskType, subject },
+  { date, startTime, endTime },
   excludeId = null,
 ) {
+  if (!startTime || !endTime) return null;
   const entries = await getEntries();
   return (
     entries.find(
       (e) =>
         e.id !== excludeId &&
         e.date === date &&
-        Number(e.hours) === Number(hours) &&
-        (e.taskType || "Tutoring") === (taskType || "Tutoring") &&
-        (e.subject || "") === (subject || ""),
+        e.startTime &&
+        e.endTime &&
+        startTime < e.endTime &&
+        e.startTime < endTime,
     ) || null
   );
 }

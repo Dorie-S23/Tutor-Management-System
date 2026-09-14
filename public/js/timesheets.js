@@ -48,10 +48,11 @@ const submissionsTableBody = document.getElementById("submissionsTableBody");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 
 let toastTimer = null;
-function showToast(message) {
+function showToast(message, type = "success") {
   const el = document.getElementById("toast");
   el.textContent = message;
-  el.classList.add("show");
+  el.classList.remove("toast--success", "toast--danger");
+  el.classList.add(`toast--${type}`, "show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
@@ -102,6 +103,7 @@ profileForm.addEventListener("submit", (event) => {
     headOfSchool: headOfSchoolField.value.trim(),
   });
   safeRenderClaim();
+  showToast("Profile details saved.");
 });
 
 function defaultRange() {
@@ -231,7 +233,7 @@ submitWeekStartField.addEventListener("change", () => {
 submitTimesheetBtn.addEventListener("click", async () => {
   const user = getCurrentUser();
   if (!user) {
-    showToast("You need to be signed in to submit a timesheet.");
+    showToast("You need to be signed in to submit a timesheet.", "danger");
     return;
   }
 
@@ -247,13 +249,13 @@ submitTimesheetBtn.addEventListener("click", async () => {
     });
     const body = await res.json();
     if (!res.ok) {
-      showToast(body.error || "Couldn't submit that timesheet.");
+      showToast(body.error || "Couldn't submit that timesheet.", "danger");
       return;
     }
     showToast("Timesheet submitted for approval.");
     await loadSubmissions();
   } catch (err) {
-    showToast("Network error — couldn't reach the server.");
+    showToast("Network error — couldn't reach the server.", "danger");
   } finally {
     submitTimesheetBtn.disabled = false;
   }

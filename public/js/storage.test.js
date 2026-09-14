@@ -42,7 +42,12 @@ const EXPORTED_NAMES = [
   "getScheduleForDate",
 ];
 
-function loadStorage() {
+// existingEntries seeds the GET /api/hour-entries response that
+// getEntries() (and therefore findDuplicateEntry) sees on its first call —
+// storage.js caches that response in a module-level variable each fresh
+// jsdom window gets its own copy of, so this is enough to test
+// findDuplicateEntry's overlap logic without going through a real addEntry.
+function loadStorage(existingEntries = []) {
   const storageJs = rawStorageJs.replace(
     /^export (async function|function)/gm,
     "$1",
@@ -74,9 +79,24 @@ function loadStorage() {
     runScripts: "dangerously",
     beforeParse(window) {
       // storage.js only hits the network for hour-entries and the
-      // best-effort tutor_busy_times mirror — neither is under test here,
-      // so a resolved-empty stub is enough to keep those paths quiet.
-      window.fetch = () => Promise.resolve({ ok: true, json: async () => [] });
+      // best-effort tutor_busy_times mirror. fromApiEntry() (storage.js)
+      // reads snake_case fields off each row, same shape the real API
+      // returns.
+      window.fetch = () =>
+        Promise.resolve({
+          ok: true,
+          json: async () =>
+            existingEntries.map((e) => ({
+              id: e.id,
+              date: e.date,
+              hours: e.hours,
+              start_time: e.startTime,
+              end_time: e.endTime,
+              task_type: e.taskType,
+              subject: e.subject,
+              notes: e.notes,
+            })),
+        });
     },
   });
 
@@ -244,5 +264,88 @@ describe("date helpers", () => {
     const window = loadStorage();
     expect(window.__storage.addDays("2026-01-30", 3)).toBe("2026-02-02");
     expect(window.__storage.addDays("2026-02-02", -3)).toBe("2026-01-30");
+  });
+});
+
+// Regression coverage for a reported bug: a third entry (11:30-13:03) was
+// let through even though it overlapped two already-logged entries
+// (10:00-12:00 and 12:00-13:00) on the same day.
+describe("findDuplicateEntry", () => {
+  const existing = [
+    {
+      id: "e1",
+      date: "2026-09-15",
+      hours: 2,
+      startTime: "10:00",
+      endTime: "12:00",
+      taskType: "Tutoring",
+      subject: "COMS3300",
+    },
+    {
+      id: "e2",
+      date: "2026-09-15",
+      hours: 1,
+      startTime: "12:00",
+      endTime: "13:00",
+      taskType: "Tutoring",
+      subject: "COMS3300",
+    },
+  ];
+
+  test("flags a new entry that overlaps into two existing entries", async () => {
+    const window = loadStorage(existing);
+    setCurrentUser(window, { id: "tutor-1", role: "tutor" });
+    const result = await window.__storage.findDuplicateEntry({
+      date: "2026-09-15",
+      startTime: "11:30",
+      endTime: "13:03",
+    });
+    expect(result).not.toBeNull();
+  });
+
+  test("does not flag a back-to-back entry (one starts exactly when the other ends)", async () => {
+    const window = loadStorage(existing);
+    setCurrentUser(window, { id: "tutor-1", role: "tutor" });
+    const result = await window.__storage.findDuplicateEntry({
+      date: "2026-09-15",
+      startTime: "13:00",
+      endTime: "14:00",
+    });
+    expect(result).toBeNull();
+  });
+
+  // Guards against the old, over-broad check this replaced, which compared
+  // hours/task type/course instead of actual clock time and would have
+  // wrongly blocked this.
+  test("does not flag a same-day entry for a different, non-overlapping time — even for the same course", async () => {
+    const window = loadStorage(existing);
+    setCurrentUser(window, { id: "tutor-1", role: "tutor" });
+    const result = await window.__storage.findDuplicateEntry({
+      date: "2026-09-15",
+      startTime: "14:00",
+      endTime: "15:00",
+    });
+    expect(result).toBeNull();
+  });
+
+  test("does not flag against itself when editing an entry in place", async () => {
+    const window = loadStorage(existing);
+    setCurrentUser(window, { id: "tutor-1", role: "tutor" });
+    const result = await window.__storage.findDuplicateEntry(
+      { date: "2026-09-15", startTime: "10:00", endTime: "12:00" },
+      "e1",
+    );
+    expect(result).toBeNull();
+  });
+
+  test("ignores entries on a different date", async () => {
+    const window = loadStorage(existing);
+    setCurrentUser(window, { id: "tutor-1", role: "tutor" });
+    const result = await window.__storage.findDuplicateEntry({
+      date: "2026-09-16",
+      startTime: "10:00",
+      endTime: "12:00",
+    });
+    expect(result).toBeNull();
   });
 });

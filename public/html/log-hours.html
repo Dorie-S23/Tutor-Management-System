@@ -24,36 +24,17 @@
     <main>
       <div class="card">
         <h2 id="form-title">Log hours</h2>
-        <p id="form-error" class="form-error" hidden></p>
         <form id="entry-form">
           <input type="hidden" id="entry-id" />
+          <input type="hidden" id="hours" />
           <div class="form-grid">
             <div class="form-field">
               <label for="date">Date</label>
               <input type="date" id="date" required />
             </div>
             <div class="form-field">
-              <label for="hours">Hours worked</label>
-              <input
-                type="number"
-                id="hours"
-                min="1"
-                max="24"
-                step="1"
-                required
-              />
-            </div>
-            <div class="form-field">
-              <label for="startTime">Start time</label>
-              <input type="time" id="startTime" />
-            </div>
-            <div class="form-field">
-              <label for="endTime">End time</label>
-              <input type="time" id="endTime" />
-            </div>
-            <div class="form-field">
               <label for="taskType">Task type</label>
-              <select id="taskType">
+              <select id="taskType" required>
                 <option value="Tutoring">Tutoring</option>
                 <option value="Marking">Marking</option>
                 <option value="Invigilation">Invigilation</option>
@@ -61,26 +42,51 @@
               </select>
             </div>
             <div class="form-field">
+              <label for="startTime">Start time</label>
+              <input type="time" id="startTime" required />
+            </div>
+            <div class="form-field">
+              <label for="endTime">End time</label>
+              <input type="time" id="endTime" required />
+            </div>
+            <p id="form-error" class="form-error full-width" hidden></p>
+            <div class="form-field">
               <label for="subject">Course code</label>
-              <input type="text" id="subject" placeholder="e.g. COMS1015A" />
+              <input
+                type="text"
+                id="subject"
+                placeholder="e.g. COMS1015A"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label>Hours worked</label>
+              <p
+                class="hours-readout"
+                id="hours-display"
+                title="Calculated from start/end time, rounded to the nearest whole hour"
+              >
+                —
+              </p>
             </div>
             <div class="form-field full-width">
               <label for="notes">Notes</label>
               <textarea id="notes" rows="2" placeholder="Optional"></textarea>
             </div>
-            <div class="form-actions">
-              <button type="submit" id="submit-btn" class="btn-primary">
-                Add entry
-              </button>
-              <button
-                type="button"
-                id="cancel-edit-btn"
-                class="btn-secondary"
-                hidden
-              >
-                Cancel
-              </button>
-            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" id="submit-btn" class="btn-primary">
+              Add entry
+            </button>
+            <button
+              type="button"
+              id="cancel-edit-btn"
+              class="btn-secondary"
+              hidden
+            >
+              Cancel
+            </button>
           </div>
         </form>
       </div>
@@ -116,6 +122,41 @@
         </p>
       </div>
     </main>
+
+    <dialog
+      class="modal"
+      id="confirm-modal"
+      aria-labelledby="confirm-modal-heading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="confirm-modal-heading">Are you sure?</h2>
+        </header>
+        <p id="confirm-modal-message"></p>
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn-secondary"
+              id="confirm-modal-cancel-btn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn-danger"
+              id="confirm-modal-confirm-btn"
+              type="button"
+            >
+              Confirm
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
     <script type="module" src="../js/log-hours.js"></script>
     <script src="../js/logout.js"></script>

@@ -50,6 +50,7 @@ const form = document.getElementById("entry-form");
 const entryIdField = document.getElementById("entry-id");
 const dateField = document.getElementById("date");
 const hoursField = document.getElementById("hours");
+const hoursDisplay = document.getElementById("hours-display");
 const startTimeField = document.getElementById("startTime");
 const endTimeField = document.getElementById("endTime");
 const taskTypeField = document.getElementById("taskType");
@@ -70,6 +71,91 @@ let currentWeekStart = getWeekStart(todayStr());
 
 dateField.value = todayStr();
 
+let toastTimer = null;
+function showToast(message, type = "success") {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("toast--success", "toast--danger");
+  el.classList.add(`toast--${type}`, "show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+// Replaces the browser's native confirm() with an in-app dialog matching the
+// rest of the UI, since the native one can't be styled at all. Resolves true
+// on "Confirm", false on "Cancel" or Escape/backdrop dismissal.
+const confirmModal = document.getElementById("confirm-modal");
+const confirmModalMessage = document.getElementById("confirm-modal-message");
+const confirmModalConfirmBtn = document.getElementById(
+  "confirm-modal-confirm-btn",
+);
+const confirmModalCancelBtn = document.getElementById(
+  "confirm-modal-cancel-btn",
+);
+
+function showConfirm(message, confirmLabel = "Confirm") {
+  return new Promise((resolve) => {
+    confirmModalMessage.textContent = message;
+    confirmModalConfirmBtn.textContent = confirmLabel;
+    confirmModal.showModal();
+
+    function settle(result) {
+      confirmModal.close();
+      confirmModalConfirmBtn.removeEventListener("click", onConfirm);
+      confirmModalCancelBtn.removeEventListener("click", onCancel);
+      confirmModal.removeEventListener("cancel", onCancel);
+      resolve(result);
+    }
+    function onConfirm() {
+      settle(true);
+    }
+    function onCancel() {
+      settle(false);
+    }
+
+    confirmModalConfirmBtn.addEventListener("click", onConfirm);
+    confirmModalCancelBtn.addEventListener("click", onCancel);
+    confirmModal.addEventListener("cancel", onCancel); // Escape key
+  });
+}
+
+// Hours worked is never typed in directly — it's derived from start/end
+// time and shown read-only, rounded to a whole hour since tutors are only
+// credited in whole hours (minutes don't count either way). Only reacts to
+// the user actually typing a time (the "input" event) — enterEditMode()
+// below sets .value directly, which doesn't fire "input", so it never
+// recomputes over a stored entry's hours just because it also carries
+// start/end times.
+function computeHoursFromTimes() {
+  const start = startTimeField.value;
+  const end = endTimeField.value;
+  if (!start || !end) {
+    hoursField.value = "";
+    hoursDisplay.textContent = "—";
+    return;
+  }
+
+  const [startH, startM] = start.split(":").map(Number);
+  const [endH, endM] = end.split(":").map(Number);
+  const diffMinutes = endH * 60 + endM - (startH * 60 + startM);
+  if (diffMinutes <= 0) return; // end time isn't after start time — leave hours alone
+
+  const wholeHours = Math.round(diffMinutes / 60);
+  if (wholeHours === 0) {
+    // Under 30 minutes rounds down to nothing billable — leave hours unset
+    // rather than crediting a session that rounds to zero.
+    hoursField.value = "";
+    hoursDisplay.textContent = "Too short to log (rounds to 0 hours)";
+    return;
+  }
+  hoursField.value = wholeHours;
+  hoursDisplay.textContent = wholeHours;
+}
+
+startTimeField.addEventListener("input", computeHoursFromTimes);
+endTimeField.addEventListener("input", computeHoursFromTimes);
+
 function formatWeekLabel(weekStart) {
   const start = new Date(weekStart);
   const end = new Date(addDays(weekStart, 6));
@@ -86,6 +172,7 @@ function exitEditMode() {
   entryIdField.value = "";
   form.reset();
   dateField.value = todayStr();
+  hoursDisplay.textContent = "—";
   formTitle.textContent = "Log hours";
   submitBtn.textContent = "Add entry";
   cancelEditBtn.hidden = true;
@@ -96,6 +183,7 @@ function enterEditMode(entry) {
   entryIdField.value = entry.id;
   dateField.value = entry.date;
   hoursField.value = entry.hours;
+  hoursDisplay.textContent = entry.hours;
   startTimeField.value = entry.startTime || "";
   endTimeField.value = entry.endTime || "";
   taskTypeField.value = entry.taskType || "Tutoring";
@@ -105,6 +193,11 @@ function enterEditMode(entry) {
   submitBtn.textContent = "Save changes";
   cancelEditBtn.hidden = false;
   formError.hidden = true;
+  // scrollIntoView on the form itself stops right at its top edge, leaving
+  // the "Edit entry" heading (a sibling above it, not inside it) scrolled
+  // out of view — going to the very top of the page instead brings the
+  // heading and the whole form into view together.
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 async function render() {
@@ -148,10 +241,11 @@ async function render() {
     deleteBtn.className = "btn-danger";
     deleteBtn.textContent = "Delete";
     deleteBtn.addEventListener("click", async () => {
-      if (!confirm("Delete this entry?")) return;
+      if (!(await showConfirm("Delete this entry?", "Delete"))) return;
       await deleteEntry(entry.id);
       if (entryIdField.value === entry.id) exitEditMode();
       await render();
+      showToast("Entry deleted.", "danger");
     });
 
     actionsTd.append(editBtn, deleteBtn);
@@ -162,6 +256,15 @@ async function render() {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+
+  // hours is a hidden field with no native validation of its own now that
+  // it's derived rather than typed in — check it explicitly instead.
+  if (!hoursField.value) {
+    formError.textContent =
+      "Enter a start and end time that add up to at least one whole hour.";
+    formError.hidden = false;
+    return;
+  }
 
   const payload = {
     date: dateField.value,
@@ -179,13 +282,14 @@ form.addEventListener("submit", async (event) => {
   );
   if (duplicate) {
     formError.textContent =
-      "An identical entry (same date, hours, task type and course code) is already logged.";
+      "This overlaps an entry you've already logged for this day.";
     formError.hidden = false;
     return;
   }
   formError.hidden = true;
 
-  if (entryIdField.value) {
+  const isEdit = Boolean(entryIdField.value);
+  if (isEdit) {
     await updateEntry(entryIdField.value, payload);
   } else {
     await addEntry(payload);
@@ -194,6 +298,7 @@ form.addEventListener("submit", async (event) => {
   currentWeekStart = getWeekStart(payload.date);
   exitEditMode();
   await render();
+  showToast(isEdit ? "Entry updated." : "Entry added.");
 });
 
 cancelEditBtn.addEventListener("click", exitEditMode);
