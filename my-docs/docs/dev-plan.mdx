@@ -7,7 +7,7 @@ sidebar_position: 3
 System design, tech stack rationale, and feature roadmap for the Tutor Management System — COMS3011A Project 1.
 
 :::info Living document
-This reflects the current build and a proposed roadmap, not a final signed-off plan. Sections marked **TODO** need the group to fill in — don't leave them unedited before Milestone 1 submission.
+This reflects the build as of Milestone 2 (2026-09-15) plus the proposed roadmap for Sprints 3–4. The few remaining **TODO** markers are items only the group can settle (confirming tools and links), not unfinished writing.
 :::
 
 ## Problem statement
@@ -16,31 +16,33 @@ The School of Computer Science and Applied Mathematics needs a better way to man
 
 ## How this meets the course's key requirements
 
-| Requirement                       | How this project meets it                                                                                                                                                                                                                                                                                                                                                                                      |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Non-monolithic front-end/back-end | Front-end is static HTML/CSS/vanilla JS (`public/`); back-end is a separate Express API (`app.js` + `routes/`, `server/routes/`). No framework merges the two.                                                                                                                                                                                                                                                 |
-| Hand-Written API                  | Every endpoint under `/api/*` is a hand-written Express route (see [API design](#api-design) below). The frontend never talks to Supabase's auto-generated REST API directly — it always goes through our own routes, which then use `@supabase/supabase-js` internally as a database/auth client.                                                                                                             |
-| Authentication & Security         | Sign up / sign in via **Supabase Auth** (`routes/auth.js`, `supabase.auth.signUp` / `signInWithPassword`) — an established library, not a hand-rolled auth system. **TODO:** password reset and account deletion flows are not implemented yet — required by the brief, needs to be scheduled.                                                                                                                 |
-| Integration (external API)        | Timetable PDF import (`server/timetableRoutes.js`) sends the uploaded PDF to the **Anthropic API** (Claude) to extract class times/venues into structured JSON, which seeds the calendar.                                                                                                                                                                                                                      |
-| CI/CD                             | Gitea Actions (`.gitea/workflows/`): `format.yml` (Prettier check) on every push; `deploy.yml` deploys the app to Cloudflare Workers on push to `main`; `docs-deploy.yml` deploys this documentation site to Cloudflare Pages on push to `main`. The `.gitlab-ci.yml` in the repo root is a leftover from before we realised the server runs Gitea, not GitLab — it never executes and can be ignored/removed. |
-| Documentation Website             | This site (Docusaurus, `my-docs/`), deployed via Cloudflare Pages.                                                                                                                                                                                                                                                                                                                                             |
-| Responsiveness & Accessibility    | **TODO:** not yet audited — needs a pass before Milestone 2.                                                                                                                                                                                                                                                                                                                                                   |
+| Requirement                       | How this project meets it                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Non-monolithic front-end/back-end | Front-end is static HTML/CSS/vanilla JS (`public/`); back-end is a separate Express API (`app.js` + `routes/`, `server/routes/`). No framework merges the two.                                                                                                                                                                                                                                                         |
+| Hand-Written API                  | Every endpoint under `/api/*` is a hand-written Express route (see [API design](#api-design) below). The frontend never talks to Supabase's auto-generated REST API directly — it always goes through our own routes, which then use `@supabase/supabase-js` internally as a database/auth client.                                                                                                                     |
+| Authentication & Security         | Sign up / sign in via **Supabase Auth** (`routes/auth.js`) — email + password (`signUp` / `signInWithPassword`) and Google OAuth (`/api/auth/google`, `/api/auth/google/register`). An established library, not a hand-rolled auth system. **TODO:** self-service password reset and account deletion flows are not implemented yet — required by the brief, needs scheduling.                                         |
+| Integration (external API)        | Timetable PDF import runs entirely in the browser (`public/js/timetable-import.js`, `public/js/timetable-parser.js`): **pdf.js** renders the uploaded PDF to a bitmap and **Tesseract.js** OCRs it into class blocks (day, time, venue) that seed the calendar. Wits timetable PDFs have no text layer (outlined shapes, not real text), so OCR is required. No server round-trip, no API key, no cost.                |
+| CI/CD                             | Gitea Actions (`.gitea/workflows/`): `format.yml` (Prettier check) and `test.yml` (Jest suite) on every push; `deploy.yml` deploys the app to Cloudflare Workers on push to `main`; `docs-deploy.yml` deploys this documentation site on push to `main`. The `.gitlab-ci.yml` in the repo root is a leftover from before we realised the server runs Gitea, not GitLab — it never executes and can be ignored/removed. |
+| Documentation Website             | This site (Docusaurus, `my-docs/`), deployed via Cloudflare Pages.                                                                                                                                                                                                                                                                                                                                                     |
+| Responsiveness & Accessibility    | **TODO:** not yet audited — schedule the pass ahead of Milestone 3.                                                                                                                                                                                                                                                                                                                                                    |
 
 ## System architecture
 
 ```
 Browser (public/html + public/js)
-        │  fetch()
+        │  fetch() to /api/*
+        │  timetable PDF → pdf.js (render) + Tesseract.js (OCR), fully in-browser
         ▼
 Express app (app.js)
         │
-        ├── routes/auth.js ─────────────► Supabase Auth (sign up / sign in)
-        ├── server/routes/courses.js ───► Supabase Postgres (courses table)
-        ├── server/routes/tutors.js ────► Supabase Postgres (tutors table)
+        ├── routes/auth.js ─────────────► Supabase Auth (email + Google OAuth)
+        ├── server/routes/courses.js ───► Supabase Postgres (courses)
+        ├── server/routes/tutors.js ────► Supabase Postgres (tutors, busy times, workload)
         ├── server/routes/hourEntries.js ─► Supabase Postgres (logged hours)
         ├── server/routes/courseVolunteers.js ─► Supabase Postgres
         ├── server/routes/tutorApplications.js ─► Supabase Postgres
-        └── server/timetableRoutes.js ──► Anthropic API (PDF → structured JSON)
+        ├── server/routes/timesheets.js ─► Supabase Postgres (weekly sign-off)
+        └── server/routes/sessionExcusals.js ─► Supabase Postgres
 ```
 
 `app.js` is the single source of truth for the Express app — both entry points (`server.js` for a normal Node process, `worker.js` for a Cloudflare Worker via Wrangler) load the same `app.js` and just differ in how static assets are served and how the process listens.
@@ -55,49 +57,80 @@ Express app (app.js)
 | Frontend             | Vanilla HTML/CSS/JS (`public/`)                                                                                                                          | No build step, no framework — keeps the front-end genuinely separate from the back-end (see non-monolithic requirement) and easy for every team member to touch regardless of framework experience.                                                                                                                                           |
 | Deployment target(s) | Cloudflare Workers (`worker.js` via Wrangler), deployed automatically by `deploy.yml` on push to `main`. `server.js` still exists for local `npm start`. | Satisfies the deployment requirement; auto-deploys on every meaningful update per the team's agreed build-release cycle.                                                                                                                                                                                                                      |
 | Docs site            | Docusaurus, deployed to Cloudflare Pages                                                                                                                 | Markdown-based, satisfies the course's documentation-site requirement, deploys as a static site with no account-gated platform.                                                                                                                                                                                                               |
-| CI                   | Gitea Actions (`.gitea/workflows/`)                                                                                                                      | Self-hosted Gitea, not GitLab — format-check, app-deploy, and docs-deploy workflows.                                                                                                                                                                                                                                                          |
+| CI                   | Gitea Actions (`.gitea/workflows/`)                                                                                                                      | Self-hosted Gitea, not GitLab — format-check and test workflows on every push, app-deploy and docs-deploy on `main`.                                                                                                                                                                                                                          |
 
 ## API design
 
-All endpoints are mounted under `/api` by `app.js`.
+All endpoints are mounted under `/api` by `app.js`. The full data model behind them is documented on the [Database Schema](/docs/Database-Schema) page.
 
-| Method & path                                                                                                 | Purpose                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/auth/register`                                                                                     | Create a Supabase Auth user + row in `users` (and role-specific table: `students`, `tutors`, `educators`, or `organisers`). |
-| `POST /api/auth/login`                                                                                        | Authenticate via Supabase, return session + `{ id, email, name, role }`.                                                    |
-| `GET/POST /api/courses`, `PUT /api/courses/:id`, `PATCH /api/courses/:id/tutors-assigned`                     | Course records an organiser manages.                                                                                        |
-| `GET /api/tutors`, `GET /api/tutors/:id`, `POST /api/tutors`, `PUT /api/tutors/:id`, `DELETE /api/tutors/:id` | Tutor records.                                                                                                              |
-| `GET/POST /api/hour-entries`, `PUT /api/hour-entries/:id`, `DELETE /api/hour-entries/:id`                     | Logged tutoring hours.                                                                                                      |
-| `GET/POST /api/course-volunteers`, `DELETE /api/course-volunteers`                                            | Students volunteering for overflow course work.                                                                             |
-| `GET/POST /api/tutor-applications`, `PATCH /api/tutor-applications/:id`                                       | Tutors applying to tutor a specific course, organiser approval flow.                                                        |
-| `POST /api/timetable/parse`                                                                                   | Upload a timetable PDF, get back extracted class blocks (day, time, venue) via the Anthropic API.                           |
+### Auth
 
-**TODO:** a Database Documentation page (full schema — tables, columns, relationships) is a separate rubric item (Milestone 2, 5%) and doesn't exist yet.
+| Method & path                                            | Purpose                                                                                                                     |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/auth/register`                                | Create a Supabase Auth user + row in `users` (and role-specific table: `students`, `tutors`, `educators`, or `organisers`). |
+| `GET /api/auth/google`, `POST /api/auth/google/register` | Google OAuth sign-in / registration.                                                                                        |
+| `POST /api/auth/login`                                   | Authenticate via Supabase, return session + `{ id, email, name, role }`.                                                    |
+
+### Courses and allocation
+
+| Method & path                                                                                                        | Purpose                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `GET/POST /api/courses`, `PUT /api/courses/:id`, `DELETE /api/courses/:id`, `PATCH /api/courses/:id/tutors-assigned` | Course records an organiser manages (with venue-clash validation).                                      |
+| `GET /api/tutors`, `GET /api/tutors/:id`, `POST /api/tutors`, `PUT /api/tutors/:id`, `DELETE /api/tutors/:id`        | Tutor records.                                                                                          |
+| `GET /api/tutors/workload`                                                                                           | Each tutor's assigned hours vs their weekly cap, for the workload spread view.                          |
+| `PUT /api/tutors/bulk`                                                                                               | Update a field (weekly hour cap) across all tutors at once.                                             |
+| `POST /api/tutors/bulk-rates`                                                                                        | Set hourly rates per academic level across all matching tutors.                                         |
+| `PUT /api/tutors/:id/busy-times`                                                                                     | Replace a tutor's imported timetable (busy blocks) wholesale.                                           |
+| `GET /api/tutors/:id/assignment-check`                                                                               | Timetable clashes and projected weekly hours if the tutor were assigned to a course.                    |
+| `GET/POST /api/tutor-applications`, `PATCH /api/tutor-applications/:id`, `DELETE /api/tutor-applications/:id`        | Tutors applying to tutor a specific course; organiser approval/rejection (with override audit logging). |
+| `GET /api/tutor-applications/obvious-fill`                                                                           | Pending applications that can be approved with no judgment call.                                        |
+| `POST /api/tutor-applications/bulk-approve`                                                                          | Approve several applications in one action.                                                             |
+
+### Volunteering and sessions
+
+| Method & path                                                        | Purpose                                                                       |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `GET/POST /api/course-volunteers`, `DELETE /api/course-volunteers`   | Students volunteering for overflow course work (with mark threshold check).   |
+| `GET /api/course-volunteers/counts`                                  | Number of volunteers per course, for the course list view.                    |
+| `PATCH /api/course-volunteers/:id`                                   | Organiser approves/rejects/resets a volunteer.                                |
+| `GET/POST /api/session-excusals`, `DELETE /api/session-excusals/:id` | A tutor excusing themselves from one scheduled session of an assigned course. |
+
+### Hours and timesheets
+
+| Method & path                                                                             | Purpose                                                                    |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `GET/POST /api/hour-entries`, `PUT /api/hour-entries/:id`, `DELETE /api/hour-entries/:id` | Logged tutoring hours.                                                     |
+| `GET/POST /api/timesheets`                                                                | A tutor's weekly submissions; the organiser's review queue.                |
+| `PATCH /api/timesheets/:userId/:weekStart`                                                | Organiser approves/rejects a submitted week.                               |
+| `GET /api/timesheets/payroll-export`                                                      | CSV of every approved timesheet with tutor identity, rate and amount owed. |
+
+Timetable PDF parsing is **not** a server endpoint — it happens entirely in the browser via pdf.js + Tesseract.js (see [Integration](#how-this-meets-the-courses-key-requirements)).
 
 ## Roadmap
 
-Grouped by the course's Basic / Intermediate / Advanced tiers. **TODO: the group should review and adjust this — it's a first draft based on what's already built plus obvious next steps, not an agreed plan.**
+Grouped by the course's Basic / Intermediate / Advanced tiers, with the current state marked.
 
-### Basic (already largely in place)
+### Basic (in place)
 
-- Sign up / sign in for all four roles (student, tutor, educator, organiser)
-- Organiser: create/edit courses, assign tutors
-- Tutor: log hours, view timesheets, view calendar
+- Sign up / sign in for all four roles (student, tutor, educator, organiser), via email + password or Google OAuth
+- Organiser: create/edit courses, assign tutors (with timetable-clash and weekly-hours checks)
+- Tutor: log hours, submit weekly timesheets, view calendar
+- Tutor: excuse themselves from a session
 - Student: volunteer for overflow course work
-- Tutor: apply to tutor a course (mark + availability check)
-- Timetable import from a PDF via the Anthropic integration
+- Tutor: apply to tutor a course (mark + availability check, organiser approval flow)
+- Timetable import from a PDF via in-browser OCR (pdf.js + Tesseract.js)
 
 ### Intermediate
 
+- Automated testing — **done**: Jest suites for the server routes and client storage (`*.test.js`), run by `test.yml` on every push
+- Database schema documentation — **done**: [Database Schema](/docs/Database-Schema) page (tables, columns, relationships, ERD)
 - Password reset and account deletion (required by the brief, not yet built)
-- Automated testing (none exists yet — Milestone 2 rubric weighs this at 10%)
 - Responsiveness/accessibility pass
-- Bug tracker in active use (**TODO:** confirm what the group is using — GitLab Issues?)
-- Database schema documentation page
+- Bug tracker in active use (**TODO:** confirm what the group is using — the project host is Gitea, so its built-in Issues is the obvious candidate)
 
 ### Advanced
 
-- Deployment pipeline (CI job that actually deploys the app, not just the docs site)
+- Deployment pipeline — **done**: `deploy.yml` ships every push to `main` to Cloudflare Workers automatically
 - Performance pass
 - Extended stakeholder feedback loop with the assigned client tutor
 
@@ -112,10 +145,14 @@ From the course's official schedule:
 | Milestone 3: Sprint 3   | 2026-09-29 |
 | Milestone 4: Submission | 2026-10-11 |
 
-**TODO:** add the group's own internal sprint breakdown / methodology here (e.g. Scrum with N-week sprints, Kanban board link) — the course rubric grades "Project Methodology" as a separate criterion and expects it documented and referenced, not just implied by this timeline.
+### Methodology
+
+The team works in Scrum-style sprints aligned to the course milestones (Sprint _n_ = Milestone _n_), with sprint-planning meetings, 2–3 daily scrums per week, and a named Scrum Master / role split. Per-sprint meeting minutes are kept in this documentation site as process evidence — see [Meeting Minutes — Sprint 1](/docs/meeting-minutes) and [Meeting Minutes — Sprint 2](/docs/meeting-minutes-sprint-2).
+
+**TODO:** if the group maintains a Kanban/scrum board, link it here — the rubric grades "Project Methodology" and expects it referenced, not just implied.
 
 ## Open questions for the group
 
-- Which deployment target (Node/Render-style host vs. Cloudflare Workers) is the one we're actually submitting?
 - Who is our assigned client/tutor, and what's the cadence for stakeholder check-ins?
-- What methodology are we following, and where is it documented/evidenced (standups, board, retro notes)?
+- Confirm the bug tracker the group is actually using (see Intermediate roadmap).
+- Link the project board, if one exists (see [Methodology](#methodology)).
