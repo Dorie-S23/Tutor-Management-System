@@ -156,7 +156,6 @@ describe("requireRole", () => {
   test.each([
     ["student", "StudentView.html"],
     ["tutor", "dashboard.html"],
-    ["educator", "educator.html"],
     ["organiser", "board.html"],
   ])(
     "sends a signed-in %s back to their own home page instead of the wrong-role page",

@@ -19,8 +19,8 @@ if (!currentUser) {
 
 highlightActiveTab();
 
-// This page is shared across roles (tutor, student volunteer, organiser,
-// educator), so the "Dashboard" and "Calendar" links have to point at
+// This page is shared across roles (tutor, student volunteer, organiser),
+// so the "Dashboard" and "Calendar" links have to point at
 // whichever version actually matches the signed-in user's role.
 const dashboardNavLink = document.getElementById("dashboard-nav-link");
 const calendarNavLink = document.getElementById("calendar-nav-link");
@@ -40,8 +40,8 @@ if (currentUser.role === "student") {
   if (modulesNavLink) modulesNavLink.hidden = true;
 } else {
   // "My Sessions" is a student-volunteer concept (sessions they've
-  // volunteered for) — hide it for anyone else (tutors, organisers,
-  // educators) so they can't wander onto a student-only page and get stuck
+  // volunteered for) — hide it for anyone else (tutors, organisers) so
+  // they can't wander onto a student-only page and get stuck
   // (its Dashboard link only knows how to get back to StudentView.html).
   if (mySessionsNavLink) mySessionsNavLink.hidden = true;
 }

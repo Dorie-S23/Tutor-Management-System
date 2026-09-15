@@ -17,7 +17,6 @@ export function getCurrentUser() {
 const ROLE_HOME = {
   student: "StudentView.html",
   tutor: "dashboard.html",
-  educator: "educator.html",
   organiser: "board.html",
 };
 
