@@ -8,7 +8,7 @@ How the test suite is organized, how to run it, and the conventions to follow wh
 
 ## Overview
 
-Unit/integration tests for the backend API routes and a handful of frontend scripts, run with Jest. There's no end-to-end/browser test runner (no Playwright/Cypress) — frontend coverage instead loads the real `.js`/`.html` source into a JSDOM environment and drives it directly.
+API tests for every backend route file, plus frontend script tests — some genuine unit tests of individual functions, some closer to component/interaction tests — all run with Jest. There's no end-to-end/browser test runner (no Playwright/Cypress) — frontend coverage instead loads the real `.js`/`.html` source into a JSDOM environment and drives it directly.
 
 ## Test Stack
 
@@ -45,7 +45,11 @@ server/
     ├── courseVolunteers.js
     ├── courseVolunteers.test.js
     ├── timesheets.js
-    └── timesheets.test.js
+    ├── timesheets.test.js
+    ├── courses.js
+    ├── courses.test.js
+    ├── sessionExcusals.js
+    └── sessionExcusals.test.js
 public/js/
 ├── storage.js
 ├── storage.test.js
@@ -55,7 +59,20 @@ public/js/
 
 Naming: `<name>.test.js` mirrors the source file by default; when a test only covers one specific behaviour of a larger file, it's named after that behaviour instead (`board.keyboard-nav.test.js`, `auth.register-email.test.js`) rather than forcing everything into one `board.test.js`.
 
-## Backend Route Tests
+## API Testing
+
+Every `server/routes/*.test.js` file is a genuine API test, not just a unit test with a mocked-out network layer: [Supertest](https://www.npmjs.com/package/supertest) sends a real HTTP request (`GET`/`POST`/`PUT`/`PATCH`/`DELETE`, real URL, real JSON body) at a real Express app with the router mounted, and the app handles it through its actual routing, validation, and response logic. The only thing faked is the database call at the bottom of each route — `fakeSupabase` stands in for Supabase so tests don't depend on network access or mutate a real (shared) database, but every layer between "HTTP request comes in" and "database call goes out" runs for real, including status codes, JSON error shapes, and side effects on the in-memory data.
+
+Every route file under `server/routes/` currently has API test coverage:
+
+| Route file             | Endpoints covered                                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tutorApplications.js` | `GET /`, `GET /obvious-fill`, `POST /`, `POST /bulk-approve`, `PATCH /:id` (approve/reject/reset, capacity + weekly-hour-cap checks, the `override`/`allocation_overrides` bypass path), `DELETE /:id` |
+| `courseVolunteers.js`  | `GET /`, `GET /counts`, `POST /`, `PATCH /:id` (approve/reject/reset), `DELETE /`                                                                                                                      |
+| `timesheets.js`        | `GET /` (incl. `?status=` filter), `POST /`, `GET /payroll-export`, `PATCH /:userId/:weekStart` (approve/reject, `reviewed_at` stamping)                                                               |
+| `tutors.js`            | `GET /`, `GET /:id`, `POST /` (incl. the Supabase Auth signup flow, stubbed), `PUT /:id`, `DELETE /:id`, `PUT /bulk`, `POST /bulk-rates`, `PUT /:id/busy-times`, `GET /:id/assignment-check`           |
+| `courses.js`           | `GET /`, `POST /` (incl. venue-clash detection), `PUT /:id`, `DELETE /:id`, `PATCH /:id/tutors-assigned`                                                                                               |
+| `sessionExcusals.js`   | `GET /`, `POST /` (incl. tutorial-day and assignment checks), `DELETE /:id`                                                                                                                            |
 
 Pattern used by every `server/routes/*.test.js` file:
 
@@ -92,19 +109,42 @@ Pattern used by every `server/routes/*.test.js` file:
 
 `fakeSupabase` supports `select` / `insert` (single row or an array, for bulk inserts) / `update` / `delete`, `eq` / `neq` / `in`, `order`, `single()` / `maybeSingle()`, and simulates Postgres's `23505` duplicate-key error for tables with declared unique constraints. It does **not** perform real relational joins — a `select("*, courses(hours_per_week)")` just returns whatever plain fields the row itself has, so a test that needs the joined shape back seeds the nested object directly on the row, e.g. `{ tutor_id: 1, courses: { hours_per_week: 3 } }`. If a route needs Supabase Auth (e.g. `tutors.js`'s `POST /` calls `supabase.auth.signUp`), stub that separately per test file — `fakeSupabase` doesn't provide it.
 
+:::info A real gotcha: `req.params`/`req.query` values are always strings
+Express never converts a URL path segment or query-string value to a number — `req.params.id` and `req.query.courseId` are strings even when the underlying column is an integer. `fakeSupabase`'s `.eq()`/`.neq()` do a strict `===` match with no type coercion (real Postgrest coerces based on the column's actual type), so a numeric id seeded into a test table (e.g. `{ id: 1, ... }`) silently fails to match a route hitting it via `req.params.id` (`"1"`) — the request doesn't error, it just quietly returns 404/empty instead of the row you seeded. When seeding a row that a test reaches through a URL param or query string, seed that field as a **string** to match what the route will actually receive.
+:::
+
 ## Frontend Script Tests
 
-Frontend files ship as plain browser scripts (some ES modules, some classic scripts) with no build step, so tests read the real source with `fs.readFileSync` and execute it in a JSDOM (`runScripts: "dangerously"`), then either drive real DOM events (`KeyboardEvent`, form `submit`) or call functions the script has attached to a `window.__test`-style hook, with `window.fetch` stubbed.
+Frontend files ship as plain browser scripts (some ES modules, some classic scripts) with no build step, so every frontend test reads the real source with `fs.readFileSync` and executes it in a JSDOM (`runScripts: "dangerously"`) rather than requiring a CommonJS build of it. From there, the suites split into two different styles depending on what they're checking.
+
+### Unit tests
+
+Yes — `public/js/storage.test.js` and `public/js/calendar.render-race.test.js` are true unit tests: each one exercises a single function in isolation, with no HTTP call and no simulated multi-step user journey. JSDOM is only there to load the browser-style source (`export function ...`, `sessionStorage`/`fetch` references); the assertions themselves are plain "call the function, check the return value."
+
+- **`public/js/storage.test.js`** — attaches `storage.js`'s exported functions to `window.__storage` and calls them directly: `getWeekStart`/`addDays` (pure date arithmetic), `findDuplicateEntry` (overlap-detection logic — a regression test for a reported bug where a third logged entry slipped past the overlap check), `getCurrentUser`/`requireRole` (session/role logic, redirect target asserted via a fake `window.location` stand-in), and the `saveProfile`/`getSchedule`/schedule-exception helpers (regression coverage for a bug where one signed-in user's data leaked into another's on the same browser).
+- **`public/js/calendar.render-race.test.js`** — isolates `calendar.js`'s `render()` function by replacing every function it calls (`getScheduleForDate`, `getEntriesForDate`, `requireRole`, etc.) with a minimal stub, then calls `render()` directly to reproduce and guard a specific concurrency race (a second `render()` call finishing before an in-flight first one, and the first one's late-arriving results clobbering the second's correct output).
+
+:::info The backend doesn't unit-test its own helper functions in isolation
+Pure logic embedded in a route file — `tutorApplications.js`'s applicant-ranking score, `courses.js`'s `parseVenues`/`sharedVenues` venue-clash math, `timetable-parser.js`'s grid-reconstruction geometry — isn't called directly by a dedicated unit test. It's exercised indirectly, through the [API Testing](#api-testing) suite above (e.g. `courses.test.js`'s venue-clash tests send a real `POST`/`PUT` and assert on the resulting 409, rather than importing `parseVenues` and calling it directly). That's a reasonable choice here — these functions aren't exported for reuse elsewhere, so testing them only through the route that owns them avoids testing an implementation detail directly — but it does mean the "pure unit test" label only really applies to the frontend suites above.
+:::
+
+### Interaction tests
+
+`public/js/board.keyboard-nav.test.js` and `public/js/auth.register-email.test.js` are closer to component/integration tests: instead of calling an exported function directly, they load the real `.html` + `.js` into JSDOM and drive it the way a user would — dispatching real `KeyboardEvent`s to navigate the course rail, or submitting a real form — then assert on the resulting DOM state, rather than on a function's return value.
 
 ## Coverage
 
-Organiser-facing backend routes are the best-covered area: `tutorApplications.js` (including the override/`allocation_overrides` bypass path), `courseVolunteers.js`, `timesheets.js`, and `tutors.js` all have route tests.
+Every backend route file has API test coverage (see the table above) — `tutorApplications.js`, `courseVolunteers.js`, `timesheets.js`, `tutors.js`, `courses.js`, and `sessionExcusals.js`.
 
 Known gaps, in rough priority order:
 
-- **`server/routes/courses.js`** and **`server/routes/sessionExcusals.js`** — no test file at all.
 - **`public/js/board.js`** and **`public/js/timesheet-review.js`** — only `board.js`'s keyboard navigation is covered; the actual organiser workflows (approving applications/volunteers, the guided tour, the shortfall filter) aren't. `board.js` also has no `requireRole()` login guard of its own (noted in a comment at `public/js/board.js:1476`) — worth a regression test if that gets fixed.
 - **No CI test stage** (see the callout above).
+- **No live/integration testing against a real Supabase instance** — every API test here runs against `fakeSupabase`, so a real Postgres-level bug (a genuine constraint mismatch, an RLS policy, a Postgrest quirk `fakeSupabase` doesn't model) wouldn't be caught by this suite. Deliberate tradeoff, not an oversight — see the note above about why tests don't touch the real, shared database.
+
+## User Acceptance Testing
+
+Everything above is automated and checks that the code does what it's supposed to — it doesn't check that the app is actually usable. That's covered separately: see [User Feedback](./user-feedback.mdx) for the write-up of an 11-response Google Form survey run across all four roles just after the Milestone 2 build, including the issues it surfaced (e.g. an unintuitive navigation flow, a missing Educator-role tutorial) and the resulting action items.
 
 ## Adding a New Test
 
