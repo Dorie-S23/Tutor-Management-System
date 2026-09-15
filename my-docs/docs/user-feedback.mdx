@@ -1,0 +1,76 @@
+---
+sidebar_position: 6.5
+---
+
+# User Feedback
+
+## How the feedback was collected
+
+Feedback was gathered using a **Google Form** — the ["Tutor Management System feedback form"](https://docs.google.com/forms/d/e/1FAIpQLSc1J6JfxXUhNInpMYqt0qXJYzphPXVDOotBT0DWXgoheT2Xhw/viewform?usp=publish-editor) — circulated to classmates and testers. Responses were collected automatically into a [linked Google Sheet](https://docs.google.com/spreadsheets/d/1euuLzB13hXVDXXdQYsXNAinAWlO4vB0msDuHh7Rfi1k/edit?usp=sharing) between 12 and 14 September 2026, just after the Milestone 2 build.
+
+**11 responses** were received from **7 unique respondents**. One respondent completed the form once per role, so **all four roles** (organiser, tutor, student volunteer, educator) are represented. The raw responses remain in the linked sheet; this page reports the findings.
+
+## Summary
+
+| Question                                     | Positive                    | Mixed / qualified                       | Negative |
+| -------------------------------------------- | --------------------------- | --------------------------------------- | -------- |
+| How was signing up / logging in?             | 11 (8 "Great", 3 "Good")    | —                                       | —        |
+| Does the app look good?                      | 10                          | —                                       | 1        |
+| Is the guided onboarding (tutorial) helpful? | 9                           | 1 ("There's no tutorial for this role") | —        |
+| How easy is the app to use?                  | 8 (5 "Very easy", 3 "Easy") | 2 ("Okay")                              | 1        |
+| Would you use this system at school?         | 9 (incl. 1 enthusiastic)    | 1 ("Not sure")                          | 1        |
+
+Headline results: sign-up/log-in is a clean sweep (**11/11 positive**), and **9/11 testers would happily adopt the system at school**. The gaps cluster in three places: the **Educator role** (no tutorial, dashboard seen as incomplete), **navigation intuitiveness** for at least one tester, and **tutorial polish** (scroll behaviour and tip ordering).
+
+## Findings by question
+
+### Sign-up / log-in — universally positive
+
+All 11 responses rated the experience "Great" (8) or "Good" (3), across every role — covering both email/password and Google OAuth registration.
+
+### Look and feel — positive, with one outlier
+
+Nine testers answered a flat "Yes"; one qualified it:
+
+> "Overall it looks great and professional … a bit more colour could help some things pop" — Lungile Shezi (Student Volunteer)
+
+The single negative came from the Educator walkthrough:
+
+> "It looks trivial and incomplete. Nothing to do here" — Clementinah (Educator)
+
+### Guided onboarding — helpful everywhere it exists
+
+All nine responses from roles that have a tutorial (organiser, tutor, student volunteer) found it helpful — two with constructive suggestions (below). The tenth had nothing to evaluate:
+
+> "There's no tutorial for this role" — Clementinah (Educator)
+
+### Ease of use — mostly easy
+
+5 × "Very easy", 3 × "Easy", 2 × "Okay", 1 × "Difficult". The one "Difficult" carried the strongest criticism in the survey:
+
+> "The user experience is not on par as yet. I wasn't able to navigate the system in [a way] that was intuitive and easy to navigate." — Mandla Msibi (Tutor)
+
+### Would you use it at school — a strong yes
+
+Nine yeses, including one standout:
+
+> "Spectacular, give me 14 of them right now ☝️" — Khyati (Tutor)
+
+…and one conditional:
+
+> "As a hypothetical tutor, I would use this app." — Lungile Shezi (Student Volunteer)
+
+The "Not sure" and the navigation complaint above both trace back to the Educator experience and overall navigation respectively.
+
+## Issues raised → planned actions
+
+| #   | Issue                                                            | Raised by                         | Suggested action                                                           |
+| --- | ---------------------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------- |
+| 1   | No onboarding tutorial exists for the Educator role              | Clementinah (Educator)            | Add an educator-role tour                                                  |
+| 2   | Educator dashboard looks "trivial and incomplete"                | Clementinah (Educator)            | Review educator-facing functionality; surface or add educator features     |
+| 3   | Navigation not intuitive                                         | Mandla Msibi (Tutor)              | Navigation/information-architecture pass, ahead of the accessibility audit |
+| 4   | Tutorial lets users scroll past steps without clicking Next/Skip | Lungani Shezi (Student Volunteer) | Lock page scroll while the guided tour is active                           |
+| 5   | Tutorial tips "jumped around" the screen                         | Shazana Badloo (Tutor)            | Re-sequence tour steps from the top of the screen to the bottom            |
+| 6   | Wants more colour so elements pop                                | Lungile Shezi (Student Volunteer) | Consider in the visual polish pass                                         |
+
+Items 1–3 map onto existing roadmap gaps (see the [Dev Plan](./dev-plan.mdx) — the accessibility/responsiveness TODO and the educator feedback loop); items 4–6 are new candidates for the Sprint 3 backlog on the team's Jira board.
