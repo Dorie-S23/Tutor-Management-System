@@ -4,12 +4,14 @@ A web app for organising tutor allocations to courses — tracking which courses
 
 Link: https://tutorx.devden.workers.dev/
 
-
 ### Documentation
 
 We used Docusaurus to document our development.
-Link:  https://tutorx-documentation.devden.workers.dev/
+Link: https://tutorx-documentation.devden.workers.dev/
 
+### Issue & Task Tracking
+
+Tasks and bugs are tracked on the team's [Jira board](https://thedevden.atlassian.net/jira/core/projects/TMS/board) (project `TMS`).
 
 ## Running Locally
 
