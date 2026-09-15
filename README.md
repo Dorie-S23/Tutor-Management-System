@@ -13,6 +13,10 @@ Link: https://tutorx-documentation.devden.workers.dev/
 
 Tasks and bugs are tracked on the team's [Jira board](https://thedevden.atlassian.net/jira/core/projects/TMS/board) (project `TMS`).
 
+### AI Usage
+
+This project used AI coding assistants (Qoder, Claude Code) under the COMS3011A AI attribution policy — tool, model, and purpose are listed on the [AI Usage](https://tutorx-documentation.devden.workers.dev/docs/ai-usage) page of our documentation site.
+
 ## Running Locally
 
 ```bash
