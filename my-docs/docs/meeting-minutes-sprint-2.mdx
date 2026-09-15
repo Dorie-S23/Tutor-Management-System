@@ -4,9 +4,41 @@ sidebar_position: 8
 
 # Meeting Minutes — Sprint 2
 
-Record of team meetings for Sprint 2 (September 2026), kept as evidence of process for the course's Project Methodology requirement. All meetings were held online and recorded via AI transcription. These were originally called "Daily Scrums," but since they weren't held daily, they're recorded here as **standups** instead.
+Record of team meetings for Sprint 2 (August–September 2026), kept as evidence of process for the course's Project Methodology requirement. All meetings were held online and recorded via AI transcription. The recurring check-ins were originally called "Daily Scrums," but since they weren't held daily, they're recorded here as **standups** instead.
 
 **Team:** Mkateko Chauke (Scrum Master / Lead Developer), Tagona Danha (Authentication & Database), Mutsawashe Njowa (Developer / Documentation), Dorsa Shahrokh (Developer / Documentation)
+
+## Sprint 2 Planning
+
+**Date:** Wednesday, 26 August 2026, 5:41 PM · **Duration:** 29 min 32 sec · **Attendees:** all four · **Scribe:** Mkateko
+
+Held immediately after the [Sprint 1 retrospective](./meeting-minutes.mdx#meeting-7--sprint-1-retrospective) in the same session.
+
+- Reviewed Jira: Sprint 2 covers the Intermediate Tier feature set (TMS 15–34), with roughly 19–20 days left until marking.
+- **Carried over from Sprint 1:** timesheet sign-off, live clash check, live hours-remaining check, and self-excusal (all originally assigned to Mkateko) were left unfinished in Sprint 1 and remain outstanding core features to complete alongside Sprint 2 work.
+- **Task assignment** (done live, one feature at a time, aiming for a roughly even split, since randomly splitting tasks this way would likely put multiple people in the same files — the team agreed to communicate closely as a result):
+  - **Tagona:** ranked tutor suggestions; recurring availability exceptions (recorded overrides discussed alongside it); later took on hours & budget reporting.
+  - **Dorsa:** timetable import; term calendar check; workload spread view.
+  - **Mutsawashe:** bulk-fill assignments; timesheet approval flow; payroll export; overflow claim & approval.
+  - **Mkateko:** shortfall view (already built on the organiser dashboard as a "X of Y tutors assigned" card — confirmed by Tagona as satisfying this feature, so Mkateko kept and would refine it rather than hand it off); corrections & disputes (no one else wanted it).
+  - Change notifications was raised but not firmly assigned in this session.
+- **Educator role:** discussed whether to build out educator-specific features. Mkateko noted the Educator role isn't in the original project brief — it only came up after a conversation with course staff (Brandon), who suggested the system could support one. Agreed to leave it out of Sprint 2 and revisit only if time allows in Sprint 3 (a short ~14-day sprint), prioritising the required brief first.
+- **Marker feedback follow-up:** discussed the previous day's marking session with a TA and agreed to act on everything flagged.
+- **Process/documentation items raised:**
+  - Every major interface (front end, back end, and one more per the rubric) needs its own README.
+  - The CI runner issue that broke deployment the day before still needs investigating.
+  - Database documentation needs all required tables finalised by sprint end.
+  - Third-party code documentation should disclose AI tool usage.
+  - At least one ERD is required for the database documentation.
+  - Testing tool confirmed as Jest, consistent with a previous semester.
+  - User feedback requirement (per rubric: "evidence of collection and integration, extensive user testing, formal feedback collection processes") needs clarifying with Matthew (the client/supervisor).
+  - Whether a bug tracker is required was raised but left unresolved.
+  - Reconfirmed project folder conventions: `public/` for front-end HTML/CSS/JS, `server/` for back-end route/API code, `my-docs/` for Docusaurus documentation.
+- **Branching:** reiterated that all new branches should be sourced from `main` going forward, to avoid merge conflicts and unrelated-history issues.
+
+**Decisions:** Sprint 2 tasks assigned as above; Educator role deferred, not committed to Sprint 3; next Scrum set for Monday; branches must be sourced from `main`.
+
+**Action items:** each member begins their assigned Sprint 2 features; Mkateko also continues the four carried-over Sprint 1 items; team investigates the CI runner issue; documentation gaps (READMEs, ERD, third-party code, user feedback process) to be addressed as the sprint progresses.
 
 ## Standup 1
 
