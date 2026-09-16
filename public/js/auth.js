@@ -248,6 +248,10 @@ if (loginForm) {
             window.location.href = "dashboard.html";
             break;
 
+          case "educator":
+            window.location.href = "educator.html";
+            break;
+
           case "organiser":
             window.location.href = "board.html";
             break;

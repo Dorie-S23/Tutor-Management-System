@@ -1,0 +1,66 @@
+---
+sidebar_position: 11
+---
+
+# Project Methodology
+
+## Overview
+
+The team follows an **Agile** approach, organizing work around a shared backlog and iterating in flexible-length cycles rather than fixed-duration sprints. Each cycle ends with a review/demo and a retrospective, and the next cycle's priorities are shaped by what came out of both.
+
+Three meetings run every week: a standup, a sprint review/demo, and a retrospective.
+
+## Weekly Meeting Cadence
+
+### Standup
+
+- **Purpose:** Quick sync on progress, plans, and blockers.
+- **Format:** Each team member briefly covers:
+  - What they completed since the last standup
+  - What they're working on next
+  - Any blockers they need help with
+- **Length:** Kept short — this is a status sync, not a working session. Deeper discussion is taken offline or moved to a separate conversation.
+
+### Sprint Review / Demo
+
+- **Purpose:** Show completed work to the rest of the team (and stakeholders, if applicable) and confirm it meets expectations.
+- **Format:**
+  - Each contributor demos what they finished during the cycle.
+  - The team discusses whether the work is genuinely done or needs follow-up.
+  - Anything not finished carries over to the backlog for prioritization.
+- **Outcome:** A shared, up-to-date picture of what's actually built versus what's still in progress.
+
+### Retrospective
+
+- **Purpose:** Reflect on how the team worked together, not just what was built.
+- **Format:** Discuss, as a team:
+  - What went well
+  - What didn't go well
+  - What to change or try next
+- **Outcome:** Concrete action items the team commits to for the following cycle, not just a list of complaints.
+
+## Cycles Instead of Fixed Sprints
+
+The team doesn't work in fixed-length sprints (e.g. a rigid one- or two-week box). Instead, work is organized around the backlog and reviewed continuously:
+
+- Tasks are pulled from the backlog as capacity allows, rather than being locked into a sprint at a fixed planning meeting.
+- The weekly review/demo and retro still provide the same rhythm a fixed sprint would (regular check-ins, regular reflection), without forcing every piece of work into an artificial weekly boundary.
+- Larger features may span multiple weeks; smaller fixes may be picked up and finished within days.
+
+## Branching, Commits & Pull Requests
+
+Day-to-day version control follows the team's separate [GitHub Collaboration Methodology](./Git.mdx) — feature branches off `develop`, conventional commit messages, and peer-reviewed pull requests before anything merges.
+
+## Definition of Done
+
+Before something is marked complete and demoed in the sprint review, it should:
+
+- Build and run without errors
+- Pass all relevant tests
+- Work as intended when demoed
+- Have been through code review and merged (per the GitHub methodology)
+
+## Communication Between Meetings
+
+- Blockers raised in standup that can't be resolved on the spot are followed up on outside the meeting, not left until the next standup.
+- Major scope or architectural decisions are discussed with the team before being acted on, rather than being saved for the next scheduled meeting.
