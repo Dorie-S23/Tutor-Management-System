@@ -65,11 +65,11 @@ All endpoints are mounted under `/api` by `app.js`. The full data model behind t
 
 ### Auth
 
-| Method & path                                            | Purpose                                                                                                        |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `POST /api/auth/register`                                | Create a Supabase Auth user + row in `users` (and role-specific table: `students`, `tutors`, or `organisers`). |
-| `GET /api/auth/google`, `POST /api/auth/google/register` | Google OAuth sign-in / registration.                                                                           |
-| `POST /api/auth/login`                                   | Authenticate via Supabase, return session + `{ id, email, name, role }`.                                       |
+| Method & path                                            | Purpose                                                                                                                     |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/auth/register`                                | Create a Supabase Auth user + row in `users` (and role-specific table: `students`, `tutors`, `educators`, or `organisers`). |
+| `GET /api/auth/google`, `POST /api/auth/google/register` | Google OAuth sign-in / registration.                                                                                        |
+| `POST /api/auth/login`                                   | Authenticate via Supabase, return session + `{ id, email, name, role }`.                                                    |
 
 ### Courses and allocation
 
@@ -112,7 +112,7 @@ Grouped by the course's Basic / Intermediate / Advanced tiers, with the current 
 
 ### Basic (in place)
 
-- Sign up / sign in for all three roles (student, tutor, organiser), via email + password or Google OAuth
+- Sign up / sign in for all four roles (student, tutor, educator, organiser), via email + password or Google OAuth
 - Organiser: create/edit courses, assign tutors (with timetable-clash and weekly-hours checks)
 - Tutor: log hours, submit weekly timesheets, view calendar
 - Tutor: excuse themselves from a session

@@ -22,7 +22,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `id` (uuid, PK) — the Supabase Auth user UUID
 - `email` (text, required)
 - `name` (text)
-- `role` (text) — `student`, `tutor` or `organiser`
+- `role` (text) — `student`, `tutor`, `educator` or `organiser`
 
 #### `students`
 
@@ -47,6 +47,13 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `hourly_rate` (real)
 - `academic_level` (text) — `third_year`, `honours`, `masters` or `phd`; drives the bulk-rates endpoint
 - `weekly_hour_cap` (integer)
+
+#### `educators`
+
+- Profile row for every account registered with role `educator`.
+- **Primary key**: `id`
+- **Fields**:
+- `id` (uuid, PK, FK → `users.id`)
 
 #### `organisers`
 

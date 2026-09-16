@@ -72,7 +72,7 @@ router.post("/register", async (req, res) => {
            Validate role
            ===================================================== */
 
-    const validRoles = ["student", "tutor", "organiser"];
+    const validRoles = ["student", "tutor", "educator", "organiser"];
 
     const userRole = role.toLowerCase();
 
@@ -223,6 +223,33 @@ router.post("/register", async (req, res) => {
     }
 
     /* =====================================================
+           EDUCATOR
+           
+           educators
+           ----------------
+           id
+           ===================================================== */
+    else if (userRole === "educator") {
+      const { error: educatorError } = await req.supabase
+        .from("educators")
+        .insert({
+          id: userId,
+        });
+
+      if (educatorError) {
+        console.error("Educators table error:", educatorError);
+
+        return res.status(500).json({
+          error:
+            "User was created, but could not be added to the educators table",
+
+          details: educatorError.message,
+          hint: educatorError.hint,
+        });
+      }
+    }
+
+    /* =====================================================
            ORGANISER
            
            organisers
@@ -345,7 +372,7 @@ router.post("/google/register", async (req, res) => {
            Validate role
            ===================================================== */
 
-    const validRoles = ["student", "tutor", "organiser"];
+    const validRoles = ["student", "tutor", "educator", "organiser"];
 
     const userRole = role.toLowerCase();
 
@@ -520,6 +547,28 @@ router.post("/google/register", async (req, res) => {
           error: "User was created, but could not be added to the tutors table",
 
           details: tutorError.message,
+        });
+      }
+    }
+
+    /* =====================================================
+           EDUCATOR
+           ===================================================== */
+    else if (userRole === "educator") {
+      const { error: educatorError } = await authenticatedSupabase
+        .from("educators")
+        .insert({
+          id: userId,
+        });
+
+      if (educatorError) {
+        console.error("Google educator table error:", educatorError);
+
+        return res.status(500).json({
+          error:
+            "User was created, but could not be added to the educators table",
+
+          details: educatorError.message,
         });
       }
     }
