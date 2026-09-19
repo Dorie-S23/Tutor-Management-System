@@ -316,7 +316,7 @@ body > footer p {
   transform: translate(-50%, 0);
 }
 
-/* Card (My Sessions / Profile / Log Hours / Calendar) */
+/* Card (My Sessions / Log Hours / Calendar) */
 
 .card {
   background: white;
@@ -397,7 +397,7 @@ body > footer p {
   color: #a6690f;
 }
 
-/* Forms (Profile / Log Hours) */
+/* Forms (Log Hours) */
 
 .form-grid {
   display: grid;
@@ -430,21 +430,6 @@ body > footer p {
   font-size: 14px;
   font-family: inherit;
   background: white;
-}
-
-.checkbox-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.checkbox-row label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 400;
-  color: #222;
 }
 
 .form-actions {

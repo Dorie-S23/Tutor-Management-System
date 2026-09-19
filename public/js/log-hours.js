@@ -25,7 +25,6 @@ highlightActiveTab();
 const dashboardNavLink = document.getElementById("dashboard-nav-link");
 const calendarNavLink = document.getElementById("calendar-nav-link");
 const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
-const profileNavLink = document.getElementById("profile-nav-link");
 const timesheetsNavLink = document.getElementById("timesheets-nav-link");
 const modulesNavLink = document.getElementById("modules-nav-link");
 if (currentUser.role === "student") {
@@ -40,12 +39,11 @@ if (currentUser.role === "student") {
   if (timesheetsNavLink) timesheetsNavLink.hidden = true;
   if (modulesNavLink) modulesNavLink.hidden = true;
 } else {
-  // "My Sessions" and "Profile" are student-volunteer concepts — hide them
-  // for anyone else (tutors, organisers, educators) so they can't wander
-  // onto a student-only page and get stuck (My Sessions' Dashboard link
-  // only knows how to get back to StudentView.html).
+  // "My Sessions" is a student-volunteer concept (sessions they've
+  // volunteered for) — hide it for anyone else (tutors, organisers,
+  // educators) so they can't wander onto a student-only page and get stuck
+  // (its Dashboard link only knows how to get back to StudentView.html).
   if (mySessionsNavLink) mySessionsNavLink.hidden = true;
-  if (profileNavLink) profileNavLink.hidden = true;
 }
 
 const form = document.getElementById("entry-form");

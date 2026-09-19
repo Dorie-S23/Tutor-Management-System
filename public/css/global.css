@@ -1561,7 +1561,7 @@ input[type="search"]:focus-visible {
 }
 
 /* ============================================================
-   STUDENT DASHBOARD (StudentView / My Sessions / Profile)
+   STUDENT DASHBOARD (StudentView / My Sessions)
    Scoped under body.student-app so it can't affect other pages.
    ============================================================ */
 
@@ -1898,21 +1898,6 @@ body.student-app {
   border-radius: 7px;
   font-size: 14px;
   font-family: inherit;
-}
-
-.student-app .checkbox-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.student-app .checkbox-row label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 400;
-  color: #222;
 }
 
 .student-app .form-actions button {
