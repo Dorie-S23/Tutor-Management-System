@@ -160,6 +160,8 @@ async function renderCourses() {
 
     courseListEl.appendChild(article);
   });
+
+  enableCardKeyboardNav(courseListEl);
 }
 
 async function renderOpenSessions() {
@@ -201,6 +203,8 @@ async function renderOpenSessions() {
 
     openSessionsListEl.appendChild(article);
   });
+
+  enableCardKeyboardNav(openSessionsListEl);
 }
 
 async function claimSession(session, button) {
@@ -287,6 +291,8 @@ async function renderApplications() {
 
     pendingListEl.appendChild(article);
   });
+
+  enableCardKeyboardNav(pendingListEl);
 }
 
 // Only an approved, claimed session (session_date set) belongs on the
@@ -330,6 +336,8 @@ async function renderUpcomingSessions() {
     `;
     upcomingSessionsListEl.appendChild(article);
   });
+
+  enableCardKeyboardNav(upcomingSessionsListEl);
 }
 
 async function withdrawApplication(app, button) {
@@ -363,6 +371,70 @@ async function withdrawApplication(app, button) {
     showToast("Network error — couldn't reach the server.");
     button.disabled = false;
   }
+}
+
+// ---------- keyboard navigation ----------
+// Same roving-tabindex pattern as board.js's course list, generalised to
+// this page's four independent card lists: Up/Down/Home/End move focus
+// between the <article> cards in whichever list already has focus, instead
+// of scrolling the page. Each list is scoped to its own container (rather
+// than one page-wide listener like board.js) since there's no single
+// "active" list here for a key press to default to before the student has
+// tabbed into one.
+function isTypingInField() {
+  const active = document.activeElement;
+  return !!(
+    active &&
+    (active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.isContentEditable)
+  );
+}
+
+function enableCardKeyboardNav(container) {
+  const cards = () =>
+    Array.from(container.children).filter((el) => el.tagName === "ARTICLE");
+
+  cards().forEach((el, i) => {
+    el.tabIndex = i === 0 ? 0 : -1;
+  });
+
+  // The container itself persists across re-renders (only its <article>
+  // children get thrown away and rebuilt), so this only needs binding once.
+  if (container.dataset.keyboardNavBound) return;
+  container.dataset.keyboardNavBound = "true";
+
+  container.addEventListener("keydown", (event) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    if (isTypingInField()) return;
+
+    const els = cards();
+    if (els.length === 0) return;
+
+    const currentIndex = els.indexOf(document.activeElement);
+    let targetIndex;
+    switch (event.key) {
+      case "ArrowDown":
+        targetIndex =
+          currentIndex < 0 ? 0 : Math.min(currentIndex + 1, els.length - 1);
+        break;
+      case "ArrowUp":
+        targetIndex = currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0);
+        break;
+      case "Home":
+        targetIndex = 0;
+        break;
+      case "End":
+        targetIndex = els.length - 1;
+        break;
+    }
+
+    event.preventDefault();
+    els.forEach((el, i) => {
+      el.tabIndex = i === targetIndex ? 0 : -1;
+    });
+    els[targetIndex].focus();
+  });
 }
 
 // ---------- toast ----------
