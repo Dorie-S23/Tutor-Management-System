@@ -19,31 +19,21 @@ if (!currentUser) {
 
 highlightActiveTab();
 
-// This page is shared across roles (tutor, student volunteer, organiser,
-// educator), so the "Dashboard" link has to point at whichever dashboard
-// actually matches the signed-in user's role.
+// This page is shared between the tutor and student volunteer flows, so the
+// "Dashboard" link has to point at whichever dashboard actually matches the
+// signed-in user's role.
 const dashboardNavLink = document.getElementById("dashboard-nav-link");
 const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
 const timesheetsNavLink = document.getElementById("timesheets-nav-link");
-const modulesNavLink = document.getElementById("modules-nav-link");
-const calendarNavLink = document.getElementById("calendar-nav-link");
-if (currentUser.role === "student") {
+if (currentUser.role !== "tutor") {
   if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
-  // Timesheets is a tutor-only payroll claim, and applying to tutor a
-  // module is a tutor-only concept — neither is useful to a student
-  // volunteer.
+  // Timesheets is a tutor-only payroll claim — no use to a student volunteer.
   if (timesheetsNavLink) timesheetsNavLink.hidden = true;
-  if (modulesNavLink) modulesNavLink.hidden = true;
-  // The plain Calendar link points at the tutor calendar — send a student
-  // volunteer to their own calendar instead, or every other link on that
-  // page (its own unpatched Dashboard link included) drops them straight
-  // into the tutor's app shell with no way back.
-  if (calendarNavLink) calendarNavLink.href = "student_calender.html";
 } else {
   // "My Sessions" is a student-volunteer concept (sessions they've
-  // volunteered for) — hide it for anyone else (tutors, organisers,
-  // educators) so they can't wander onto a student-only page and get stuck
-  // (its Dashboard link only knows how to get back to StudentView.html).
+  // volunteered for) — hide it for tutors so they can't wander onto a
+  // student-only page and get stuck (its Dashboard link only knows how
+  // to get back to StudentView.html).
   if (mySessionsNavLink) mySessionsNavLink.hidden = true;
 }
 
@@ -54,7 +44,7 @@ const hoursField = document.getElementById("hours");
 const startTimeField = document.getElementById("startTime");
 const endTimeField = document.getElementById("endTime");
 const taskTypeField = document.getElementById("taskType");
-const subjectField = document.getElementById("subject");
+const courseSelectField = document.getElementById("courseSelect");
 const notesField = document.getElementById("notes");
 const formTitle = document.getElementById("form-title");
 const submitBtn = document.getElementById("submit-btn");
@@ -70,6 +60,26 @@ const formError = document.getElementById("form-error");
 let currentWeekStart = getWeekStart(todayStr());
 
 dateField.value = todayStr();
+
+let COURSES = [];
+
+async function loadCourseOptions() {
+  try {
+    const res = await fetch("/api/courses");
+    if (!res.ok) throw new Error("Failed to load courses");
+    COURSES = await res.json();
+  } catch {
+    COURSES = [];
+  }
+
+  courseSelectField.innerHTML = '<option value="">No specific course</option>';
+  COURSES.forEach((course) => {
+    const option = document.createElement("option");
+    option.value = course.id;
+    option.textContent = `${course.course_code} — ${course.course_name}`;
+    courseSelectField.appendChild(option);
+  });
+}
 
 function formatWeekLabel(weekStart) {
   const start = new Date(weekStart);
@@ -87,6 +97,7 @@ function exitEditMode() {
   entryIdField.value = "";
   form.reset();
   dateField.value = todayStr();
+  courseSelectField.value = "";
   formTitle.textContent = "Log hours";
   submitBtn.textContent = "Add entry";
   cancelEditBtn.hidden = true;
@@ -100,7 +111,19 @@ function enterEditMode(entry) {
   startTimeField.value = entry.startTime || "";
   endTimeField.value = entry.endTime || "";
   taskTypeField.value = entry.taskType || "Tutoring";
-  subjectField.value = entry.subject;
+
+  if (entry.courseId != null) {
+    courseSelectField.value = String(entry.courseId);
+  } else {
+    // Older entries logged before courses were linked properly only have
+    // a free-text subject — best-effort match it to a course code so
+    // editing one doesn't silently lose that context.
+    const matched = COURSES.find(
+      (c) => c.course_code.toLowerCase() === (entry.subject || "").toLowerCase(),
+    );
+    courseSelectField.value = matched ? String(matched.id) : "";
+  }
+
   notesField.value = entry.notes;
   formTitle.textContent = "Edit entry";
   submitBtn.textContent = "Save changes";
@@ -164,13 +187,19 @@ async function render() {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
+  const courseId = courseSelectField.value ? Number(courseSelectField.value) : null;
+  const selectedCourse = COURSES.find((c) => c.id === courseId);
+
   const payload = {
     date: dateField.value,
     hours: Number(hoursField.value),
     startTime: startTimeField.value,
     endTime: endTimeField.value,
     taskType: taskTypeField.value,
-    subject: subjectField.value.trim(),
+    courseId,
+    // Kept in sync with the selected course so other pages that still read
+    // the free-text subject (e.g. the calendar's session pills) keep working.
+    subject: selectedCourse ? selectedCourse.course_code : "",
     notes: notesField.value.trim(),
   };
 
@@ -180,7 +209,7 @@ form.addEventListener("submit", async (event) => {
   );
   if (duplicate) {
     formError.textContent =
-      "An identical entry (same date, hours, task type and course code) is already logged.";
+      "An identical entry (same date, hours, task type and course) is already logged.";
     formError.hidden = false;
     return;
   }
@@ -209,4 +238,5 @@ nextWeekBtn.addEventListener("click", async () => {
   await render();
 });
 
+await loadCourseOptions();
 await render();

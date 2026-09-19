@@ -3,20 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Log Hours | Tutor Management System</title>
-    <link rel="stylesheet" href="../css/global.css" />
+    <title>StudyConnect | Log Hours</title>
+    <link rel="stylesheet" href="../css/style.css" />
   </head>
 
-  <body class="tutor-app">
-    <header class="app-header">
-      <h1>Log Hours</h1>
-      <nav class="tab-nav">
+  <body>
+    <header>
+      <nav aria-label="Main navigation">
         <a href="dashboard.html" id="dashboard-nav-link">Dashboard</a>
         <a href="my-sessions.html" id="my-sessions-nav-link">My Sessions</a>
         <a href="log-hours.html" aria-current="page">Log Hours</a>
-        <a href="calendar.html" id="calendar-nav-link">Calendar</a>
+        <a href="calendar.html">Calendar</a>
         <a href="timesheets.html" id="timesheets-nav-link">Timesheets</a>
-        <a href="modules.html" id="modules-nav-link">Module Application</a>
         <a href="#" id="logout-button">Logout</a>
       </nav>
     </header>
@@ -61,8 +59,10 @@
               </select>
             </div>
             <div class="form-field">
-              <label for="subject">Course code</label>
-              <input type="text" id="subject" placeholder="e.g. COMS1015A" />
+              <label for="courseSelect">Course</label>
+              <select id="courseSelect">
+                <option value="">No specific course</option>
+              </select>
             </div>
             <div class="form-field full-width">
               <label for="notes">Notes</label>

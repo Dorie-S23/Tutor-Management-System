@@ -23,6 +23,7 @@ function fromApiEntry(row) {
     taskType: row.task_type || "Tutoring",
     subject: row.subject || "",
     notes: row.notes || "",
+    courseId: row.course_id ?? null,
   };
 }
 
@@ -85,22 +86,28 @@ export async function deleteEntry(id) {
   entriesCache = null;
 }
 
-// Flags an entry with the same date, hours, task type and course code as an
+// Flags an entry with the same date, hours, task type and course as an
 // existing one (ignoring the entry currently being edited, if any).
+// Compares by courseId when either entry has one — the free-text subject
+// is only used as a fallback for older entries logged before courses were
+// linked properly.
 export async function findDuplicateEntry(
-  { date, hours, taskType, subject },
+  { date, hours, taskType, subject, courseId },
   excludeId = null,
 ) {
   const entries = await getEntries();
   return (
-    entries.find(
-      (e) =>
-        e.id !== excludeId &&
-        e.date === date &&
-        Number(e.hours) === Number(hours) &&
-        (e.taskType || "Tutoring") === (taskType || "Tutoring") &&
-        (e.subject || "") === (subject || ""),
-    ) || null
+    entries.find((e) => {
+      if (e.id === excludeId) return false;
+      if (e.date !== date) return false;
+      if (Number(e.hours) !== Number(hours)) return false;
+      if ((e.taskType || "Tutoring") !== (taskType || "Tutoring")) return false;
+
+      if (courseId != null || e.courseId != null) {
+        return (e.courseId ?? null) === (courseId ?? null);
+      }
+      return (e.subject || "") === (subject || "");
+    }) || null
   );
 }
 
@@ -223,17 +230,6 @@ export function addScheduleClasses(classes) {
 export function deleteScheduleClass(id) {
   writeSchedule(readSchedule().filter((c) => c.id !== id));
   writeExceptions(readExceptions().filter((e) => e.classId !== id));
-  syncScheduleToServer();
-}
-
-// Updates the base fields of a recurring class (title, dayOfWeek, startTime,
-// endTime, venue, firstDate, endDate). Affects every future occurrence that
-// hasn't been individually overridden.
-export function updateScheduleClass(id, changes) {
-  const schedule = readSchedule().map((c) =>
-    c.id === id ? { ...c, ...changes } : c,
-  );
-  writeSchedule(schedule);
   syncScheduleToServer();
 }
 
