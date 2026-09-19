@@ -22,10 +22,13 @@ router.get("/counts", async (req, res) => {
 
 // GET /api/course-volunteers?userId=... - a student's own applications, with course info attached
 // GET /api/course-volunteers?courseId=... - everyone who has volunteered for a course, with student info attached
+// GET /api/course-volunteers?status=open - every unclaimed overflow session across all courses, for students to browse
 router.get("/", async (req, res) => {
-  const { userId, courseId } = req.query;
-  if (!userId && !courseId) {
-    return res.status(400).json({ error: "userId or courseId is required" });
+  const { userId, courseId, status } = req.query;
+  if (!userId && !courseId && !status) {
+    return res
+      .status(400)
+      .json({ error: "userId, courseId or status is required" });
   }
 
   let query = supabase
@@ -37,6 +40,7 @@ router.get("/", async (req, res) => {
 
   if (userId) query = query.eq("user_id", userId);
   if (courseId) query = query.eq("course_id", courseId);
+  if (status) query = query.eq("status", status);
 
   const { data, error } = await query;
 
@@ -44,10 +48,71 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
-// POST /api/course-volunteers - volunteer for a course, self-reporting a mark.
-// Below the course's min_mark is rejected outright (nothing recorded); at or
-// above it goes in as 'pending' for an organiser to review later.
+// POST /api/course-volunteers
+//
+// Two shapes share this table and this route, told apart by whether
+// sessionDate is present:
+//
+// - Student volunteering for a whole course: {userId, courseId, mark}.
+//   Self-reported mark below the course's min_mark is rejected outright
+//   (nothing recorded); at or above it goes in as 'pending' for an
+//   organiser to review later.
+// - Organiser posting a specific overflow gap: {courseId, sessionDate,
+//   startTime, endTime, venue, reason, organiserId}. No student attached
+//   yet — status 'open' until someone claims it (see PATCH /:id/claim).
 router.post("/", async (req, res) => {
+  const { sessionDate } = req.body ?? {};
+  if (sessionDate) return postOverflowSession(req, res);
+  return postCourseApplication(req, res);
+});
+
+async function postOverflowSession(req, res) {
+  const {
+    courseId,
+    sessionDate,
+    startTime,
+    endTime,
+    venue,
+    reason,
+    organiserId,
+  } = req.body ?? {};
+
+  if (!courseId || !sessionDate || !startTime || !endTime) {
+    return res.status(400).json({
+      error: "courseId, sessionDate, startTime and endTime are required",
+    });
+  }
+
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("course_code")
+    .eq("id", courseId)
+    .single();
+
+  if (courseError || !course) {
+    return res.status(404).json({ error: "Course not found" });
+  }
+
+  const { data, error } = await supabase
+    .from("course_volunteers")
+    .insert({
+      course_id: courseId,
+      session_date: sessionDate,
+      start_time: startTime,
+      end_time: endTime,
+      venue: venue || null,
+      reason: reason || null,
+      created_by: organiserId || null,
+      status: "open",
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+}
+
+async function postCourseApplication(req, res) {
   const { userId, courseId, mark } = req.body ?? {};
 
   if (!userId || !courseId) {
@@ -98,6 +163,47 @@ router.post("/", async (req, res) => {
   }
 
   res.status(201).json(data);
+}
+
+// PATCH /api/course-volunteers/:id/claim — a student claims an open overflow
+// session. Only succeeds while the row is still open and unclaimed, so two
+// students racing for the same gap can't both land it — whoever's update
+// actually matches a row wins, the other gets a 409.
+router.patch("/:id/claim", async (req, res) => {
+  const { userId } = req.body ?? {};
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  const { data, error } = await supabase
+    .from("course_volunteers")
+    .update({ user_id: userId, status: "pending" })
+    .eq("id", req.params.id)
+    .eq("status", "open")
+    .select(
+      "*, courses(course_code, course_name, department), users(name, email)",
+    )
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return res.status(409).json({
+        error: "This session was already claimed by someone else",
+      });
+    }
+    // The same (user_id, course_id) unique constraint that stops a student
+    // double-volunteering for a course also fires here if they already have
+    // a blanket application for this course — one row per student per
+    // course, whether it's a course-wide application or a claimed session.
+    if (error.code === "23505") {
+      return res.status(409).json({
+        error: "You already have an application for this course",
+      });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json(data);
 });
 
 const VALID_STATUSES = ["pending", "approved", "rejected"];

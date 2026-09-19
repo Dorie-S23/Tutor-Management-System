@@ -40,6 +40,31 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
           return row[col] === val;
         });
 
+      // Matches Postgres's default unique-index behaviour: a row where any
+      // constrained column is null never conflicts with anything, including
+      // another null (NULL <> NULL) — e.g. several organiser-posted overflow
+      // sessions for the same course, all still unclaimed (user_id null),
+      // aren't duplicates of each other under a (user_id, course_id)
+      // constraint. `excludeRow` lets an update check against every row
+      // except the one being updated, so setting a row to its own existing
+      // values doesn't spuriously conflict with itself.
+      function hasConflict(candidate, excludeRow) {
+        return constraints.some(
+          (cols) =>
+            cols.every((c) => candidate[c] != null) &&
+            rows.some(
+              (existing) =>
+                existing !== excludeRow &&
+                cols.every((c) => existing[c] === candidate[c]),
+            ),
+        );
+      }
+
+      const CONFLICT_ERROR = {
+        code: "23505",
+        message: "duplicate key value violates unique constraint",
+      };
+
       function resolve(wantsSingle, allowNullSingle) {
         if (insertConflict) {
           return { data: null, error: insertConflict };
@@ -48,6 +73,12 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
         let matched = rows.filter(matches);
 
         if (pendingWrite?.type === "update") {
+          for (const row of matched) {
+            const candidate = { ...row, ...pendingWrite.fields };
+            if (hasConflict(candidate, row)) {
+              return { data: null, error: CONFLICT_ERROR };
+            }
+          }
           matched.forEach((row) => Object.assign(row, pendingWrite.fields));
         } else if (pendingWrite?.type === "delete") {
           matched.slice().forEach((row) => {
@@ -84,18 +115,8 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
         insert: (rowOrRows) => {
           const incoming = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
 
-          const conflicts = incoming.some((row) =>
-            constraints.some((cols) =>
-              rows.some((existing) =>
-                cols.every((c) => existing[c] === row[c]),
-              ),
-            ),
-          );
-          if (conflicts) {
-            insertConflict = {
-              code: "23505",
-              message: "duplicate key value violates unique constraint",
-            };
+          if (incoming.some((row) => hasConflict(row, null))) {
+            insertConflict = CONFLICT_ERROR;
             filters.length = 0;
             pendingWrite = null;
             return builder;

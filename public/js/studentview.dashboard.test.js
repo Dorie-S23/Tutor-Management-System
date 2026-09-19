@@ -26,7 +26,7 @@ function requireRole() {
 async function getEntries() { return []; }
 `;
 
-function loadPage({ courses = [], applications = [] } = {}) {
+function loadPage({ courses = [], applications = [], openSessions = [] } = {}) {
   const script = `<script>${stubs}\n${studentviewSrc}\n</script>`;
   const pageHtml = html
     .replace(
@@ -56,6 +56,9 @@ function loadPage({ courses = [], applications = [] } = {}) {
         }
         if (u.includes("/api/course-volunteers") && opts?.method === "DELETE") {
           return { ok: true, status: 204, json: async () => ({}) };
+        }
+        if (u.includes("/api/course-volunteers?status=open")) {
+          return { ok: true, json: async () => openSessions };
         }
         if (u.includes("/api/course-volunteers")) {
           return { ok: true, json: async () => applications };
@@ -186,5 +189,165 @@ describe("studentview.js — My Applications", () => {
     expect(deleteCall).toBeDefined();
     expect(deleteCall.url).toContain("userId=student-1");
     expect(deleteCall.url).toContain("courseId=1");
+  });
+});
+
+describe("studentview.js — Open Sessions You Can Cover", () => {
+  test("renders an open session with course, date/time/venue and a Claim button", async () => {
+    const { window } = loadPage({
+      openSessions: [
+        {
+          id: "s1",
+          course_id: 1,
+          session_date: "2026-09-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          venue: "FNB1",
+          reason: "Regular tutor is away",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const text = window.document.getElementById("openSessionsList").textContent;
+    expect(text).toContain("COMS1000");
+    expect(text).toContain("25/09/2026");
+    expect(text).toContain("14:00–16:00");
+    expect(text).toContain("FNB1");
+    expect(text).toContain("Regular tutor is away");
+
+    const claimBtn = window.document.querySelector(
+      "#openSessionsList article button",
+    );
+    expect(claimBtn.textContent).toBe("Claim");
+  });
+
+  test("clicking Claim PATCHes the session's claim endpoint with the signed-in student's id", async () => {
+    const { window, calls } = loadPage({
+      openSessions: [
+        {
+          id: "s1",
+          course_id: 1,
+          session_date: "2026-09-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    window.document.querySelector("#openSessionsList article button").click();
+    await wait();
+
+    const claimCall = calls.find((c) => c.url.includes("/claim"));
+    expect(claimCall).toBeDefined();
+    expect(claimCall.url).toContain("/api/course-volunteers/s1/claim");
+    expect(claimCall.opts.method).toBe("PATCH");
+    expect(JSON.parse(claimCall.opts.body)).toEqual({ userId: "student-1" });
+  });
+
+  test("shows an empty state when there are no open sessions", async () => {
+    const { window } = loadPage({ openSessions: [] });
+    await wait();
+
+    expect(
+      window.document.getElementById("openSessionsList").textContent,
+    ).toContain("No open sessions right now");
+  });
+});
+
+describe("studentview.js — a claimed session in My Applications", () => {
+  test("shows the session date/time instead of a mark for a session-claim row", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "s1",
+          course_id: 1,
+          status: "pending",
+          session_date: "2026-09-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const text = window.document.getElementById("pendingList").textContent;
+    expect(text).toContain("25/09/2026");
+    expect(text).not.toContain("Mark submitted");
+  });
+});
+
+describe("studentview.js — Upcoming Sessions", () => {
+  test("shows only approved, future-dated claimed sessions, soonest first", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "s1",
+          course_id: 1,
+          status: "approved",
+          session_date: "2099-12-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          courses: { course_code: "LATER1000", course_name: "Later" },
+        },
+        {
+          id: "s2",
+          course_id: 2,
+          status: "approved",
+          session_date: "2099-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "SOON1000", course_name: "Soon" },
+        },
+        {
+          id: "s3",
+          course_id: 3,
+          status: "pending",
+          session_date: "2099-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "PENDING1000", course_name: "Pending" },
+        },
+        {
+          id: "s4",
+          course_id: 4,
+          status: "approved",
+          session_date: "2020-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "PAST1000", course_name: "Past" },
+        },
+        {
+          id: "a1",
+          course_id: 5,
+          status: "approved",
+          mark: 80,
+          courses: { course_code: "COURSEONLY1000", course_name: "No session" },
+        },
+      ],
+    });
+    await wait();
+
+    const cards = window.document.querySelectorAll(
+      "#upcomingSessionsList article",
+    );
+    const codes = Array.from(cards).map(
+      (c) => c.querySelector("h3").textContent,
+    );
+
+    expect(codes).toEqual(["SOON1000", "LATER1000"]);
+  });
+
+  test("shows the empty state when there's nothing upcoming", async () => {
+    const { window } = loadPage({ applications: [] });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingSessionsList").textContent,
+    ).toContain("No upcoming sessions");
   });
 });

@@ -225,3 +225,166 @@ describe("PATCH /api/course-volunteers/:id", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("POST /api/course-volunteers — organiser posting an overflow session", () => {
+  beforeEach(() => {
+    tables.courses = [{ id: 1, course_code: "COMS1000", min_mark: 60 }];
+  });
+
+  test("creates an open, unclaimed session row", async () => {
+    const res = await request(buildApp()).post("/api/course-volunteers").send({
+      courseId: 1,
+      sessionDate: "2026-09-25",
+      startTime: "14:00",
+      endTime: "16:00",
+      venue: "FNB1",
+      reason: "Regular tutor is away that week",
+      organiserId: "organiser-1",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      course_id: 1,
+      session_date: "2026-09-25",
+      start_time: "14:00",
+      end_time: "16:00",
+      venue: "FNB1",
+      reason: "Regular tutor is away that week",
+      created_by: "organiser-1",
+      status: "open",
+    });
+    expect(res.body.user_id).toBeUndefined();
+  });
+
+  test("rejects a session missing required fields", async () => {
+    const res = await request(buildApp())
+      .post("/api/course-volunteers")
+      .send({ courseId: 1, sessionDate: "2026-09-25" });
+
+    expect(res.status).toBe(400);
+    expect(tables.course_volunteers).toHaveLength(0);
+  });
+
+  test("returns 404 for a course that doesn't exist", async () => {
+    const res = await request(buildApp()).post("/api/course-volunteers").send({
+      courseId: 999,
+      sessionDate: "2026-09-25",
+      startTime: "14:00",
+      endTime: "16:00",
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("posting two open sessions for the same course doesn't collide as duplicate volunteers", async () => {
+    const app = buildApp();
+    const first = await request(app).post("/api/course-volunteers").send({
+      courseId: 1,
+      sessionDate: "2026-09-25",
+      startTime: "14:00",
+      endTime: "16:00",
+    });
+    const second = await request(app).post("/api/course-volunteers").send({
+      courseId: 1,
+      sessionDate: "2026-10-02",
+      startTime: "14:00",
+      endTime: "16:00",
+    });
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(tables.course_volunteers).toHaveLength(2);
+  });
+});
+
+describe("PATCH /api/course-volunteers/:id/claim", () => {
+  beforeEach(() => {
+    tables.course_volunteers = [
+      {
+        id: "s1",
+        course_id: 1,
+        session_date: "2026-09-25",
+        start_time: "14:00",
+        end_time: "16:00",
+        status: "open",
+        user_id: null,
+      },
+    ];
+  });
+
+  test("a student claiming an open session attaches their id and moves it to pending", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/s1/claim")
+      .send({ userId: "student-1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("pending");
+    expect(res.body.user_id).toBe("student-1");
+    expect(tables.course_volunteers[0].status).toBe("pending");
+    expect(tables.course_volunteers[0].user_id).toBe("student-1");
+  });
+
+  test("rejects a claim with no userId", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/s1/claim")
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(tables.course_volunteers[0].status).toBe("open");
+  });
+
+  test("a session that's already been claimed can't be claimed again", async () => {
+    tables.course_volunteers[0].status = "pending";
+    tables.course_volunteers[0].user_id = "student-1";
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/s1/claim")
+      .send({ userId: "student-2" });
+
+    expect(res.status).toBe(409);
+    expect(tables.course_volunteers[0].user_id).toBe("student-1");
+  });
+
+  test("claiming a session for a course the student already has an application in gets a clean 409, not a raw DB error", async () => {
+    tables.course_volunteers.push({
+      id: "a1",
+      course_id: 1,
+      user_id: "student-1",
+      mark: 75,
+      status: "pending",
+    });
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/s1/claim")
+      .send({ userId: "student-1" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/already have an application/i);
+    expect(tables.course_volunteers[0].status).toBe("open");
+  });
+
+  test("returns a clear error for a session id that doesn't exist", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/nonexistent/claim")
+      .send({ userId: "student-1" });
+
+    expect(res.status).toBe(409);
+  });
+});
+
+describe("GET /api/course-volunteers?status=open", () => {
+  test("returns only open sessions, across every course, with no userId or courseId needed", async () => {
+    tables.course_volunteers = [
+      { id: "s1", course_id: 1, status: "open", user_id: null },
+      { id: "s2", course_id: 2, status: "open", user_id: null },
+      { id: "s3", course_id: 1, status: "pending", user_id: "student-1" },
+    ];
+
+    const res = await request(buildApp()).get(
+      "/api/course-volunteers?status=open",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((r) => r.id).sort()).toEqual(["s1", "s2"]);
+  });
+});

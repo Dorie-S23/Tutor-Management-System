@@ -1,9 +1,14 @@
 /* ============================================================
    Student Dashboard
-   Modules You Can Tutor (real courses from Supabase) + a mark-based
-   volunteer application + the resulting pending applications. No
-   real backing data for upcoming sessions yet, so that list just
-   says so.
+   Two ways to volunteer, both living in the course_volunteers table:
+   - Modules You Can Tutor: a mark-based application for a whole course
+     (has a mark, no session_date).
+   - Open Sessions You Can Cover: an organiser-posted, dated overflow gap
+     a student claims (has a session_date, no mark). A claim starts
+     'open', moves to 'pending' on claim, then approved/rejected exactly
+     like a course application.
+   My Applications shows both kinds together. Upcoming Sessions surfaces
+   only approved, future-dated claims.
    ============================================================ */
 
 import { getEntries, requireRole } from "./storage.js";
@@ -18,10 +23,27 @@ if (!currentUser) {
 const welcomeHeadingEl = document.getElementById("welcome-heading");
 const hoursVolunteeredEl = document.getElementById("stat-hours-volunteered");
 const courseListEl = document.getElementById("courseList");
+const openSessionsListEl = document.getElementById("openSessionsList");
 const pendingListEl = document.getElementById("pendingList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
 
 welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
+
+function formatSessionDate(dateStr) {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function formatSessionTime(t) {
+  return t ? t.slice(0, 5) : "";
+}
+
+function sessionDetailLine(app) {
+  const date = formatSessionDate(app.session_date);
+  const time = `${formatSessionTime(app.start_time)}–${formatSessionTime(app.end_time)}`;
+  const venue = app.venue ? ` &bull; ${app.venue}` : "";
+  return `${date}, ${time}${venue}`;
+}
 
 async function renderHoursVolunteered() {
   const entries = await getEntries();
@@ -140,6 +162,76 @@ async function renderCourses() {
   });
 }
 
+async function renderOpenSessions() {
+  openSessionsListEl.innerHTML = "";
+
+  let sessions;
+  try {
+    const res = await fetch("/api/course-volunteers?status=open");
+    if (!res.ok) throw new Error("Failed to load open sessions");
+    sessions = await res.json();
+  } catch (err) {
+    openSessionsListEl.innerHTML = `<p class="empty-state">Couldn't load open sessions right now.</p>`;
+    return;
+  }
+
+  if (sessions.length === 0) {
+    openSessionsListEl.innerHTML = `<p class="empty-state">No open sessions right now — check back soon.</p>`;
+    return;
+  }
+
+  sessions.forEach((session) => {
+    const article = document.createElement("article");
+    const reasonHtml = session.reason
+      ? `<p class="session-note">${session.reason}</p>`
+      : "";
+    article.innerHTML = `
+      <h3>${session.courses.course_code}</h3>
+      <p class="session-meta">${session.courses.course_name}</p>
+      <p class="session-note">${sessionDetailLine(session)}</p>
+      ${reasonHtml}
+    `;
+
+    const claimBtn = document.createElement("button");
+    claimBtn.type = "button";
+    claimBtn.className = "btn-primary";
+    claimBtn.textContent = "Claim";
+    claimBtn.addEventListener("click", () => claimSession(session, claimBtn));
+    article.appendChild(claimBtn);
+
+    openSessionsListEl.appendChild(article);
+  });
+}
+
+async function claimSession(session, button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/course-volunteers/${session.id}/claim`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: currentUser.id }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      showToast(body.error || "Couldn't claim that session.");
+      // Someone else may have just taken it — refresh so the list matches reality.
+      renderOpenSessions();
+      button.disabled = false;
+      return;
+    }
+
+    showToast(
+      `Claimed the ${session.courses.course_code} session on ${formatSessionDate(session.session_date)} — waiting for organiser approval`,
+    );
+    renderOpenSessions();
+    renderApplications();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    button.disabled = false;
+  }
+}
+
 async function renderApplications() {
   pendingListEl.innerHTML = "";
 
@@ -169,9 +261,15 @@ async function renderApplications() {
         ? `<p class="session-note">Reason: ${app.reason}</p>`
         : "";
 
+    // A row is either a whole-course application (has a mark) or a claimed
+    // overflow session (has a session_date instead) — never both.
+    const detailLine = app.session_date
+      ? sessionDetailLine(app)
+      : `Mark submitted: ${app.mark}`;
+
     article.innerHTML = `
       <h3>${app.courses.course_code}</h3>
-      <p>${app.courses.course_name} &bull; Mark submitted: ${app.mark}</p>
+      <p>${app.courses.course_name} &bull; ${detailLine}</p>
       ${reasonHtml}
       <span class="status-pill ${status}">${status[0].toUpperCase()}${status.slice(1)}</span>
     `;
@@ -188,6 +286,49 @@ async function renderApplications() {
     }
 
     pendingListEl.appendChild(article);
+  });
+}
+
+// Only an approved, claimed session (session_date set) belongs on the
+// dashboard's "Upcoming Sessions" card — a plain course application has no
+// date to show yet, and a rejected or still-pending claim isn't a real
+// commitment. Past-dated ones are excluded too — those live on My Sessions.
+async function renderUpcomingSessions() {
+  let applications;
+  try {
+    const res = await fetch(
+      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+    );
+    if (!res.ok) throw new Error("Failed to load sessions");
+    applications = await res.json();
+  } catch (err) {
+    upcomingSessionsListEl.innerHTML = `<p class="empty-state">Couldn't load your sessions right now.</p>`;
+    return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = applications
+    .filter(
+      (app) =>
+        app.status === "approved" &&
+        app.session_date &&
+        app.session_date >= today,
+    )
+    .sort((a, b) => a.session_date.localeCompare(b.session_date));
+
+  if (upcoming.length === 0) {
+    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
+    return;
+  }
+
+  upcomingSessionsListEl.innerHTML = "";
+  upcoming.forEach((app) => {
+    const article = document.createElement("article");
+    article.innerHTML = `
+      <h3>${app.courses.course_code}</h3>
+      <p class="session-note">${sessionDetailLine(app)}</p>
+    `;
+    upcomingSessionsListEl.appendChild(article);
   });
 }
 
@@ -251,15 +392,21 @@ const VOLUNTEER_TOUR_STEPS = [
     placement: "top",
   },
   {
+    selector: "section[aria-labelledby='open-sessions-heading']",
+    title: "Open sessions you can cover",
+    body: "Specific, dated gaps an organiser has flagged — a one-off session with nobody to run it. Claim one and an organiser will confirm it.",
+    placement: "top",
+  },
+  {
     selector: "section[aria-labelledby='pending-heading']",
     title: "My applications",
-    body: "Every module you've volunteered for, with its outcome — including a reason if one was rejected. You can withdraw a pending application any time.",
+    body: "Every module and claimed session you've volunteered for, with its outcome — including a reason if one was rejected. You can withdraw a pending one any time.",
     placement: "top",
   },
   {
     selector: "section[aria-labelledby='sessions-heading']",
     title: "Upcoming sessions",
-    body: "Once you're approved for a module, your scheduled tutoring sessions will appear here.",
+    body: "Once a claimed session is approved, it shows up here — closest first.",
     placement: "top",
   },
   {
@@ -296,13 +443,13 @@ if (tourLink) {
 
 // ---------- init ----------
 
-upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
-
 (async () => {
   await Promise.all([
     renderHoursVolunteered(),
     renderCourses(),
+    renderOpenSessions(),
     renderApplications(),
+    renderUpcomingSessions(),
   ]);
 
   window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
