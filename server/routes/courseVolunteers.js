@@ -104,16 +104,25 @@ const VALID_STATUSES = ["pending", "approved", "rejected"];
 
 // PATCH /api/course-volunteers/:id — organiser approves/rejects/resets a volunteer
 router.patch("/:id", async (req, res) => {
-  const { status } = req.body ?? {};
+  const { status, rejectionReason } = req.body ?? {};
   if (!VALID_STATUSES.includes(status)) {
     return res
       .status(400)
       .json({ error: "status must be pending, approved or rejected" });
   }
 
+  if (status === "rejected" && (!rejectionReason || !rejectionReason.trim())) {
+    return res
+      .status(400)
+      .json({ error: "A reason is required to reject a volunteer" });
+  }
+
   const { data, error } = await supabase
     .from("course_volunteers")
-    .update({ status })
+    .update({
+      status,
+      rejection_reason: status === "rejected" ? rejectionReason.trim() : null,
+    })
     .eq("id", req.params.id)
     .select(
       "*, courses(course_code, course_name, department), users(name, email)",

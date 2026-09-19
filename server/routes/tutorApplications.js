@@ -712,11 +712,23 @@ router.post("/bulk-approve", async (req, res) => {
 const VALID_STATUSES = ["pending", "approved", "rejected"];
 
 router.patch("/:id", async (req, res) => {
-  const { status, override, organiserId, reason } = req.body ?? {};
+  const {
+    status,
+    override,
+    organiserId,
+    reason,
+    rejectionReason,
+  } = req.body ?? {};
 
   if (!VALID_STATUSES.includes(status)) {
     return res.status(400).json({
       error: "status must be pending, approved or rejected",
+    });
+  }
+
+  if (status === "rejected" && (!rejectionReason || !rejectionReason.trim())) {
+    return res.status(400).json({
+      error: "A reason is required to reject an application",
     });
   }
 
@@ -848,7 +860,10 @@ router.patch("/:id", async (req, res) => {
 
   const { data, error } = await supabase
     .from("tutor_subject_preference")
-    .update({ status })
+    .update({
+      status,
+      rejection_reason: status === "rejected" ? rejectionReason.trim() : null,
+    })
     .eq("id", req.params.id)
     .select(
       `

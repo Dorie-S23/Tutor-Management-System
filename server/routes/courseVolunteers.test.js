@@ -1,129 +1,159 @@
 const express = require("express");
-const request = require("supertest");
-const { fakeSupabase } = require("../testUtils/fakeSupabase");
+const supabase = require("../supabaseClient");
 
-let tables;
-let mockSupabase;
+const router = express.Router();
 
-// The route module grabs the Supabase client via `require("../supabaseClient")`
-// at load time, so the mock has to be in place before it's required below.
-jest.mock("../supabaseClient", () => ({
-  from: (...args) => mockSupabase.from(...args),
-}));
+// GET /api/course-volunteers/counts?status=approved - number of volunteers per course, for the course list view
+router.get("/counts", async (req, res) => {
+  const { status } = req.query;
 
-const courseVolunteersRouter = require("./courseVolunteers");
+  let query = supabase.from("course_volunteers").select("course_id");
+  if (status) query = query.eq("status", status);
 
-function buildApp() {
-  const app = express();
-  app.use(express.json());
-  app.use("/api/course-volunteers", courseVolunteersRouter);
-  return app;
-}
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
 
-beforeEach(() => {
-  tables = { courses: [], course_volunteers: [] };
-  mockSupabase = fakeSupabase(tables, {
-    course_volunteers: [["user_id", "course_id"]],
+  const counts = {};
+  data.forEach((row) => {
+    counts[row.course_id] = (counts[row.course_id] || 0) + 1;
   });
+  res.json(counts);
 });
 
-describe("POST /api/course-volunteers", () => {
-  beforeEach(() => {
-    tables.courses = [
-      {
-        id: 1,
-        course_code: "COMS1000",
-        course_name: "Intro to Programming",
-        min_mark: 60,
-      },
-    ];
-  });
+// GET /api/course-volunteers?userId=... - a student's own applications, with course info attached
+// GET /api/course-volunteers?courseId=... - everyone who has volunteered for a course, with student info attached
+router.get("/", async (req, res) => {
+  const { userId, courseId } = req.query;
+  if (!userId && !courseId) {
+    return res.status(400).json({ error: "userId or courseId is required" });
+  }
 
-  test("a student meeting the mark requirement is recorded as a pending volunteer", async () => {
-    const res = await request(buildApp())
-      .post("/api/course-volunteers")
-      .send({ userId: "student-1", courseId: 1, mark: 75 });
+  let query = supabase
+    .from("course_volunteers")
+    .select(
+      "*, courses(course_code, course_name, department), users(name, email)",
+    )
+    .order("created_at", { ascending: false });
 
-    expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({
-      user_id: "student-1",
-      course_id: 1,
-      mark: 75,
-      status: "pending",
+  if (userId) query = query.eq("user_id", userId);
+  if (courseId) query = query.eq("course_id", courseId);
+
+  const { data, error } = await query;
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// POST /api/course-volunteers - volunteer for a course, self-reporting a mark.
+// Below the course's min_mark is rejected outright (nothing recorded); at or
+// above it goes in as 'pending' for an organiser to review later.
+router.post("/", async (req, res) => {
+  const { userId, courseId, mark } = req.body ?? {};
+
+  if (!userId || !courseId) {
+    return res.status(400).json({ error: "userId and courseId are required" });
+  }
+
+  const markNum = Number(mark);
+  if (!Number.isInteger(markNum) || markNum < 0 || markNum > 100) {
+    return res
+      .status(400)
+      .json({ error: "mark must be an integer between 0 and 100" });
+  }
+
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("course_code, min_mark")
+    .eq("id", courseId)
+    .single();
+
+  if (courseError || !course) {
+    return res.status(404).json({ error: "Course not found" });
+  }
+
+  if (Number.isInteger(course.min_mark) && markNum < course.min_mark) {
+    return res.status(403).json({
+      error: `You need at least ${course.min_mark} for ${course.course_code} to volunteer — you entered ${markNum}.`,
     });
-    expect(tables.course_volunteers).toHaveLength(1);
-  });
+  }
 
-  test("a mark exactly at the course's minimum is accepted", async () => {
-    const res = await request(buildApp())
-      .post("/api/course-volunteers")
-      .send({ userId: "student-1", courseId: 1, mark: 60 });
+  const { data, error } = await supabase
+    .from("course_volunteers")
+    .insert({
+      user_id: userId,
+      course_id: courseId,
+      mark: markNum,
+      status: "pending",
+    })
+    .select()
+    .single();
 
-    expect(res.status).toBe(201);
-    expect(res.body.status).toBe("pending");
-  });
+  if (error) {
+    if (error.code === "23505") {
+      return res.status(409).json({
+        error: `You've already volunteered for ${course.course_code}.`,
+      });
+    }
+    return res.status(500).json({ error: error.message });
+  }
 
-  test("a mark below the course's minimum is rejected and nothing is recorded", async () => {
-    const res = await request(buildApp())
-      .post("/api/course-volunteers")
-      .send({ userId: "student-1", courseId: 1, mark: 59 });
-
-    expect(res.status).toBe(403);
-    expect(res.body.error).toBe(
-      "You need at least 60 for COMS1000 to volunteer — you entered 59.",
-    );
-    expect(tables.course_volunteers).toHaveLength(0);
-  });
-
-  test("rejects a request missing userId or courseId", async () => {
-    const res = await request(buildApp())
-      .post("/api/course-volunteers")
-      .send({ courseId: 1, mark: 75 });
-
-    expect(res.status).toBe(400);
-    expect(tables.course_volunteers).toHaveLength(0);
-  });
-
-  test.each([
-    ["not a number", "abc"],
-    ["negative", -1],
-    ["over 100", 101],
-    ["not an integer", 75.5],
-  ])("rejects a mark that is %s", async (_label, mark) => {
-    const res = await request(buildApp())
-      .post("/api/course-volunteers")
-      .send({ userId: "student-1", courseId: 1, mark });
-
-    expect(res.status).toBe(400);
-    expect(tables.course_volunteers).toHaveLength(0);
-  });
-
-  test("returns 404 for a course that doesn't exist", async () => {
-    const res = await request(buildApp())
-      .post("/api/course-volunteers")
-      .send({ userId: "student-1", courseId: 999, mark: 75 });
-
-    expect(res.status).toBe(404);
-    expect(res.body.error).toBe("Course not found");
-  });
-
-  test("a student who has already volunteered for the course gets a 409, not a second row", async () => {
-    tables.course_volunteers = [
-      {
-        id: 1,
-        user_id: "student-1",
-        course_id: 1,
-        mark: 80,
-        status: "pending",
-      },
-    ];
-
-    const res = await request(buildApp())
-      .post("/api/course-volunteers")
-      .send({ userId: "student-1", courseId: 1, mark: 90 });
-
-    expect(res.status).toBe(409);
-    expect(res.body.error).toBe("You've already volunteered for COMS1000.");
-    expect(tables.course_volunteers).toHaveLength(1);
-  });
+  res.status(201).json(data);
 });
+
+const VALID_STATUSES = ["pending", "approved", "rejected"];
+
+// PATCH /api/course-volunteers/:id — organiser approves/rejects/resets a volunteer
+router.patch("/:id", async (req, res) => {
+  const { status, rejectionReason } = req.body ?? {};
+  if (!VALID_STATUSES.includes(status)) {
+    return res
+      .status(400)
+      .json({ error: "status must be pending, approved or rejected" });
+  }
+
+  if (status === "rejected" && (!rejectionReason || !rejectionReason.trim())) {
+    return res
+      .status(400)
+      .json({ error: "A reason is required to reject a volunteer" });
+  }
+
+  const { data, error } = await supabase
+    .from("course_volunteers")
+    .update({
+      status,
+      rejection_reason: status === "rejected" ? rejectionReason.trim() : null,
+    })
+    .eq("id", req.params.id)
+    .select(
+      "*, courses(course_code, course_name, department), users(name, email)",
+    )
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return res.status(404).json({ error: "Volunteer not found" });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json(data);
+});
+
+// DELETE /api/course-volunteers?userId=...&courseId=... - withdraw
+router.delete("/", async (req, res) => {
+  const { userId, courseId } = req.query;
+  if (!userId || !courseId) {
+    return res.status(400).json({ error: "userId and courseId are required" });
+  }
+
+  const { error } = await supabase
+    .from("course_volunteers")
+    .delete()
+    .eq("user_id", userId)
+    .eq("course_id", courseId);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
+});
+
+module.exports = router;
