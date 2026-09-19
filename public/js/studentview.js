@@ -56,6 +56,7 @@ async function renderCourses() {
 
   openCourses.forEach((course) => {
     const article = document.createElement("article");
+    article.dataset.courseId = String(course.id);
     article.innerHTML = `
       <h3>${course.course_code}</h3>
       <p class="session-meta">${course.course_name}</p>
@@ -128,7 +129,7 @@ async function renderCourses() {
         showToast(
           `Applied for ${course.course_code} — waiting for organiser approval`,
         );
-        renderPendingApplications();
+        renderApplications();
       } catch (err) {
         showToast("Something went wrong, try again");
         submitMarkBtn.disabled = false;
@@ -139,7 +140,7 @@ async function renderCourses() {
   });
 }
 
-async function renderPendingApplications() {
+async function renderApplications() {
   pendingListEl.innerHTML = "";
 
   let applications;
@@ -154,22 +155,73 @@ async function renderPendingApplications() {
     return;
   }
 
-  const pending = applications.filter((app) => app.status === "pending");
-
-  if (pending.length === 0) {
-    pendingListEl.innerHTML = `<p class="empty-state">No modules waiting on approval.</p>`;
+  if (applications.length === 0) {
+    pendingListEl.innerHTML = `<p class="empty-state">You haven't volunteered for anything yet.</p>`;
     return;
   }
 
-  pending.forEach((app) => {
+  applications.forEach((app) => {
+    const status = app.status || "pending";
     const article = document.createElement("article");
+
+    const reasonHtml =
+      status === "rejected" && app.reason
+        ? `<p class="session-note">Reason: ${app.reason}</p>`
+        : "";
+
     article.innerHTML = `
       <h3>${app.courses.course_code}</h3>
       <p>${app.courses.course_name} &bull; Mark submitted: ${app.mark}</p>
-      <span class="status-pill pending">Pending</span>
+      ${reasonHtml}
+      <span class="status-pill ${status}">${status[0].toUpperCase()}${status.slice(1)}</span>
     `;
+
+    if (status === "pending") {
+      const withdrawBtn = document.createElement("button");
+      withdrawBtn.type = "button";
+      withdrawBtn.className = "btn-secondary";
+      withdrawBtn.textContent = "Withdraw";
+      withdrawBtn.addEventListener("click", () =>
+        withdrawApplication(app, withdrawBtn),
+      );
+      article.appendChild(withdrawBtn);
+    }
+
     pendingListEl.appendChild(article);
   });
+}
+
+async function withdrawApplication(app, button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}&courseId=${encodeURIComponent(app.course_id)}`,
+      { method: "DELETE" },
+    );
+    if (!res.ok && res.status !== 204) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Couldn't withdraw that application.");
+      button.disabled = false;
+      return;
+    }
+    showToast(`Withdrew your application for ${app.courses.course_code}`);
+    renderApplications();
+
+    // If this course's card is still on screen with a stale "Pending
+    // approval" button (set by a direct DOM patch on submit, not a
+    // re-render), reset it so the student can volunteer again right away
+    // instead of needing to reload.
+    const card = courseListEl.querySelector(
+      `article[data-course-id="${CSS.escape(app.course_id)}"] .volunteer-btn`,
+    );
+    if (card) {
+      card.disabled = false;
+      card.textContent = "Volunteer";
+    }
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    button.disabled = false;
+  }
 }
 
 // ---------- toast ----------
@@ -200,8 +252,8 @@ const VOLUNTEER_TOUR_STEPS = [
   },
   {
     selector: "section[aria-labelledby='pending-heading']",
-    title: "Awaiting approval",
-    body: "Modules you've applied for sit here until an organiser approves or rejects them.",
+    title: "My applications",
+    body: "Every module you've volunteered for, with its outcome — including a reason if one was rejected. You can withdraw a pending application any time.",
     placement: "top",
   },
   {
@@ -250,7 +302,7 @@ upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions<
   await Promise.all([
     renderHoursVolunteered(),
     renderCourses(),
-    renderPendingApplications(),
+    renderApplications(),
   ]);
 
   window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {

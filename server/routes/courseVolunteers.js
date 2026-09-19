@@ -102,9 +102,12 @@ router.post("/", async (req, res) => {
 
 const VALID_STATUSES = ["pending", "approved", "rejected"];
 
-// PATCH /api/course-volunteers/:id — organiser approves/rejects/resets a volunteer
+// PATCH /api/course-volunteers/:id — organiser approves/rejects/resets a volunteer.
+// A rejection can carry a reason so the student isn't left with a silent
+// status flip; reconsidering back to pending (or approving) clears any
+// earlier rejection reason rather than leaving it stale on the row.
 router.patch("/:id", async (req, res) => {
-  const { status } = req.body ?? {};
+  const { status, reason } = req.body ?? {};
   if (!VALID_STATUSES.includes(status)) {
     return res
       .status(400)
@@ -113,7 +116,10 @@ router.patch("/:id", async (req, res) => {
 
   const { data, error } = await supabase
     .from("course_volunteers")
-    .update({ status })
+    .update({
+      status,
+      reason: status === "rejected" ? (reason ?? null) : null,
+    })
     .eq("id", req.params.id)
     .select(
       "*, courses(course_code, course_name, department), users(name, email)",

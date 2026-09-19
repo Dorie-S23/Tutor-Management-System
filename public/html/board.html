@@ -467,6 +467,61 @@
     </dialog>
 
     <dialog
+      class="modal"
+      id="rejectVolunteerModal"
+      aria-labelledby="rejectVolunteerModalHeading"
+    >
+      <form method="dialog" class="modal-form" id="rejectVolunteerForm">
+        <header class="modal-head">
+          <h2 id="rejectVolunteerModalHeading">Reject volunteer</h2>
+          <button
+            class="modal-close"
+            id="rejectVolunteerModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="rejectVolunteerFormError" hidden></p>
+
+        <p class="hint" id="rejectVolunteerModalContext"></p>
+
+        <label class="field">
+          <span class="field-label">Reason (shown to the student)</span>
+          <textarea
+            id="rejectVolunteerReasonInput"
+            name="reason"
+            rows="3"
+            placeholder="e.g. Mark is close but another applicant is stronger this term"
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="rejectVolunteerCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-danger"
+              id="rejectVolunteerSubmitBtn"
+              type="submit"
+            >
+              Reject
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog
       class="modal modal-wide"
       id="obviousFillModal"
       aria-labelledby="obviousFillHeading"

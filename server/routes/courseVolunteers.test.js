@@ -172,6 +172,40 @@ describe("PATCH /api/course-volunteers/:id", () => {
     expect(tables.course_volunteers[0].status).toBe("rejected");
   });
 
+  test("a rejection can carry a reason, returned to the caller and stored on the row", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "rejected", reason: "Another applicant is stronger" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.reason).toBe("Another applicant is stronger");
+    expect(tables.course_volunteers[0].reason).toBe(
+      "Another applicant is stronger",
+    );
+  });
+
+  test("a rejection with no reason stores null rather than undefined", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "rejected" });
+
+    expect(res.status).toBe(200);
+    expect(tables.course_volunteers[0].reason).toBeNull();
+  });
+
+  test("approving clears any earlier rejection reason rather than leaving it stale", async () => {
+    tables.course_volunteers[0].status = "rejected";
+    tables.course_volunteers[0].reason = "Mark too low this term";
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.reason).toBeNull();
+    expect(tables.course_volunteers[0].reason).toBeNull();
+  });
+
   test("an organiser can reset a decided volunteer back to pending", async () => {
     tables.course_volunteers[0].status = "approved";
 

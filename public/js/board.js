@@ -890,7 +890,7 @@ async function renderVolunteers(course) {
       );
       actionsEl.appendChild(
         makeApplicantActionBtn("Reject", "", () =>
-          setVolunteerStatus(course, vol, "rejected", name),
+          openRejectVolunteerModal(course, vol, name),
         ),
       );
     } else {
@@ -906,13 +906,13 @@ async function renderVolunteers(course) {
   });
 }
 
-async function setVolunteerStatus(course, vol, status, name) {
+async function setVolunteerStatus(course, vol, status, name, reason) {
   const previousStatus = (vol.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/course-volunteers/${vol.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, reason }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -943,6 +943,66 @@ async function setVolunteerStatus(course, vol, status, name) {
     showToast("Network error — couldn't reach the server.");
   }
 }
+
+// ---------- reject volunteer modal ----------
+
+let pendingVolunteerRejection = null; // { course, vol, name } for whichever row opened the modal
+
+const rejectVolunteerModal = document.getElementById("rejectVolunteerModal");
+const rejectVolunteerForm = document.getElementById("rejectVolunteerForm");
+const rejectVolunteerFormError = document.getElementById(
+  "rejectVolunteerFormError",
+);
+const rejectVolunteerModalContext = document.getElementById(
+  "rejectVolunteerModalContext",
+);
+const rejectVolunteerReasonInput = document.getElementById(
+  "rejectVolunteerReasonInput",
+);
+const rejectVolunteerSubmitBtn = document.getElementById(
+  "rejectVolunteerSubmitBtn",
+);
+
+function openRejectVolunteerModal(course, vol, name) {
+  pendingVolunteerRejection = { course, vol, name };
+  rejectVolunteerForm.reset();
+  rejectVolunteerFormError.hidden = true;
+  rejectVolunteerModalContext.textContent = `Rejecting ${name}'s volunteer request for ${course.code}. The reason below is shown to them, so they know why and can try again elsewhere.`;
+  rejectVolunteerModal.showModal();
+  rejectVolunteerReasonInput.focus();
+}
+
+function closeRejectVolunteerModal() {
+  rejectVolunteerModal.close();
+  pendingVolunteerRejection = null;
+}
+
+document
+  .getElementById("rejectVolunteerModalCloseBtn")
+  .addEventListener("click", closeRejectVolunteerModal);
+document
+  .getElementById("rejectVolunteerCancelBtn")
+  .addEventListener("click", closeRejectVolunteerModal);
+rejectVolunteerModal.addEventListener("click", (e) => {
+  if (e.target === rejectVolunteerModal) closeRejectVolunteerModal();
+});
+
+rejectVolunteerForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  rejectVolunteerFormError.hidden = true;
+  if (!pendingVolunteerRejection) return;
+
+  const { course, vol, name } = pendingVolunteerRejection;
+  const reason = rejectVolunteerReasonInput.value.trim();
+
+  rejectVolunteerSubmitBtn.disabled = true;
+  try {
+    await setVolunteerStatus(course, vol, "rejected", name, reason);
+    closeRejectVolunteerModal();
+  } finally {
+    rejectVolunteerSubmitBtn.disabled = false;
+  }
+});
 
 function renderAssignmentCard(course) {
   const isFull =
