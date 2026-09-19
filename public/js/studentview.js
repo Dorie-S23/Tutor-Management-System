@@ -83,15 +83,15 @@ async function renderCourses() {
       <h3>${course.course_code}</h3>
       <p class="session-meta">${course.course_name}</p>
       <p class="session-note">${course.department}</p>
-      <button type="button" class="volunteer-btn">Volunteer</button>
+      <button type="button" class="volunteer-btn btn btn-primary">Volunteer</button>
       <div class="mark-form" hidden>
         <div class="form-field">
           <label>Your mark for this module</label>
           <input type="number" class="mark-input" min="0" max="100" placeholder="0-100" />
         </div>
         <div class="form-actions">
-          <button type="button" class="submit-mark-btn btn-primary">Submit</button>
-          <button type="button" class="cancel-mark-btn btn-secondary">Cancel</button>
+          <button type="button" class="submit-mark-btn btn btn-primary">Submit</button>
+          <button type="button" class="cancel-mark-btn btn btn-ghost">Cancel</button>
         </div>
       </div>
     `;
@@ -194,7 +194,7 @@ async function renderOpenSessions() {
 
     const claimBtn = document.createElement("button");
     claimBtn.type = "button";
-    claimBtn.className = "btn-primary";
+    claimBtn.className = "btn btn-primary";
     claimBtn.textContent = "Claim";
     claimBtn.addEventListener("click", () => claimSession(session, claimBtn));
     article.appendChild(claimBtn);
@@ -277,7 +277,7 @@ async function renderApplications() {
     if (status === "pending") {
       const withdrawBtn = document.createElement("button");
       withdrawBtn.type = "button";
-      withdrawBtn.className = "btn-secondary";
+      withdrawBtn.className = "btn btn-ghost";
       withdrawBtn.textContent = "Withdraw";
       withdrawBtn.addEventListener("click", () =>
         withdrawApplication(app, withdrawBtn),
