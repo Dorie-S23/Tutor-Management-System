@@ -466,11 +466,30 @@ async function renderApplicants(course) {
         ),
       );
     } else if (status === "approved") {
-      actionsEl.appendChild(
-        makeApplicantActionBtn("Unassign", "", () =>
-          setApplicationStatus(course, app, "pending", name),
-        ),
-      );
+      if (app.locked) {
+        const lockedStamp = document.createElement("span");
+        lockedStamp.className = "stamp";
+        lockedStamp.textContent = "🔒 Locked";
+        actionsEl.appendChild(lockedStamp);
+      } else {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Unassign", "", () =>
+            setApplicationStatus(course, app, "pending", name),
+          ),
+        );
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Lock", "", () => {
+            if (
+              !confirm(
+                `Lock ${name}'s assignment to ${course.code}? This is permanent — it can't be undone or reconsidered afterwards.`,
+              )
+            ) {
+              return;
+            }
+            setApplicationLock(course, app, name);
+          }),
+        );
+      }
     } else {
       actionsEl.appendChild(
         makeApplicantActionBtn("Reconsider", "", () =>
@@ -583,6 +602,25 @@ async function setApplicationStatus(course, app, status, name, reasons = {}) {
       );
     }
 
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
+async function setApplicationLock(course, app, name) {
+  try {
+    const res = await fetch(`/api/tutor-applications/${app.id}/lock`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locked: true }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't lock that assignment.");
+      return;
+    }
+    showToast(`${name}'s assignment to ${course.code} is now locked.`);
     await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
@@ -727,6 +765,31 @@ async function renderVolunteers(course) {
           ),
         ),
       );
+    } else if (status === "approved") {
+      if (vol.locked) {
+        const lockedStamp = document.createElement("span");
+        lockedStamp.className = "stamp";
+        lockedStamp.textContent = "🔒 Locked";
+        actionsEl.appendChild(lockedStamp);
+      } else {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Reconsider", "", () =>
+            setVolunteerStatus(course, vol, "pending", name),
+          ),
+        );
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Lock", "", () => {
+            if (
+              !confirm(
+                `Lock ${name}'s approval for ${course.code}? This is permanent — it can't be undone or reconsidered afterwards.`,
+              )
+            ) {
+              return;
+            }
+            setVolunteerLock(course, vol, name);
+          }),
+        );
+      }
     } else {
       actionsEl.appendChild(
         makeApplicantActionBtn("Reconsider", "", () =>
@@ -774,6 +837,25 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
     renderVolunteers(course);
     fetchVolunteerCounts();
     renderCourseList();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
+async function setVolunteerLock(course, vol, name) {
+  try {
+    const res = await fetch(`/api/course-volunteers/${vol.id}/lock`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locked: true }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't lock that volunteer.");
+      return;
+    }
+    showToast(`${name}'s approval for ${course.code} is now locked.`);
+    renderVolunteers(course);
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }

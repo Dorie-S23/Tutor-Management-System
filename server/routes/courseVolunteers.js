@@ -123,6 +123,22 @@ router.patch("/:id", async (req, res) => {
       .json({ error: "A reason is required to approve a volunteer" });
   }
 
+  const { data: existing, error: existingError } = await supabase
+    .from("course_volunteers")
+    .select("id, locked")
+    .eq("id", req.params.id)
+    .single();
+
+  if (existingError || !existing) {
+    return res.status(404).json({ error: "Volunteer not found" });
+  }
+
+  if (existing.locked) {
+    return res.status(409).json({
+      error: "This approval is locked and can't be reconsidered.",
+    });
+  }
+
   const { data, error } = await supabase
     .from("course_volunteers")
     .update({
@@ -140,6 +156,58 @@ router.patch("/:id", async (req, res) => {
     if (error.code === "PGRST116") {
       return res.status(404).json({ error: "Volunteer not found" });
     }
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json(data);
+});
+
+// PATCH /api/course-volunteers/:id/lock — lock or unlock an approved
+// volunteer. While locked, PATCH /:id refuses any status change until
+// it's unlocked again.
+// PATCH /api/course-volunteers/:id/lock — permanently lock an approved
+// volunteer. This is intentionally one-way: there is no unlock. Once
+// locked, PATCH /:id refuses any status change to this record, forever.
+router.patch("/:id/lock", async (req, res) => {
+  const { locked } = req.body ?? {};
+  if (locked !== true) {
+    return res.status(400).json({
+      error: "locked must be true — locking is permanent and cannot be undone",
+    });
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("course_volunteers")
+    .select("id, status, locked")
+    .eq("id", req.params.id)
+    .single();
+
+  if (existingError || !existing) {
+    return res.status(404).json({ error: "Volunteer not found" });
+  }
+
+  if (existing.locked) {
+    return res
+      .status(409)
+      .json({ error: "This approval is already locked and cannot be changed" });
+  }
+
+  if (existing.status !== "approved") {
+    return res
+      .status(409)
+      .json({ error: "Only an approved volunteer can be locked" });
+  }
+
+  const { data, error } = await supabase
+    .from("course_volunteers")
+    .update({ locked: true })
+    .eq("id", req.params.id)
+    .select(
+      "*, courses(course_code, course_name, department), users(name, email)",
+    )
+    .single();
+
+  if (error) {
     return res.status(500).json({ error: error.message });
   }
 

@@ -758,13 +758,19 @@ router.patch("/:id", async (req, res) => {
 
   const { data: application, error: applicationError } = await supabase
     .from("tutor_subject_preference")
-    .select("id, status, course_id, tutor_id")
+    .select("id, status, course_id, tutor_id, locked")
     .eq("id", req.params.id)
     .single();
 
   if (applicationError || !application) {
     return res.status(404).json({
       error: "Application not found",
+    });
+  }
+
+  if (application.locked) {
+    return res.status(409).json({
+      error: "This assignment is locked and can't be reconsidered.",
     });
   }
 
@@ -913,6 +919,69 @@ router.patch("/:id", async (req, res) => {
         error: `The approval went through, but the override reason couldn't be saved: ${overrideError.message}`,
       });
     }
+  }
+
+  res.json(data);
+});
+
+// PATCH /api/tutor-applications/:id/lock — lock or unlock an approved
+// assignment. While locked, PATCH /:id refuses any status change (see
+// above) until it's unlocked again.
+// PATCH /api/tutor-applications/:id/lock — permanently lock an approved
+// assignment. This is intentionally one-way: there is no unlock. Once
+// locked, PATCH /:id refuses any status change to this record, forever.
+router.patch("/:id/lock", async (req, res) => {
+  const { locked } = req.body ?? {};
+  if (locked !== true) {
+    return res.status(400).json({
+      error: "locked must be true — locking is permanent and cannot be undone",
+    });
+  }
+
+  const { data: application, error: applicationError } = await supabase
+    .from("tutor_subject_preference")
+    .select("id, status, locked")
+    .eq("id", req.params.id)
+    .single();
+
+  if (applicationError || !application) {
+    return res.status(404).json({ error: "Application not found" });
+  }
+
+  if (application.locked) {
+    return res.status(409).json({
+      error: "This assignment is already locked and cannot be changed",
+    });
+  }
+
+  if (application.status !== "approved") {
+    return res.status(409).json({
+      error: "Only an approved assignment can be locked",
+    });
+  }
+
+  const { data, error } = await supabase
+    .from("tutor_subject_preference")
+    .update({ locked: true })
+    .eq("id", req.params.id)
+    .select(
+      `
+        *,
+        courses(
+          course_code,
+          course_name
+        ),
+        tutors(
+          name,
+          email,
+          academic_level
+        )
+        `,
+    )
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
   }
 
   res.json(data);
