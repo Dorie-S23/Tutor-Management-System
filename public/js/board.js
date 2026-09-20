@@ -1269,6 +1269,166 @@ obviousFillConfirmBtn.addEventListener("click", async () => {
   }
 });
 
+// ---------- auto-allocate whole school ----------
+//
+// Same reviewable-list shape as Obvious Fill, but backed by a real draft:
+// opening the modal calls auto-allocate to propose assignments for every
+// course in one pass (unambiguous slots picked outright, ambiguous ones
+// ranked by mark), and Publish applies only the still-checked rows. The
+// draft itself already exists in allocation_drafts the moment the modal
+// opens — cancelling just leaves it unpublished, nothing to clean up.
+
+const autoAllocateBtn = document.getElementById("autoAllocateBtn");
+const autoAllocateModal = document.getElementById("autoAllocateModal");
+const autoAllocateList = document.getElementById("autoAllocateList");
+const autoAllocateEmpty = document.getElementById("autoAllocateEmpty");
+const autoAllocateHint = document.getElementById("autoAllocateHint");
+const autoAllocatePublishBtn = document.getElementById(
+  "autoAllocatePublishBtn",
+);
+
+let activeAutoAllocateDraftId = null;
+
+function closeAutoAllocateModal() {
+  autoAllocateModal.close();
+}
+
+async function openAutoAllocateModal() {
+  activeAutoAllocateDraftId = null;
+  autoAllocateList.innerHTML = "";
+  autoAllocateEmpty.hidden = true;
+  autoAllocateHint.textContent = "Proposing assignments…";
+  autoAllocatePublishBtn.hidden = false;
+  autoAllocatePublishBtn.disabled = true;
+  autoAllocateModal.showModal();
+
+  let draft, assignments;
+  try {
+    const res = await fetch("/api/allocation-drafts/auto-allocate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organiserId: getSessionUserId() }),
+    });
+    const body = await res.json();
+    if (!res.ok)
+      throw new Error(body.error || "Failed to propose an allocation");
+    ({ draft, assignments } = body);
+  } catch (err) {
+    autoAllocateHint.textContent =
+      "Couldn't propose an allocation — try again.";
+    autoAllocatePublishBtn.hidden = true;
+    return;
+  }
+
+  if (!draft || assignments.length === 0) {
+    autoAllocateHint.textContent = "";
+    autoAllocateEmpty.hidden = false;
+    autoAllocatePublishBtn.hidden = true;
+    return;
+  }
+
+  activeAutoAllocateDraftId = draft.id;
+  autoAllocateHint.textContent = `${assignments.length} assignment${assignments.length === 1 ? "" : "s"} proposed across every course with an open slot — uncheck anything you'd rather decide yourself.`;
+
+  const byCourse = new Map();
+  assignments.forEach((a) => {
+    const key = a.course?.course_code || String(a.course_id);
+    if (!byCourse.has(key)) byCourse.set(key, []);
+    byCourse.get(key).push(a);
+  });
+
+  byCourse.forEach((group, courseKey) => {
+    const heading = document.createElement("li");
+    heading.className = "obvious-fill-course-head";
+    heading.textContent = `${courseKey} — ${group[0].course?.course_name || ""}`;
+    autoAllocateList.appendChild(heading);
+
+    group.forEach((assignment) => {
+      const li = document.createElement("li");
+      const row = document.createElement("label");
+      row.className = "tutor-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <input type="checkbox" class="auto-allocate-check" data-id="${assignment.id}" checked>
+        <span class="name-block">
+          <span class="name">${assignment.tutor?.name || "Unknown"}</span>
+          <span class="role">${assignment.explanation}</span>
+        </span>
+      `;
+      li.appendChild(row);
+      autoAllocateList.appendChild(li);
+    });
+  });
+
+  autoAllocatePublishBtn.disabled = false;
+}
+
+autoAllocateBtn.addEventListener("click", openAutoAllocateModal);
+document
+  .getElementById("autoAllocateCloseBtn")
+  .addEventListener("click", closeAutoAllocateModal);
+document
+  .getElementById("autoAllocateCancelBtn")
+  .addEventListener("click", closeAutoAllocateModal);
+autoAllocateModal.addEventListener("click", (e) => {
+  if (e.target === autoAllocateModal) closeAutoAllocateModal();
+});
+
+autoAllocatePublishBtn.addEventListener("click", async () => {
+  if (!activeAutoAllocateDraftId) {
+    closeAutoAllocateModal();
+    return;
+  }
+
+  const allChecks = Array.from(
+    autoAllocateList.querySelectorAll(".auto-allocate-check"),
+  );
+  const excludeAssignmentIds = allChecks
+    .filter((cb) => !cb.checked)
+    .map((cb) => cb.dataset.id);
+
+  if (excludeAssignmentIds.length === allChecks.length) {
+    closeAutoAllocateModal();
+    return;
+  }
+
+  autoAllocatePublishBtn.disabled = true;
+  autoAllocatePublishBtn.textContent = "Publishing…";
+
+  try {
+    const res = await fetch(
+      `/api/allocation-drafts/${activeAutoAllocateDraftId}/publish`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organiserId: getSessionUserId(),
+          excludeAssignmentIds,
+        }),
+      },
+    );
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't publish that allocation.");
+      return;
+    }
+    const failed = body.results.filter((r) => !r.success);
+    const succeeded = body.results.length - failed.length;
+    showToast(
+      failed.length === 0
+        ? `${succeeded} assignment${succeeded === 1 ? "" : "s"} published.`
+        : `${succeeded} published, ${failed.length} couldn't be — something changed since you opened this. See History for details.`,
+    );
+    closeAutoAllocateModal();
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    autoAllocatePublishBtn.disabled = false;
+    autoAllocatePublishBtn.textContent = "Publish selected";
+  }
+});
+
 // ---------- add / edit course modal ----------
 
 const addCourseBtn = document.getElementById("addCourseBtn");
