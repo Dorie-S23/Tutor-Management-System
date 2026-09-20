@@ -21,7 +21,7 @@ function buildApp() {
 }
 
 beforeEach(() => {
-  tables = { courses: [], course_volunteers: [] };
+  tables = { courses: [], course_volunteers: [], audit_log: [] };
   mockSupabase = fakeSupabase(tables, {
     course_volunteers: [["user_id", "course_id"]],
   });
@@ -386,5 +386,89 @@ describe("GET /api/course-volunteers?status=open", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.map((r) => r.id).sort()).toEqual(["s1", "s2"]);
+  });
+});
+
+describe("course-volunteers audit log", () => {
+  test("claiming an open session records who claimed it", async () => {
+    tables.course_volunteers = [
+      { id: "s1", course_id: 1, status: "open", user_id: null },
+    ];
+
+    await request(buildApp())
+      .patch("/api/course-volunteers/s1/claim")
+      .send({ userId: "student-1" });
+
+    expect(tables.audit_log).toHaveLength(1);
+    expect(tables.audit_log[0]).toMatchObject({
+      entity_type: "course_volunteers",
+      entity_id: "s1",
+      action: "claimed",
+      actor_id: "student-1",
+      before: { status: "open" },
+    });
+  });
+
+  test("a claim that loses the race doesn't record anything", async () => {
+    tables.course_volunteers = [
+      { id: "s1", course_id: 1, status: "pending", user_id: "someone-else" },
+    ];
+
+    await request(buildApp())
+      .patch("/api/course-volunteers/s1/claim")
+      .send({ userId: "student-1" });
+
+    expect(tables.audit_log).toHaveLength(0);
+  });
+
+  test("approving a volunteer records the prior status and the organiser as actor", async () => {
+    tables.course_volunteers = [
+      { id: "v1", course_id: 1, user_id: "student-1", status: "pending" },
+    ];
+
+    await request(buildApp())
+      .patch("/api/course-volunteers/v1")
+      .send({ status: "approved", organiserId: "organiser-1" });
+
+    expect(tables.audit_log).toHaveLength(1);
+    expect(tables.audit_log[0]).toMatchObject({
+      entity_type: "course_volunteers",
+      entity_id: "v1",
+      action: "approved",
+      actor_id: "organiser-1",
+      before: { status: "pending" },
+    });
+  });
+
+  test("withdrawing records the student as actor", async () => {
+    // course_id has to match the query-string type — fakeSupabase does a
+    // strict === match and doesn't coerce the way Postgrest does for a real
+    // integer column (same caveat as the PATCH tests above, for req.query
+    // instead of req.params).
+    tables.course_volunteers = [
+      { id: "v1", course_id: "1", user_id: "student-1", status: "pending" },
+    ];
+
+    await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(tables.audit_log).toHaveLength(1);
+    expect(tables.audit_log[0]).toMatchObject({
+      entity_type: "course_volunteers",
+      entity_id: "v1",
+      action: "withdrawn",
+      actor_id: "student-1",
+      before: { status: "pending" },
+    });
+  });
+
+  test("withdrawing a row that doesn't exist doesn't write an audit entry", async () => {
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.audit_log).toHaveLength(0);
   });
 });

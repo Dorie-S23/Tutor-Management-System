@@ -12,6 +12,7 @@ const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
 const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
 const timesheetsRoutes = require("./server/routes/timesheets");
 const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
+const auditLogRoutes = require("./server/routes/auditLog");
 
 // Supabase client
 const supabase = createClient(
@@ -77,5 +78,8 @@ app.use("/api/timesheets", timesheetsRoutes);
 
 // Tutor self-excusal from a scheduled session
 app.use("/api/session-excusals", sessionExcusalsRoutes);
+
+// Full change history across allocation decisions
+app.use("/api/audit-log", auditLogRoutes);
 
 module.exports = app;

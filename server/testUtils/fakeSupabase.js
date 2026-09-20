@@ -1,8 +1,11 @@
 // A minimal stand-in for the @supabase/supabase-js query builder, backed by
 // plain in-memory arrays instead of Postgres. Only supports what this repo's
 // routes actually call (select/insert/update/delete, eq, neq, in, order,
-// single, maybeSingle) — enough to unit-test route logic without a real
-// database. Note: it does NOT perform real relational joins — a `select`
+// limit, single, maybeSingle) — enough to unit-test route logic without a
+// real database. order() really sorts (ascending unless {ascending: false}
+// is passed) and limit() really truncates, so a route's ordering/capping
+// logic is genuinely exercised, not just assumed from fixture order. Note:
+// it does NOT perform real relational joins — a `select`
 // with an embedded table (e.g. "*, courses(hours_per_week)") just returns
 // whatever plain fields the row itself has, so tests that need a joined
 // shape back should seed the nested object directly on the row (e.g.
@@ -32,6 +35,8 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
       const filters = [];
       let pendingWrite = null;
       let insertConflict = null;
+      let pendingOrder = null;
+      let pendingLimit = null;
 
       const matches = (row) =>
         filters.every(([type, col, val]) => {
@@ -85,6 +90,26 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
             const index = rows.indexOf(row);
             if (index !== -1) rows.splice(index, 1);
           });
+        }
+
+        if (pendingOrder) {
+          const { column, ascending } = pendingOrder;
+          matched = matched.slice().sort((a, b) => {
+            if (a[column] === b[column]) return 0;
+            if (a[column] == null) return ascending ? -1 : 1;
+            if (b[column] == null) return ascending ? 1 : -1;
+            return ascending
+              ? a[column] > b[column]
+                ? 1
+                : -1
+              : a[column] > b[column]
+                ? -1
+                : 1;
+          });
+        }
+
+        if (pendingLimit != null) {
+          matched = matched.slice(0, pendingLimit);
         }
 
         if (wantsSingle) {
@@ -164,7 +189,14 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
           filters.push(["in", column, values]);
           return builder;
         },
-        order: () => builder,
+        order: (column, opts = {}) => {
+          pendingOrder = { column, ascending: opts.ascending !== false };
+          return builder;
+        },
+        limit: (n) => {
+          pendingLimit = n;
+          return builder;
+        },
         single: () => resolve(true, false),
         maybeSingle: () => resolve(true, true),
         // Lets `await supabase.from(...).select(...)` work even when no

@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { recordAudit } = require("../utils/auditLog");
 
 const router = express.Router();
 
@@ -203,6 +204,15 @@ router.patch("/:id/claim", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 
+  await recordAudit({
+    entityType: "course_volunteers",
+    entityId: data.id,
+    action: "claimed",
+    actorId: userId,
+    before: { status: "open" },
+    after: { status: "pending", user_id: userId },
+  });
+
   res.json(data);
 });
 
@@ -213,11 +223,21 @@ const VALID_STATUSES = ["pending", "approved", "rejected"];
 // status flip; reconsidering back to pending (or approving) clears any
 // earlier rejection reason rather than leaving it stale on the row.
 router.patch("/:id", async (req, res) => {
-  const { status, reason } = req.body ?? {};
+  const { status, reason, organiserId } = req.body ?? {};
   if (!VALID_STATUSES.includes(status)) {
     return res
       .status(400)
       .json({ error: "status must be pending, approved or rejected" });
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("course_volunteers")
+    .select("status")
+    .eq("id", req.params.id)
+    .single();
+
+  if (existingError || !existing) {
+    return res.status(404).json({ error: "Volunteer not found" });
   }
 
   const { data, error } = await supabase
@@ -239,6 +259,15 @@ router.patch("/:id", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 
+  await recordAudit({
+    entityType: "course_volunteers",
+    entityId: data.id,
+    action: status,
+    actorId: organiserId ?? null,
+    before: { status: existing.status },
+    after: { status, reason: data.reason ?? null },
+  });
+
   res.json(data);
 });
 
@@ -249,6 +278,13 @@ router.delete("/", async (req, res) => {
     return res.status(400).json({ error: "userId and courseId are required" });
   }
 
+  const { data: existing } = await supabase
+    .from("course_volunteers")
+    .select("id, status")
+    .eq("user_id", userId)
+    .eq("course_id", courseId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("course_volunteers")
     .delete()
@@ -256,6 +292,18 @@ router.delete("/", async (req, res) => {
     .eq("course_id", courseId);
 
   if (error) return res.status(500).json({ error: error.message });
+
+  if (existing) {
+    await recordAudit({
+      entityType: "course_volunteers",
+      entityId: existing.id,
+      action: "withdrawn",
+      actorId: userId,
+      before: { status: existing.status },
+      after: null,
+    });
+  }
+
   res.status(204).end();
 });
 
