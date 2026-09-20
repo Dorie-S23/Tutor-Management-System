@@ -718,6 +718,7 @@ router.patch("/:id", async (req, res) => {
     organiserId,
     reason,
     rejectionReason,
+    approvalReason,
   } = req.body ?? {};
 
   if (!VALID_STATUSES.includes(status)) {
@@ -729,6 +730,12 @@ router.patch("/:id", async (req, res) => {
   if (status === "rejected" && (!rejectionReason || !rejectionReason.trim())) {
     return res.status(400).json({
       error: "A reason is required to reject an application",
+    });
+  }
+
+  if (status === "approved" && (!approvalReason || !approvalReason.trim())) {
+    return res.status(400).json({
+      error: "A reason is required to approve an application",
     });
   }
 
@@ -863,6 +870,7 @@ router.patch("/:id", async (req, res) => {
     .update({
       status,
       rejection_reason: status === "rejected" ? rejectionReason.trim() : null,
+      approval_reason: status === "approved" ? approvalReason.trim() : null,
     })
     .eq("id", req.params.id)
     .select(

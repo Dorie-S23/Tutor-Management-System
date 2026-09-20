@@ -331,15 +331,15 @@
 
     <dialog
       class="modal"
-      id="rejectReasonModal"
-      aria-labelledby="rejectReasonHeading"
+      id="reasonModal"
+      aria-labelledby="reasonHeading"
     >
-      <form method="dialog" class="modal-form" id="rejectReasonForm">
+      <form method="dialog" class="modal-form" id="reasonForm">
         <header class="modal-head">
-          <h2 id="rejectReasonHeading">Reject</h2>
+          <h2 id="reasonHeading">Reason</h2>
           <button
             class="modal-close"
-            id="rejectReasonCloseBtn"
+            id="reasonCloseBtn"
             type="button"
             aria-label="Close"
           >
@@ -352,12 +352,12 @@
           respectful.
         </p>
 
-        <p class="field-error" id="rejectReasonError" hidden></p>
+        <p class="field-error" id="reasonError" hidden></p>
 
         <label class="field">
           <span class="field-label">Reason</span>
           <textarea
-            id="rejectReasonInput"
+            id="reasonInput"
             name="reason"
             rows="4"
             placeholder="e.g. Mark just below the course minimum this term."
@@ -369,7 +369,7 @@
           <li>
             <button
               class="btn btn-ghost"
-              id="rejectReasonCancelBtn"
+              id="reasonCancelBtn"
               type="button"
             >
               Cancel
@@ -378,10 +378,10 @@
           <li>
             <button
               class="btn btn-primary"
-              id="rejectReasonSubmitBtn"
+              id="reasonSubmitBtn"
               type="submit"
             >
-              Reject with this reason
+              Confirm
             </button>
           </li>
         </menu>

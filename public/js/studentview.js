@@ -153,9 +153,12 @@ async function renderPendingApplications() {
     return;
   }
 
+  const statusOrder = { pending: 0, approved: 1, rejected: 2 };
+  const statusLabels = { pending: "Pending", approved: "Approved", rejected: "Rejected" };
+
   const relevant = applications
-    .filter((app) => app.status === "pending" || app.status === "rejected")
-    .sort((a, b) => (a.status === b.status ? 0 : a.status === "pending" ? -1 : 1));
+    .filter((app) => ["pending", "approved", "rejected"].includes(app.status))
+    .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
   if (relevant.length === 0) {
     pendingListEl.innerHTML = `<p class="empty-state">No modules waiting on approval.</p>`;
@@ -168,10 +171,15 @@ async function renderPendingApplications() {
     article.innerHTML = `
       <h3>${app.courses.course_code}</h3>
       <p>${app.courses.course_name} &bull; Mark submitted: ${app.mark}</p>
-      <span class="status-pill ${status}">${status === "pending" ? "Pending" : "Rejected"}</span>
+      <span class="status-pill ${status}">${statusLabels[status] || status}</span>
       ${
         status === "rejected" && app.rejection_reason
           ? `<p class="card-hint">Reason: ${app.rejection_reason}</p>`
+          : ""
+      }
+      ${
+        status === "approved" && app.approval_reason
+          ? `<p class="card-hint">Note: ${app.approval_reason}</p>`
           : ""
       }
       ${status === "rejected" ? `<button type="button" class="btn-link" data-action="remove-volunteer">Remove &amp; volunteer again</button>` : ""}

@@ -99,7 +99,53 @@ function renderApplicationsList() {
     li.innerHTML = `
       <span>${label}</span>
       <span class="status-pill ${status}">${status}</span>
+      ${
+        status === "rejected" && app.rejection_reason
+          ? `<p class="hint">Reason: ${app.rejection_reason}</p>`
+          : ""
+      }
+      ${
+        status === "approved" && app.approval_reason
+          ? `<p class="hint">Note: ${app.approval_reason}</p>`
+          : ""
+      }
     `;
+
+    if (status === "rejected") {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-link";
+      removeBtn.textContent = "Remove & apply again";
+      removeBtn.addEventListener("click", async () => {
+        if (
+          !confirm(
+            `Remove this application for ${label}? You'll be able to apply again.`,
+          )
+        )
+          return;
+
+        removeBtn.disabled = true;
+        try {
+          const res = await fetch(`/api/tutor-applications/${app.id}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            showToast(body.error || "Couldn't remove that application.");
+            removeBtn.disabled = false;
+            return;
+          }
+          showToast("Application removed.");
+          await fetchMyApplications(currentUser.id);
+        } catch {
+          showToast("Network error — couldn't reach the server.");
+          removeBtn.disabled = false;
+        }
+      });
+      li.appendChild(removeBtn);
+      applicationsItemsEl.appendChild(li);
+      return;
+    }
 
     if (status !== "pending") {
       applicationsItemsEl.appendChild(li);

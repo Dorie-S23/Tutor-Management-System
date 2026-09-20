@@ -438,7 +438,15 @@ async function renderApplicants(course) {
             ) {
               return;
             }
-            setApplicationStatus(course, app, "approved", name);
+            openReasonModal(
+              `Approve ${name} for ${course.code}?`,
+              "Approve with this note",
+              (reason) =>
+                setApplicationStatus(course, app, "approved", name, {
+                  approvalReason: reason,
+                }),
+              "e.g. Strong mark and full availability at the tutorial time.",
+            );
           },
           (isFull && "This course already has all the tutors it needs") ||
             (overCap &&
@@ -447,8 +455,13 @@ async function renderApplicants(course) {
       );
       actionsEl.appendChild(
         makeApplicantActionBtn("Reject", "", () =>
-          openRejectReasonModal(`Reject ${name}'s application?`, (reason) =>
-            setApplicationStatus(course, app, "rejected", name, reason),
+          openReasonModal(
+            `Reject ${name}'s application?`,
+            "Reject with this reason",
+            (reason) =>
+              setApplicationStatus(course, app, "rejected", name, {
+                rejectionReason: reason,
+              }),
           ),
         ),
       );
@@ -485,61 +498,66 @@ function makeApplicantActionBtn(label, variant, onClick, disabledTitle) {
   return btn;
 }
 
-// Collects a required reason before a rejection goes through — the tutor or
-// student sees this text next to their rejected status on their own
+// Collects a required reason/note before an approve or reject goes through
+// — the tutor or student sees this text next to their status on their own
 // dashboard, so it needs to actually say something useful to them.
-const rejectReasonModal = document.getElementById("rejectReasonModal");
-const rejectReasonForm = document.getElementById("rejectReasonForm");
-const rejectReasonHeading = document.getElementById("rejectReasonHeading");
-const rejectReasonInput = document.getElementById("rejectReasonInput");
-const rejectReasonError = document.getElementById("rejectReasonError");
+const reasonModal = document.getElementById("reasonModal");
+const reasonForm = document.getElementById("reasonForm");
+const reasonHeading = document.getElementById("reasonHeading");
+const reasonInput = document.getElementById("reasonInput");
+const reasonError = document.getElementById("reasonError");
+const reasonSubmitBtn = document.getElementById("reasonSubmitBtn");
 
-let pendingRejectConfirm = null; // callback set by whichever button opened the modal
+let pendingReasonConfirm = null; // callback set by whichever button opened the modal
 
-function openRejectReasonModal(title, onConfirm) {
-  pendingRejectConfirm = onConfirm;
-  rejectReasonHeading.textContent = title;
-  rejectReasonForm.reset();
-  rejectReasonError.hidden = true;
-  rejectReasonModal.showModal();
-  rejectReasonInput.focus();
+function openReasonModal(title, confirmLabel, onConfirm, placeholder) {
+  pendingReasonConfirm = onConfirm;
+  reasonHeading.textContent = title;
+  reasonSubmitBtn.textContent = confirmLabel;
+  reasonInput.placeholder =
+    placeholder || "e.g. Mark just below the course minimum this term.";
+  reasonForm.reset();
+  reasonError.hidden = true;
+  reasonModal.showModal();
+  reasonInput.focus();
 }
 
-function closeRejectReasonModal() {
-  pendingRejectConfirm = null;
-  rejectReasonModal.close();
+function closeReasonModal() {
+  pendingReasonConfirm = null;
+  reasonModal.close();
 }
 
 document
-  .getElementById("rejectReasonCloseBtn")
-  .addEventListener("click", closeRejectReasonModal);
+  .getElementById("reasonCloseBtn")
+  .addEventListener("click", closeReasonModal);
 document
-  .getElementById("rejectReasonCancelBtn")
-  .addEventListener("click", closeRejectReasonModal);
-rejectReasonModal.addEventListener("click", (e) => {
-  if (e.target === rejectReasonModal) closeRejectReasonModal();
+  .getElementById("reasonCancelBtn")
+  .addEventListener("click", closeReasonModal);
+reasonModal.addEventListener("click", (e) => {
+  if (e.target === reasonModal) closeReasonModal();
 });
 
-rejectReasonForm.addEventListener("submit", (e) => {
+reasonForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  const reason = rejectReasonInput.value.trim();
+  const reason = reasonInput.value.trim();
   if (!reason) {
-    rejectReasonError.textContent = "A reason is required.";
-    rejectReasonError.hidden = false;
+    reasonError.textContent = "A reason is required.";
+    reasonError.hidden = false;
     return;
   }
-  const confirmCallback = pendingRejectConfirm;
-  closeRejectReasonModal();
+  const confirmCallback = pendingReasonConfirm;
+  closeReasonModal();
   confirmCallback?.(reason);
 });
 
-async function setApplicationStatus(course, app, status, name, rejectionReason) {
+async function setApplicationStatus(course, app, status, name, reasons = {}) {
+  const { rejectionReason, approvalReason } = reasons;
   const previousStatus = (app.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/tutor-applications/${app.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejectionReason }),
+      body: JSON.stringify({ status, rejectionReason, approvalReason }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -686,13 +704,26 @@ async function renderVolunteers(course) {
     if (status === "pending") {
       actionsEl.appendChild(
         makeApplicantActionBtn("Approve", "approve", () =>
-          setVolunteerStatus(course, vol, "approved", name),
+          openReasonModal(
+            `Approve ${name} for ${course.code}?`,
+            "Approve with this note",
+            (reason) =>
+              setVolunteerStatus(course, vol, "approved", name, {
+                approvalReason: reason,
+              }),
+            "e.g. Mark comfortably above the course minimum.",
+          ),
         ),
       );
       actionsEl.appendChild(
         makeApplicantActionBtn("Reject", "", () =>
-          openRejectReasonModal(`Reject ${name}'s volunteer request?`, (reason) =>
-            setVolunteerStatus(course, vol, "rejected", name, reason),
+          openReasonModal(
+            `Reject ${name}'s volunteer request?`,
+            "Reject with this reason",
+            (reason) =>
+              setVolunteerStatus(course, vol, "rejected", name, {
+                rejectionReason: reason,
+              }),
           ),
         ),
       );
@@ -709,13 +740,14 @@ async function renderVolunteers(course) {
   });
 }
 
-async function setVolunteerStatus(course, vol, status, name, rejectionReason) {
+async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
+  const { rejectionReason, approvalReason } = reasons;
   const previousStatus = (vol.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/course-volunteers/${vol.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejectionReason }),
+      body: JSON.stringify({ status, rejectionReason, approvalReason }),
     });
     const body = await res.json();
     if (!res.ok) {

@@ -152,6 +152,11 @@ function renderApplicationsList() {
           ? `<p class="hint">Reason: ${app.rejection_reason}</p>`
           : ""
       }
+      ${
+        status === "approved" && app.approval_reason
+          ? `<p class="hint">Note: ${app.approval_reason}</p>`
+          : ""
+      }
       ${status === "rejected" ? `<button type="button" class="btn-link" data-action="remove-application">Remove &amp; apply again</button>` : ""}
     `;
     if (status === "rejected") {
