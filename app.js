@@ -13,6 +13,7 @@ const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
 const timesheetsRoutes = require("./server/routes/timesheets");
 const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
 const auditLogRoutes = require("./server/routes/auditLog");
+const allocationDraftsRoutes = require("./server/routes/allocationDrafts");
 
 // Supabase client
 const supabase = createClient(
@@ -81,5 +82,8 @@ app.use("/api/session-excusals", sessionExcusalsRoutes);
 
 // Full change history across allocation decisions
 app.use("/api/audit-log", auditLogRoutes);
+
+// Whole-school auto allocation drafts + publish/restore
+app.use("/api/allocation-drafts", allocationDraftsRoutes);
 
 module.exports = app;
