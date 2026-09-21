@@ -147,6 +147,7 @@ const shortfallToggleEl = document.getElementById("shortfallToggle");
 const statFilledEl = document.getElementById("statFilled");
 const statTutorsEl = document.getElementById("statTutors");
 const statPendingEl = document.getElementById("statPending");
+const syncStatusEl = document.getElementById("syncStatus");
 
 function shortfall(course) {
   return course.tutorsNeeded ? course.tutorsNeeded - course.tutorsAssigned : 0;
@@ -161,8 +162,29 @@ function pendingCount(course) {
   );
 }
 
+let lastCourseListSnapshot = null;
+
 function renderCourseList() {
   const query = courseSearchEl.value.trim().toLowerCase();
+
+  // Everything this function's output depends on — if none of it changed
+  // since last render, skip the rebuild entirely. Prevents the course
+  // rail flashing on every poll tick when nothing actually changed, while
+  // still re-rendering immediately for real changes (a live edit from
+  // another organiser) or local UI state (typing in search, toggling the
+  // shortfall filter, selecting a course).
+  const snapshot = JSON.stringify({
+    courses: COURSES,
+    volunteerCounts,
+    pendingApplicationCounts,
+    pendingVolunteerCounts,
+    query,
+    shortfallOnly,
+    activeCourseId,
+  });
+  if (snapshot === lastCourseListSnapshot) return;
+  lastCourseListSnapshot = snapshot;
+
   const filled = COURSES.filter(
     (c) => c.tutorsNeeded && c.tutorsAssigned >= c.tutorsNeeded,
   ).length;
@@ -355,10 +377,10 @@ function buildWorkloadStamp(check) {
   return `<span class="stamp ${over ? "blocked" : "ok"}">${projectedHours}/${weeklyHourCap} hrs/wk${over ? " · over cap" : ""}</span>`;
 }
 
+let lastApplicantsSnapshot = null; // most recent `${courseId}:${rowsJson}` rendered
+
 async function renderApplicants(course) {
   const requestId = ++applicantsRequestId;
-  applicantListEl.innerHTML = "";
-  applicantsEmptyEl.hidden = true;
 
   let rows = [];
   try {
@@ -373,6 +395,16 @@ async function renderApplicants(course) {
 
   // the active course may have changed while this request was in flight
   if (requestId !== applicantsRequestId) return;
+
+  // Nothing about this course's applicants changed since we last actually
+  // rendered them — skip the rebuild (and the assignment-check fetches
+  // below) entirely, rather than flashing an identical list on every poll.
+  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  if (snapshot === lastApplicantsSnapshot) return;
+  lastApplicantsSnapshot = snapshot;
+
+  applicantListEl.innerHTML = "";
+  applicantsEmptyEl.hidden = true;
 
   renderRemainingBudget(course, rows);
 
@@ -633,11 +665,10 @@ const excusalListEl = document.getElementById("excusalList");
 const excusalsEmptyEl = document.getElementById("excusalsEmpty");
 
 let excusalsRequestId = 0;
+let lastExcusalsSnapshot = null;
 
 async function renderExcusals(course) {
   const requestId = ++excusalsRequestId;
-  excusalListEl.innerHTML = "";
-  excusalsEmptyEl.hidden = true;
 
   let rows = [];
   try {
@@ -651,6 +682,13 @@ async function renderExcusals(course) {
   }
 
   if (requestId !== excusalsRequestId) return;
+
+  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  if (snapshot === lastExcusalsSnapshot) return;
+  lastExcusalsSnapshot = snapshot;
+
+  excusalListEl.innerHTML = "";
+  excusalsEmptyEl.hidden = true;
 
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = rows.filter((e) => e.session_date >= today);
@@ -686,11 +724,10 @@ const volunteerListEl = document.getElementById("volunteerList");
 const volunteersEmptyEl = document.getElementById("volunteersEmpty");
 
 let volunteersRequestId = 0;
+let lastVolunteersSnapshot = null;
 
 async function renderVolunteers(course) {
   const requestId = ++volunteersRequestId;
-  volunteerListEl.innerHTML = "";
-  volunteersEmptyEl.hidden = true;
 
   let rows = [];
   try {
@@ -705,6 +742,13 @@ async function renderVolunteers(course) {
 
   // the active course may have changed while this request was in flight
   if (requestId !== volunteersRequestId) return;
+
+  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  if (snapshot === lastVolunteersSnapshot) return;
+  lastVolunteersSnapshot = snapshot;
+
+  volunteerListEl.innerHTML = "";
+  volunteersEmptyEl.hidden = true;
 
   if (rows.length === 0) {
     volunteersEmptyEl.hidden = false;
@@ -861,14 +905,23 @@ async function setVolunteerLock(course, vol, name) {
   }
 }
 
+let lastAssignmentCardSnapshot = null;
+
 function renderAssignmentCard(course) {
   const isFull =
     !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
-  assignmentCardEl.className =
+  const className =
     "assignment-card " + (course.tutorsAssigned > 0 ? "filled" : "empty");
-  assignmentCardEl.innerHTML = isFull
+  const html = isFull
     ? `<p class="empty-copy">This course is fully staffed — ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
     : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "—"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
+
+  const snapshot = `${course.id}:${className}:${html}`;
+  if (snapshot === lastAssignmentCardSnapshot) return;
+  lastAssignmentCardSnapshot = snapshot;
+
+  assignmentCardEl.className = className;
+  assignmentCardEl.innerHTML = html;
 }
 
 // ---------- add / edit course modal ----------
@@ -1102,6 +1155,134 @@ if (tourBtn) {
   });
 }
 
+// ---------- live updates (concurrent editing) ----------
+// Realtime, not polling: a Supabase channel notifies this page the instant
+// something changes (course edits, approvals, rejections, locks, excusals)
+// and it refetches through the existing /api/... routes — Realtime is used
+// purely as a "go refetch" signal, not as a data source, so the Express
+// validation/auth layer is untouched. Each organiser's own course
+// selection stays local; only the *data* refreshes.
+//
+// Every render function this triggers already skips its own DOM rebuild
+// when the fetched data is unchanged (see the snapshot checks throughout
+// this file), so bursts of events don't cause visible flicker.
+
+function isAnyModalOpen() {
+  return Boolean(addCourseModal?.open || reasonModal?.open);
+}
+
+function formatSyncStatus(date) {
+  const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+  if (seconds < 3) return "Synced just now";
+  return `Synced ${seconds}s ago`;
+}
+
+let lastSyncedAt = null;
+
+function tickSyncStatusLabel() {
+  if (syncStatusEl && lastSyncedAt) {
+    syncStatusEl.textContent = formatSyncStatus(lastSyncedAt);
+  }
+}
+
+let refreshInFlight = false;
+
+async function refreshBoard() {
+  // Same reasoning as before: don't yank the page out from under an
+  // organiser who's mid-form, and don't let overlapping refreshes race.
+  if (refreshInFlight || isAnyModalOpen()) return;
+
+  refreshInFlight = true;
+  try {
+    await fetchCourses();
+    await Promise.all([
+      fetchTutorCount(),
+      fetchVolunteerCounts(),
+      fetchPendingApplicationCounts(),
+      fetchPendingVolunteerCounts(),
+    ]);
+    lastSyncedAt = new Date();
+    tickSyncStatusLabel();
+  } catch (err) {
+    // Fails open, same as every other fetch on this page.
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+// Realtime can deliver several change events in a tight burst (e.g. a
+// status update touching both tutor_subject_preference and courses at
+// once) — debounce so that becomes one refresh, not several.
+let refreshDebounceTimer = null;
+function scheduleRefresh() {
+  clearTimeout(refreshDebounceTimer);
+  refreshDebounceTimer = setTimeout(refreshBoard, 300);
+}
+
+function startRealtimeSync() {
+  if (!window.supabase?.createClient) {
+    console.error(
+      "Supabase client library not loaded — live updates are disabled. Check that the supabase-js <script> tag in board.html loaded successfully.",
+    );
+    return;
+  }
+  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+    console.error(
+      "SUPABASE_URL / SUPABASE_ANON_KEY not configured — live updates are disabled.",
+    );
+    return;
+  }
+
+  const supabaseClient = window.supabase.createClient(
+    window.SUPABASE_URL,
+    window.SUPABASE_ANON_KEY,
+  );
+
+  const watchedTables = [
+    "courses",
+    "tutor_subject_preference",
+    "course_volunteers",
+    "session_excusals",
+    "tutors",
+  ];
+
+  let channel = supabaseClient.channel("board-realtime");
+  watchedTables.forEach((table) => {
+    channel = channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table },
+      scheduleRefresh,
+    );
+  });
+
+  channel.subscribe((status) => {
+    if (status === "SUBSCRIBED") {
+      if (syncStatusEl) syncStatusEl.title = "Live updates connected";
+    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      console.error(
+        `Supabase Realtime channel status: ${status} — live updates may be stale. This is usually a Realtime replication or RLS policy issue on the watched tables, not a bug in this page.`,
+      );
+      if (syncStatusEl)
+        syncStatusEl.title =
+          "Live updates disconnected — reload the page to retry";
+    }
+  });
+
+  // Slow safety-net poll, purely for the rare case Realtime misses an
+  // event during a brief disconnect — not the primary update mechanism
+  // anymore, so its interval doesn't need to be tight.
+  setInterval(() => {
+    if (!document.hidden) refreshBoard();
+  }, 60000);
+
+  setInterval(tickSyncStatusLabel, 1000); // keeps the "Xs ago" label current
+
+  // Catch up immediately when the tab regains focus.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshBoard();
+  });
+}
+
 // ---------- init ----------
 
 (async () => {
@@ -1110,6 +1291,9 @@ if (tourBtn) {
   fetchVolunteerCounts();
   fetchPendingApplicationCounts();
   fetchPendingVolunteerCounts();
+  lastSyncedAt = new Date();
+  tickSyncStatusLabel();
+  startRealtimeSync();
 
   window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
     tourId: "organiser-board",

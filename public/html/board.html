@@ -29,6 +29,8 @@
         <dd class="stat-value" id="statPending">0</dd>
       </dl>
 
+      <p class="hint" id="syncStatus" aria-live="polite"></p>
+
       <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
       <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
       <a class="btn btn-ghost" href="hours-budget-report.html">Budget report</a>
@@ -388,6 +390,18 @@
       </form>
     </dialog>
 
+    <!--
+      Public by design: the anon key is meant to be embedded in client-side
+      code — Supabase's security model relies on Row Level Security
+      policies on the database side, not on keeping this secret. Never put
+      the service_role key here.
+    -->
+    <script>
+      window.SUPABASE_URL = "https://bdwyjepbxwoitdwbdlir.supabase.co";
+      window.SUPABASE_ANON_KEY =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkd3lqZXBieHdvaXRkd2JkbGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4OTUxNDQsImV4cCI6MjEwMTQ3MTE0NH0.xCpleg_YveDZf-ilAcudkuf0vsvOROFfQUQHpMssmzc";
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="../js/onboarding.js"></script>
     <script src="../js/board.js"></script>
     <script src="../js/logout.js"></script>
