@@ -4,184 +4,498 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>Register | Tutor Management System</title>
+    <title>Register | TutorX</title>
 
+    <!-- Design tokens, base typography and the shared .btn component -->
     <link rel="stylesheet" href="../css/auth-global.css" />
 
-    <!-- Fonts used by your stylesheet -->
+    <!-- Login / register page styling — loads after the base sheet -->
+    <link rel="stylesheet" href="../css/auth.css" />
+
+    <!-- Fonts used by the auth pages -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,400;1,600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap"
       rel="stylesheet"
     />
   </head>
 
   <body>
-    <main class="auth-page">
-      <section class="auth-card">
-        <header class="auth-header">
-          <span class="eyebrow"> Tutor Management System </span>
+    <main class="auth-shell">
+      <!-- Brand panel (decorative, desktop only) -->
+      <aside class="auth-brand" aria-hidden="true">
+        <div class="auth-brand-inner">
+          <div class="brand-mark">
+            <span class="brand-mark-badge">TX</span>
 
-          <h1>Create your account</h1>
+            <span class="brand-mark-name">TutorX</span>
+          </div>
 
-          <p>Register to get started.</p>
-        </header>
+          <div class="auth-brand-hero">
+            <p class="auth-brand-kicker">Tutor allocation, streamlined</p>
 
-        <form id="register-form">
-          <!-- =========================
-                     NAME
-                     ========================= -->
+            <h2>Where <em>great tutors</em> meet great courses.</h2>
 
-          <div class="form-group">
-            <label for="name"> Full name </label>
+            <p>
+              TutorX brings course needs, tutor matching, timetables and
+              timesheets together — so organisers spend less time scheduling and
+              students get the help they need.
+            </p>
+          </div>
 
-            <input
-              type="text"
-              id="name"
-              name="name"
-              placeholder="Your full name"
-              required
+          <ul class="auth-brand-points">
+            <li>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="8.5 12.5 11 15 15.5 9.5" />
+              </svg>
+
+              <span>Match tutors to courses without the guesswork</span>
+            </li>
+
+            <li>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="8.5 12.5 11 15 15.5 9.5" />
+              </svg>
+
+              <span>Log hours with timetable-aware timesheets</span>
+            </li>
+
+            <li>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="8.5 12.5 11 15 15.5 9.5" />
+              </svg>
+
+              <span>Flag timetable clashes before they happen</span>
+            </li>
+          </ul>
+
+          <div class="auth-brand-foot">
+            <img
+              src="../images/Wits-890x664.png"
+              alt=""
+              class="auth-brand-logo"
             />
+
+            <span class="auth-brand-caption">
+              University of the Witwatersrand
+            </span>
           </div>
+        </div>
+      </aside>
+
+      <!-- Form panel -->
+      <section class="auth-panel">
+        <div class="auth-card">
+          <header class="auth-header">
+            <div class="auth-card-brand">
+              <span class="brand-mark-badge">TX</span>
+
+              <span class="brand-mark-name">TutorX</span>
+            </div>
+
+            <h1>Create your account</h1>
+
+            <p>Register to get started.</p>
+          </header>
+
+          <form id="register-form">
+            <!-- =========================
+                       NAME
+                       ========================= -->
+
+            <div class="form-group">
+              <label for="name"> Full name </label>
+
+              <div class="input-wrap">
+                <svg
+                  class="input-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  placeholder="Your full name"
+                  autocomplete="name"
+                  required
+                />
+              </div>
+            </div>
+
+            <!-- =========================
+                       EMAIL
+                       ========================= -->
+
+            <div class="form-group">
+              <label for="email"> Email </label>
+
+              <div class="input-wrap">
+                <svg
+                  class="input-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+                  />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  placeholder="you@example.com"
+                  autocomplete="email"
+                  required
+                />
+              </div>
+
+              <p class="field-hint">
+                Use your Wits email address (@wits.ac.za or
+                @students.wits.ac.za).
+              </p>
+            </div>
+
+            <!-- =========================
+                       PASSWORD
+                       ========================= -->
+
+            <div class="form-group">
+              <label for="password"> Password </label>
+
+              <div class="input-wrap">
+                <svg
+                  class="input-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  placeholder="Create a password"
+                  autocomplete="new-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  class="password-toggle"
+                  data-target="password"
+                  aria-label="Show password"
+                >
+                  <svg
+                    class="icon-eye"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+
+                  <svg
+                    class="icon-eye-off"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                    />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- =========================
+                       CONFIRM PASSWORD
+                       ========================= -->
+
+            <div class="form-group">
+              <label for="confirm-password"> Confirm password </label>
+
+              <div class="input-wrap">
+                <svg
+                  class="input-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+
+                <input
+                  type="password"
+                  id="confirm-password"
+                  name="confirm-password"
+                  placeholder="Enter your password again"
+                  autocomplete="new-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  class="password-toggle"
+                  data-target="confirm-password"
+                  aria-label="Show password"
+                >
+                  <svg
+                    class="icon-eye"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+
+                  <svg
+                    class="icon-eye-off"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                    />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- =========================
+                       ROLE
+                       ========================= -->
+
+            <div class="form-group">
+              <label for="role"> Account type </label>
+
+              <div class="input-wrap">
+                <svg
+                  class="input-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                </svg>
+
+                <select id="role" name="role" required>
+                  <option value="" disabled selected>Select your role</option>
+
+                  <option value="student">Student</option>
+
+                  <option value="tutor">Tutor</option>
+
+                  <option value="organiser">Organiser</option>
+
+                  <option value="educator">Educator</option>
+                </select>
+
+                <svg
+                  class="select-chevron"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </div>
+
+            <!-- =========================
+                       STUDENT NUMBER
+
+                       Shown for:
+                       - Student
+                       - Tutor
+
+                       Toggled by auth.js, which flips this group's
+                       inline display between none and block — keep
+                       the inline style as-is.
+                       ========================= -->
+
+            <div
+              class="form-group"
+              id="student-number-group"
+              style="display: none"
+            >
+              <label for="student-number"> Student number </label>
+
+              <div class="input-wrap">
+                <svg
+                  class="input-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="4" y1="9" x2="20" y2="9" />
+                  <line x1="4" y1="15" x2="20" y2="15" />
+                  <line x1="10" y1="3" x2="8" y2="21" />
+                  <line x1="16" y1="3" x2="14" y2="21" />
+                </svg>
+
+                <input
+                  type="text"
+                  id="student-number"
+                  name="student-number"
+                  placeholder="e.g. 1234567"
+                  autocomplete="off"
+                />
+              </div>
+            </div>
+
+            <!-- =========================
+                       SUBMIT
+                       ========================= -->
+
+            <button type="submit" class="btn btn-primary auth-button">
+              Create account
+            </button>
+          </form>
 
           <!-- =========================
-                     EMAIL
+                     MESSAGE
                      ========================= -->
 
-          <div class="form-group">
-            <label for="email"> Email </label>
-
-            <input
-              type="email"
-              id="email"
-              name="email"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
+          <p id="register-message" class="form-message" aria-live="polite"></p>
 
           <!-- =========================
-                     PASSWORD
+                     GOOGLE REGISTRATION
                      ========================= -->
 
-          <div class="form-group">
-            <label for="password"> Password </label>
+          <div class="auth-divider"><span>or sign up with</span></div>
 
-            <input
-              type="password"
-              id="password"
-              name="password"
-              placeholder="Create a password"
-              required
-            />
-          </div>
+          <button type="button" id="google-register-button" class="auth-social">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path
+                fill="#FFC107"
+                d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c6.627 0 12 5.373 12 12h12c0-11.045-8.955-20-20-20S0 12.955 0 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
+              />
+              <path
+                fill="#FF3D00"
+                d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
+              />
+              <path
+                fill="#4CAF50"
+                d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
+              />
+              <path
+                fill="#1976D2"
+                d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
+              />
+            </svg>
 
-          <!-- =========================
-                     CONFIRM PASSWORD
-                     ========================= -->
-
-          <div class="form-group">
-            <label for="confirm-password"> Confirm password </label>
-
-            <input
-              type="password"
-              id="confirm-password"
-              name="confirm-password"
-              placeholder="Enter your password again"
-              required
-            />
-          </div>
-
-          <!-- =========================
-                     ROLE
-                     ========================= -->
-
-          <div class="form-group">
-            <label for="role"> Account type </label>
-
-            <select id="role" name="role" required>
-              <option value="" disabled selected>Select your role</option>
-
-              <option value="student">Student</option>
-
-              <option value="tutor">Tutor</option>
-
-              <option value="organiser">Organiser</option>
-
-              <option value="educator">Educator</option>
-            </select>
-          </div>
-
-          <!-- =========================
-                     STUDENT NUMBER
-                     
-                     Shown for:
-                     - Student
-                     - Tutor
-                     ========================= -->
-
-          <div
-            class="form-group"
-            id="student-number-group"
-            style="display: none"
-          >
-            <label for="student-number"> Student number </label>
-
-            <input
-              type="text"
-              id="student-number"
-              name="student-number"
-              placeholder="e.g. 1234567"
-            />
-          </div>
-
-          <!-- =========================
-                     SUBMIT
-                     ========================= -->
-
-          <button type="submit" class="btn btn-primary auth-button">
-            Create account
+            Continue with Google
           </button>
-        </form>
 
-        <!-- =========================
-                 GOOGLE REGISTRATION
-                 ========================= -->
+          <!-- =========================
+                     LOGIN LINK
+                     ========================= -->
 
-        <div class="auth-divider">
-          <span>OR</span>
+          <p class="auth-switch">
+            Already have an account? <a href="login.html">Back to login</a>
+          </p>
         </div>
 
-        <button
-          type="button"
-          id="google-register-button"
-          class="btn btn-ghost auth-button"
-        >
-          Continue with Google
-        </button>
-
-        <!-- =========================
-                 MESSAGE
-                 ========================= -->
-
-        <p id="register-message" class="form-message" aria-live="polite"></p>
-
-        <!-- =========================
-                 LOGIN LINK
-                 ========================= -->
-
-        <div class="auth-divider">
-          <span> Already have an account? </span>
-        </div>
-
-        <a href="login.html" class="btn btn-ghost auth-button">
-          Back to login
-        </a>
+        <p class="auth-legal">
+          © 2026 TutorX · University of the Witwatersrand
+        </p>
       </section>
     </main>
 
     <script src="../js/auth.js"></script>
+    <script src="../js/auth-ui.js"></script>
   </body>
 </html>
