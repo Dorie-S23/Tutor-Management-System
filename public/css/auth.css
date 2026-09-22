@@ -637,12 +637,23 @@
 
 /* ---------- legal footnote ---------- */
 
+.auth-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .auth-legal {
   margin: 0;
   font-size: 11.5px;
   letter-spacing: 0.02em;
   color: var(--ink-faint);
   text-align: center;
+}
+
+.auth-credit {
+  opacity: 0.75;
 }
 
 /* ---------- desktop split layout ---------- */
