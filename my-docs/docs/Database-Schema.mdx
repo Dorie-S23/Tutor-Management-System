@@ -226,8 +226,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `timesheet_disputes`
 
-- A dispute raised against a reviewed timesheet.
-- Not yet read or written by the application API — managed directly in Supabase.
+- A dispute raised against a reviewed (approved or rejected) timesheet. Read and written via `/api/timesheet-disputes` — a tutor raises one against their own reviewed timesheet, an organiser resolves it.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)

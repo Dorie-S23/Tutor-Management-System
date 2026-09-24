@@ -77,6 +77,81 @@
       </section>
     </main>
 
+    <dialog class="modal" id="reasonModal" aria-labelledby="reasonModalHeading">
+      <form method="dialog" class="modal-form" id="reasonForm">
+        <header class="modal-head">
+          <h2 id="reasonModalHeading">Note</h2>
+          <button
+            class="modal-close"
+            id="reasonModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="reasonFormError" hidden></p>
+
+        <label class="field">
+          <span class="field-label" id="reasonFieldLabel">Note</span>
+          <textarea id="reasonInput" name="reason" rows="3"></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="reasonCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button class="btn btn-primary" id="reasonSubmitBtn" type="submit">
+              Confirm
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog
+      class="modal"
+      id="disputeModal"
+      aria-labelledby="disputeModalHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="disputeModalHeading">Dispute</h2>
+          <button
+            class="modal-close"
+            id="disputeModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <div id="disputeModalBody"></div>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="disputeCloseBtn" type="button">
+              Close
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="disputeResolveBtn"
+              type="button"
+            >
+              Mark resolved
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
     <script src="../js/universal-search.js"></script>

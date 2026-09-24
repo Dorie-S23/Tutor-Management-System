@@ -128,6 +128,7 @@
               <th>Hours</th>
               <th>Status</th>
               <th>Submitted</th>
+              <th>Dispute</th>
             </tr>
           </thead>
           <tbody id="submissionsTableBody"></tbody>
@@ -223,6 +224,54 @@
         </div>
       </div>
     </main>
+
+    <dialog
+      class="modal"
+      id="disputeModal"
+      aria-labelledby="disputeModalHeading"
+    >
+      <form method="dialog" class="modal-form" id="disputeForm">
+        <header class="modal-head">
+          <h2 id="disputeModalHeading">Dispute this decision</h2>
+          <button
+            class="modal-close"
+            id="disputeModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="disputeFormError" hidden></p>
+
+        <p class="card-hint" id="disputeModalContext"></p>
+
+        <label class="field">
+          <span class="field-label">What's wrong?</span>
+          <textarea
+            id="disputeMessageInput"
+            name="message"
+            rows="3"
+            required
+            placeholder="e.g. My hours for Tuesday were logged correctly — please recheck."
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn-secondary" id="disputeCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button class="btn-primary" id="disputeSubmitBtn" type="submit">
+              Submit dispute
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 

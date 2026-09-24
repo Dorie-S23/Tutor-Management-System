@@ -170,13 +170,20 @@ router.get("/payroll-export", async (req, res) => {
   res.send(csv);
 });
 
-// PATCH /api/timesheets/:userId/:weekStart — organiser approves/rejects a submission
+// PATCH /api/timesheets/:userId/:weekStart — organiser approves/rejects a
+// submission. A rejection must come with a reviewerNote explaining the
+// correction (e.g. which hours look wrong) — approval's note is optional.
 router.patch("/:userId/:weekStart", async (req, res) => {
-  const { status } = req.body ?? {};
+  const { status, reviewerNote } = req.body ?? {};
   if (!VALID_STATUSES.includes(status)) {
     return res
       .status(400)
       .json({ error: "status must be pending, approved or rejected" });
+  }
+  if (status === "rejected" && !reviewerNote?.trim()) {
+    return res
+      .status(400)
+      .json({ error: "A note is required to reject a timesheet" });
   }
 
   const { data, error } = await supabase
@@ -184,6 +191,7 @@ router.patch("/:userId/:weekStart", async (req, res) => {
     .update({
       status,
       reviewed_at: status === "pending" ? null : new Date().toISOString(),
+      reviewer_note: status === "pending" ? null : reviewerNote?.trim() || null,
     })
     .eq("user_id", req.params.userId)
     .eq("week_start", req.params.weekStart)
