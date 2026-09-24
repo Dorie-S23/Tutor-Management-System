@@ -198,6 +198,34 @@ describe("POST /api/courses", () => {
     });
     expect(tables.courses).toHaveLength(1);
   });
+
+  test("budget is optional and defaults to null", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse());
+
+    expect(res.status).toBe(201);
+    expect(res.body.budget).toBeNull();
+  });
+
+  test("accepts a budget and stores it as a number", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ budget: "15000" }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.budget).toBe(15000);
+  });
+
+  test("rejects a negative budget", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ budget: -1 }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("budget must be a non-negative number");
+    expect(tables.courses).toHaveLength(0);
+  });
 });
 
 describe("PUT /api/courses/:id", () => {

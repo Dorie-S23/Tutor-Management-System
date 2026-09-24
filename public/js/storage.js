@@ -48,6 +48,7 @@ function fromApiEntry(row) {
     taskType: row.task_type || "Tutoring",
     subject: row.subject || "",
     notes: row.notes || "",
+    courseId: row.course_id ?? null,
   };
 }
 

@@ -179,6 +179,7 @@ function parseCoursePayload(body) {
     lab_start_time,
     lab_end_time,
     lab_venues,
+    budget,
   } = body ?? {};
 
   if (typeof course_code !== "string" || !course_code.trim()) {
@@ -268,6 +269,15 @@ function parseCoursePayload(body) {
     };
   }
 
+  // Optional — a course can exist without a budget set yet.
+  let budgetNum = null;
+  if (budget !== undefined && budget !== null && budget !== "") {
+    budgetNum = Number(budget);
+    if (!Number.isFinite(budgetNum) || budgetNum < 0) {
+      return { error: "budget must be a non-negative number" };
+    }
+  }
+
   return {
     values: {
       course_code: course_code.trim(),
@@ -284,6 +294,7 @@ function parseCoursePayload(body) {
       lab_start_time: lab.start,
       lab_end_time: lab.end,
       lab_venues: lab.venue,
+      budget: budgetNum,
     },
   };
 }

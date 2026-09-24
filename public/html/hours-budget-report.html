@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hours &amp; Budget Report | Tutor Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/global.css" />
+  </head>
+  <body>
+    <header class="board-header board-header--brand">
+      <hgroup class="header-left">
+        <p class="eyebrow">
+          <img src="../images/images.png" alt="" class="eyebrow-logo" />
+          School of Computer Science &amp; Applied Mathematics
+        </p>
+        <h1>Hours &amp; Budget Report</h1>
+      </hgroup>
+
+      <img
+        src="../images/Wits-890x664.png"
+        alt="University of the Witwatersrand"
+        class="header-wits-logo"
+      />
+
+      <div class="header-actions">
+        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+      </div>
+      <button class="btn btn-danger" id="logout-button" type="button">
+        Logout
+      </button>
+    </header>
+
+    <main class="tutors-layout">
+      <section class="card" aria-labelledby="filtersHeading">
+        <h2 id="filtersHeading">Date range</h2>
+        <p class="hint">
+          Leave both blank to include every logged tutoring hour on record.
+        </p>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="fromDate">From</label>
+            <input type="date" id="fromDate" />
+          </div>
+          <div class="form-field">
+            <label for="toDate">To</label>
+            <input type="date" id="toDate" />
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" id="applyFilterBtn" type="button">
+              Apply
+            </button>
+            <button class="btn btn-ghost" id="clearFilterBtn" type="button">
+              Clear
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <p class="field-error" id="unlinkedWarning" hidden></p>
+
+      <section id="reportSections" aria-label="Hours and budget by course">
+        <!-- injected -->
+      </section>
+
+      <p class="empty-copy" id="emptyCopy" hidden>
+        No tutoring hours logged against a course for this range yet.
+      </p>
+    </main>
+
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
+
+    <script src="../js/hours-budget-report.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
+</html>

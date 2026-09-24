@@ -227,7 +227,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
   test("returns 404 for an application that doesn't exist", async () => {
     const res = await request(buildApp())
       .patch("/api/tutor-applications/missing")
-      .send({ status: "approved" });
+      .send({ status: "approved", approvalReason: "Great fit" });
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("Application not found");
@@ -244,7 +244,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved" });
+      .send({ status: "approved", approvalReason: "Great fit" });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
@@ -262,7 +262,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "rejected" });
+      .send({ status: "rejected", rejectionReason: "No longer needed" });
 
     expect(res.status).toBe(200);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
@@ -277,10 +277,49 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "rejected" });
+      .send({ status: "rejected", rejectionReason: "No longer needed" });
 
     expect(res.status).toBe(200);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("rejecting stores the reason, rejecting without one is a 400", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 2, no_of_tutors_assigned: 0 }];
+    tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+    tables.tutor_subject_preference = [
+      { id: "app-1", status: "pending", course_id: 10, tutor_id: "t1" },
+    ];
+
+    const missingReason = await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({ status: "rejected" });
+    expect(missingReason.status).toBe(400);
+    expect(tables.tutor_subject_preference[0].status).toBe("pending");
+
+    const withReason = await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({ status: "rejected", rejectionReason: "Mark below cutoff" });
+    expect(withReason.status).toBe(200);
+    expect(tables.tutor_subject_preference[0].rejection_reason).toBe(
+      "Mark below cutoff",
+    );
+  });
+
+  test("approving without a reason is rejected with a 400", async () => {
+    tables.courses = [
+      { id: 10, tutors_needed: 2, no_of_tutors_assigned: 0, hours_per_week: 3 },
+    ];
+    tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+    tables.tutor_subject_preference = [
+      { id: "app-1", status: "pending", course_id: 10, tutor_id: "t1" },
+    ];
+
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(400);
+    expect(tables.tutor_subject_preference[0].status).toBe("pending");
   });
 
   test("blocks approval that would exceed the course's tutor capacity", async () => {
@@ -294,7 +333,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved" });
+      .send({ status: "approved", approvalReason: "Great fit" });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toBe(
@@ -327,7 +366,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved" });
+      .send({ status: "approved", approvalReason: "Great fit" });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toBe(
@@ -354,7 +393,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved" });
+      .send({ status: "approved", approvalReason: "Great fit" });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
@@ -369,7 +408,12 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved", override: true, reason: "urgent" });
+      .send({
+        status: "approved",
+        approvalReason: "Great fit",
+        override: true,
+        reason: "urgent",
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe(
@@ -389,6 +433,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
       .patch("/api/tutor-applications/app-1")
       .send({
         status: "approved",
+        approvalReason: "Great fit",
         override: true,
         organiserId: "org-1",
         reason: "   ",
@@ -411,6 +456,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
       .patch("/api/tutor-applications/app-1")
       .send({
         status: "approved",
+        approvalReason: "Great fit",
         override: true,
         organiserId: "org-1",
         reason: "Short-staffed this week",
@@ -445,6 +491,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
       .patch("/api/tutor-applications/app-1")
       .send({
         status: "approved",
+        approvalReason: "Great fit",
         override: true,
         organiserId: "org-1",
         reason: "Special case",
@@ -472,6 +519,89 @@ describe("PATCH /api/tutor-applications/:id", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("pending");
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("a locked application's status can't be changed", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 2, no_of_tutors_assigned: 1 }];
+    tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+    tables.tutor_subject_preference = [
+      {
+        id: "app-1",
+        status: "approved",
+        course_id: 10,
+        tutor_id: "t1",
+        locked: true,
+      },
+    ];
+
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({ status: "pending" });
+
+    expect(res.status).toBe(409);
+    expect(tables.tutor_subject_preference[0].status).toBe("approved");
+  });
+});
+
+describe("PATCH /api/tutor-applications/:id/lock", () => {
+  beforeEach(() => {
+    tables.tutor_subject_preference = [
+      {
+        id: "app-1",
+        status: "approved",
+        course_id: 10,
+        tutor_id: "t1",
+        locked: false,
+      },
+    ];
+  });
+
+  test("locks an approved application", async () => {
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.locked).toBe(true);
+    expect(tables.tutor_subject_preference[0].locked).toBe(true);
+  });
+
+  test("rejects anything other than locked: true", async () => {
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1/lock")
+      .send({ locked: false });
+
+    expect(res.status).toBe(400);
+    expect(tables.tutor_subject_preference[0].locked).toBe(false);
+  });
+
+  test("refuses to lock an application that isn't approved", async () => {
+    tables.tutor_subject_preference[0].status = "pending";
+
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(409);
+    expect(tables.tutor_subject_preference[0].locked).toBe(false);
+  });
+
+  test("refuses to lock an application that's already locked", async () => {
+    tables.tutor_subject_preference[0].locked = true;
+
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(409);
+  });
+
+  test("404s for an application that doesn't exist", async () => {
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/missing/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(404);
   });
 });
 

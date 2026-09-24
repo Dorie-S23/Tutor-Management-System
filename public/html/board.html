@@ -42,6 +42,8 @@
           <dd class="stat-value" id="statPending">0</dd>
         </dl>
 
+        <p class="hint" id="syncStatus" aria-live="polite"></p>
+
         <div class="header-actions">
           <div class="universal-search">
             <input
@@ -64,6 +66,9 @@
           <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
           <a class="btn btn-ghost" href="timetable.html">Timetable</a>
           <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
+          <a class="btn btn-ghost" href="hours-budget-report.html"
+            >Budget report</a
+          >
           <button class="btn btn-ghost" id="tour-button" type="button">
             Take the tour
           </button>
@@ -132,6 +137,14 @@
               <dl class="hours-need">
                 <dt class="stat-label">students volunteered</dt>
                 <dd class="stat-value" id="dVolunteered"></dd>
+              </dl>
+              <dl class="hours-need">
+                <dt class="stat-label">budget</dt>
+                <dd class="stat-value" id="dBudget"></dd>
+              </dl>
+              <dl class="hours-need">
+                <dt class="stat-label">remaining (weekly, assigned tutors)</dt>
+                <dd class="stat-value" id="dRemainingBudget"></dd>
               </dl>
               <button
                 class="btn btn-ghost btn-small-pad"
@@ -303,6 +316,20 @@
             step="1"
             placeholder="e.g. 8"
             required
+          />
+        </label>
+
+        <label class="field">
+          <span class="field-label"
+            >Budget <span class="field-optional">(optional)</span></span
+          >
+          <input
+            type="number"
+            id="budgetInput"
+            name="budget"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 15000"
           />
         </label>
 
@@ -561,6 +588,53 @@
           </li>
         </menu>
       </div>
+    </dialog>
+
+    <dialog class="modal" id="reasonModal" aria-labelledby="reasonHeading">
+      <form method="dialog" class="modal-form" id="reasonForm">
+        <header class="modal-head">
+          <h2 id="reasonHeading">Reason</h2>
+          <button
+            class="modal-close"
+            id="reasonCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint">
+          This is shown to them on their own dashboard, so keep it clear and
+          respectful.
+        </p>
+
+        <p class="field-error" id="reasonError" hidden></p>
+
+        <label class="field">
+          <span class="field-label">Reason</span>
+          <textarea
+            id="reasonInput"
+            name="reason"
+            rows="4"
+            placeholder="e.g. Mark just below the course minimum this term."
+            required
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="reasonCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button class="btn btn-primary" id="reasonSubmitBtn" type="submit">
+              Confirm
+            </button>
+          </li>
+        </menu>
+      </form>
     </dialog>
 
     <script src="../js/onboarding.js"></script>

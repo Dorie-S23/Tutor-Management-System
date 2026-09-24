@@ -21,6 +21,7 @@ function mapCourseRow(row) {
     hoursNeeded: row.hours_per_week,
     tutorsNeeded: row.tutors_needed,
     tutorsAssigned: row.no_of_tutors_assigned ?? 0,
+    budget: row.budget,
     dayOfTut: row.Day_of_tut,
     startTime: row.tutor_start_time,
     endTime: row.tutor_end_time,
@@ -252,6 +253,7 @@ const shortfallToggleEl = document.getElementById("shortfallToggle");
 const statFilledEl = document.getElementById("statFilled");
 const statTutorsEl = document.getElementById("statTutors");
 const statPendingEl = document.getElementById("statPending");
+const syncStatusEl = document.getElementById("syncStatus");
 
 function shortfall(course) {
   return course.tutorsNeeded ? course.tutorsNeeded - course.tutorsAssigned : 0;
@@ -266,8 +268,29 @@ function pendingCount(course) {
   );
 }
 
+let lastCourseListSnapshot = null;
+
 function renderCourseList() {
   const query = courseSearchEl.value.trim().toLowerCase();
+
+  // Everything this function's output depends on — if none of it changed
+  // since last render, skip the rebuild entirely. Prevents the course
+  // rail flashing on every poll tick when nothing actually changed, while
+  // still re-rendering immediately for real changes (a live edit from
+  // another organiser) or local UI state (typing in search, toggling the
+  // shortfall filter, selecting a course).
+  const snapshot = JSON.stringify({
+    courses: COURSES,
+    volunteerCounts,
+    pendingApplicationCounts,
+    pendingVolunteerCounts,
+    query,
+    shortfallOnly,
+    activeCourseId,
+  });
+  if (snapshot === lastCourseListSnapshot) return;
+  lastCourseListSnapshot = snapshot;
+
   const filled = COURSES.filter(
     (c) => c.tutorsNeeded && c.tutorsAssigned >= c.tutorsNeeded,
   ).length;
@@ -415,6 +438,40 @@ function buildSessionSummary(course) {
   return `${parts.join("  ·  ")}  ·  requires a mark of ${course.minMark}+`;
 }
 
+function formatMoney(value) {
+  if (value == null) return "Not set";
+  return `R${Number(value).toFixed(2)}`;
+}
+
+// Weekly cost projection: budget minus each currently-assigned (approved)
+// tutor's hourly_rate × this course's hours_per_week. This is a forward-
+// looking projection based on who's assigned right now — for actual
+// logged-hours cost over time, see the Hours & Budget report page.
+function renderRemainingBudget(course, applicantRows) {
+  const remainingEl = document.getElementById("dRemainingBudget");
+  if (course.budget == null) {
+    remainingEl.textContent = "No budget set";
+    return;
+  }
+
+  const approved = applicantRows.filter(
+    (app) => (app.status || "").toLowerCase() === "approved",
+  );
+  const hasUnknownRate = approved.some(
+    (app) => app.tutors?.hourly_rate == null,
+  );
+  const weeklyCost = approved.reduce((sum, app) => {
+    const rate = app.tutors?.hourly_rate;
+    return sum + (rate != null ? rate * (course.hoursNeeded || 0) : 0);
+  }, 0);
+
+  const remaining = course.budget - weeklyCost;
+  remainingEl.textContent =
+    formatMoney(remaining) +
+    (hasUnknownRate ? " (partial — some rates unknown)" : "");
+  remainingEl.classList.toggle("stat-value--attention", remaining < 0);
+}
+
 const emptyStateEl = document.getElementById("emptyState");
 const courseDetailEl = document.getElementById("courseDetail");
 const assignmentCardEl = document.getElementById("assignmentCard");
@@ -444,6 +501,8 @@ function renderDetail() {
     `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
   document.getElementById("dVolunteered").textContent =
     volunteerCounts[course.id] ?? 0;
+  document.getElementById("dBudget").textContent = formatMoney(course.budget);
+  document.getElementById("dRemainingBudget").textContent = "—";
 
   renderAssignmentCard(course);
   renderApplicants(course);
@@ -514,10 +573,10 @@ function buildWorkloadStamp(check) {
   return `<span class="stamp ${over ? "blocked" : "ok"}">${projectedHours}/${weeklyHourCap} hrs/wk${over ? " · over cap" : ""}</span>`;
 }
 
+let lastApplicantsSnapshot = null; // most recent `${courseId}:${rowsJson}` rendered
+
 async function renderApplicants(course) {
   const requestId = ++applicantsRequestId;
-  applicantListEl.innerHTML = "";
-  applicantsEmptyEl.hidden = true;
 
   let rows = [];
   try {
@@ -532,6 +591,18 @@ async function renderApplicants(course) {
 
   // the active course may have changed while this request was in flight
   if (requestId !== applicantsRequestId) return;
+
+  // Nothing about this course's applicants changed since we last actually
+  // rendered them — skip the rebuild (and the assignment-check fetches
+  // below) entirely, rather than flashing an identical list on every poll.
+  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  if (snapshot === lastApplicantsSnapshot) return;
+  lastApplicantsSnapshot = snapshot;
+
+  applicantListEl.innerHTML = "";
+  applicantsEmptyEl.hidden = true;
+
+  renderRemainingBudget(course, rows);
 
   if (rows.length === 0) {
     applicantsEmptyEl.hidden = false;
@@ -603,7 +674,15 @@ async function renderApplicants(course) {
             ) {
               return;
             }
-            setApplicationStatus(course, app, "approved", name);
+            openReasonModal(
+              `Approve ${name} for ${course.code}?`,
+              "Approve with this note",
+              (reason) =>
+                setApplicationStatus(course, app, "approved", name, {
+                  approvalReason: reason,
+                }),
+              "e.g. Strong mark and full availability at the tutorial time.",
+            );
           },
           blockReason,
         ),
@@ -617,15 +696,41 @@ async function renderApplicants(course) {
       }
       actionsEl.appendChild(
         makeApplicantActionBtn("Reject", "", () =>
-          setApplicationStatus(course, app, "rejected", name),
+          openReasonModal(
+            `Reject ${name}'s application?`,
+            "Reject with this reason",
+            (reason) =>
+              setApplicationStatus(course, app, "rejected", name, {
+                rejectionReason: reason,
+              }),
+          ),
         ),
       );
     } else if (status === "approved") {
-      actionsEl.appendChild(
-        makeApplicantActionBtn("Unassign", "", () =>
-          setApplicationStatus(course, app, "pending", name),
-        ),
-      );
+      if (app.locked) {
+        const lockedStamp = document.createElement("span");
+        lockedStamp.className = "stamp";
+        lockedStamp.textContent = "Locked";
+        actionsEl.appendChild(lockedStamp);
+      } else {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Unassign", "", () =>
+            setApplicationStatus(course, app, "pending", name),
+          ),
+        );
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Lock", "", () => {
+            if (
+              !confirm(
+                `Lock ${name}'s assignment to ${course.code}? This is permanent — it can't be undone or reconsidered afterwards.`,
+              )
+            ) {
+              return;
+            }
+            setApplicationLock(course, app, name);
+          }),
+        );
+      }
     } else {
       actionsEl.appendChild(
         makeApplicantActionBtn("Reconsider", "", () =>
@@ -653,13 +758,66 @@ function makeApplicantActionBtn(label, variant, onClick, disabledTitle) {
   return btn;
 }
 
-async function setApplicationStatus(course, app, status, name) {
+// Collects a required reason/note before an approve or reject goes through
+// — the tutor or student sees this text next to their status on their own
+// dashboard, so it needs to actually say something useful to them.
+const reasonModal = document.getElementById("reasonModal");
+const reasonForm = document.getElementById("reasonForm");
+const reasonHeading = document.getElementById("reasonHeading");
+const reasonInput = document.getElementById("reasonInput");
+const reasonError = document.getElementById("reasonError");
+const reasonSubmitBtn = document.getElementById("reasonSubmitBtn");
+
+let pendingReasonConfirm = null; // callback set by whichever button opened the modal
+
+function openReasonModal(title, confirmLabel, onConfirm, placeholder) {
+  pendingReasonConfirm = onConfirm;
+  reasonHeading.textContent = title;
+  reasonSubmitBtn.textContent = confirmLabel;
+  reasonInput.placeholder =
+    placeholder || "e.g. Mark just below the course minimum this term.";
+  reasonForm.reset();
+  reasonError.hidden = true;
+  reasonModal.showModal();
+  reasonInput.focus();
+}
+
+function closeReasonModal() {
+  pendingReasonConfirm = null;
+  reasonModal.close();
+}
+
+document
+  .getElementById("reasonCloseBtn")
+  .addEventListener("click", closeReasonModal);
+document
+  .getElementById("reasonCancelBtn")
+  .addEventListener("click", closeReasonModal);
+reasonModal.addEventListener("click", (e) => {
+  if (e.target === reasonModal) closeReasonModal();
+});
+
+reasonForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const reason = reasonInput.value.trim();
+  if (!reason) {
+    reasonError.textContent = "A reason is required.";
+    reasonError.hidden = false;
+    return;
+  }
+  const confirmCallback = pendingReasonConfirm;
+  closeReasonModal();
+  confirmCallback?.(reason);
+});
+
+async function setApplicationStatus(course, app, status, name, reasons = {}) {
+  const { rejectionReason, approvalReason } = reasons;
   const previousStatus = (app.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/tutor-applications/${app.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, rejectionReason, approvalReason }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -685,6 +843,25 @@ async function setApplicationStatus(course, app, status, name) {
       );
     }
 
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
+async function setApplicationLock(course, app, name) {
+  try {
+    const res = await fetch(`/api/tutor-applications/${app.id}/lock`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locked: true }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't lock that assignment.");
+      return;
+    }
+    showToast(`${name}'s assignment to ${course.code} is now locked.`);
     await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
@@ -776,11 +953,10 @@ const excusalListEl = document.getElementById("excusalList");
 const excusalsEmptyEl = document.getElementById("excusalsEmpty");
 
 let excusalsRequestId = 0;
+let lastExcusalsSnapshot = null;
 
 async function renderExcusals(course) {
   const requestId = ++excusalsRequestId;
-  excusalListEl.innerHTML = "";
-  excusalsEmptyEl.hidden = true;
 
   let rows = [];
   try {
@@ -794,6 +970,13 @@ async function renderExcusals(course) {
   }
 
   if (requestId !== excusalsRequestId) return;
+
+  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  if (snapshot === lastExcusalsSnapshot) return;
+  lastExcusalsSnapshot = snapshot;
+
+  excusalListEl.innerHTML = "";
+  excusalsEmptyEl.hidden = true;
 
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = rows.filter((e) => e.session_date >= today);
@@ -829,11 +1012,10 @@ const volunteerListEl = document.getElementById("volunteerList");
 const volunteersEmptyEl = document.getElementById("volunteersEmpty");
 
 let volunteersRequestId = 0;
+let lastVolunteersSnapshot = null;
 
 async function renderVolunteers(course) {
   const requestId = ++volunteersRequestId;
-  volunteerListEl.innerHTML = "";
-  volunteersEmptyEl.hidden = true;
 
   let rows = [];
   try {
@@ -848,6 +1030,13 @@ async function renderVolunteers(course) {
 
   // the active course may have changed while this request was in flight
   if (requestId !== volunteersRequestId) return;
+
+  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  if (snapshot === lastVolunteersSnapshot) return;
+  lastVolunteersSnapshot = snapshot;
+
+  volunteerListEl.innerHTML = "";
+  volunteersEmptyEl.hidden = true;
 
   if (rows.length === 0) {
     volunteersEmptyEl.hidden = false;
@@ -885,14 +1074,54 @@ async function renderVolunteers(course) {
     if (status === "pending") {
       actionsEl.appendChild(
         makeApplicantActionBtn("Approve", "approve", () =>
-          setVolunteerStatus(course, vol, "approved", name),
+          openReasonModal(
+            `Approve ${name} for ${course.code}?`,
+            "Approve with this note",
+            (reason) =>
+              setVolunteerStatus(course, vol, "approved", name, {
+                approvalReason: reason,
+              }),
+            "e.g. Mark comfortably above the course minimum.",
+          ),
         ),
       );
       actionsEl.appendChild(
         makeApplicantActionBtn("Reject", "", () =>
-          setVolunteerStatus(course, vol, "rejected", name),
+          openReasonModal(
+            `Reject ${name}'s volunteer request?`,
+            "Reject with this reason",
+            (reason) =>
+              setVolunteerStatus(course, vol, "rejected", name, {
+                rejectionReason: reason,
+              }),
+          ),
         ),
       );
+    } else if (status === "approved") {
+      if (vol.locked) {
+        const lockedStamp = document.createElement("span");
+        lockedStamp.className = "stamp";
+        lockedStamp.textContent = "Locked";
+        actionsEl.appendChild(lockedStamp);
+      } else {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Reconsider", "", () =>
+            setVolunteerStatus(course, vol, "pending", name),
+          ),
+        );
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Lock", "", () => {
+            if (
+              !confirm(
+                `Lock ${name}'s approval for ${course.code}? This is permanent — it can't be undone or reconsidered afterwards.`,
+              )
+            ) {
+              return;
+            }
+            setVolunteerLock(course, vol, name);
+          }),
+        );
+      }
     } else {
       actionsEl.appendChild(
         makeApplicantActionBtn("Reconsider", "", () =>
@@ -906,13 +1135,14 @@ async function renderVolunteers(course) {
   });
 }
 
-async function setVolunteerStatus(course, vol, status, name) {
+async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
+  const { rejectionReason, approvalReason } = reasons;
   const previousStatus = (vol.status || "pending").toLowerCase();
   try {
     const res = await fetch(`/api/course-volunteers/${vol.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, rejectionReason, approvalReason }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -944,14 +1174,42 @@ async function setVolunteerStatus(course, vol, status, name) {
   }
 }
 
+async function setVolunteerLock(course, vol, name) {
+  try {
+    const res = await fetch(`/api/course-volunteers/${vol.id}/lock`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locked: true }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't lock that volunteer.");
+      return;
+    }
+    showToast(`${name}'s approval for ${course.code} is now locked.`);
+    renderVolunteers(course);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
+let lastAssignmentCardSnapshot = null;
+
 function renderAssignmentCard(course) {
   const isFull =
     !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
-  assignmentCardEl.className =
+  const className =
     "assignment-card " + (course.tutorsAssigned > 0 ? "filled" : "empty");
-  assignmentCardEl.innerHTML = isFull
+  const html = isFull
     ? `<p class="empty-copy">This course is fully staffed — ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
     : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "—"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
+
+  const snapshot = `${course.id}:${className}:${html}`;
+  if (snapshot === lastAssignmentCardSnapshot) return;
+  lastAssignmentCardSnapshot = snapshot;
+
+  assignmentCardEl.className = className;
+  assignmentCardEl.innerHTML = html;
 }
 
 // ---------- bulk-fill obvious assignments ----------
@@ -1175,6 +1433,7 @@ function openCourseModal(course = null) {
       course.hoursNeeded ?? "";
     document.getElementById("TutorsNeededInput").value =
       course.tutorsNeeded ?? "";
+    document.getElementById("budgetInput").value = course.budget ?? "";
 
     document.getElementById("dayOfTutInput").value = course.dayOfTut ?? "";
     document.getElementById("tutorStartTimeInput").value = course.startTime
@@ -1365,6 +1624,7 @@ addCourseForm.addEventListener("submit", async (e) => {
 
   const hoursValue = document.getElementById("hoursPerWeekInput").value;
   const tutorsNeededValue = document.getElementById("TutorsNeededInput").value;
+  const budgetValue = document.getElementById("budgetInput").value;
 
   const tutorialChecked = hasTutorialInput.checked;
   const labChecked = hasLabInput.checked;
@@ -1384,6 +1644,7 @@ addCourseForm.addEventListener("submit", async (e) => {
     department: document.getElementById("departmentInput").value.trim(),
     hours_per_week: hoursValue === "" ? null : Number(hoursValue),
     tutors_needed: tutorsNeededValue === "" ? null : Number(tutorsNeededValue),
+    budget: budgetValue === "" ? null : Number(budgetValue),
     has_tutorial: tutorialChecked,
     day_of_tut: tutorialChecked && dayOfTutValue !== "" ? dayOfTutValue : null,
     tutor_start_time:
@@ -1534,6 +1795,12 @@ const ORGANISER_TOUR_STEPS = [
     body: "Logged hours from tutors show up here for you to review.",
     placement: "bottom",
   },
+  {
+    selector: "a[href='hours-budget-report.html']",
+    title: "Hours & budget report",
+    body: "See logged tutoring hours broken down by tutor and course, with cost calculated against each course's budget.",
+    placement: "bottom",
+  },
 ];
 
 const tourBtn = document.getElementById("tour-button");
@@ -1547,6 +1814,78 @@ if (tourBtn) {
   });
 }
 
+// ---------- live updates (concurrent editing) ----------
+// Polls the existing /api/... routes on an interval so another organiser's
+// changes (course edits, approvals, rejections, locks, excusals) show up
+// here without a manual reload. Every render function this triggers already
+// skips its own DOM rebuild when the fetched data is unchanged (see the
+// snapshot checks throughout this file), so poll ticks with nothing new
+// don't cause visible flicker.
+
+function isAnyModalOpen() {
+  return Boolean(
+    addCourseModal?.open ||
+    reasonModal?.open ||
+    overrideModal?.open ||
+    obviousFillModal?.open ||
+    deleteCourseModal?.open,
+  );
+}
+
+function formatSyncStatus(date) {
+  const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+  if (seconds < 3) return "Synced just now";
+  return `Synced ${seconds}s ago`;
+}
+
+let lastSyncedAt = null;
+
+function tickSyncStatusLabel() {
+  if (syncStatusEl && lastSyncedAt) {
+    syncStatusEl.textContent = formatSyncStatus(lastSyncedAt);
+  }
+}
+
+let refreshInFlight = false;
+
+async function refreshBoard() {
+  // Don't yank the page out from under an organiser who's mid-form, and
+  // don't let overlapping refreshes race.
+  if (refreshInFlight || isAnyModalOpen()) return;
+
+  refreshInFlight = true;
+  try {
+    await fetchCourses();
+    await Promise.all([
+      fetchTutorCount(),
+      fetchVolunteerCounts(),
+      fetchPendingApplicationCounts(),
+      fetchPendingVolunteerCounts(),
+    ]);
+    lastSyncedAt = new Date();
+    tickSyncStatusLabel();
+  } catch (err) {
+    // Fails open, same as every other fetch on this page.
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+const POLL_INTERVAL_MS = 8000;
+
+function startPollingSync() {
+  setInterval(() => {
+    if (!document.hidden) refreshBoard();
+  }, POLL_INTERVAL_MS);
+
+  setInterval(tickSyncStatusLabel, 1000); // keeps the "Xs ago" label current
+
+  // Catch up immediately when the tab regains focus.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshBoard();
+  });
+}
+
 // ---------- init ----------
 
 async function init() {
@@ -1555,6 +1894,9 @@ async function init() {
   fetchVolunteerCounts();
   fetchPendingApplicationCounts();
   fetchPendingVolunteerCounts();
+  lastSyncedAt = new Date();
+  tickSyncStatusLabel();
+  startPollingSync();
 
   const params = new URLSearchParams(location.search);
 

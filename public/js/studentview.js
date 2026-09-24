@@ -154,22 +154,77 @@ async function renderPendingApplications() {
     return;
   }
 
-  const pending = applications.filter((app) => app.status === "pending");
+  const statusOrder = { pending: 0, approved: 1, rejected: 2 };
+  const statusLabels = {
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+  };
 
-  if (pending.length === 0) {
+  const relevant = applications
+    .filter((app) => ["pending", "approved", "rejected"].includes(app.status))
+    .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
+
+  if (relevant.length === 0) {
     pendingListEl.innerHTML = `<p class="empty-state">No modules waiting on approval.</p>`;
     return;
   }
 
-  pending.forEach((app) => {
+  relevant.forEach((app) => {
+    const status = (app.status || "pending").toLowerCase();
     const article = document.createElement("article");
     article.innerHTML = `
       <h3>${app.courses.course_code}</h3>
       <p>${app.courses.course_name} &bull; Mark submitted: ${app.mark}</p>
-      <span class="status-pill pending">Pending</span>
+      <span class="status-pill ${status}">${statusLabels[status] || status}</span>
+      ${
+        status === "rejected" && app.rejection_reason
+          ? `<p class="card-hint">Reason: ${app.rejection_reason}</p>`
+          : ""
+      }
+      ${
+        status === "approved" && app.approval_reason
+          ? `<p class="card-hint">Note: ${app.approval_reason}</p>`
+          : ""
+      }
+      ${status === "rejected" ? `<button type="button" class="btn-link" data-action="remove-volunteer">Remove &amp; volunteer again</button>` : ""}
     `;
+    if (status === "rejected") {
+      article
+        .querySelector('[data-action="remove-volunteer"]')
+        .addEventListener("click", () =>
+          removeVolunteerApplication(app.course_id),
+        );
+    }
     pendingListEl.appendChild(article);
   });
+}
+
+// Lets a rejected student volunteer dismiss it themselves so the unique
+// (user, course) constraint stops blocking them from volunteering again,
+// rather than waiting on an organiser to reset it.
+async function removeVolunteerApplication(courseId) {
+  if (
+    !confirm(
+      "Remove this application? You'll be able to volunteer for this course again.",
+    )
+  )
+    return;
+  try {
+    const res = await fetch(
+      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}&courseId=${encodeURIComponent(courseId)}`,
+      { method: "DELETE" },
+    );
+    if (!res.ok && res.status !== 204) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Couldn't remove that application.");
+      return;
+    }
+    showToast("Application removed.");
+    renderPendingApplications();
+  } catch {
+    showToast("Network error — couldn't reach the server.");
+  }
 }
 
 // ---------- toast ----------

@@ -153,23 +153,45 @@ describe("PATCH /api/course-volunteers/:id", () => {
     expect(tables.course_volunteers[0].status).toBe("pending");
   });
 
-  test("an organiser approves a pending volunteer", async () => {
+  test("an organiser approves a pending volunteer, recording the reason", async () => {
     const res = await request(buildApp())
       .patch("/api/course-volunteers/1")
-      .send({ status: "approved" });
+      .send({ status: "approved", approvalReason: "Strong mark, good fit" });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
     expect(tables.course_volunteers[0].status).toBe("approved");
+    expect(tables.course_volunteers[0].approval_reason).toBe(
+      "Strong mark, good fit",
+    );
   });
 
-  test("an organiser rejects a pending volunteer", async () => {
+  test("approving without a reason is rejected with a 400", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(400);
+    expect(tables.course_volunteers[0].status).toBe("pending");
+  });
+
+  test("an organiser rejects a pending volunteer, recording the reason", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "rejected", rejectionReason: "Mark too low" });
+
+    expect(res.status).toBe(200);
+    expect(tables.course_volunteers[0].status).toBe("rejected");
+    expect(tables.course_volunteers[0].rejection_reason).toBe("Mark too low");
+  });
+
+  test("rejecting without a reason is rejected with a 400", async () => {
     const res = await request(buildApp())
       .patch("/api/course-volunteers/1")
       .send({ status: "rejected" });
 
-    expect(res.status).toBe(200);
-    expect(tables.course_volunteers[0].status).toBe("rejected");
+    expect(res.status).toBe(400);
+    expect(tables.course_volunteers[0].status).toBe("pending");
   });
 
   test("an organiser can reset a decided volunteer back to pending", async () => {
@@ -186,7 +208,82 @@ describe("PATCH /api/course-volunteers/:id", () => {
   test("returns 404 for a volunteer row that doesn't exist", async () => {
     const res = await request(buildApp())
       .patch("/api/course-volunteers/999")
-      .send({ status: "approved" });
+      .send({ status: "approved", approvalReason: "Strong mark" });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("a locked volunteer's status can't be changed", async () => {
+    tables.course_volunteers[0].status = "approved";
+    tables.course_volunteers[0].locked = true;
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "pending" });
+
+    expect(res.status).toBe(409);
+    expect(tables.course_volunteers[0].status).toBe("approved");
+  });
+});
+
+describe("PATCH /api/course-volunteers/:id/lock", () => {
+  beforeEach(() => {
+    tables.course_volunteers = [
+      {
+        id: "1",
+        user_id: "student-1",
+        course_id: 1,
+        mark: 75,
+        status: "approved",
+        locked: false,
+      },
+    ];
+  });
+
+  test("locks an approved volunteer", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.locked).toBe(true);
+    expect(tables.course_volunteers[0].locked).toBe(true);
+  });
+
+  test("rejects anything other than locked: true", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1/lock")
+      .send({ locked: false });
+
+    expect(res.status).toBe(400);
+    expect(tables.course_volunteers[0].locked).toBe(false);
+  });
+
+  test("refuses to lock a volunteer that isn't approved", async () => {
+    tables.course_volunteers[0].status = "pending";
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(409);
+    expect(tables.course_volunteers[0].locked).toBe(false);
+  });
+
+  test("refuses to lock a volunteer that's already locked", async () => {
+    tables.course_volunteers[0].locked = true;
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(409);
+  });
+
+  test("404s for a volunteer that doesn't exist", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/999/lock")
+      .send({ locked: true });
 
     expect(res.status).toBe(404);
   });

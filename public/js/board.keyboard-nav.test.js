@@ -27,6 +27,11 @@ window.__test = {
 };
 `;
 
+// board.js's init() starts a polling interval for live updates — closing
+// each window after its test stops those timers, otherwise they'd keep
+// firing against a torn-down document and leave the Jest process hanging.
+const openDoms = [];
+
 function loadBoard() {
   const html = boardHtml
     .replace(
@@ -51,8 +56,13 @@ function loadBoard() {
     },
   });
 
+  openDoms.push(dom);
   return dom.window;
 }
+
+afterEach(() => {
+  openDoms.splice(0).forEach((dom) => dom.window.close());
+});
 
 function seedThreeCourses(window) {
   window.__test.pushCourse({

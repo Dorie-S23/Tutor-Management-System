@@ -37,6 +37,8 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
         filters.every(([type, col, val]) => {
           if (type === "in") return val.includes(row[col]);
           if (type === "neq") return row[col] !== val;
+          if (type === "gte") return row[col] >= val;
+          if (type === "lte") return row[col] <= val;
           return row[col] === val;
         });
 
@@ -137,6 +139,14 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
         },
         neq: (column, value) => {
           filters.push(["neq", column, value]);
+          return builder;
+        },
+        gte: (column, value) => {
+          filters.push(["gte", column, value]);
+          return builder;
+        },
+        lte: (column, value) => {
+          filters.push(["lte", column, value]);
           return builder;
         },
         in: (column, values) => {
