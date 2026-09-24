@@ -487,6 +487,11 @@ input[type="search"]:focus-visible {
   color: var(--red);
   border-color: var(--red-line);
 }
+.status-pill.disputed {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red-line);
+}
 
 /* ---------- detail pane ---------- */
 

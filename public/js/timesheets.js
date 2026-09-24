@@ -47,6 +47,18 @@ const claimRowsEl = document.getElementById("claimRows");
 const submissionsTableBody = document.getElementById("submissionsTableBody");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 
+const disputeModal = document.getElementById("disputeModal");
+const disputeForm = document.getElementById("disputeForm");
+const disputeFormError = document.getElementById("disputeFormError");
+const disputeModalContext = document.getElementById("disputeModalContext");
+const disputeMessageInput = document.getElementById("disputeMessageInput");
+const disputeSubmitBtn = document.getElementById("disputeSubmitBtn");
+
+// This tutor's most recent dispute per submitted week, keyed by weekStart —
+// only need the latest one to know whether "Dispute" or a status badge shows.
+let latestDisputeByWeek = new Map();
+let pendingDispute = null; // { weekStart } for whichever row opened the modal
+
 let toastTimer = null;
 function showToast(message, type = "success") {
   const el = document.getElementById("toast");
@@ -184,6 +196,38 @@ async function renderClaim() {
     : "";
 }
 
+async function loadDisputes(userId) {
+  try {
+    const res = await fetch(
+      `/api/timesheet-disputes?raisedBy=${encodeURIComponent(userId)}`,
+    );
+    const disputes = await res.json();
+    if (!res.ok) throw new Error(disputes.error);
+
+    // The API orders newest-first, so the first one seen per week is the latest.
+    latestDisputeByWeek = new Map();
+    disputes.forEach((d) => {
+      if (!latestDisputeByWeek.has(d.timesheet_week_start)) {
+        latestDisputeByWeek.set(d.timesheet_week_start, d);
+      }
+    });
+  } catch (err) {
+    latestDisputeByWeek = new Map();
+  }
+}
+
+function renderDisputeCell(sub) {
+  if (sub.status === "pending") return "";
+
+  const dispute = latestDisputeByWeek.get(sub.week_start);
+  if (dispute && !dispute.resolved) {
+    return `<span class="status-pill disputed">dispute pending</span>`;
+  }
+
+  const label = dispute ? "Dispute again" : "Dispute";
+  return `<button type="button" class="btn-link" data-action="dispute" data-week="${sub.week_start}">${label}</button>`;
+}
+
 async function loadSubmissions() {
   const user = getCurrentUser();
   if (!user) return;
@@ -199,6 +243,8 @@ async function loadSubmissions() {
     return;
   }
 
+  await loadDisputes(user.id);
+
   submissionsTableBody.innerHTML = "";
   submissionsEmptyEl.hidden = rows.length > 0;
 
@@ -207,8 +253,12 @@ async function loadSubmissions() {
     tr.innerHTML = `
       <td>${toDisplayDate(sub.week_start)}</td>
       <td>${sub.total_hours}</td>
-      <td><span class="status-pill ${sub.status}">${sub.status}</span></td>
+      <td>
+        <span class="status-pill ${sub.status}">${sub.status}</span>
+        ${sub.reviewer_note ? `<p class="hint">${sub.reviewer_note}</p>` : ""}
+      </td>
       <td>${toDisplayDate(sub.submitted_at.slice(0, 10))}</td>
+      <td>${renderDisputeCell(sub)}</td>
     `;
     submissionsTableBody.appendChild(tr);
   });
@@ -258,6 +308,75 @@ submitTimesheetBtn.addEventListener("click", async () => {
     showToast("Network error — couldn't reach the server.", "danger");
   } finally {
     submitTimesheetBtn.disabled = false;
+  }
+});
+
+function openDisputeModal(weekStart) {
+  pendingDispute = { weekStart };
+  disputeForm.reset();
+  disputeFormError.hidden = true;
+  disputeModalContext.textContent = `Raising a dispute about the week of ${toDisplayDate(weekStart)}.`;
+  disputeModal.showModal();
+  disputeMessageInput.focus();
+}
+
+function closeDisputeModal() {
+  disputeModal.close();
+  pendingDispute = null;
+}
+
+document
+  .getElementById("disputeModalCloseBtn")
+  .addEventListener("click", closeDisputeModal);
+document
+  .getElementById("disputeCancelBtn")
+  .addEventListener("click", closeDisputeModal);
+disputeModal.addEventListener("click", (e) => {
+  if (e.target === disputeModal) closeDisputeModal();
+});
+
+submissionsTableBody.addEventListener("click", (e) => {
+  const btn = e.target.closest('[data-action="dispute"]');
+  if (btn) openDisputeModal(btn.dataset.week);
+});
+
+disputeForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  disputeFormError.hidden = true;
+  if (!pendingDispute) return;
+
+  const user = getCurrentUser();
+  const message = disputeMessageInput.value.trim();
+
+  disputeSubmitBtn.disabled = true;
+  try {
+    const res = await fetch("/api/timesheet-disputes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        timesheetUserId: user.id,
+        timesheetWeekStart: pendingDispute.weekStart,
+        raisedBy: user.id,
+        message,
+      }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      disputeFormError.textContent =
+        body.error || "Couldn't submit that dispute.";
+      disputeFormError.hidden = false;
+      return;
+    }
+
+    closeDisputeModal();
+    showToast("Dispute submitted.");
+    await loadSubmissions();
+  } catch (err) {
+    disputeFormError.textContent = "Network error — couldn't reach the server.";
+    disputeFormError.hidden = false;
+  } finally {
+    disputeSubmitBtn.disabled = false;
   }
 });
 

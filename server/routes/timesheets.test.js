@@ -111,13 +111,50 @@ describe("PATCH /api/timesheets/:userId/:weekStart", () => {
     expect(tables.timesheets[0].reviewed_at).not.toBeNull();
   });
 
-  test("rejecting also stamps reviewed_at", async () => {
+  test("rejecting also stamps reviewed_at and saves the reviewer's note", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "rejected", reviewerNote: "Tuesday's hours look off" });
+
+    expect(res.status).toBe(200);
+    expect(tables.timesheets[0].reviewed_at).not.toBeNull();
+    expect(tables.timesheets[0].reviewer_note).toBe("Tuesday's hours look off");
+  });
+
+  test("rejecting without a reviewer note is rejected with a 400", async () => {
     const res = await request(buildApp())
       .patch("/api/timesheets/t1/2026-08-31")
       .send({ status: "rejected" });
 
+    expect(res.status).toBe(400);
+    expect(tables.timesheets[0].status).toBe("pending");
+  });
+
+  test("rejecting with a blank/whitespace reviewer note is also rejected", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "rejected", reviewerNote: "   " });
+
+    expect(res.status).toBe(400);
+    expect(tables.timesheets[0].status).toBe("pending");
+  });
+
+  test("approving accepts an optional reviewer note", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "approved", reviewerNote: "Looks good, thanks" });
+
     expect(res.status).toBe(200);
-    expect(tables.timesheets[0].reviewed_at).not.toBeNull();
+    expect(tables.timesheets[0].reviewer_note).toBe("Looks good, thanks");
+  });
+
+  test("approving without a reviewer note leaves it null", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-08-31")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    expect(tables.timesheets[0].reviewer_note).toBeNull();
   });
 
   test("resetting a reviewed timesheet back to pending clears reviewed_at", async () => {

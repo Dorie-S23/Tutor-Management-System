@@ -3,6 +3,15 @@ const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 const statusFilterEl = document.getElementById("statusFilter");
 const exportPayrollBtn = document.getElementById("exportPayrollBtn");
 
+// Disputes for the currently-loaded submissions, keyed by "userId_weekStart".
+// Only unresolved ones are fetched — once resolved, a submission's row goes
+// back to showing just its ordinary status.
+let openDisputesByKey = new Map();
+
+function submissionKey(userId, weekStart) {
+  return `${userId}_${weekStart}`;
+}
+
 function initials(name) {
   return (name || "?")
     .split(" ")
@@ -27,6 +36,29 @@ function makeActionBtn(label, variant, onClick) {
   return btn;
 }
 
+async function loadOpenDisputes() {
+  try {
+    const res = await fetch("/api/timesheet-disputes?resolved=false");
+    const disputes = await res.json();
+    if (!res.ok) throw new Error(disputes.error);
+
+    openDisputesByKey = new Map();
+    disputes.forEach((dispute) => {
+      const key = submissionKey(
+        dispute.timesheet_user_id,
+        dispute.timesheet_week_start,
+      );
+      const list = openDisputesByKey.get(key) || [];
+      list.push(dispute);
+      openDisputesByKey.set(key, list);
+    });
+  } catch (err) {
+    // Disputes are a secondary signal on top of the review queue — don't
+    // block the page over them, just show submissions without dispute pills.
+    openDisputesByKey = new Map();
+  }
+}
+
 async function loadSubmissions() {
   submissionListEl.innerHTML = "";
   submissionsEmptyEl.hidden = true;
@@ -43,6 +75,8 @@ async function loadSubmissions() {
     showToast("Couldn't load timesheets.");
     return;
   }
+
+  await loadOpenDisputes();
 
   if (rows.length === 0) {
     submissionsEmptyEl.hidden = false;
@@ -70,9 +104,11 @@ function renderSubmission(sub) {
   const user = sub.users;
   const name = user?.name || "Unknown tutor";
   const status = (sub.status || "pending").toLowerCase();
+  const key = submissionKey(sub.user_id, sub.week_start);
+  const disputes = openDisputesByKey.get(key) || [];
 
   const li = document.createElement("li");
-  li.dataset.key = `${sub.user_id}_${sub.week_start}`;
+  li.dataset.key = key;
   const row = document.createElement("div");
   row.className = "tutor-row";
   row.innerHTML = `
@@ -86,6 +122,7 @@ function renderSubmission(sub) {
       <span class="stamp">${sub.total_hours} hrs</span>
     </span>
     <span class="status-pill ${status}">${status}</span>
+    ${disputes.length > 0 ? `<span class="status-pill disputed">disputed</span>` : ""}
     <span class="applicant-actions"></span>
   `;
 
@@ -94,15 +131,37 @@ function renderSubmission(sub) {
     makeActionBtn("Details", "btn-small-neutral", () => toggleDetail(li, sub)),
   );
 
+  if (disputes.length > 0) {
+    actionsEl.appendChild(
+      makeActionBtn("View dispute", "btn-small-neutral", () =>
+        openDisputeModal(sub, name, disputes),
+      ),
+    );
+  }
+
   if (status === "pending") {
     actionsEl.appendChild(
       makeActionBtn("Approve", "approve", () =>
-        setSubmissionStatus(sub, "approved", name),
+        openReasonModal({
+          title: "Approve timesheet",
+          fieldLabel: "Note (optional)",
+          placeholder: "Optional note for the tutor",
+          required: false,
+          confirmLabel: "Approve",
+          onConfirm: (note) => setSubmissionStatus(sub, "approved", name, note),
+        }),
       ),
     );
     actionsEl.appendChild(
       makeActionBtn("Reject", "", () =>
-        setSubmissionStatus(sub, "rejected", name),
+        openReasonModal({
+          title: "Reject timesheet",
+          fieldLabel: "Reason for rejection",
+          placeholder: "e.g. Wednesday's hours don't match the logged times",
+          required: true,
+          confirmLabel: "Reject",
+          onConfirm: (note) => setSubmissionStatus(sub, "rejected", name, note),
+        }),
       ),
     );
   } else {
@@ -114,6 +173,12 @@ function renderSubmission(sub) {
   }
 
   li.appendChild(row);
+  if (status !== "pending" && sub.reviewer_note) {
+    const noteEl = document.createElement("p");
+    noteEl.className = "hint";
+    noteEl.textContent = `Note: ${sub.reviewer_note}`;
+    li.appendChild(noteEl);
+  }
   submissionListEl.appendChild(li);
 }
 
@@ -152,20 +217,20 @@ function toggleDetail(li, sub) {
   li.appendChild(detail);
 }
 
-async function setSubmissionStatus(sub, status, name) {
+async function setSubmissionStatus(sub, status, name, reviewerNote) {
   try {
     const res = await fetch(
       `/api/timesheets/${sub.user_id}/${sub.week_start}`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, reviewerNote }),
       },
     );
     const body = await res.json();
     if (!res.ok) {
       showToast(body.error || "Couldn't update that timesheet.");
-      return;
+      return false;
     }
     const messages = {
       approved: `${name}'s timesheet approved`,
@@ -174,10 +239,140 @@ async function setSubmissionStatus(sub, status, name) {
     };
     showToast(messages[status] || "Timesheet updated.");
     await loadSubmissions();
+    return true;
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
+    return false;
   }
 }
+
+// ---------- reason modal (approve-with-note / reject-with-reason) ----------
+
+const reasonModal = document.getElementById("reasonModal");
+const reasonForm = document.getElementById("reasonForm");
+const reasonFormError = document.getElementById("reasonFormError");
+const reasonModalHeading = document.getElementById("reasonModalHeading");
+const reasonFieldLabel = document.getElementById("reasonFieldLabel");
+const reasonInput = document.getElementById("reasonInput");
+const reasonSubmitBtn = document.getElementById("reasonSubmitBtn");
+
+let pendingReason = null; // { required, confirmLabel, onConfirm }
+
+function openReasonModal({
+  title,
+  fieldLabel,
+  placeholder,
+  required,
+  confirmLabel,
+  onConfirm,
+}) {
+  pendingReason = { required, confirmLabel, onConfirm };
+  reasonForm.reset();
+  reasonFormError.hidden = true;
+  reasonModalHeading.textContent = title;
+  reasonFieldLabel.textContent = fieldLabel;
+  reasonInput.placeholder = placeholder || "";
+  reasonSubmitBtn.textContent = confirmLabel;
+  reasonModal.showModal();
+  reasonInput.focus();
+}
+
+function closeReasonModal() {
+  reasonModal.close();
+  pendingReason = null;
+}
+
+document
+  .getElementById("reasonModalCloseBtn")
+  .addEventListener("click", closeReasonModal);
+document
+  .getElementById("reasonCancelBtn")
+  .addEventListener("click", closeReasonModal);
+reasonModal.addEventListener("click", (e) => {
+  if (e.target === reasonModal) closeReasonModal();
+});
+
+reasonForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  reasonFormError.hidden = true;
+  if (!pendingReason) return;
+
+  const note = reasonInput.value.trim();
+  if (pendingReason.required && !note) {
+    reasonFormError.textContent = "A reason is required.";
+    reasonFormError.hidden = false;
+    return;
+  }
+
+  reasonSubmitBtn.disabled = true;
+  const ok = await pendingReason.onConfirm(note);
+  reasonSubmitBtn.disabled = false;
+
+  if (ok) closeReasonModal();
+});
+
+// ---------- dispute modal ----------
+
+const disputeModal = document.getElementById("disputeModal");
+const disputeModalBody = document.getElementById("disputeModalBody");
+const disputeResolveBtn = document.getElementById("disputeResolveBtn");
+
+let pendingDisputes = []; // every open dispute currently shown in the modal
+
+function openDisputeModal(sub, name, disputes) {
+  disputeModalBody.innerHTML = disputes
+    .map(
+      (d) => `
+      <p class="hint">
+        <strong>${d.users?.name || name}</strong> —
+        ${new Date(d.created_at).toLocaleString()}
+      </p>
+      <p>${d.message}</p>
+    `,
+    )
+    .join("<hr />");
+  pendingDisputes = disputes;
+  disputeModal.showModal();
+}
+
+function closeDisputeModal() {
+  disputeModal.close();
+  pendingDisputes = [];
+}
+
+document
+  .getElementById("disputeModalCloseBtn")
+  .addEventListener("click", closeDisputeModal);
+document
+  .getElementById("disputeCloseBtn")
+  .addEventListener("click", closeDisputeModal);
+disputeModal.addEventListener("click", (e) => {
+  if (e.target === disputeModal) closeDisputeModal();
+});
+
+disputeResolveBtn.addEventListener("click", async () => {
+  if (pendingDisputes.length === 0) return;
+
+  disputeResolveBtn.disabled = true;
+  try {
+    const results = await Promise.all(
+      pendingDisputes.map((d) =>
+        fetch(`/api/timesheet-disputes/${d.id}/resolve`, { method: "PATCH" }),
+      ),
+    );
+    if (results.some((res) => !res.ok)) {
+      showToast("Couldn't resolve one or more disputes.");
+      return;
+    }
+    showToast("Dispute marked resolved.");
+    closeDisputeModal();
+    await loadSubmissions();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    disputeResolveBtn.disabled = false;
+  }
+});
 
 let toastTimer = null;
 function showToast(message) {
