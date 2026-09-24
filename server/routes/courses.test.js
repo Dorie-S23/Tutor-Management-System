@@ -39,7 +39,12 @@ function validCourse(overrides = {}) {
 }
 
 beforeEach(() => {
-  tables = { courses: [] };
+  tables = {
+    courses: [],
+    tutor_subject_preference: [],
+    course_volunteers: [],
+    notifications: [],
+  };
   mockSupabase = fakeSupabase(tables);
 });
 
@@ -282,6 +287,86 @@ describe("PUT /api/courses/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.course_name).toBe("Data Structures II");
+  });
+
+  // The notification fan-out is fire-and-forget (not awaited by the route
+  // before responding), so these flush a macrotask after the request
+  // resolves to let it land before asserting on the fake table.
+  function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  describe("notifying approved tutors/volunteers on a session change", () => {
+    beforeEach(() => {
+      tables.tutor_subject_preference = [
+        { id: 1, tutor_id: "tutor-approved", course_id: 1, status: "approved" },
+        { id: 2, tutor_id: "tutor-pending", course_id: 1, status: "pending" },
+        {
+          id: 3,
+          tutor_id: "tutor-other-course",
+          course_id: 2,
+          status: "approved",
+        },
+      ];
+      tables.course_volunteers = [
+        {
+          id: 1,
+          user_id: "vol-approved",
+          course_id: 1,
+          status: "approved",
+        },
+        { id: 2, user_id: "vol-rejected", course_id: 1, status: "rejected" },
+      ];
+    });
+
+    test("notifies only approved tutors/volunteers on this course when the tutorial time changes", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(
+          validCourse({ tutor_start_time: "11:00", tutor_end_time: "12:00" }),
+        );
+      expect(res.status).toBe(200);
+      await flush();
+
+      const recipients = tables.notifications.map((n) => n.user_id).sort();
+      expect(recipients).toEqual(["tutor-approved", "vol-approved"]);
+      expect(tables.notifications[0]).toMatchObject({
+        type: "session_change",
+        related_entity: "course",
+        related_id: "1",
+        read: false,
+      });
+      expect(tables.notifications[0].message).toContain("COMS2000");
+    });
+
+    test("does not notify anyone when the edit doesn't touch day/time/venue", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(validCourse({ course_name: "Data Structures II" }));
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(0);
+    });
+
+    test("notifies when a lab is added to a course that previously had none", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(
+          validCourse({
+            has_lab: true,
+            day_of_lab: "Wednesday",
+            lab_start_time: "14:00",
+            lab_end_time: "15:00",
+            lab_venues: "MSL010",
+          }),
+        );
+      expect(res.status).toBe(200);
+      await flush();
+
+      const recipients = tables.notifications.map((n) => n.user_id).sort();
+      expect(recipients).toEqual(["tutor-approved", "vol-approved"]);
+    });
   });
 });
 

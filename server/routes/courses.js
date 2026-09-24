@@ -299,6 +299,66 @@ function parseCoursePayload(body) {
   };
 }
 
+// The only Tutorial/Lab fields that matter to someone already assigned —
+// a course_name, min_mark or budget edit doesn't affect anyone's schedule.
+const SESSION_FIELDS = [
+  "Day_of_tut",
+  "tutor_start_time",
+  "tutor_end_time",
+  "venues",
+  "Day_of_lab",
+  "lab_start_time",
+  "lab_end_time",
+  "lab_venues",
+];
+
+// Notifies every tutor and student volunteer currently approved on this
+// course when its Tutorial/Lab day, time or venue changes. Best-effort —
+// the caller swallows any error so a notification failure never blocks the
+// course edit itself from saving.
+async function notifySessionChange(courseId, before, after) {
+  // Nullish-coalesced on both sides: an unset field can come back as either
+  // `null` (an explicit no-lab row) or `undefined` (the column was never
+  // touched), and those two must compare as "no change" against each other.
+  const changed = SESSION_FIELDS.some(
+    (field) => (before[field] ?? null) !== (after[field] ?? null),
+  );
+  if (!changed) return;
+
+  const [{ data: tutorRows }, { data: volunteerRows }] = await Promise.all([
+    supabase
+      .from("tutor_subject_preference")
+      .select("tutor_id")
+      .eq("course_id", courseId)
+      .eq("status", "approved"),
+    supabase
+      .from("course_volunteers")
+      .select("user_id")
+      .eq("course_id", courseId)
+      .eq("status", "approved"),
+  ]);
+
+  const recipientIds = new Set([
+    ...(tutorRows || []).map((r) => r.tutor_id),
+    ...(volunteerRows || []).map((r) => r.user_id),
+  ]);
+  if (recipientIds.size === 0) return;
+
+  const message = `${after.course_code}'s session time changed — check the calendar for the new day/time/venue.`;
+
+  const { error } = await supabase.from("notifications").insert(
+    [...recipientIds].map((userId) => ({
+      user_id: userId,
+      type: "session_change",
+      message,
+      related_entity: "course",
+      related_id: String(courseId),
+      read: false,
+    })),
+  );
+  if (error) throw error;
+}
+
 // GET /api/courses — list all courses
 router.get("/", async (req, res) => {
   const { data, error } = await supabase
@@ -359,6 +419,15 @@ router.put("/:id", async (req, res) => {
     return res.status(409).json({ error: clashError });
   }
 
+  // Fetched before applying the update purely to detect whether the
+  // Tutorial/Lab day/time/venue actually changed — the one edit worth
+  // notifying already-assigned tutors/volunteers about.
+  const { data: before } = await supabase
+    .from("courses")
+    .select(SESSION_FIELDS.join(", "))
+    .eq("id", id)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("courses")
     .update(values)
@@ -376,6 +445,12 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ error: "Course not found" });
     }
     return res.status(500).json({ error: error.message });
+  }
+
+  if (before) {
+    notifySessionChange(id, before, values).catch((err) =>
+      console.warn("Failed to notify about session change:", err),
+    );
   }
 
   res.json(data);
