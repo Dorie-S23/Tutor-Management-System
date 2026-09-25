@@ -199,7 +199,6 @@ router.post("/register", async (req, res) => {
            student_number
            email
            name
-           hourly_rate
            academic_level
            ===================================================== */
     else if (userRole === "tutor") {

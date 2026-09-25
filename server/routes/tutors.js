@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { DAY_NAMES } = require("../dayNames");
+const { getRatesMap } = require("./academicLevelRates");
 
 const router = express.Router();
 
@@ -24,7 +25,17 @@ router.get("/", async (req, res) => {
     .order("name");
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+
+  const { ratesMap, error: ratesError } = await getRatesMap();
+  if (ratesError) return res.status(500).json({ error: ratesError.message });
+
+  res.json(
+    data.map((t) => ({
+      ...t,
+      hourly_rate:
+        t.academic_level != null ? (ratesMap[t.academic_level] ?? null) : null,
+    })),
+  );
 });
 
 // GET /api/tutors/workload — every tutor's assigned hours (summed from their
@@ -115,25 +126,54 @@ router.put("/bulk", async (req, res) => {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// POST /api/tutors/bulk-rates — update hourly_rate per academic level.
-// The organiser edits rates in the settings card and clicks "Save rates";
-// this writes the new rate to every tutor at each level.
+// POST /api/tutors/bulk-rates — set the hourly_rate for one or more academic
+// levels. The organiser edits rates in the settings card and clicks "Save
+// rates"; this writes to the shared per-level rate, not to individual tutor
+// rows, so every tutor at that level is paid from the same number.
 router.post("/bulk-rates", async (req, res) => {
   const { rates } = req.body;
   if (!rates || typeof rates !== "object") {
     return res.status(400).json({ error: "rates object is required" });
   }
 
-  let totalUpdated = 0;
   for (const [level, rate] of Object.entries(rates)) {
-    const { error, count } = await supabase
-      .from("tutors")
-      .update({ hourly_rate: rate })
-      .eq("academic_level", level);
-    if (error) return res.status(500).json({ error: error.message });
-    totalUpdated += count || 0;
+    const rateNum = Number(rate);
+    if (!Number.isFinite(rateNum) || rateNum < 0) {
+      return res
+        .status(400)
+        .json({
+          error: `Invalid rate for ${level}: must be a non-negative number`,
+        });
+    }
+
+    const { data: existing, error: findError } = await supabase
+      .from("academic_level_rates")
+      .select("academic_level")
+      .eq("academic_level", level)
+      .maybeSingle();
+    if (findError) return res.status(500).json({ error: findError.message });
+
+    const { error: writeError } = existing
+      ? await supabase
+          .from("academic_level_rates")
+          .update({ hourly_rate: rateNum })
+          .eq("academic_level", level)
+      : await supabase
+          .from("academic_level_rates")
+          .insert({ academic_level: level, hourly_rate: rateNum });
+
+    if (writeError) return res.status(500).json({ error: writeError.message });
   }
-  res.json({ updated: totalUpdated });
+
+  res.json({ updated: Object.keys(rates).length });
+});
+
+// GET /api/tutors/rates — the current hourly_rate for each academic level.
+// Registered before /:id so "rates" isn't swallowed as a tutor id.
+router.get("/rates", async (req, res) => {
+  const { ratesMap, error } = await getRatesMap();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(ratesMap);
 });
 
 // GET /api/tutors/:id — a single tutor
@@ -152,7 +192,17 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Tutor not found" });
     return res.status(500).json({ error: error.message });
   }
-  res.json(data);
+
+  const { ratesMap, error: ratesError } = await getRatesMap();
+  if (ratesError) return res.status(500).json({ error: ratesError.message });
+
+  res.json({
+    ...data,
+    hourly_rate:
+      data.academic_level != null
+        ? (ratesMap[data.academic_level] ?? null)
+        : null,
+  });
 });
 
 // POST /api/tutors — add a new tutor.
@@ -160,14 +210,8 @@ router.get("/:id", async (req, res) => {
 // requires first creating an auth account. We generate a temporary password;
 // the tutor will be prompted to change it on first login.
 router.post("/", async (req, res) => {
-  const {
-    student_number,
-    email,
-    name,
-    academic_level,
-    weekly_hour_cap,
-    hourly_rate,
-  } = req.body;
+  const { student_number, email, name, academic_level, weekly_hour_cap } =
+    req.body;
 
   // ── Input validation ─────────────────────────────────────────
   const VALID_LEVELS = ["third_year", "honours", "masters", "phd"];
@@ -199,9 +243,6 @@ router.post("/", async (req, res) => {
     (isNaN(weekly_hour_cap) || weekly_hour_cap < 0)
   )
     errors.push("Weekly hour cap must be a non-negative number.");
-
-  if (hourly_rate != null && (isNaN(hourly_rate) || hourly_rate < 0))
-    errors.push("Hourly rate must be a non-negative number.");
 
   if (errors.length) {
     return res.status(400).json({ error: errors.join(" ") });
@@ -283,7 +324,6 @@ router.post("/", async (req, res) => {
       name,
       academic_level,
       weekly_hour_cap,
-      hourly_rate: hourly_rate ?? null,
     })
     .select()
     .single();
@@ -292,19 +332,18 @@ router.post("/", async (req, res) => {
     return res.status(500).json({ error: tutorError.message });
   }
 
+  // Best-effort: the tutor is already created, so a rates lookup failure
+  // here shouldn't fail the whole request — it just falls back to null.
+  const { ratesMap } = await getRatesMap();
+  tutor.hourly_rate = ratesMap?.[academic_level] ?? null;
+
   res.status(201).json(tutor);
 });
 
 // PUT /api/tutors/:id — edit an existing tutor
 router.put("/:id", async (req, res) => {
-  const {
-    student_number,
-    email,
-    name,
-    academic_level,
-    weekly_hour_cap,
-    hourly_rate,
-  } = req.body;
+  const { student_number, email, name, academic_level, weekly_hour_cap } =
+    req.body;
 
   const { data, error } = await supabase
     .from("tutors")
@@ -314,13 +353,21 @@ router.put("/:id", async (req, res) => {
       name,
       academic_level,
       weekly_hour_cap,
-      hourly_rate: hourly_rate ?? null,
     })
     .eq("id", req.params.id)
     .select()
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Best-effort: the update already succeeded, so a rates lookup failure
+  // here shouldn't fail the whole request — it just falls back to null.
+  const { ratesMap } = await getRatesMap();
+  data.hourly_rate =
+    data.academic_level != null
+      ? (ratesMap?.[data.academic_level] ?? null)
+      : null;
+
   res.json(data);
 });
 

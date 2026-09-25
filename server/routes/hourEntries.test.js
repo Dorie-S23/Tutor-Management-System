@@ -21,7 +21,7 @@ function buildApp() {
 }
 
 beforeEach(() => {
-  tables = { hour_entries: [], tutors: [] };
+  tables = { hour_entries: [], tutors: [], academic_level_rates: [] };
   mockSupabase = fakeSupabase(tables);
 });
 
@@ -53,8 +53,12 @@ describe("POST /api/hour-entries", () => {
 describe("GET /api/hour-entries/report", () => {
   beforeEach(() => {
     tables.tutors = [
-      { id: "t1", name: "Alice", hourly_rate: 150 },
-      { id: "t2", name: "Bob", hourly_rate: 200 },
+      { id: "t1", name: "Alice", academic_level: "honours" },
+      { id: "t2", name: "Bob", academic_level: "masters" },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+      { academic_level: "masters", hourly_rate: 200 },
     ];
   });
 
@@ -213,7 +217,7 @@ describe("GET /api/hour-entries/report", () => {
     expect(res.body.unlinkedEntryCount).toBe(1);
   });
 
-  test("leaves cost null when the tutor has no hourly_rate set", async () => {
+  test("leaves cost null when the tutor has no academic_level set", async () => {
     tables.tutors = [{ id: "t1", name: "Alice" }];
     tables.hour_entries = [
       {

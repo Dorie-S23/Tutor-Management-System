@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { getRatesMap } = require("./academicLevelRates");
 
 const router = express.Router();
 
@@ -117,10 +118,13 @@ router.get("/payroll-export", async (req, res) => {
 
   const { data: tutors, error: tutorsError } = await supabase
     .from("tutors")
-    .select("id, name, student_number, email, hourly_rate")
+    .select("id, name, student_number, email, academic_level")
     .in("id", tutorIds);
 
   if (tutorsError) return res.status(500).json({ error: tutorsError.message });
+
+  const { ratesMap, error: ratesError } = await getRatesMap();
+  if (ratesError) return res.status(500).json({ error: ratesError.message });
 
   const tutorById = new Map(tutors.map((t) => [t.id, t]));
 
@@ -142,7 +146,10 @@ router.get("/payroll-export", async (req, res) => {
 
   const rows = timesheets.map((t) => {
     const tutor = tutorById.get(t.user_id);
-    const rate = tutor?.hourly_rate;
+    const rate =
+      tutor?.academic_level != null
+        ? (ratesMap[tutor.academic_level] ?? null)
+        : null;
     const amount =
       rate != null ? (Number(t.total_hours) * Number(rate)).toFixed(2) : "";
 

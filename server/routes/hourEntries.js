@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { getRatesMap } = require("./academicLevelRates");
 
 const router = express.Router();
 
@@ -89,7 +90,8 @@ router.put("/:id", async (req, res) => {
 
 // GET /api/hour-entries/report?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Aggregates logged Tutoring hours per (tutor, course), with cost computed
-// from the tutor's hourly_rate, for the organiser's hours/budget report.
+// from the hourly_rate for the tutor's academic_level, for the organiser's
+// hours/budget report.
 // hour_entries has no direct FK to tutors (only to users, which tutors
 // happens to share a primary key with), so tutor details are fetched
 // separately and merged here rather than relying on PostgREST embedding.
@@ -113,11 +115,16 @@ router.get("/report", async (req, res) => {
 
   const { data: tutors, error: tutorsError } = await supabase
     .from("tutors")
-    .select("id, name, hourly_rate");
+    .select("id, name, academic_level");
   if (tutorsError) {
     return res.status(500).json({ error: tutorsError.message });
   }
   const tutorsById = Object.fromEntries(tutors.map((t) => [t.id, t]));
+
+  const { ratesMap, error: ratesError } = await getRatesMap();
+  if (ratesError) {
+    return res.status(500).json({ error: ratesError.message });
+  }
 
   const linked = entries.filter((e) => e.course_id != null && e.courses);
   const unlinked = entries.filter((e) => e.course_id == null);
@@ -130,7 +137,10 @@ router.get("/report", async (req, res) => {
       grouped[key] = {
         tutorId: entry.user_id,
         tutorName: tutor?.name || null,
-        hourlyRate: tutor?.hourly_rate ?? null,
+        hourlyRate:
+          tutor?.academic_level != null
+            ? (ratesMap[tutor.academic_level] ?? null)
+            : null,
         courseId: entry.course_id,
         courseCode: entry.courses.course_code,
         courseName: entry.courses.course_name,

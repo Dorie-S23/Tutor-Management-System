@@ -26,6 +26,7 @@ function validCourse(overrides = {}) {
     course_name: "Data Structures",
     department: "Computer Science",
     min_mark: 60,
+    course_level: "honours",
     hours_per_week: 4,
     tutors_needed: 2,
     has_tutorial: true,
@@ -136,6 +137,29 @@ describe("POST /api/courses", () => {
     expect(res.body.error).toMatch(/min_mark/);
   });
 
+  test.each([
+    ["missing", undefined],
+    ["blank", ""],
+    ["not a recognised level", "second_year"],
+  ])("rejects a course_level that is %s", async (_label, course_level) => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ course_level }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/course_level/);
+    expect(tables.courses).toHaveLength(0);
+  });
+
+  test("stores course_level as its numeric rank", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ course_level: "phd" }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.course_level).toBe(6);
+  });
+
   test("rejects a duplicate course code with a 409, not a second row", async () => {
     mockSupabase = fakeSupabase(tables, { courses: [["course_code"]] });
     tables.courses = [{ id: 1, course_code: "COMS2000" }];
@@ -198,6 +222,7 @@ describe("POST /api/courses", () => {
     expect(res.body).toMatchObject({
       course_code: "COMS2000",
       min_mark: 60,
+      course_level: 4,
       hours_per_week: 4,
       tutors_needed: 2,
     });

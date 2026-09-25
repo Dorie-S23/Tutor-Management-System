@@ -31,6 +31,16 @@ let COURSES = [];
 let myApplications = [];
 let myAcademicLevel = null;
 
+// course_level is stored as a numeric rank (see server/routes/tutorApplications.js's
+// LEVEL_RANK) — shown back to the tutor as the label they'd recognise from their own
+// year-of-study dropdown.
+const COURSE_LEVEL_LABEL = {
+  3: "3rd year",
+  4: "Honours",
+  5: "Masters",
+  6: "PhD",
+};
+
 function showToast(message, type = "success") {
   toastEl.textContent = message;
   toastEl.classList.remove("toast--success", "toast--danger");
@@ -258,10 +268,18 @@ function updateCourseMeta() {
   }
 
   const session = formatSession(course);
+  const levelLabel = COURSE_LEVEL_LABEL[course.course_level];
+  const requirements = [
+    `a mark of ${course.min_mark}+`,
+    levelLabel ? `${levelLabel} level or higher` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   courseMeta.hidden = false;
   courseMeta.textContent = session
-    ? `Requires a mark of ${course.min_mark}+ · tutorial is ${session}`
-    : `Requires a mark of ${course.min_mark}+ · tutorial day/time not yet set`;
+    ? `Requires ${requirements} · tutorial is ${session}`
+    : `Requires ${requirements} · tutorial day/time not yet set`;
 
   availabilityLabel.textContent = session
     ? `Are you free on ${session}?`

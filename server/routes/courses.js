@@ -6,6 +6,11 @@ const router = express.Router();
 // shared validation for POST (create) and PUT (update)
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 
+// The minimum academic level a tutor must hold to apply for this course.
+// Mirrors LEVEL_RANK in server/routes/tutorApplications.js, minus second_year
+// since no tutor can actually hold that level.
+const COURSE_LEVEL_RANK = { third_year: 3, honours: 4, masters: 5, phd: 6 };
+
 // A venue field can list several rooms for one session (e.g. multiple
 // tutorial groups) as "MSL004,005,006" — a shorthand where bare numbers
 // inherit the last letter prefix (so "005" means "MSL005"). Split that into
@@ -166,6 +171,7 @@ function parseCoursePayload(body) {
     course_code,
     course_name,
     min_mark,
+    course_level,
     department,
     hours_per_week,
     tutors_needed,
@@ -233,6 +239,14 @@ function parseCoursePayload(body) {
     return { error: "min_mark must be an integer between 0 and 100" };
   }
 
+  if (!Object.prototype.hasOwnProperty.call(COURSE_LEVEL_RANK, course_level)) {
+    return {
+      error:
+        "course_level is required and must be one of: " +
+        Object.keys(COURSE_LEVEL_RANK).join(", "),
+    };
+  }
+
   if (
     hours_per_week === undefined ||
     hours_per_week === null ||
@@ -283,6 +297,7 @@ function parseCoursePayload(body) {
       course_code: course_code.trim(),
       course_name: course_name.trim(),
       min_mark: minMarkNum,
+      course_level: COURSE_LEVEL_RANK[course_level],
       department: department.trim(),
       hours_per_week: hoursPerWeekNum,
       tutors_needed: tutorsNeeded,

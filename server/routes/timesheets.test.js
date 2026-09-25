@@ -21,7 +21,7 @@ function buildApp() {
 }
 
 beforeEach(() => {
-  tables = { timesheets: [], tutors: [], users: [] };
+  tables = { timesheets: [], tutors: [], users: [], academic_level_rates: [] };
   mockSupabase = fakeSupabase(tables);
 });
 
@@ -208,15 +208,19 @@ describe("GET /api/timesheets/payroll-export", () => {
         name: "Alice",
         student_number: "1111111",
         email: "alice@wits.ac.za",
-        hourly_rate: 150,
+        academic_level: "honours",
       },
       {
         id: "t2",
         name: "Bob",
         student_number: "2222222",
         email: "bob@wits.ac.za",
-        hourly_rate: 200,
+        academic_level: "masters",
       },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+      { academic_level: "masters", hourly_rate: 200 },
     ];
     tables.timesheets = [
       {
@@ -251,7 +255,7 @@ describe("GET /api/timesheets/payroll-export", () => {
     );
   });
 
-  test("leaves rate and amount blank instead of guessing when the tutor has no hourly_rate set", async () => {
+  test("leaves rate and amount blank instead of guessing when the tutor has no academic_level set", async () => {
     tables.tutors = [
       { id: "t1", name: "Alice", student_number: "1111111", email: "a@b.c" },
     ];
@@ -281,8 +285,11 @@ describe("GET /api/timesheets/payroll-export", () => {
         name: "Doe, Alice",
         student_number: "1111111",
         email: "a@b.c",
-        hourly_rate: 100,
+        academic_level: "third_year",
       },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "third_year", hourly_rate: 100 },
     ];
     tables.timesheets = [
       {

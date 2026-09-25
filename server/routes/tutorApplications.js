@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { getRatesMap } = require("./academicLevelRates");
 
 const router = express.Router();
 
@@ -10,6 +11,14 @@ const LEVEL_RANK = {
   honours: 4,
   masters: 5,
   phd: 6,
+};
+
+const LEVEL_LABEL = {
+  2: "2nd year",
+  3: "3rd year",
+  4: "Honours",
+  5: "Masters",
+  6: "PhD",
 };
 
 function toMinutes(timeStr) {
@@ -80,8 +89,7 @@ router.get("/", async (req, res) => {
         name,
         email,
         academic_level,
-        weekly_hour_cap,
-        hourly_rate
+        weekly_hour_cap
       )
       `,
   );
@@ -101,6 +109,22 @@ router.get("/", async (req, res) => {
       error: error.message,
     });
   }
+
+  // hourly_rate isn't a tutors column — it's derived from the tutor's
+  // academic_level via the shared rate table, same as everywhere else
+  // pay is calculated.
+  const { ratesMap, error: ratesError } = await getRatesMap();
+  if (ratesError) {
+    return res.status(500).json({ error: ratesError.message });
+  }
+  (data || []).forEach((application) => {
+    if (application.tutors) {
+      application.tutors.hourly_rate =
+        application.tutors.academic_level != null
+          ? (ratesMap[application.tutors.academic_level] ?? null)
+          : null;
+    }
+  });
 
   // ------------------------------------------------------------
   // If this is a tutor's own applications, don't need ranking.
@@ -459,7 +483,7 @@ router.post("/", async (req, res) => {
     });
   }
 
-  // A tutor must be at least one year ahead of the course.
+  // A tutor must be at this course's minimum level or higher.
   if (course.course_level == null) {
     return res.status(403).json({
       error: `${course.course_code} doesn't have a year level set yet — ask an organiser to set it before applying.`,
@@ -468,9 +492,11 @@ router.post("/", async (req, res) => {
 
   const tutorYear = LEVEL_RANK[academicLevel];
 
-  if (tutorYear <= course.course_level) {
+  if (tutorYear < course.course_level) {
+    const requiredLabel =
+      LEVEL_LABEL[course.course_level] || `level ${course.course_level}`;
     return res.status(403).json({
-      error: `You need to be at least one year ahead of ${course.course_code} (level ${course.course_level}) to tutor it.`,
+      error: `You need to be at ${requiredLabel} level or higher to tutor ${course.course_code}.`,
     });
   }
 
