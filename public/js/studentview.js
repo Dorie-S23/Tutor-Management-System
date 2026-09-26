@@ -53,7 +53,7 @@ async function renderHoursVolunteered() {
   );
 }
 
-async function renderCourses() {
+async function renderCourses(applications) {
   courseListEl.innerHTML = "";
 
   let courses;
@@ -76,9 +76,36 @@ async function renderCourses() {
     return;
   }
 
+  // A course the student already has an application or claimed session
+  // against (any status) shows that status instead of a Volunteer button —
+  // otherwise it looks like they can apply again, and clicking Volunteer
+  // just fails with "you've already volunteered for this course".
+  const applicationByCourseId = new Map(
+    (applications || []).map((app) => [app.course_id, app]),
+  );
+
   openCourses.forEach((course) => {
     const article = document.createElement("article");
     article.dataset.courseId = String(course.id);
+
+    const existingApp = applicationByCourseId.get(course.id);
+    if (existingApp) {
+      const status = existingApp.status || "pending";
+      const reasonHtml =
+        status === "rejected" && existingApp.reason
+          ? `<p class="session-note">Reason: ${existingApp.reason}</p>`
+          : "";
+      article.innerHTML = `
+        <h3>${course.course_code}</h3>
+        <p class="session-meta">${course.course_name}</p>
+        <p class="session-note">${course.department}</p>
+        <span class="status-pill ${status}">${status[0].toUpperCase()}${status.slice(1)}</span>
+        ${reasonHtml}
+      `;
+      courseListEl.appendChild(article);
+      return;
+    }
+
     article.innerHTML = `
       <h3>${course.course_code}</h3>
       <p class="session-meta">${course.course_name}</p>
@@ -144,14 +171,10 @@ async function renderCourses() {
           return;
         }
 
-        markForm.hidden = true;
-        volunteerBtn.hidden = false;
-        volunteerBtn.textContent = "Pending approval";
-        volunteerBtn.disabled = true;
         showToast(
           `Applied for ${course.course_code} — waiting for organiser approval`,
         );
-        renderApplications();
+        await refreshVolunteerState();
       } catch (err) {
         showToast("Something went wrong, try again");
         submitMarkBtn.disabled = false;
@@ -229,24 +252,44 @@ async function claimSession(session, button) {
       `Claimed the ${session.courses.course_code} session on ${formatSessionDate(session.session_date)} — waiting for organiser approval`,
     );
     renderOpenSessions();
-    renderApplications();
+    await refreshVolunteerState();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
     button.disabled = false;
   }
 }
 
-async function renderApplications() {
+// Shared by every action that changes what the student has applied/claimed
+// (submitting a mark, claiming a session, withdrawing) — courseList,
+// pendingList and upcomingSessionsList all key off the same applications
+// fetch, so they're always kept in sync with each other rather than one
+// being patched ad hoc while the others go stale.
+async function fetchApplications() {
+  const res = await fetch(
+    `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+  );
+  if (!res.ok) throw new Error("Failed to load applications");
+  return res.json();
+}
+
+async function refreshVolunteerState() {
+  let applications = null;
+  try {
+    applications = await fetchApplications();
+  } catch (err) {
+    // Individual render functions show their own error copy when passed null.
+  }
+  await Promise.all([
+    renderCourses(applications),
+    renderApplications(applications),
+    renderUpcomingSessions(applications),
+  ]);
+}
+
+function renderApplications(applications) {
   pendingListEl.innerHTML = "";
 
-  let applications;
-  try {
-    const res = await fetch(
-      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
-    );
-    if (!res.ok) throw new Error("Failed to load applications");
-    applications = await res.json();
-  } catch (err) {
+  if (!applications) {
     pendingListEl.innerHTML = `<p class="empty-state">Couldn't load your applications right now.</p>`;
     return;
   }
@@ -278,11 +321,14 @@ async function renderApplications() {
       <span class="status-pill ${status}">${status[0].toUpperCase()}${status.slice(1)}</span>
     `;
 
-    if (status === "pending") {
+    // A rejected row also gets a button — otherwise it's a dead end: the
+    // student can never clear it to try again, since the same (student,
+    // course) pair can't have a second row while this one still exists.
+    if (status === "pending" || status === "rejected") {
       const withdrawBtn = document.createElement("button");
       withdrawBtn.type = "button";
       withdrawBtn.className = "btn btn-ghost";
-      withdrawBtn.textContent = "Withdraw";
+      withdrawBtn.textContent = status === "rejected" ? "Remove" : "Withdraw";
       withdrawBtn.addEventListener("click", () =>
         withdrawApplication(app, withdrawBtn),
       );
@@ -299,15 +345,8 @@ async function renderApplications() {
 // dashboard's "Upcoming Sessions" card — a plain course application has no
 // date to show yet, and a rejected or still-pending claim isn't a real
 // commitment. Past-dated ones are excluded too — those live on My Sessions.
-async function renderUpcomingSessions() {
-  let applications;
-  try {
-    const res = await fetch(
-      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
-    );
-    if (!res.ok) throw new Error("Failed to load sessions");
-    applications = await res.json();
-  } catch (err) {
+function renderUpcomingSessions(applications) {
+  if (!applications) {
     upcomingSessionsListEl.innerHTML = `<p class="empty-state">Couldn't load your sessions right now.</p>`;
     return;
   }
@@ -353,20 +392,20 @@ async function withdrawApplication(app, button) {
       button.disabled = false;
       return;
     }
-    showToast(`Withdrew your application for ${app.courses.course_code}`);
-    renderApplications();
 
-    // If this course's card is still on screen with a stale "Pending
-    // approval" button (set by a direct DOM patch on submit, not a
-    // re-render), reset it so the student can volunteer again right away
-    // instead of needing to reload.
-    const card = courseListEl.querySelector(
-      `article[data-course-id="${CSS.escape(app.course_id)}"] .volunteer-btn`,
+    // A claimed session's row survives the DELETE (the server reopens it
+    // for someone else instead) — a plain course application's doesn't.
+    showToast(
+      app.session_date
+        ? `Released the ${app.courses.course_code} session on ${formatSessionDate(app.session_date)} back to the pool`
+        : app.status === "rejected"
+          ? `Removed your application for ${app.courses.course_code} — you can apply again`
+          : `Withdrew your application for ${app.courses.course_code}`,
     );
-    if (card) {
-      card.disabled = false;
-      card.textContent = "Volunteer";
-    }
+
+    // A full re-render (not a one-off DOM patch) so the course card, the
+    // applications list and upcoming sessions all agree on the new state.
+    await refreshVolunteerState();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
     button.disabled = false;
@@ -518,10 +557,8 @@ if (tourLink) {
 (async () => {
   await Promise.all([
     renderHoursVolunteered(),
-    renderCourses(),
     renderOpenSessions(),
-    renderApplications(),
-    renderUpcomingSessions(),
+    refreshVolunteerState(),
   ]);
 
   window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {

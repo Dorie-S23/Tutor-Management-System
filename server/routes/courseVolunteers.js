@@ -272,6 +272,13 @@ router.patch("/:id", async (req, res) => {
 });
 
 // DELETE /api/course-volunteers?userId=...&courseId=... - withdraw
+//
+// A plain course application (no session_date) is just deleted — nothing
+// else refers to that row. A claimed session is different: the row IS the
+// organiser's posted gap (session_date/start_time/end_time/venue/reason),
+// so withdrawing from it deletes nothing and instead hands it back to the
+// pool (status back to 'open', user_id cleared) so another student can
+// claim the exact same gap, rather than the organiser silently losing it.
 router.delete("/", async (req, res) => {
   const { userId, courseId } = req.query;
   if (!userId || !courseId) {
@@ -280,29 +287,50 @@ router.delete("/", async (req, res) => {
 
   const { data: existing } = await supabase
     .from("course_volunteers")
-    .select("id, status")
+    .select("id, status, session_date")
     .eq("user_id", userId)
     .eq("course_id", courseId)
     .maybeSingle();
 
-  const { error } = await supabase
-    .from("course_volunteers")
-    .delete()
-    .eq("user_id", userId)
-    .eq("course_id", courseId);
+  if (!existing) {
+    return res.status(204).end();
+  }
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (existing.session_date) {
+    const { error } = await supabase
+      .from("course_volunteers")
+      .update({ status: "open", user_id: null })
+      .eq("id", existing.id);
 
-  if (existing) {
+    if (error) return res.status(500).json({ error: error.message });
+
     await recordAudit({
       entityType: "course_volunteers",
       entityId: existing.id,
-      action: "withdrawn",
+      action: "unclaimed",
       actorId: userId,
       before: { status: existing.status },
-      after: null,
+      after: { status: "open" },
     });
+
+    return res.status(204).end();
   }
+
+  const { error } = await supabase
+    .from("course_volunteers")
+    .delete()
+    .eq("id", existing.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  await recordAudit({
+    entityType: "course_volunteers",
+    entityId: existing.id,
+    action: "withdrawn",
+    actorId: userId,
+    before: { status: existing.status },
+    after: null,
+  });
 
   res.status(204).end();
 });

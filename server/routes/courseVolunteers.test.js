@@ -471,4 +471,80 @@ describe("course-volunteers audit log", () => {
     expect(res.status).toBe(204);
     expect(tables.audit_log).toHaveLength(0);
   });
+
+  test("withdrawing from a claimed session reopens it instead of deleting it", async () => {
+    tables.course_volunteers = [
+      {
+        id: "s1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "pending",
+        session_date: "2026-06-01",
+        start_time: "09:00:00",
+        end_time: "11:00:00",
+        venue: "FNB1",
+        reason: "Regular tutor is on leave",
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.course_volunteers).toHaveLength(1);
+    expect(tables.course_volunteers[0]).toMatchObject({
+      status: "open",
+      user_id: null,
+      // The organiser's original gap details survive the withdrawal so the
+      // session can be claimed again by someone else.
+      session_date: "2026-06-01",
+      venue: "FNB1",
+      reason: "Regular tutor is on leave",
+    });
+  });
+
+  test("reopening a claimed session records an 'unclaimed' audit entry, not 'withdrawn'", async () => {
+    tables.course_volunteers = [
+      {
+        id: "s1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "pending",
+        session_date: "2026-06-01",
+      },
+    ];
+
+    await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(tables.audit_log).toHaveLength(1);
+    expect(tables.audit_log[0]).toMatchObject({
+      entity_id: "s1",
+      action: "unclaimed",
+      actor_id: "student-1",
+      before: { status: "pending" },
+      after: { status: "open" },
+    });
+  });
+
+  test("a plain course application (no session_date) is still deleted outright", async () => {
+    tables.course_volunteers = [
+      {
+        id: "v1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "pending",
+        mark: 75,
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.course_volunteers).toHaveLength(0);
+  });
 });

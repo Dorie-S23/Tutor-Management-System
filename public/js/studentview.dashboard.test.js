@@ -134,7 +134,7 @@ describe("studentview.js — My Applications", () => {
     );
   });
 
-  test("only a pending application gets a Withdraw button", async () => {
+  test("a pending application gets a Withdraw button, an approved one gets none", async () => {
     const { window } = loadPage({
       applications: [
         {
@@ -165,6 +165,34 @@ describe("studentview.js — My Applications", () => {
     expect(approvedCard.querySelector("button")).toBeNull();
   });
 
+  test("a rejected application gets a Remove button, not a dead end", async () => {
+    const { window, calls } = loadPage({
+      applications: [
+        {
+          id: "a3",
+          course_id: 3,
+          mark: 40,
+          status: "rejected",
+          reason: "Mark below the course minimum",
+          courses: { course_code: "COMS3000", course_name: "Advanced Topics" },
+        },
+      ],
+    });
+    await wait();
+
+    const removeBtn = window.document.querySelector(
+      "#pendingList article button",
+    );
+    expect(removeBtn.textContent).toBe("Remove");
+
+    removeBtn.click();
+    await wait();
+
+    const deleteCall = calls.find((c) => c.opts?.method === "DELETE");
+    expect(deleteCall).toBeDefined();
+    expect(deleteCall.url).toContain("courseId=3");
+  });
+
   test("clicking Withdraw calls DELETE with the signed-in student's id and the right course", async () => {
     const { window, calls } = loadPage({
       applications: [
@@ -189,6 +217,88 @@ describe("studentview.js — My Applications", () => {
     expect(deleteCall).toBeDefined();
     expect(deleteCall.url).toContain("userId=student-1");
     expect(deleteCall.url).toContain("courseId=1");
+  });
+});
+
+describe("studentview.js — Modules You Can Tutor reflects existing applications", () => {
+  const openCourse = {
+    id: 1,
+    course_code: "COMS1000",
+    course_name: "Intro",
+    department: "Computer Science",
+    tutors_needed: 2,
+    no_of_tutors_assigned: 0,
+  };
+
+  test("a course with no existing application still shows a Volunteer button", async () => {
+    const { window } = loadPage({ courses: [openCourse], applications: [] });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).not.toBeNull();
+    expect(card.querySelector(".status-pill")).toBeNull();
+  });
+
+  test("a course already applied for shows its status instead of a Volunteer button", async () => {
+    const { window } = loadPage({
+      courses: [openCourse],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 82,
+          status: "pending",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).toBeNull();
+    expect(card.querySelector(".status-pill").textContent).toBe("Pending");
+  });
+
+  test("a course already approved for doesn't invite a second application", async () => {
+    const { window } = loadPage({
+      courses: [openCourse],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 82,
+          status: "approved",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).toBeNull();
+    expect(card.querySelector(".status-pill").textContent).toBe("Approved");
+  });
+
+  test("a course rejected for shows the reason on the course card too", async () => {
+    const { window } = loadPage({
+      courses: [openCourse],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 40,
+          status: "rejected",
+          reason: "Mark below the course minimum",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).toBeNull();
+    expect(card.querySelector(".status-pill").textContent).toBe("Rejected");
+    expect(card.textContent).toContain("Mark below the course minimum");
   });
 });
 
