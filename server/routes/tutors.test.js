@@ -31,6 +31,7 @@ beforeEach(() => {
     tutor_busy_times: [],
     courses: [],
     users: [],
+    academic_level_rates: [],
   };
   mockSupabase = fakeSupabase(tables);
   mockSupabase.auth = {
@@ -106,38 +107,108 @@ describe("POST /api/tutors/bulk-rates", () => {
     expect(res.status).toBe(400);
   });
 
-  test("writes each level's rate only to tutors at that level", async () => {
-    tables.tutors = [
-      { id: "t1", academic_level: "honours", hourly_rate: 100 },
-      { id: "t2", academic_level: "honours", hourly_rate: 100 },
-      { id: "t3", academic_level: "masters", hourly_rate: 150 },
-    ];
+  test("rejects a negative or non-numeric rate", async () => {
+    const res = await request(buildApp())
+      .post("/api/tutors/bulk-rates")
+      .send({ rates: { honours: -5 } });
 
+    expect(res.status).toBe(400);
+    expect(tables.academic_level_rates).toHaveLength(0);
+  });
+
+  test("inserts a rate for a level that has none yet", async () => {
     const res = await request(buildApp())
       .post("/api/tutors/bulk-rates")
       .send({ rates: { honours: 120, masters: 180 } });
 
     expect(res.status).toBe(200);
-    expect(res.body.updated).toBe(3);
+    expect(res.body.updated).toBe(2);
 
-    const byId = Object.fromEntries(tables.tutors.map((t) => [t.id, t]));
-    expect(byId.t1.hourly_rate).toBe(120);
-    expect(byId.t2.hourly_rate).toBe(120);
-    expect(byId.t3.hourly_rate).toBe(180);
+    const byLevel = Object.fromEntries(
+      tables.academic_level_rates.map((r) => [r.academic_level, r]),
+    );
+    expect(byLevel.honours.hourly_rate).toBe(120);
+    expect(byLevel.masters.hourly_rate).toBe(180);
+  });
+
+  test("updates a level's existing rate in place rather than duplicating it", async () => {
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 100 },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/tutors/bulk-rates")
+      .send({ rates: { honours: 130 } });
+
+    expect(res.status).toBe(200);
+    expect(tables.academic_level_rates).toHaveLength(1);
+    expect(tables.academic_level_rates[0].hourly_rate).toBe(130);
+  });
+
+  test("a saved rate applies to every tutor at that level, not just the ones that existed when it was set", async () => {
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 100 },
+    ];
+    await request(buildApp())
+      .post("/api/tutors/bulk-rates")
+      .send({ rates: { honours: 130 } });
+
+    tables.tutors = [
+      { id: "t1", academic_level: "honours" },
+      { id: "t2", academic_level: "honours" },
+    ];
+
+    const res = await request(buildApp()).get("/api/tutors");
+
+    expect(res.body.every((t) => t.hourly_rate === 130)).toBe(true);
+  });
+});
+
+describe("GET /api/tutors/rates", () => {
+  test("returns the current rate for each level", async () => {
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+      { academic_level: "phd", hourly_rate: 200 },
+    ];
+
+    const res = await request(buildApp()).get("/api/tutors/rates");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ honours: 150, phd: 200 });
   });
 });
 
 describe("PUT /api/tutors/:id", () => {
   test("edits an existing tutor's fields", async () => {
-    tables.tutors = [{ id: TUTOR_ID, name: "Alice", hourly_rate: 100 }];
+    tables.tutors = [
+      { id: TUTOR_ID, name: "Alice", academic_level: "honours" },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+    ];
 
     const res = await request(buildApp())
       .put(`/api/tutors/${TUTOR_ID}`)
-      .send({ name: "Alice Smith", hourly_rate: 150 });
+      .send({ name: "Alice Smith", academic_level: "honours" });
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Alice Smith");
-    expect(tables.tutors[0].hourly_rate).toBe(150);
+  });
+
+  test("derives hourly_rate from the tutor's academic_level rather than trusting the request body", async () => {
+    tables.tutors = [
+      { id: TUTOR_ID, name: "Alice", academic_level: "honours" },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+    ];
+
+    const res = await request(buildApp())
+      .put(`/api/tutors/${TUTOR_ID}`)
+      .send({ name: "Alice", academic_level: "honours", hourly_rate: 999 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.hourly_rate).toBe(150);
   });
 });
 
@@ -372,7 +443,6 @@ describe("POST /api/tutors", () => {
       email: "alice@students.wits.ac.za",
       academic_level: "honours",
       weekly_hour_cap: 10,
-      hourly_rate: 150,
       ...overrides,
     };
   }
@@ -438,6 +508,20 @@ describe("POST /api/tutors", () => {
       name: "Alice Example",
       student_number: "1234567",
     });
+  });
+
+  test("derives hourly_rate from the honours rate rather than accepting one directly", async () => {
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/tutors")
+      .send(validPayload({ hourly_rate: 999 }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.hourly_rate).toBe(150);
+    expect(tables.tutors[0].hourly_rate).toBeUndefined();
   });
 
   test("surfaces a clear message when the auth email is already registered", async () => {

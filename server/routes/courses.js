@@ -6,6 +6,11 @@ const router = express.Router();
 // shared validation for POST (create) and PUT (update)
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
 
+// The minimum academic level a tutor must hold to apply for this course.
+// Mirrors LEVEL_RANK in server/routes/tutorApplications.js, minus second_year
+// since no tutor can actually hold that level.
+const COURSE_LEVEL_RANK = { third_year: 3, honours: 4, masters: 5, phd: 6 };
+
 // A venue field can list several rooms for one session (e.g. multiple
 // tutorial groups) as "MSL004,005,006" — a shorthand where bare numbers
 // inherit the last letter prefix (so "005" means "MSL005"). Split that into
@@ -166,6 +171,7 @@ function parseCoursePayload(body) {
     course_code,
     course_name,
     min_mark,
+    course_level,
     department,
     hours_per_week,
     tutors_needed,
@@ -233,6 +239,14 @@ function parseCoursePayload(body) {
     return { error: "min_mark must be an integer between 0 and 100" };
   }
 
+  if (!Object.prototype.hasOwnProperty.call(COURSE_LEVEL_RANK, course_level)) {
+    return {
+      error:
+        "course_level is required and must be one of: " +
+        Object.keys(COURSE_LEVEL_RANK).join(", "),
+    };
+  }
+
   if (
     hours_per_week === undefined ||
     hours_per_week === null ||
@@ -283,6 +297,7 @@ function parseCoursePayload(body) {
       course_code: course_code.trim(),
       course_name: course_name.trim(),
       min_mark: minMarkNum,
+      course_level: COURSE_LEVEL_RANK[course_level],
       department: department.trim(),
       hours_per_week: hoursPerWeekNum,
       tutors_needed: tutorsNeeded,
@@ -297,6 +312,84 @@ function parseCoursePayload(body) {
       budget: budgetNum,
     },
   };
+}
+
+// The only Tutorial/Lab fields that matter to someone already assigned —
+// a course_name, min_mark or budget edit doesn't affect anyone's schedule.
+const SESSION_FIELDS = [
+  "Day_of_tut",
+  "tutor_start_time",
+  "tutor_end_time",
+  "venues",
+  "Day_of_lab",
+  "lab_start_time",
+  "lab_end_time",
+  "lab_venues",
+];
+
+// Postgres's `time` columns round-trip as "HH:MM:SS" once read back from the
+// DB, but the client only ever sends "HH:MM" (no seconds) from a plain
+// <input type="time">. Without normalizing both sides to the same shape,
+// "10:15:00" (before, freshly fetched) vs "10:15" (after, from the request
+// body) would compare unequal even when nothing actually changed — flagging
+// every single course edit, including ones that only touch min_mark or
+// course_level, as a session change.
+const TIME_FIELDS = new Set([
+  "tutor_start_time",
+  "tutor_end_time",
+  "lab_start_time",
+  "lab_end_time",
+]);
+
+function normalizeSessionField(field, value) {
+  if (value == null) return null;
+  return TIME_FIELDS.has(field) ? value.slice(0, 5) : value;
+}
+
+// Notifies every tutor and student volunteer currently approved on this
+// course when its Tutorial/Lab day, time or venue changes. Best-effort —
+// the caller swallows any error so a notification failure never blocks the
+// course edit itself from saving.
+async function notifySessionChange(courseId, before, after) {
+  const changed = SESSION_FIELDS.some(
+    (field) =>
+      normalizeSessionField(field, before[field]) !==
+      normalizeSessionField(field, after[field]),
+  );
+  if (!changed) return;
+
+  const [{ data: tutorRows }, { data: volunteerRows }] = await Promise.all([
+    supabase
+      .from("tutor_subject_preference")
+      .select("tutor_id")
+      .eq("course_id", courseId)
+      .eq("status", "approved"),
+    supabase
+      .from("course_volunteers")
+      .select("user_id")
+      .eq("course_id", courseId)
+      .eq("status", "approved"),
+  ]);
+
+  const recipientIds = new Set([
+    ...(tutorRows || []).map((r) => r.tutor_id),
+    ...(volunteerRows || []).map((r) => r.user_id),
+  ]);
+  if (recipientIds.size === 0) return;
+
+  const message = `${after.course_code}'s session time changed — check the calendar for the new day/time/venue.`;
+
+  const { error } = await supabase.from("notifications").insert(
+    [...recipientIds].map((userId) => ({
+      user_id: userId,
+      type: "session_change",
+      message,
+      related_entity: "course",
+      related_id: String(courseId),
+      read: false,
+    })),
+  );
+  if (error) throw error;
 }
 
 // GET /api/courses — list all courses
@@ -359,6 +452,15 @@ router.put("/:id", async (req, res) => {
     return res.status(409).json({ error: clashError });
   }
 
+  // Fetched before applying the update purely to detect whether the
+  // Tutorial/Lab day/time/venue actually changed — the one edit worth
+  // notifying already-assigned tutors/volunteers about.
+  const { data: before } = await supabase
+    .from("courses")
+    .select(SESSION_FIELDS.join(", "))
+    .eq("id", id)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("courses")
     .update(values)
@@ -376,6 +478,12 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ error: "Course not found" });
     }
     return res.status(500).json({ error: error.message });
+  }
+
+  if (before) {
+    notifySessionChange(id, before, values).catch((err) =>
+      console.warn("Failed to notify about session change:", err),
+    );
   }
 
   res.json(data);

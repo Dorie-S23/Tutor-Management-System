@@ -105,6 +105,159 @@ nav a[aria-current="page"] {
   color: #2563eb;
 }
 
+/* ---------- notification bell ---------- */
+
+.notif-bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.notif-bell-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+}
+
+.notif-bell-btn:hover {
+  background: #eaf1ff;
+  color: #2563eb;
+}
+
+/* The bell icon's width/height are only set via SVG attributes (not CSS),
+   so as a flex item it has no CSS-specified size for flexbox to respect —
+   it was being shrunk to a sliver, leaving just the unread badge visible
+   with no bell underneath it. */
+.notif-bell-btn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.notif-bell-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 100px;
+  background: #d33;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 2rem);
+  max-height: 400px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 40;
+}
+
+.notif-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ddd;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.notif-mark-all-btn {
+  border: none;
+  background: none;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.notif-mark-all-btn:hover {
+  text-decoration: underline;
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notif-item {
+  padding: 10px 16px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item:hover {
+  background: #f4f6f8;
+}
+
+.notif-item--unread {
+  background: #eaf1ff;
+}
+
+.notif-message {
+  margin: 0 0 3px;
+  font-size: 13px;
+  color: #222;
+}
+
+.notif-time {
+  margin: 0;
+  font-size: 11px;
+  color: #888;
+}
+
+/* Briefly flashed on whatever a notification click scrolls to, so it's
+   obvious which row the notification was actually about. */
+@keyframes highlight-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  20%,
+  60% {
+    box-shadow: 0 0 0 3px #2563eb;
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 1.4s ease-in-out;
+}
+
+.notif-empty {
+  padding: 20px 16px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+}
+
 /* Main */
 
 main {

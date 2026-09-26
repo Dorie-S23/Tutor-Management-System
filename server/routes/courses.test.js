@@ -26,6 +26,7 @@ function validCourse(overrides = {}) {
     course_name: "Data Structures",
     department: "Computer Science",
     min_mark: 60,
+    course_level: "honours",
     hours_per_week: 4,
     tutors_needed: 2,
     has_tutorial: true,
@@ -39,7 +40,12 @@ function validCourse(overrides = {}) {
 }
 
 beforeEach(() => {
-  tables = { courses: [] };
+  tables = {
+    courses: [],
+    tutor_subject_preference: [],
+    course_volunteers: [],
+    notifications: [],
+  };
   mockSupabase = fakeSupabase(tables);
 });
 
@@ -131,6 +137,29 @@ describe("POST /api/courses", () => {
     expect(res.body.error).toMatch(/min_mark/);
   });
 
+  test.each([
+    ["missing", undefined],
+    ["blank", ""],
+    ["not a recognised level", "second_year"],
+  ])("rejects a course_level that is %s", async (_label, course_level) => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ course_level }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/course_level/);
+    expect(tables.courses).toHaveLength(0);
+  });
+
+  test("stores course_level as its numeric rank", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ course_level: "phd" }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.course_level).toBe(6);
+  });
+
   test("rejects a duplicate course code with a 409, not a second row", async () => {
     mockSupabase = fakeSupabase(tables, { courses: [["course_code"]] });
     tables.courses = [{ id: 1, course_code: "COMS2000" }];
@@ -193,6 +222,7 @@ describe("POST /api/courses", () => {
     expect(res.body).toMatchObject({
       course_code: "COMS2000",
       min_mark: 60,
+      course_level: 4,
       hours_per_week: 4,
       tutors_needed: 2,
     });
@@ -240,8 +270,12 @@ describe("PUT /api/courses/:id", () => {
         hours_per_week: 4,
         tutors_needed: 2,
         Day_of_tut: "Monday",
-        tutor_start_time: "09:00",
-        tutor_end_time: "10:00",
+        // Realistic Postgres `time` round-trip shape (with seconds) — the
+        // client's submitted payload only ever has "HH:MM", so seeding the
+        // "before" row this way is what actually exercises the
+        // notifySessionChange format-mismatch bug below.
+        tutor_start_time: "09:00:00",
+        tutor_end_time: "10:00:00",
         venues: "MSL004",
       },
     ];
@@ -282,6 +316,96 @@ describe("PUT /api/courses/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.course_name).toBe("Data Structures II");
+  });
+
+  // The notification fan-out is fire-and-forget (not awaited by the route
+  // before responding), so these flush a macrotask after the request
+  // resolves to let it land before asserting on the fake table.
+  function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  describe("notifying approved tutors/volunteers on a session change", () => {
+    beforeEach(() => {
+      tables.tutor_subject_preference = [
+        { id: 1, tutor_id: "tutor-approved", course_id: 1, status: "approved" },
+        { id: 2, tutor_id: "tutor-pending", course_id: 1, status: "pending" },
+        {
+          id: 3,
+          tutor_id: "tutor-other-course",
+          course_id: 2,
+          status: "approved",
+        },
+      ];
+      tables.course_volunteers = [
+        {
+          id: 1,
+          user_id: "vol-approved",
+          course_id: 1,
+          status: "approved",
+        },
+        { id: 2, user_id: "vol-rejected", course_id: 1, status: "rejected" },
+      ];
+    });
+
+    test("notifies only approved tutors/volunteers on this course when the tutorial time changes", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(
+          validCourse({ tutor_start_time: "11:00", tutor_end_time: "12:00" }),
+        );
+      expect(res.status).toBe(200);
+      await flush();
+
+      const recipients = tables.notifications.map((n) => n.user_id).sort();
+      expect(recipients).toEqual(["tutor-approved", "vol-approved"]);
+      expect(tables.notifications[0]).toMatchObject({
+        type: "session_change",
+        related_entity: "course",
+        related_id: "1",
+        read: false,
+      });
+      expect(tables.notifications[0].message).toContain("COMS2000");
+    });
+
+    test("does not notify anyone when the edit doesn't touch day/time/venue", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(validCourse({ course_name: "Data Structures II" }));
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(0);
+    });
+
+    test("does not false-positive on the submitted time's missing seconds (client sends HH:MM, DB round-trips HH:MM:SS)", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(validCourse({ min_mark: 75 }));
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(0);
+    });
+
+    test("notifies when a lab is added to a course that previously had none", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(
+          validCourse({
+            has_lab: true,
+            day_of_lab: "Wednesday",
+            lab_start_time: "14:00",
+            lab_end_time: "15:00",
+            lab_venues: "MSL010",
+          }),
+        );
+      expect(res.status).toBe(200);
+      await flush();
+
+      const recipients = tables.notifications.map((n) => n.user_id).sort();
+      expect(recipients).toEqual(["tutor-approved", "vol-approved"]);
+    });
   });
 });
 

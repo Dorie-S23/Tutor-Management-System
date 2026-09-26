@@ -5,6 +5,7 @@ import {
   todayStr,
   requireRole,
 } from "./storage.js";
+import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 
 // This page (dashboard.html) is tutor-only. Without this, any signed-in
 // user (e.g. a student volunteer who wandered in via a stale nav link) could
@@ -201,6 +202,7 @@ function renderUpcomingSessions(sessions) {
     const palette = courseColor(s.courseId);
     const li = document.createElement("li");
     li.className = "application-row application-row--course";
+    li.dataset.courseId = s.courseId;
     li.style.background = palette.bg;
     li.style.borderColor = palette.border;
     li.innerHTML = `
@@ -271,11 +273,32 @@ if (tourLink) {
 (async function initUpcomingSessions() {
   const user = getCurrentUser();
   if (user) {
-    // Independent endpoints — no need to wait for one before starting the other.
-    await Promise.all([
+    // Independent endpoints — no need to wait for one before starting the
+    // other. allSettled so a failure in one never blocks the highlight
+    // logic below, which only depends on fetchUpcomingSessions.
+    await Promise.allSettled([
       fetchUpcomingSessions(user.id),
       fetchMyExcusals(user.id),
     ]);
+
+    // No scheduled job in this app — the "you haven't submitted last
+    // week's timesheet" reminder is instead checked (idempotently, server
+    // decides if a new one is actually due) each time the dashboard loads.
+    // Fire-and-forget: the bell's own polling picks up any new notification.
+    fetch(
+      `/api/timesheets/due-reminder?tutorId=${encodeURIComponent(user.id)}`,
+    ).catch(() => {});
+  }
+
+  // Arriving from a "session changed" notification — scroll to and flash
+  // the course it was about, now that the list containing it has rendered.
+  const highlightCourseId = consumeQueryParam("highlightCourse");
+  if (highlightCourseId) {
+    scrollAndHighlight(
+      upcomingItemsEl.querySelector(
+        `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
+      ),
+    );
   }
 
   window.Onboarding?.start(TUTOR_TOUR_STEPS, {

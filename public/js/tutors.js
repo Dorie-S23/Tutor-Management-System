@@ -5,27 +5,15 @@ const ACADEMIC_LEVEL_LABELS = {
   phd: "PhD",
 };
 
-// Default hourly rates (ZAR) per academic level — used as seed values for
-// the settings card when no tutors exist yet. Once tutors are in the
-// database, their actual hourly_rate is the source of truth.
+// Fallback hourly rates (ZAR) per academic level, only used if
+// /api/tutors/rates can't be reached — the server's academic_level_rates
+// table is the actual source of truth.
 const DEFAULT_RATES = {
   third_year: 120,
   honours: 150,
   masters: 170,
   phd: 200,
 };
-
-// Build a { level: rate } map from the tutors currently loaded from the DB.
-// Falls back to DEFAULT_RATES for levels with no tutors yet.
-function extractRatesFromTutors(tutors) {
-  const rates = { ...DEFAULT_RATES };
-  tutors.forEach((t) => {
-    if (t.academic_level && t.hourly_rate != null) {
-      rates[t.academic_level] = t.hourly_rate;
-    }
-  });
-  return rates;
-}
 
 // ── Form validation ──────────────────────────────────────────
 const VALID_LEVELS = Object.keys(ACADEMIC_LEVEL_LABELS);
@@ -90,7 +78,6 @@ async function loadTutors() {
   }
   window.__tutorsCache = data;
   renderTutors(data);
-  initRateFields(data);
 }
 
 function applyHighlight() {
@@ -239,14 +226,12 @@ form.addEventListener("submit", async (e) => {
     }
   }
 
-  const rates = extractRatesFromTutors(window.__tutorsCache || []);
   const payload = {
     name: nameVal,
     student_number: studentNumVal,
     email: emailVal || null,
     academic_level: level,
     weekly_hour_cap: getGlobalCap(),
-    hourly_rate: level ? (rates[level] ?? null) : null,
   };
 
   const id = tutorIdEl.value;
@@ -321,8 +306,17 @@ function showToast(message) {
 }
 
 // ── Role rates (editable) ────────────────────────────────────────────
-function initRateFields(tutors) {
-  const rates = tutors ? extractRatesFromTutors(tutors) : { ...DEFAULT_RATES };
+// Rates live in their own per-level table on the server (academic_level_rates)
+// rather than being inferred from whatever tutors happen to be loaded.
+async function loadRates() {
+  let rates = { ...DEFAULT_RATES };
+  try {
+    const res = await fetch("/api/tutors/rates");
+    const data = await res.json();
+    if (res.ok) rates = { ...rates, ...data };
+  } catch {
+    // Network error — the DEFAULT_RATES fallback above still populates the fields.
+  }
   document.querySelectorAll(".rate-input").forEach((input) => {
     const level = input.dataset.level;
     if (rates[level] != null) input.value = rates[level];
@@ -349,7 +343,7 @@ document.getElementById("saveRatesBtn").addEventListener("click", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to save rates");
     showToast(
-      `Rates saved — updated ${data.updated} tutor${data.updated !== 1 ? "s" : ""}.`,
+      `Rates saved for ${data.updated} level${data.updated !== 1 ? "s" : ""}.`,
     );
     loadTutors();
   } catch (err) {
@@ -362,6 +356,6 @@ document.getElementById("saveRatesBtn").addEventListener("click", async () => {
 
 // Boot
 initCapField();
-initRateFields();
+loadRates();
 loadTutors();
 loadWorkload();

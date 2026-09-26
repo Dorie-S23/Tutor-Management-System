@@ -1,5 +1,15 @@
 const COURSES = [];
 
+// course_level is stored as a numeric rank (matches server/routes/tutorApplications.js's
+// LEVEL_RANK) but the organiser picks it from a labelled dropdown, same as tutors do
+// for their own academic_level on modules.html.
+const COURSE_LEVEL_LABELS = {
+  3: "third_year",
+  4: "honours",
+  5: "masters",
+  6: "phd",
+};
+
 // ---------- state ----------
 
 let activeCourseId = null;
@@ -17,6 +27,7 @@ function mapCourseRow(row) {
     code: row.course_code,
     name: row.course_name,
     minMark: row.min_mark,
+    courseLevel: row.course_level,
     department: row.department,
     hoursNeeded: row.hours_per_week,
     tutorsNeeded: row.tutors_needed,
@@ -1428,6 +1439,8 @@ function openCourseModal(course = null) {
     document.getElementById("courseCodeInput").value = course.code;
     document.getElementById("courseNameInput").value = course.name;
     document.getElementById("minMarkInput").value = course.minMark;
+    document.getElementById("courseLevelInput").value =
+      COURSE_LEVEL_LABELS[course.courseLevel] ?? "";
     document.getElementById("departmentInput").value = course.department ?? "";
     document.getElementById("hoursPerWeekInput").value =
       course.hoursNeeded ?? "";
@@ -1641,6 +1654,7 @@ addCourseForm.addEventListener("submit", async (e) => {
     course_code: document.getElementById("courseCodeInput").value.trim(),
     course_name: document.getElementById("courseNameInput").value.trim(),
     min_mark: Number(document.getElementById("minMarkInput").value),
+    course_level: document.getElementById("courseLevelInput").value,
     department: document.getElementById("departmentInput").value.trim(),
     hours_per_week: hoursValue === "" ? null : Number(hoursValue),
     tutors_needed: tutorsNeededValue === "" ? null : Number(tutorsNeededValue),

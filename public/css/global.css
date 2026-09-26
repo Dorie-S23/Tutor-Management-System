@@ -732,6 +732,12 @@ input[type="search"]:focus-visible {
   gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
+  /* Without this, a flex item's default min-width is its content's
+     unbreakable width — here, the longest single stamp (e.g. a long
+     "Clashes with ..." message) — which stops flex-wrap from ever
+     kicking in and instead forces the whole row wider than its card,
+     showing a horizontal scrollbar and clipping the tutor's name. */
+  min-width: 0;
 }
 
 .stamp {
@@ -1083,6 +1089,164 @@ input[type="search"]:focus-visible {
 
 .toast.toast--danger {
   background: var(--red);
+}
+
+/* ---------- notification bell ----------
+   Unscoped (not .tutor-app/.student-app) since header markup/classes aren't
+   consistent across every page this ships on — plain, page-agnostic tokens
+   so it looks right regardless of which header it's dropped into. */
+
+.notif-bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.notif-bell-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+/* The bell icon's width/height are only set via SVG attributes (not CSS),
+   so as a flex item it has no CSS-specified size for flexbox to respect —
+   Chromium was shrinking it down to a sliver, leaving just the unread
+   badge visibly floating with no bell underneath it. Pinning the size in
+   CSS and disabling shrink fixes that. */
+.notif-bell-btn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.notif-bell-btn:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.notif-bell-badge {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.1rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 100px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 2rem);
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  z-index: 40;
+}
+
+.notif-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.notif-mark-all-btn {
+  border: none;
+  background: none;
+  color: var(--navy);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.notif-mark-all-btn:hover {
+  text-decoration: underline;
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notif-item {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item:hover {
+  background: var(--line-soft);
+}
+
+.notif-item--unread {
+  background: var(--navy-bg);
+}
+
+.notif-message {
+  margin: 0 0 0.2rem;
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.notif-time {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+
+/* Briefly flashed on whatever a notification click scrolls to, so it's
+   obvious which row the notification was actually about. */
+@keyframes highlight-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  20%,
+  60% {
+    box-shadow: 0 0 0 3px var(--navy);
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 1.4s ease-in-out;
+}
+
+.notif-empty {
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
 }
 
 /* ---------- tutors page ---------- */

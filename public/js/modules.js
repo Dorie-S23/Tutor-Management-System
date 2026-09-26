@@ -1,5 +1,6 @@
 import { highlightActiveTab } from "./nav.js";
 import { requireRole } from "./storage.js";
+import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 
 // This page (modules.html) is tutor-only — applying to tutor a module isn't
 // a concept that applies to other roles.
@@ -30,6 +31,16 @@ const toastEl = document.getElementById("toast");
 let COURSES = [];
 let myApplications = [];
 let myAcademicLevel = null;
+
+// course_level is stored as a numeric rank (see server/routes/tutorApplications.js's
+// LEVEL_RANK) — shown back to the tutor as the label they'd recognise from their own
+// year-of-study dropdown.
+const COURSE_LEVEL_LABEL = {
+  3: "3rd year",
+  4: "Honours",
+  5: "Masters",
+  6: "PhD",
+};
 
 function showToast(message, type = "success") {
   toastEl.textContent = message;
@@ -131,6 +142,7 @@ function renderApplicationsList() {
   myApplications.forEach((app) => {
     const li = document.createElement("li");
     li.className = "application-row";
+    li.dataset.applicationId = app.id;
     const course = app.courses;
     const status = (app.status || "pending").toLowerCase();
     const label = course
@@ -258,10 +270,18 @@ function updateCourseMeta() {
   }
 
   const session = formatSession(course);
+  const levelLabel = COURSE_LEVEL_LABEL[course.course_level];
+  const requirements = [
+    `a mark of ${course.min_mark}+`,
+    levelLabel ? `${levelLabel} level or higher` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   courseMeta.hidden = false;
   courseMeta.textContent = session
-    ? `Requires a mark of ${course.min_mark}+ · tutorial is ${session}`
-    : `Requires a mark of ${course.min_mark}+ · tutorial day/time not yet set`;
+    ? `Requires ${requirements} · tutorial is ${session}`
+    : `Requires ${requirements} · tutorial day/time not yet set`;
 
   availabilityLabel.textContent = session
     ? `Are you free on ${session}?`
@@ -340,4 +360,15 @@ applyForm?.addEventListener("submit", async (e) => {
   await fetchCourses();
   await fetchMyAcademicLevel(currentUser.id);
   await fetchMyApplications(currentUser.id);
+
+  // Arriving from an "application status changed" notification — scroll to
+  // and flash the application it was about.
+  const highlightApplicationId = consumeQueryParam("highlightApplication");
+  if (highlightApplicationId) {
+    scrollAndHighlight(
+      applicationsItemsEl.querySelector(
+        `[data-application-id="${CSS.escape(highlightApplicationId)}"]`,
+      ),
+    );
+  }
 })();

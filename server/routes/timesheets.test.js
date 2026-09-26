@@ -21,7 +21,14 @@ function buildApp() {
 }
 
 beforeEach(() => {
-  tables = { timesheets: [], tutors: [], users: [] };
+  tables = {
+    timesheets: [],
+    tutors: [],
+    users: [],
+    academic_level_rates: [],
+    notifications: [],
+    hour_entries: [],
+  };
   mockSupabase = fakeSupabase(tables);
 });
 
@@ -198,6 +205,161 @@ describe("PATCH /api/timesheets/:userId/:weekStart", () => {
     );
     expect(otherWeek.status).toBe("pending");
   });
+
+  // The notification fan-out is fire-and-forget (not awaited before the
+  // route responds), so these flush a macrotask after the request resolves
+  // to let it land before asserting on the fake table.
+  function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  describe("notifying the tutor of the outcome", () => {
+    test("approving notifies the tutor", async () => {
+      const res = await request(buildApp())
+        .patch("/api/timesheets/t1/2026-08-31")
+        .send({ status: "approved" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(1);
+      expect(tables.notifications[0]).toMatchObject({
+        user_id: "t1",
+        type: "timesheet_status",
+        related_entity: "timesheet",
+        related_id: "2026-08-31",
+        read: false,
+      });
+      expect(tables.notifications[0].message).toMatch(/approved/);
+    });
+
+    test("rejecting notifies the tutor with the reviewer's note", async () => {
+      const res = await request(buildApp())
+        .patch("/api/timesheets/t1/2026-08-31")
+        .send({ status: "rejected", reviewerNote: "Tuesday's hours look off" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications[0].message).toContain(
+        "Tuesday's hours look off",
+      );
+    });
+
+    test("resetting to pending doesn't notify anyone", async () => {
+      tables.timesheets[0].status = "approved";
+
+      const res = await request(buildApp())
+        .patch("/api/timesheets/t1/2026-08-31")
+        .send({ status: "pending" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(0);
+    });
+  });
+});
+
+describe("GET /api/timesheets/due-reminder", () => {
+  // Mirrors the route's own getWeekStart (Monday-start, UTC), so the
+  // expected week boundary is computed the same way regardless of which
+  // day "today" is pinned to below.
+  function mondayOf(dateStr) {
+    const d = new Date(dateStr + "T00:00:00Z");
+    const day = d.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setUTCDate(d.getUTCDate() + diff);
+    return d.toISOString().slice(0, 10);
+  }
+
+  const TODAY = "2026-09-16"; // a Wednesday
+  const LAST_WEEK_START = mondayOf(
+    new Date(new Date(TODAY + "T00:00:00Z").getTime() - 7 * 86400000)
+      .toISOString()
+      .slice(0, 10),
+  );
+
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ["nextTick", "setTimeout"] });
+    jest.setSystemTime(new Date(TODAY + "T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test("requires tutorId", async () => {
+    const res = await request(buildApp()).get("/api/timesheets/due-reminder");
+    expect(res.status).toBe(400);
+  });
+
+  test("does nothing when no hours were logged last week", async () => {
+    const res = await request(buildApp())
+      .get("/api/timesheets/due-reminder")
+      .query({ tutorId: "t1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.notified).toBe(false);
+    expect(tables.notifications).toHaveLength(0);
+  });
+
+  test("does nothing when last week's timesheet was already submitted", async () => {
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: LAST_WEEK_START, hours: 3 },
+    ];
+    tables.timesheets = [
+      { user_id: "t1", week_start: LAST_WEEK_START, status: "pending" },
+    ];
+
+    const res = await request(buildApp())
+      .get("/api/timesheets/due-reminder")
+      .query({ tutorId: "t1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.notified).toBe(false);
+    expect(tables.notifications).toHaveLength(0);
+  });
+
+  test("notifies once when hours were logged last week but never submitted", async () => {
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: LAST_WEEK_START, hours: 3 },
+    ];
+
+    const res = await request(buildApp())
+      .get("/api/timesheets/due-reminder")
+      .query({ tutorId: "t1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.notified).toBe(true);
+    expect(tables.notifications).toHaveLength(1);
+    expect(tables.notifications[0]).toMatchObject({
+      user_id: "t1",
+      type: "timesheet_due",
+      related_entity: "timesheet",
+      related_id: LAST_WEEK_START,
+      read: false,
+    });
+  });
+
+  test("doesn't send a second reminder for a week it already nagged about", async () => {
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: LAST_WEEK_START, hours: 3 },
+    ];
+    tables.notifications = [
+      {
+        id: 1,
+        user_id: "t1",
+        type: "timesheet_due",
+        related_id: LAST_WEEK_START,
+      },
+    ];
+
+    const res = await request(buildApp())
+      .get("/api/timesheets/due-reminder")
+      .query({ tutorId: "t1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.notified).toBe(false);
+    expect(tables.notifications).toHaveLength(1);
+  });
 });
 
 describe("GET /api/timesheets/payroll-export", () => {
@@ -208,15 +370,19 @@ describe("GET /api/timesheets/payroll-export", () => {
         name: "Alice",
         student_number: "1111111",
         email: "alice@wits.ac.za",
-        hourly_rate: 150,
+        academic_level: "honours",
       },
       {
         id: "t2",
         name: "Bob",
         student_number: "2222222",
         email: "bob@wits.ac.za",
-        hourly_rate: 200,
+        academic_level: "masters",
       },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+      { academic_level: "masters", hourly_rate: 200 },
     ];
     tables.timesheets = [
       {
@@ -251,7 +417,7 @@ describe("GET /api/timesheets/payroll-export", () => {
     );
   });
 
-  test("leaves rate and amount blank instead of guessing when the tutor has no hourly_rate set", async () => {
+  test("leaves rate and amount blank instead of guessing when the tutor has no academic_level set", async () => {
     tables.tutors = [
       { id: "t1", name: "Alice", student_number: "1111111", email: "a@b.c" },
     ];
@@ -281,8 +447,11 @@ describe("GET /api/timesheets/payroll-export", () => {
         name: "Doe, Alice",
         student_number: "1111111",
         email: "a@b.c",
-        hourly_rate: 100,
+        academic_level: "third_year",
       },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "third_year", hourly_rate: 100 },
     ];
     tables.timesheets = [
       {

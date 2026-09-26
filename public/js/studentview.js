@@ -1,12 +1,12 @@
 /* ============================================================
    Student Dashboard
    Modules You Can Tutor (real courses from Supabase) + a mark-based
-   volunteer application + the resulting pending applications. No
-   real backing data for upcoming sessions yet, so that list just
-   says so.
+   volunteer application + the resulting pending applications +
+   upcoming sessions for the courses you're approved to volunteer on.
    ============================================================ */
 
 import { getEntries, requireRole } from "./storage.js";
+import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 
 // This page (StudentView.html) is student-only — symmetric with the guard
 // on the tutor pages, so a tutor can't wander in here either.
@@ -22,6 +22,99 @@ const pendingListEl = document.getElementById("pendingList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
 
 welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
+
+// ---------- upcoming sessions ----------
+
+// Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching
+// JS Date.getDay(), so a course's weekly Day_of_tut can be projected onto
+// the next real calendar date.
+const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+function formatSession(course) {
+  if (!course.Day_of_tut || !course.tutor_start_time || !course.tutor_end_time)
+    return null;
+  return `${course.Day_of_tut} · ${course.tutor_start_time.slice(0, 5)}–${course.tutor_end_time.slice(0, 5)}`;
+}
+
+// Days from today until the next occurrence of a weekly tutorial day
+// (0 = today, 1 = tomorrow, ... 6 = a week from today at the latest).
+function daysUntil(dayName) {
+  const targetIdx = DAY_NAMES.indexOf(dayName);
+  if (targetIdx === -1) return null;
+  const todayIdx = new Date().getDay();
+  return (targetIdx - todayIdx + 7) % 7;
+}
+
+function describeDaysAway(daysAway) {
+  if (daysAway === 0) return "today";
+  if (daysAway === 1) return "tomorrow";
+  return `in ${daysAway} days`;
+}
+
+async function fetchUpcomingSessions() {
+  let sessions = [];
+  try {
+    const res = await fetch(
+      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+    );
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load sessions");
+
+    sessions = rows
+      .filter((app) => (app.status || "").toLowerCase() === "approved")
+      .map((app) => {
+        const course = app.courses;
+        const session = course ? formatSession(course) : null;
+        const daysAway = course ? daysUntil(course.Day_of_tut) : null;
+        if (!course || !session || daysAway === null) return null;
+        return {
+          courseId: app.course_id,
+          courseCode: course.course_code,
+          courseName: course.course_name,
+          session,
+          startTime: course.tutor_start_time,
+          daysAway,
+        };
+      })
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          a.daysAway - b.daysAway || a.startTime.localeCompare(b.startTime),
+      );
+  } catch {
+    sessions = [];
+  }
+  renderUpcomingSessions(sessions);
+}
+
+function renderUpcomingSessions(sessions) {
+  if (sessions.length === 0) {
+    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
+    return;
+  }
+
+  upcomingSessionsListEl.innerHTML = "";
+  upcomingSessionsListEl.className = "session-list";
+
+  sessions.forEach((s) => {
+    const article = document.createElement("article");
+    article.dataset.courseId = s.courseId;
+    article.innerHTML = `
+      <h3>${s.courseCode} — ${s.courseName}</h3>
+      <p>${s.session}</p>
+      <span class="status-pill">${describeDaysAway(s.daysAway)}</span>
+    `;
+    upcomingSessionsListEl.appendChild(article);
+  });
+}
 
 async function renderHoursVolunteered() {
   const entries = await getEntries();
@@ -173,6 +266,7 @@ async function renderPendingApplications() {
   relevant.forEach((app) => {
     const status = (app.status || "pending").toLowerCase();
     const article = document.createElement("article");
+    article.dataset.applicationId = app.id;
     article.innerHTML = `
       <h3>${app.courses.course_code}</h3>
       <p>${app.courses.course_name} &bull; Mark submitted: ${app.mark}</p>
@@ -299,14 +393,37 @@ if (tourLink) {
 
 // ---------- init ----------
 
-upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
-
 (async () => {
-  await Promise.all([
+  // allSettled, not all: one widget's fetch failing (e.g. hours volunteered)
+  // shouldn't stop the others from rendering — including the highlight
+  // below, which only depends on fetchUpcomingSessions having finished.
+  await Promise.allSettled([
     renderHoursVolunteered(),
     renderCourses(),
     renderPendingApplications(),
+    fetchUpcomingSessions(),
   ]);
+
+  // Arriving from a "session changed" notification — scroll to and flash
+  // the course it was about, now that the list containing it has rendered.
+  const highlightCourseId = consumeQueryParam("highlightCourse");
+  if (highlightCourseId) {
+    scrollAndHighlight(
+      upcomingSessionsListEl.querySelector(
+        `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
+      ),
+    );
+  }
+
+  // Arriving from a "volunteer application status changed" notification.
+  const highlightApplicationId = consumeQueryParam("highlightApplication");
+  if (highlightApplicationId) {
+    scrollAndHighlight(
+      pendingListEl.querySelector(
+        `[data-application-id="${CSS.escape(highlightApplicationId)}"]`,
+      ),
+    );
+  }
 
   window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
     tourId: "volunteer-dashboard",

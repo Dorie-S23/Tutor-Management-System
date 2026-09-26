@@ -1,5 +1,7 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { getRatesMap } = require("./academicLevelRates");
+const { notify } = require("./notificationHelpers");
 
 const router = express.Router();
 
@@ -10,6 +12,14 @@ const LEVEL_RANK = {
   honours: 4,
   masters: 5,
   phd: 6,
+};
+
+const LEVEL_LABEL = {
+  2: "2nd year",
+  3: "3rd year",
+  4: "Honours",
+  5: "Masters",
+  6: "PhD",
 };
 
 function toMinutes(timeStr) {
@@ -80,8 +90,7 @@ router.get("/", async (req, res) => {
         name,
         email,
         academic_level,
-        weekly_hour_cap,
-        hourly_rate
+        weekly_hour_cap
       )
       `,
   );
@@ -101,6 +110,22 @@ router.get("/", async (req, res) => {
       error: error.message,
     });
   }
+
+  // hourly_rate isn't a tutors column — it's derived from the tutor's
+  // academic_level via the shared rate table, same as everywhere else
+  // pay is calculated.
+  const { ratesMap, error: ratesError } = await getRatesMap();
+  if (ratesError) {
+    return res.status(500).json({ error: ratesError.message });
+  }
+  (data || []).forEach((application) => {
+    if (application.tutors) {
+      application.tutors.hourly_rate =
+        application.tutors.academic_level != null
+          ? (ratesMap[application.tutors.academic_level] ?? null)
+          : null;
+    }
+  });
 
   // ------------------------------------------------------------
   // If this is a tutor's own applications, don't need ranking.
@@ -459,7 +484,7 @@ router.post("/", async (req, res) => {
     });
   }
 
-  // A tutor must be at least one year ahead of the course.
+  // A tutor must be at this course's minimum level or higher.
   if (course.course_level == null) {
     return res.status(403).json({
       error: `${course.course_code} doesn't have a year level set yet — ask an organiser to set it before applying.`,
@@ -468,9 +493,11 @@ router.post("/", async (req, res) => {
 
   const tutorYear = LEVEL_RANK[academicLevel];
 
-  if (tutorYear <= course.course_level) {
+  if (tutorYear < course.course_level) {
+    const requiredLabel =
+      LEVEL_LABEL[course.course_level] || `level ${course.course_level}`;
     return res.status(403).json({
-      error: `You need to be at least one year ahead of ${course.course_code} (level ${course.course_level}) to tutor it.`,
+      error: `You need to be at ${requiredLabel} level or higher to tutor ${course.course_code}.`,
     });
   }
 
@@ -643,7 +670,7 @@ router.post("/bulk-approve", async (req, res) => {
   for (const id of applicationIds) {
     const { data: application, error: applicationError } = await supabase
       .from("tutor_subject_preference")
-      .select("id, status, course_id, Tutor_name")
+      .select("id, status, course_id, tutor_id, Tutor_name")
       .eq("id", id)
       .single();
 
@@ -659,7 +686,7 @@ router.post("/bulk-approve", async (req, res) => {
 
     const { data: course, error: courseError } = await supabase
       .from("courses")
-      .select("no_of_tutors_assigned, tutors_needed")
+      .select("no_of_tutors_assigned, tutors_needed, course_code, course_name")
       .eq("id", application.course_id)
       .single();
 
@@ -697,6 +724,15 @@ router.post("/bulk-approve", async (req, res) => {
       results.push({ id, success: false, error: updateError.message });
       continue;
     }
+
+    notify(application.tutor_id, {
+      type: "application_status",
+      message: `You've been approved to tutor ${course.course_code}${course.course_name ? ` — ${course.course_name}` : ""}.`,
+      relatedEntity: "application",
+      relatedId: application.id,
+    }).catch((err) =>
+      console.warn("Failed to notify about application status:", err),
+    );
 
     results.push({ id, success: true, name: application.Tutor_name });
   }
@@ -920,6 +956,25 @@ router.patch("/:id", async (req, res) => {
         error: `The approval went through, but the override reason couldn't be saved: ${overrideError.message}`,
       });
     }
+  }
+
+  if (status === "approved" || status === "rejected") {
+    const courseLabel = data.courses?.course_code || "a course";
+    const message =
+      status === "approved"
+        ? `You've been approved to tutor ${courseLabel}${data.courses?.course_name ? ` — ${data.courses.course_name}` : ""}.`
+        : wasApproved
+          ? `You've been removed from ${courseLabel} — you were previously approved to tutor it: ${rejectionReason.trim()}`
+          : `Your application to tutor ${courseLabel} was rejected: ${rejectionReason.trim()}`;
+
+    notify(application.tutor_id, {
+      type: "application_status",
+      message,
+      relatedEntity: "application",
+      relatedId: application.id,
+    }).catch((err) =>
+      console.warn("Failed to notify about application status:", err),
+    );
   }
 
   res.json(data);

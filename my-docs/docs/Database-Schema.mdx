@@ -37,16 +37,23 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `tutors`
 
-- Profile row for every account registered with role `tutor`, plus the pay and workload settings used by allocation and payroll.
+- Profile row for every account registered with role `tutor`, plus the workload settings used by allocation and payroll. Pay itself is looked up from `academic_level_rates` via `academic_level`, not stored here.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (uuid, PK, FK → `users.id`)
 - `student_number` (text, required, unique)
 - `email` (text, required)
 - `name` (text)
-- `hourly_rate` (real)
-- `academic_level` (text) — `third_year`, `honours`, `masters` or `phd`; drives the bulk-rates endpoint
+- `academic_level` (text) — `third_year`, `honours`, `masters` or `phd`; looks up the tutor's pay rate in `academic_level_rates` and is checked against a course's `course_level`
 - `weekly_hour_cap` (integer)
+
+#### `academic_level_rates`
+
+- The hourly rate paid at each academic level — one row per level, shared by every tutor at that level instead of a rate duplicated onto each tutor's row. Edited from the tutors page's rates settings card (`POST /api/tutors/bulk-rates`), read via `GET /api/tutors/rates` and by the hours/budget report and payroll export.
+- **Primary key**: `academic_level`
+- **Fields**:
+- `academic_level` (text, PK) — `third_year`, `honours`, `masters` or `phd`
+- `hourly_rate` (real, required, >= 0)
 
 #### `educators`
 
@@ -80,7 +87,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `no_of_tutors_assigned` (smallint)
 - `tutor_start_time`, `tutor_end_time` (time)
 - `Day_of_tut` (text)
-- `course_level` (smallint)
+- `course_level` (smallint) — minimum academic level a tutor must hold to apply, as a rank (`third_year`=3, `honours`=4, `masters`=5, `phd`=6); set from the organiser's Add/Edit Course form
 - `venues` (text) — tutorial rooms, e.g. `"MSL004,005,006"`
 - `Day_of_lab` (text)
 - `lab_start_time`, `lab_end_time` (time)

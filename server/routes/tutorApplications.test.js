@@ -28,8 +28,123 @@ beforeEach(() => {
     tutor_subject_preference: [],
     tutors: [],
     allocation_overrides: [],
+    academic_level_rates: [],
+    notifications: [],
   };
   mockSupabase = fakeSupabase(tables);
+});
+
+describe("POST /api/tutor-applications", () => {
+  beforeEach(() => {
+    tables.tutors = [{ id: "tutor-1", name: "Test Tutor" }];
+    tables.courses = [
+      {
+        id: 1,
+        course_code: "COMS3300",
+        course_name: "Honours Project",
+        course_level: 4, // honours
+      },
+    ];
+  });
+
+  function validApplication(overrides = {}) {
+    return {
+      tutorId: "tutor-1",
+      courseId: 1,
+      mark: 75,
+      availability: true,
+      academicLevel: "honours",
+      ...overrides,
+    };
+  }
+
+  test("rejects a course with no course_level set yet", async () => {
+    tables.courses[0].course_level = null;
+
+    const res = await request(buildApp())
+      .post("/api/tutor-applications")
+      .send(validApplication());
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/doesn't have a year level set yet/);
+  });
+
+  test("rejects a tutor below the course's minimum level", async () => {
+    const res = await request(buildApp())
+      .post("/api/tutor-applications")
+      .send(validApplication({ academicLevel: "third_year" }));
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe(
+      "You need to be at Honours level or higher to tutor COMS3300.",
+    );
+  });
+
+  test("accepts a tutor exactly at the course's minimum level", async () => {
+    const res = await request(buildApp())
+      .post("/api/tutor-applications")
+      .send(validApplication({ academicLevel: "honours" }));
+
+    expect(res.status).toBe(201);
+  });
+
+  test("accepts a tutor above the course's minimum level", async () => {
+    const res = await request(buildApp())
+      .post("/api/tutor-applications")
+      .send(validApplication({ academicLevel: "phd" }));
+
+    expect(res.status).toBe(201);
+  });
+});
+
+describe("GET /api/tutor-applications", () => {
+  test("attaches hourly_rate to the embedded tutor, derived from their academic_level", async () => {
+    tables.tutor_subject_preference = [
+      {
+        id: 1,
+        tutor_id: "tutor-1",
+        course_id: 1,
+        tutor_mark: 80,
+        Availability: true,
+        tutors: {
+          name: "Test Tutor",
+          email: "tutor@wits.ac.za",
+          academic_level: "honours",
+          weekly_hour_cap: 10,
+        },
+        courses: { course_code: "COMS3300", course_name: "Honours Project" },
+      },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+    ];
+
+    const res = await request(buildApp())
+      .get("/api/tutor-applications")
+      .query({ tutorId: "tutor-1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].tutors.hourly_rate).toBe(150);
+  });
+
+  test("leaves hourly_rate null when the tutor has no academic_level", async () => {
+    tables.tutor_subject_preference = [
+      {
+        id: 1,
+        tutor_id: "tutor-1",
+        course_id: 1,
+        tutors: { name: "Test Tutor" },
+        courses: { course_code: "COMS3300" },
+      },
+    ];
+
+    const res = await request(buildApp())
+      .get("/api/tutor-applications")
+      .query({ tutorId: "tutor-1" });
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].tutors.hourly_rate).toBeNull();
+  });
 });
 
 describe("GET /api/tutor-applications/obvious-fill", () => {
@@ -212,6 +327,47 @@ describe("POST /api/tutor-applications/bulk-approve", () => {
     ]);
     // Shouldn't double-count an already-approved application against capacity.
     expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
+  });
+
+  test("notifies each tutor it actually approved, not the ones it couldn't", async () => {
+    tables.courses = [
+      {
+        id: 10,
+        course_code: "COMS2000",
+        course_name: "Data Structures",
+        tutors_needed: 1,
+        no_of_tutors_assigned: 0,
+      },
+    ];
+    tables.tutor_subject_preference = [
+      {
+        id: "app-1",
+        status: "pending",
+        course_id: 10,
+        tutor_id: "t1",
+        Tutor_name: "Alice",
+      },
+      {
+        id: "app-2",
+        status: "pending",
+        course_id: 10,
+        tutor_id: "t2",
+        Tutor_name: "Bob",
+      },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/tutor-applications/bulk-approve")
+      .send({ applicationIds: ["app-1", "app-2"] });
+    expect(res.status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(tables.notifications).toHaveLength(1);
+    expect(tables.notifications[0]).toMatchObject({
+      user_id: "t1",
+      type: "application_status",
+    });
+    expect(tables.notifications[0].message).toContain("COMS2000");
   });
 });
 
@@ -540,6 +696,113 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     expect(res.status).toBe(409);
     expect(tables.tutor_subject_preference[0].status).toBe("approved");
+  });
+
+  // The notification fan-out is fire-and-forget (not awaited before the
+  // route responds), so these flush a macrotask after the request resolves
+  // to let it land before asserting on the fake table.
+  function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  describe("notifying the tutor of the outcome", () => {
+    test("approving notifies the tutor", async () => {
+      tables.courses = [
+        {
+          id: 10,
+          course_code: "COMS2000",
+          course_name: "Data Structures",
+          tutors_needed: 2,
+          no_of_tutors_assigned: 0,
+          hours_per_week: 3,
+        },
+      ];
+      tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+      tables.tutor_subject_preference = [
+        {
+          id: "app-1",
+          status: "pending",
+          course_id: 10,
+          tutor_id: "t1",
+          // fakeSupabase doesn't do real joins — seed the embedded shape
+          // the route's .select("*, courses(...)") expects back directly.
+          courses: { course_code: "COMS2000", course_name: "Data Structures" },
+        },
+      ];
+
+      const res = await request(buildApp())
+        .patch("/api/tutor-applications/app-1")
+        .send({ status: "approved", approvalReason: "Great fit" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(1);
+      expect(tables.notifications[0]).toMatchObject({
+        user_id: "t1",
+        type: "application_status",
+        related_entity: "application",
+        related_id: "app-1",
+        read: false,
+      });
+      expect(tables.notifications[0].message).toContain("COMS2000");
+    });
+
+    test("rejecting a pending application notifies the tutor it was rejected, not removed", async () => {
+      tables.courses = [{ id: 10, course_code: "COMS2000" }];
+      tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+      tables.tutor_subject_preference = [
+        {
+          id: "app-1",
+          status: "pending",
+          course_id: 10,
+          tutor_id: "t1",
+          courses: { course_code: "COMS2000" },
+        },
+      ];
+
+      const res = await request(buildApp())
+        .patch("/api/tutor-applications/app-1")
+        .send({ status: "rejected", rejectionReason: "Mark too low" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications[0].message).toMatch(/was rejected/);
+      expect(tables.notifications[0].message).toContain("Mark too low");
+    });
+
+    test("rejecting a previously-approved application tells the tutor they were removed", async () => {
+      tables.courses = [
+        { id: 10, course_code: "COMS2000", no_of_tutors_assigned: 1 },
+      ];
+      tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+      tables.tutor_subject_preference = [
+        { id: "app-1", status: "approved", course_id: 10, tutor_id: "t1" },
+      ];
+
+      const res = await request(buildApp())
+        .patch("/api/tutor-applications/app-1")
+        .send({ status: "rejected", rejectionReason: "Course cancelled" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications[0].message).toMatch(/removed from/);
+    });
+
+    test("resetting to pending doesn't notify anyone", async () => {
+      tables.courses = [{ id: 10, course_code: "COMS2000" }];
+      tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+      tables.tutor_subject_preference = [
+        { id: "app-1", status: "approved", course_id: 10, tutor_id: "t1" },
+      ];
+
+      const res = await request(buildApp())
+        .patch("/api/tutor-applications/app-1")
+        .send({ status: "pending" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(0);
+    });
   });
 });
 

@@ -32,6 +32,8 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
       const filters = [];
       let pendingWrite = null;
       let insertConflict = null;
+      let pendingOrder = null;
+      let pendingLimit = null;
 
       const matches = (row) =>
         filters.every(([type, col, val]) => {
@@ -72,6 +74,19 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
           }
           return { data: { ...matched[0] }, error: null };
         }
+
+        if (pendingOrder) {
+          const { column, ascending } = pendingOrder;
+          matched = matched.slice().sort((a, b) => {
+            if (a[column] < b[column]) return ascending ? -1 : 1;
+            if (a[column] > b[column]) return ascending ? 1 : -1;
+            return 0;
+          });
+        }
+        if (pendingLimit != null) {
+          matched = matched.slice(0, pendingLimit);
+        }
+
         return {
           data: matched.map((row) => ({ ...row })),
           error: null,
@@ -153,7 +168,15 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
           filters.push(["in", column, values]);
           return builder;
         },
-        order: () => builder,
+        // Matches Supabase's own default (ascending unless told otherwise).
+        order: (column, opts = {}) => {
+          pendingOrder = { column, ascending: opts.ascending !== false };
+          return builder;
+        },
+        limit: (n) => {
+          pendingLimit = n;
+          return builder;
+        },
         single: () => resolve(true, false),
         maybeSingle: () => resolve(true, true),
         // Lets `await supabase.from(...).select(...)` work even when no
