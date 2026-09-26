@@ -139,11 +139,9 @@ router.post("/bulk-rates", async (req, res) => {
   for (const [level, rate] of Object.entries(rates)) {
     const rateNum = Number(rate);
     if (!Number.isFinite(rateNum) || rateNum < 0) {
-      return res
-        .status(400)
-        .json({
-          error: `Invalid rate for ${level}: must be a non-negative number`,
-        });
+      return res.status(400).json({
+        error: `Invalid rate for ${level}: must be a non-negative number`,
+      });
     }
 
     const { data: existing, error: findError } = await supabase
