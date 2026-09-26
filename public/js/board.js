@@ -1302,7 +1302,7 @@ async function openAutoAllocateModal() {
   autoAllocatePublishBtn.disabled = true;
   autoAllocateModal.showModal();
 
-  let draft, assignments;
+  let draft, assignments, skipped;
   try {
     const res = await fetch("/api/allocation-drafts/auto-allocate", {
       method: "POST",
@@ -1312,7 +1312,7 @@ async function openAutoAllocateModal() {
     const body = await res.json();
     if (!res.ok)
       throw new Error(body.error || "Failed to propose an allocation");
-    ({ draft, assignments } = body);
+    ({ draft, assignments, skipped } = body);
   } catch (err) {
     autoAllocateHint.textContent =
       "Couldn't propose an allocation — try again.";
@@ -1324,6 +1324,7 @@ async function openAutoAllocateModal() {
     autoAllocateHint.textContent = "";
     autoAllocateEmpty.hidden = false;
     autoAllocatePublishBtn.hidden = true;
+    renderSkippedCandidates(skipped);
     return;
   }
 
@@ -1360,7 +1361,38 @@ async function openAutoAllocateModal() {
     });
   });
 
+  renderSkippedCandidates(skipped);
+
   autoAllocatePublishBtn.disabled = false;
+}
+
+// Every eligible-but-not-proposed applicant (locked, over the tutor's hour
+// cap, or simply outranked for a slot) is still shown here — not as
+// something to publish, just so the organiser can see why they didn't make
+// the cut instead of the run looking like it silently ignored them.
+function renderSkippedCandidates(skipped) {
+  if (!skipped || skipped.length === 0) return;
+
+  const heading = document.createElement("li");
+  heading.className = "obvious-fill-course-head";
+  heading.textContent = "Not proposed";
+  autoAllocateList.appendChild(heading);
+
+  skipped.forEach((skip) => {
+    const course = COURSES.find((c) => c.id === skip.courseId);
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "tutor-row";
+    row.style.cursor = "default";
+    row.innerHTML = `
+      <span class="name-block">
+        <span class="name">${skip.tutorName || "Unknown"} &mdash; ${course?.code || `course ${skip.courseId}`}</span>
+        <span class="role">${skip.reason}</span>
+      </span>
+    `;
+    li.appendChild(row);
+    autoAllocateList.appendChild(li);
+  });
 }
 
 autoAllocateBtn.addEventListener("click", openAutoAllocateModal);

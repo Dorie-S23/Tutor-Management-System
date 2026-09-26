@@ -1,8 +1,62 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { recordAudit } = require("../utils/auditLog");
+const { DAY_NAMES } = require("../dayNames");
 
 const router = express.Router();
+
+// Small, self-contained duplicates of tutorApplications.js's own
+// toMinutes/overlaps helpers — deliberately not shared, so this route never
+// risks changing the behaviour of that already-tested endpoint.
+function toMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function overlaps(startA, endA, startB, endB) {
+  return startA < endB && startB < endA;
+}
+
+// Used only as a soft ranking tie-break (see auto-allocate below), not a
+// hard gate — the manual PATCH /:id approval doesn't block on clash either,
+// it's informational there too. busy.day_of_week is 0-6 (see dayNames.js);
+// course.Day_of_tut is the same day spelled out ("Monday"), so it's mapped
+// through DAY_NAMES before comparing.
+function courseHasClash(course, busyTimes, otherApprovedCourses) {
+  const courseDay = course.Day_of_tut;
+  const courseStart = toMinutes(course.tutor_start_time);
+  const courseEnd = toMinutes(course.tutor_end_time);
+  if (!courseDay || courseStart == null || courseEnd == null) return false;
+
+  for (const busy of busyTimes) {
+    if (DAY_NAMES[busy.day_of_week] !== courseDay) continue;
+    const busyStart = toMinutes(busy.start_time);
+    const busyEnd = toMinutes(busy.end_time);
+    if (
+      busyStart != null &&
+      busyEnd != null &&
+      overlaps(courseStart, courseEnd, busyStart, busyEnd)
+    ) {
+      return true;
+    }
+  }
+
+  for (const other of otherApprovedCourses) {
+    if (!other || other.Day_of_tut !== courseDay) continue;
+    const otherStart = toMinutes(other.tutor_start_time);
+    const otherEnd = toMinutes(other.tutor_end_time);
+    if (
+      otherStart != null &&
+      otherEnd != null &&
+      overlaps(courseStart, courseEnd, otherStart, otherEnd)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 // Attaches course_code/course_name and tutor name/email to a set of
 // allocation_draft_assignments rows, which only store bare tutor_id/
@@ -35,12 +89,27 @@ async function enrichAssignments(assignments) {
 }
 
 // POST /api/allocation-drafts/auto-allocate — proposes tutor assignments for
-// every course with open slots, in one pass across the whole school. For
-// each course: pending applicants meeting the mark bar and marked available
-// are eligible; if there are more eligible applicants than slots, they're
-// ranked by mark (highest first, tie-broken by application id for a
-// deterministic order) and only the top N are proposed. Nothing is applied
-// yet — this just writes a draft for an organiser to review and publish.
+// every course with open slots, in one pass across the whole school.
+//
+// A pending application is even considered if: the tutor's mark clears the
+// course's bar, they're marked available, the application isn't locked (an
+// organiser's manual pin that no bulk/auto action should touch), and
+// approving it wouldn't push the tutor over their weekly hour cap — that
+// last one is a running total across this whole run, not just this course,
+// so a tutor proposed for two courses in the same pass can't blow their cap
+// across the two even though each alone would fit. Mark and availability
+// are hard requirements (matching the mark-only bar the manual application
+// flow already enforces); hour cap is a hard rule too, mirroring the manual
+// PATCH /:id approval, which blocks on it unless an organiser overrides it —
+// auto-allocate has no such override step, so it just skips those instead.
+// A timetable clash is a softer signal (the manual approval doesn't block on
+// it either, only shows it) — it's used to break ties, preferring a
+// non-clashing candidate over a clashing one at the same mark.
+//
+// Nothing is applied yet — this writes a draft for an organiser to review
+// and publish. Every eligible-but-not-picked applicant is still reported
+// back (not persisted) with the reason it didn't make the cut, so the
+// review UI can show why, not just who.
 router.post("/auto-allocate", async (req, res) => {
   const { organiserId, name } = req.body ?? {};
   if (!organiserId) {
@@ -50,50 +119,179 @@ router.post("/auto-allocate", async (req, res) => {
   const { data: courses, error: coursesError } = await supabase
     .from("courses")
     .select(
-      "id, course_code, course_name, min_mark, tutors_needed, no_of_tutors_assigned",
+      "id, course_code, course_name, min_mark, tutors_needed, no_of_tutors_assigned, hours_per_week, Day_of_tut, tutor_start_time, tutor_end_time",
     );
   if (coursesError)
     return res.status(500).json({ error: coursesError.message });
 
   const { data: applications, error: applicationsError } = await supabase
     .from("tutor_subject_preference")
-    .select("id, tutor_id, course_id, tutor_mark, Availability, Tutor_name")
+    .select(
+      "id, tutor_id, course_id, tutor_mark, Availability, Tutor_name, locked",
+    )
     .eq("status", "pending");
   if (applicationsError)
     return res.status(500).json({ error: applicationsError.message });
 
+  const candidateTutorIds = [
+    ...new Set(applications.filter((a) => !a.locked).map((a) => a.tutor_id)),
+  ];
+
+  const [
+    { data: tutors, error: tutorsError },
+    { data: otherApprovals, error: otherApprovalsError },
+    { data: busyTimeRows, error: busyTimesError },
+  ] = await Promise.all([
+    candidateTutorIds.length
+      ? supabase
+          .from("tutors")
+          .select("id, weekly_hour_cap")
+          .in("id", candidateTutorIds)
+      : Promise.resolve({ data: [] }),
+    candidateTutorIds.length
+      ? supabase
+          .from("tutor_subject_preference")
+          .select("tutor_id, courses(hours_per_week)")
+          .eq("status", "approved")
+          .in("tutor_id", candidateTutorIds)
+      : Promise.resolve({ data: [] }),
+    candidateTutorIds.length
+      ? supabase
+          .from("tutor_busy_times")
+          .select("tutor_id, day_of_week, start_time, end_time")
+          .in("tutor_id", candidateTutorIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  if (tutorsError) return res.status(500).json({ error: tutorsError.message });
+  if (otherApprovalsError)
+    return res.status(500).json({ error: otherApprovalsError.message });
+  if (busyTimesError)
+    return res.status(500).json({ error: busyTimesError.message });
+
+  const hourCapByTutor = new Map(
+    (tutors || []).map((t) => [t.id, t.weekly_hour_cap]),
+  );
+
+  // Running total, mutated as picks are made below so a tutor proposed for
+  // more than one course in this same run is checked cumulatively.
+  const projectedHoursByTutor = new Map();
+  (otherApprovals || []).forEach((row) => {
+    const hours = row.courses?.hours_per_week || 0;
+    projectedHoursByTutor.set(
+      row.tutor_id,
+      (projectedHoursByTutor.get(row.tutor_id) || 0) + hours,
+    );
+  });
+
+  const busyTimesByTutor = new Map();
+  (busyTimeRows || []).forEach((row) => {
+    if (!busyTimesByTutor.has(row.tutor_id))
+      busyTimesByTutor.set(row.tutor_id, []);
+    busyTimesByTutor.get(row.tutor_id).push(row);
+  });
+
+  function wouldExceedCap(tutorId, course) {
+    const cap = hourCapByTutor.get(tutorId);
+    if (cap == null) return false;
+    const projected =
+      (projectedHoursByTutor.get(tutorId) || 0) + (course.hours_per_week || 0);
+    return projected > cap;
+  }
+
   const proposals = [];
+  const skipped = [];
 
   for (const course of courses) {
     const remainingSlots =
       (course.tutors_needed ?? 0) - (course.no_of_tutors_assigned ?? 0);
     if (remainingSlots <= 0) continue;
 
-    const eligible = applications
-      .filter(
-        (app) =>
-          app.course_id === course.id &&
-          typeof app.tutor_mark === "number" &&
-          app.tutor_mark >= course.min_mark &&
-          app.Availability === true,
-      )
-      .sort((a, b) => b.tutor_mark - a.tutor_mark || (a.id > b.id ? 1 : -1));
+    const courseApplicants = applications.filter(
+      (app) => app.course_id === course.id,
+    );
+
+    const eligible = [];
+    for (const app of courseApplicants) {
+      if (app.locked) {
+        skipped.push({
+          tutorId: app.tutor_id,
+          courseId: course.id,
+          tutorName: app.Tutor_name,
+          reason: "This application is locked — left for manual review",
+        });
+        continue;
+      }
+      if (
+        typeof app.tutor_mark !== "number" ||
+        app.tutor_mark < course.min_mark
+      ) {
+        continue; // below the mark bar — not a real candidate, not worth reporting as "skipped"
+      }
+      if (app.Availability !== true) {
+        continue; // not available — same as above
+      }
+      if (wouldExceedCap(app.tutor_id, course)) {
+        const cap = hourCapByTutor.get(app.tutor_id);
+        skipped.push({
+          tutorId: app.tutor_id,
+          courseId: course.id,
+          tutorName: app.Tutor_name,
+          reason: `Would put this tutor over their ${cap} hr/week cap — skipped`,
+        });
+        continue;
+      }
+      eligible.push({
+        ...app,
+        clash: courseHasClash(
+          course,
+          busyTimesByTutor.get(app.tutor_id) || [],
+          [],
+        ),
+      });
+    }
 
     if (eligible.length === 0) continue;
 
+    // Mark dominates, same as the manual ranking display (mark is worth up
+    // to 100 of its 160-point score, clash only 20) — clash only decides it
+    // between candidates already tied on mark.
+    eligible.sort(
+      (a, b) =>
+        b.tutor_mark - a.tutor_mark ||
+        Number(a.clash) - Number(b.clash) ||
+        (a.id > b.id ? 1 : -1),
+    );
+
     const picked = eligible.slice(0, remainingSlots);
+    const passedOver = eligible.slice(remainingSlots);
 
     picked.forEach((app, index) => {
+      const clashNote = app.clash ? ", has a timetable clash" : "";
       const explanation =
         eligible.length <= remainingSlots
-          ? `Only eligible applicant for this slot (mark ${app.tutor_mark}, course minimum ${course.min_mark})`
-          : `Ranked #${index + 1} of ${eligible.length} eligible applicants by mark (${app.tutor_mark})`;
+          ? `Only eligible applicant for this slot (mark ${app.tutor_mark}, course minimum ${course.min_mark}${clashNote})`
+          : `Ranked #${index + 1} of ${eligible.length} eligible applicants by mark (${app.tutor_mark}${clashNote})`;
 
       proposals.push({
         tutor_id: app.tutor_id,
         course_id: course.id,
         explanation,
         locked: false,
+      });
+
+      projectedHoursByTutor.set(
+        app.tutor_id,
+        (projectedHoursByTutor.get(app.tutor_id) || 0) +
+          (course.hours_per_week || 0),
+      );
+    });
+
+    passedOver.forEach((app, index) => {
+      skipped.push({
+        tutorId: app.tutor_id,
+        courseId: course.id,
+        tutorName: app.Tutor_name,
+        reason: `Ranked #${remainingSlots + index + 1} of ${eligible.length} eligible applicants — the ${remainingSlots} open slot${remainingSlots === 1 ? "" : "s"} went to higher-ranked applicants`,
       });
     });
   }
@@ -102,6 +300,7 @@ router.post("/auto-allocate", async (req, res) => {
     return res.status(200).json({
       draft: null,
       assignments: [],
+      skipped,
       message:
         "No courses currently have both open slots and eligible applicants.",
     });
@@ -130,6 +329,7 @@ router.post("/auto-allocate", async (req, res) => {
   res.status(201).json({
     draft,
     assignments: await enrichAssignments(assignments),
+    skipped,
   });
 });
 
@@ -268,7 +468,7 @@ router.post("/:id/publish", async (req, res) => {
 
     const { data: course, error: courseError } = await supabase
       .from("courses")
-      .select("no_of_tutors_assigned, tutors_needed")
+      .select("no_of_tutors_assigned, tutors_needed, hours_per_week")
       .eq("id", assignment.course_id)
       .single();
     if (courseError || !course) {
@@ -288,6 +488,55 @@ router.post("/:id/publish", async (req, res) => {
         reason: "course is now full",
       });
       continue;
+    }
+
+    // Re-checked here too (auto-allocate already screened for this when the
+    // draft was proposed) since time may have passed and other approvals
+    // may have landed since — same rule the manual PATCH /:id approval
+    // enforces, just with no override step available here.
+    const { data: tutor, error: tutorError } = await supabase
+      .from("tutors")
+      .select("weekly_hour_cap")
+      .eq("id", assignment.tutor_id)
+      .single();
+    if (tutorError || !tutor) {
+      results.push({
+        assignmentId: assignment.id,
+        success: false,
+        reason: "tutor not found",
+      });
+      continue;
+    }
+    if (tutor.weekly_hour_cap != null) {
+      const { data: otherApprovals, error: otherApprovalsError } =
+        await supabase
+          .from("tutor_subject_preference")
+          .select("courses(hours_per_week)")
+          .eq("tutor_id", assignment.tutor_id)
+          .eq("status", "approved")
+          .neq("course_id", assignment.course_id);
+      if (otherApprovalsError) {
+        results.push({
+          assignmentId: assignment.id,
+          success: false,
+          reason: otherApprovalsError.message,
+        });
+        continue;
+      }
+      const currentAssignedHours = (otherApprovals || []).reduce(
+        (sum, a) => sum + (a.courses?.hours_per_week || 0),
+        0,
+      );
+      const projectedHours =
+        currentAssignedHours + (course.hours_per_week || 0);
+      if (projectedHours > tutor.weekly_hour_cap) {
+        results.push({
+          assignmentId: assignment.id,
+          success: false,
+          reason: `would put the tutor at ${projectedHours}/${tutor.weekly_hour_cap} hrs/week, over their cap`,
+        });
+        continue;
+      }
     }
 
     const { error: bumpError } = await supabase
