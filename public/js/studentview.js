@@ -106,10 +106,13 @@ async function renderCourses(applications) {
       return;
     }
 
+    const minMarkNote = Number.isInteger(course.min_mark)
+      ? ` &bull; Min mark ${course.min_mark}`
+      : "";
     article.innerHTML = `
       <h3>${course.course_code}</h3>
       <p class="session-meta">${course.course_name}</p>
-      <p class="session-note">${course.department}</p>
+      <p class="session-note">${course.department}${minMarkNote}</p>
       <button type="button" class="volunteer-btn btn btn-primary">Volunteer</button>
       <div class="mark-form" hidden>
         <div class="form-field">
@@ -149,6 +152,12 @@ async function renderCourses(applications) {
       const mark = Number(markInput.value);
       if (!Number.isInteger(mark) || mark < 0 || mark > 100) {
         showToast("Enter a valid mark between 0 and 100");
+        return;
+      }
+      if (Number.isInteger(course.min_mark) && mark < course.min_mark) {
+        showToast(
+          `You need at least ${course.min_mark} for ${course.course_code} to volunteer`,
+        );
         return;
       }
 

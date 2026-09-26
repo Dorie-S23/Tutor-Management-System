@@ -239,6 +239,40 @@ describe("studentview.js — Modules You Can Tutor reflects existing application
     expect(card.querySelector(".status-pill")).toBeNull();
   });
 
+  test("shows the course's minimum mark up front", async () => {
+    const { window } = loadPage({
+      courses: [{ ...openCourse, min_mark: 65 }],
+      applications: [],
+    });
+    await wait();
+
+    expect(
+      window.document.querySelector("#courseList article").textContent,
+    ).toContain("Min mark 65");
+  });
+
+  test("blocks a below-minimum mark before ever hitting the server", async () => {
+    const { window, calls } = loadPage({
+      courses: [{ ...openCourse, min_mark: 65 }],
+      applications: [],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    card.querySelector(".volunteer-btn").click();
+    const input = card.querySelector(".mark-input");
+    input.value = "50";
+    card.querySelector(".submit-mark-btn").click();
+    await wait();
+
+    expect(
+      calls.some(
+        (c) =>
+          c.url.includes("/api/course-volunteers") && c.opts?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
   test("a course already applied for shows its status instead of a Volunteer button", async () => {
     const { window } = loadPage({
       courses: [openCourse],
