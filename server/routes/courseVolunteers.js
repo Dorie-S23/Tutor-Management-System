@@ -223,12 +223,15 @@ const VALID_STATUSES = ["pending", "approved", "rejected"];
 // status flip; reconsidering back to pending (or approving) clears any
 // earlier rejection reason rather than leaving it stale on the row.
 //
-// Approving/un-approving here bumps courses.no_of_tutors_assigned exactly
-// the way approving a tutor_subject_preference application does — a course
-// a volunteer just filled needs to actually look filled everywhere else
-// that reads that count (the board's shortfall view, whole-school
-// auto-allocate, and the student dashboard's "still needs tutors" filter),
-// not just on this row.
+// Approving/un-approving a whole-course application bumps
+// courses.no_of_tutors_assigned exactly the way approving a
+// tutor_subject_preference application does — a course a volunteer just
+// filled needs to actually look filled everywhere else that reads that
+// count (the board's shortfall view, whole-school auto-allocate, and the
+// student dashboard's "still needs tutors" filter), not just on this row.
+// A claimed *session* is deliberately left out of this — it's one-off
+// cover for a single date, not a change in the course's regular tutoring
+// capacity, so it shouldn't make the course look more or less staffed.
 router.patch("/:id", async (req, res) => {
   const { status, reason, organiserId } = req.body ?? {};
   if (!VALID_STATUSES.includes(status)) {
@@ -239,7 +242,7 @@ router.patch("/:id", async (req, res) => {
 
   const { data: existing, error: existingError } = await supabase
     .from("course_volunteers")
-    .select("status, course_id")
+    .select("status, course_id, session_date")
     .eq("id", req.params.id)
     .single();
 
@@ -250,7 +253,7 @@ router.patch("/:id", async (req, res) => {
   const wasApproved = existing.status === "approved";
   const willBeApproved = status === "approved";
 
-  if (wasApproved !== willBeApproved) {
+  if (!existing.session_date && wasApproved !== willBeApproved) {
     const { data: course, error: courseError } = await supabase
       .from("courses")
       .select("no_of_tutors_assigned, tutors_needed")
@@ -317,9 +320,11 @@ router.patch("/:id", async (req, res) => {
 // so withdrawing from it deletes nothing and instead hands it back to the
 // pool (status back to 'open', user_id cleared) so another student can
 // claim the exact same gap, rather than the organiser silently losing it.
-// Either way, if the row being withdrawn was already 'approved', the
-// course's assigned-tutor count is freed up too — same as withdrawing an
-// approved tutor application does.
+// If the row being withdrawn was an approved *whole-course* application,
+// the course's assigned-tutor count is freed up too — same as withdrawing
+// an approved tutor application does. A claimed session never bumped that
+// count in the first place (see PATCH /:id above), so withdrawing one
+// doesn't touch it either.
 router.delete("/", async (req, res) => {
   const { userId, courseId } = req.query;
   if (!userId || !courseId) {
@@ -337,7 +342,7 @@ router.delete("/", async (req, res) => {
     return res.status(204).end();
   }
 
-  if (existing.status === "approved") {
+  if (existing.status === "approved" && !existing.session_date) {
     const { data: course, error: courseError } = await supabase
       .from("courses")
       .select("no_of_tutors_assigned")

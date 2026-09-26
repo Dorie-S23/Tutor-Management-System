@@ -207,6 +207,24 @@ describe("PATCH /api/course-volunteers/:id", () => {
     expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
   });
 
+  test("approving a claimed session doesn't touch the course's slot count", async () => {
+    // One-off cover for a single date, not a change in the course's
+    // regular tutoring capacity, and not subject to the capacity check
+    // either — a fully-staffed course can still need someone to cover for
+    // a regular tutor who's out sick one day.
+    tables.courses[0].tutors_needed = 1;
+    tables.courses[0].no_of_tutors_assigned = 1;
+    tables.course_volunteers[0].session_date = "2026-06-01";
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    expect(tables.course_volunteers[0].status).toBe("approved");
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
+  });
+
   test("an organiser rejects a pending volunteer", async () => {
     const res = await request(buildApp())
       .patch("/api/course-volunteers/1")
@@ -613,7 +631,10 @@ describe("course-volunteers audit log", () => {
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
   });
 
-  test("releasing an approved claimed session also frees the course's slot", async () => {
+  test("releasing an approved claimed session doesn't touch the course's slot count", async () => {
+    // A claimed session is one-off cover for a single date, not a change in
+    // the course's regular tutoring capacity — it never bumped
+    // no_of_tutors_assigned on approval, so releasing it shouldn't either.
     tables.courses = [{ id: "1", tutors_needed: 2, no_of_tutors_assigned: 1 }];
     tables.course_volunteers = [
       {
@@ -630,7 +651,7 @@ describe("course-volunteers audit log", () => {
     );
 
     expect(res.status).toBe(204);
-    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
     expect(tables.course_volunteers[0]).toMatchObject({
       status: "open",
       user_id: null,
