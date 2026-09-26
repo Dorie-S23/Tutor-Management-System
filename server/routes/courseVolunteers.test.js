@@ -133,6 +133,7 @@ describe("PATCH /api/course-volunteers/:id", () => {
   // has to be a string too — fakeSupabase does a strict === match and
   // doesn't coerce types the way Postgrest does for a real integer column.
   beforeEach(() => {
+    tables.courses = [{ id: 1, tutors_needed: 2, no_of_tutors_assigned: 0 }];
     tables.course_volunteers = [
       {
         id: "1",
@@ -161,6 +162,49 @@ describe("PATCH /api/course-volunteers/:id", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
     expect(tables.course_volunteers[0].status).toBe("approved");
+  });
+
+  test("approving a volunteer bumps the course's assigned-tutor count", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
+  });
+
+  test("rejecting a previously approved volunteer frees up the course's slot", async () => {
+    tables.course_volunteers[0].status = "approved";
+    tables.courses[0].no_of_tutors_assigned = 1;
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "rejected" });
+
+    expect(res.status).toBe(200);
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("moving a pending volunteer to rejected doesn't touch the course's slot count", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "rejected" });
+
+    expect(res.status).toBe(200);
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("refuses to approve a volunteer once the course already has all the tutors it needs", async () => {
+    tables.courses[0].tutors_needed = 1;
+    tables.courses[0].no_of_tutors_assigned = 1;
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(409);
+    expect(tables.course_volunteers[0].status).toBe("pending");
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
   });
 
   test("an organiser rejects a pending volunteer", async () => {
@@ -422,6 +466,7 @@ describe("course-volunteers audit log", () => {
   });
 
   test("approving a volunteer records the prior status and the organiser as actor", async () => {
+    tables.courses = [{ id: 1, tutors_needed: 2, no_of_tutors_assigned: 0 }];
     tables.course_volunteers = [
       { id: "v1", course_id: 1, user_id: "student-1", status: "pending" },
     ];
@@ -546,5 +591,69 @@ describe("course-volunteers audit log", () => {
 
     expect(res.status).toBe(204);
     expect(tables.course_volunteers).toHaveLength(0);
+  });
+
+  test("withdrawing an approved course application frees the course's slot", async () => {
+    tables.courses = [{ id: "1", tutors_needed: 2, no_of_tutors_assigned: 1 }];
+    tables.course_volunteers = [
+      {
+        id: "v1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "approved",
+        mark: 75,
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("releasing an approved claimed session also frees the course's slot", async () => {
+    tables.courses = [{ id: "1", tutors_needed: 2, no_of_tutors_assigned: 1 }];
+    tables.course_volunteers = [
+      {
+        id: "s1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "approved",
+        session_date: "2026-06-01",
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+    expect(tables.course_volunteers[0]).toMatchObject({
+      status: "open",
+      user_id: null,
+    });
+  });
+
+  test("withdrawing a pending (not yet approved) application doesn't touch the course's slot count", async () => {
+    tables.courses = [{ id: "1", tutors_needed: 2, no_of_tutors_assigned: 0 }];
+    tables.course_volunteers = [
+      {
+        id: "v1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "pending",
+        mark: 75,
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
   });
 });

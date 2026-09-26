@@ -947,7 +947,11 @@ async function setVolunteerStatus(course, vol, status, name, reason) {
 
     renderVolunteers(course);
     fetchVolunteerCounts();
-    renderCourseList();
+    // Approving/un-approving a volunteer now changes the course's
+    // assigned-tutor count too (see courseVolunteers.js), so the shortfall/
+    // staffed pill needs a real re-fetch, not just a re-render of the stale
+    // in-memory COURSES array.
+    await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
