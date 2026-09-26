@@ -251,6 +251,58 @@ describe("studentview.js — Modules You Can Tutor reflects existing application
     ).toContain("Min mark 65");
   });
 
+  test("shows the course's recurring Tutorial/Lab schedule before volunteering", async () => {
+    const { window } = loadPage({
+      courses: [
+        {
+          ...openCourse,
+          Day_of_tut: "Monday",
+          tutor_start_time: "10:00:00",
+          tutor_end_time: "12:00:00",
+          venues: "MSL004",
+          Day_of_lab: "Wednesday",
+          lab_start_time: "14:00:00",
+          lab_end_time: "16:00:00",
+          lab_venues: "MSL010",
+        },
+      ],
+      applications: [],
+    });
+    await wait();
+
+    const text = window.document.querySelector(
+      "#courseList article",
+    ).textContent;
+    expect(text).toContain("Tutorial Monday 10:00–12:00 (MSL004)");
+    expect(text).toContain("Lab Wednesday 14:00–16:00 (MSL010)");
+  });
+
+  test("still shows the schedule once already applied, so it's not lost after applying", async () => {
+    const { window } = loadPage({
+      courses: [
+        {
+          ...openCourse,
+          Day_of_tut: "Monday",
+          tutor_start_time: "10:00:00",
+          tutor_end_time: "12:00:00",
+        },
+      ],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          status: "pending",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.querySelector("#courseList article").textContent,
+    ).toContain("Tutorial Monday 10:00–12:00");
+  });
+
   test("blocks a below-minimum mark before ever hitting the server", async () => {
     const { window, calls } = loadPage({
       courses: [{ ...openCourse, min_mark: 65 }],
@@ -484,6 +536,118 @@ describe("studentview.js — Upcoming Sessions", () => {
     );
 
     expect(codes).toEqual(["SOON1000", "LATER1000"]);
+  });
+
+  test("an approved whole-course application shows its recurring slot's next occurrence", async () => {
+    const DAY_NAMES = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const todayName = DAY_NAMES[new Date().getDay()];
+
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          status: "approved",
+          mark: 80,
+          courses: {
+            course_code: "COMS1000",
+            course_name: "Intro",
+            Day_of_tut: todayName,
+            tutor_start_time: "10:00:00",
+            tutor_end_time: "12:00:00",
+            venues: "MSL004",
+          },
+        },
+      ],
+    });
+    await wait();
+
+    const cards = window.document.querySelectorAll(
+      "#upcomingSessionsList article",
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0].querySelector("h3").textContent).toBe("COMS1000");
+    expect(cards[0].textContent).toContain("Tutorial:");
+    expect(cards[0].textContent).toContain("10:00–12:00");
+    expect(cards[0].textContent).toContain("MSL004");
+    expect(cards[0].textContent).toContain("repeats weekly");
+  });
+
+  test("a whole-course application with no set schedule doesn't produce an upcoming-session entry", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          status: "approved",
+          mark: 80,
+          courses: {
+            course_code: "COURSEONLY1000",
+            course_name: "No schedule",
+          },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingSessionsList").textContent,
+    ).toContain("No upcoming sessions");
+  });
+
+  test("a recurring whole-course slot and a claimed session sort together, soonest first", async () => {
+    const DAY_NAMES = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const todayName = DAY_NAMES[new Date().getDay()];
+
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "s1",
+          course_id: 2,
+          status: "approved",
+          session_date: "2099-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "FARAWAY1000", course_name: "Far away" },
+        },
+        {
+          id: "a1",
+          course_id: 1,
+          status: "approved",
+          mark: 80,
+          courses: {
+            course_code: "SOON1000",
+            course_name: "Recurring",
+            Day_of_tut: todayName,
+            tutor_start_time: "10:00:00",
+            tutor_end_time: "12:00:00",
+          },
+        },
+      ],
+    });
+    await wait();
+
+    const codes = Array.from(
+      window.document.querySelectorAll("#upcomingSessionsList article h3"),
+    ).map((h) => h.textContent);
+
+    expect(codes).toEqual(["SOON1000", "FARAWAY1000"]);
   });
 
   test("shows the empty state when there's nothing upcoming", async () => {

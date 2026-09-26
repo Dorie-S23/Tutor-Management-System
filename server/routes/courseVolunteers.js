@@ -32,10 +32,13 @@ router.get("/", async (req, res) => {
       .json({ error: "userId, courseId or status is required" });
   }
 
+  // Schedule fields (Day_of_tut etc.) are included so the student dashboard
+  // can show a whole-course approval's recurring weekly slot — otherwise a
+  // volunteer approved for a whole course has no way to see when it is.
   let query = supabase
     .from("course_volunteers")
     .select(
-      "*, courses(course_code, course_name, department), users(name, email)",
+      "*, courses(course_code, course_name, department, Day_of_tut, tutor_start_time, tutor_end_time, venues, Day_of_lab, lab_start_time, lab_end_time, lab_venues), users(name, email)",
     )
     .order("created_at", { ascending: false });
 

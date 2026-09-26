@@ -2,13 +2,17 @@
    Student Dashboard
    Two ways to volunteer, both living in the course_volunteers table:
    - Modules You Can Tutor: a mark-based application for a whole course
-     (has a mark, no session_date).
+     (has a mark, no session_date). Being approved for one means taking on
+     that course's own recurring weekly Tutorial/Lab slot (Day_of_tut etc.
+     sit directly on the course row — there's no separate "sessions" table
+     for this, same as how a regularly-assigned tutor's schedule works).
    - Open Sessions You Can Cover: an organiser-posted, dated overflow gap
-     a student claims (has a session_date, no mark). A claim starts
-     'open', moves to 'pending' on claim, then approved/rejected exactly
-     like a course application.
+     a student claims (has a session_date, no mark) — a one-off date, not
+     a recurring commitment. A claim starts 'open', moves to 'pending' on
+     claim, then approved/rejected exactly like a course application.
    My Applications shows both kinds together. Upcoming Sessions surfaces
-   only approved, future-dated claims.
+   both: approved future-dated claims, and the next occurrence of every
+   approved whole-course application's recurring slot.
    ============================================================ */
 
 import { getEntries, requireRole } from "./storage.js";
@@ -43,6 +47,62 @@ function sessionDetailLine(app) {
   const time = `${formatSessionTime(app.start_time)}–${formatSessionTime(app.end_time)}`;
   const venue = app.venue ? ` &bull; ${app.venue}` : "";
   return `${date}, ${time}${venue}`;
+}
+
+// Mirrors DAY_NAMES in server/dayNames.js and dashboard.js's own copy —
+// index 0 = Sunday, matching Date#getDay() — so a course's weekly
+// Day_of_tut/Day_of_lab can be projected onto the next real calendar date.
+const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+function nextOccurrenceIso(dayName) {
+  const targetIdx = DAY_NAMES.indexOf(dayName);
+  if (targetIdx === -1) return null;
+  const d = new Date();
+  d.setDate(d.getDate() + ((targetIdx - d.getDay() + 7) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+// A course's own recurring Tutorial/Lab slot — shown on the course card
+// before volunteering (so a student knows the time commitment up front)
+// and used to build a recurring entry in Upcoming Sessions once approved.
+function courseSchedule(course) {
+  const sessions = [];
+  if (course.Day_of_tut && course.tutor_start_time && course.tutor_end_time) {
+    sessions.push({
+      type: "Tutorial",
+      day: course.Day_of_tut,
+      start: course.tutor_start_time,
+      end: course.tutor_end_time,
+      venue: course.venues,
+    });
+  }
+  if (course.Day_of_lab && course.lab_start_time && course.lab_end_time) {
+    sessions.push({
+      type: "Lab",
+      day: course.Day_of_lab,
+      start: course.lab_start_time,
+      end: course.lab_end_time,
+      venue: course.lab_venues,
+    });
+  }
+  return sessions;
+}
+
+function courseScheduleSummary(course) {
+  return courseSchedule(course)
+    .map((s) => {
+      const venueNote = s.venue ? ` (${s.venue})` : "";
+      return `${s.type} ${s.day} ${formatSessionTime(s.start)}–${formatSessionTime(s.end)}${venueNote}`;
+    })
+    .join(" &bull; ");
 }
 
 async function renderHoursVolunteered() {
@@ -88,6 +148,11 @@ async function renderCourses(applications) {
     const article = document.createElement("article");
     article.dataset.courseId = String(course.id);
 
+    const scheduleSummary = courseScheduleSummary(course);
+    const scheduleHtml = scheduleSummary
+      ? `<p class="session-note">${scheduleSummary}</p>`
+      : "";
+
     const existingApp = applicationByCourseId.get(course.id);
     if (existingApp) {
       const status = existingApp.status || "pending";
@@ -99,6 +164,7 @@ async function renderCourses(applications) {
         <h3>${course.course_code}</h3>
         <p class="session-meta">${course.course_name}</p>
         <p class="session-note">${course.department}</p>
+        ${scheduleHtml}
         <span class="status-pill ${status}">${status[0].toUpperCase()}${status.slice(1)}</span>
         ${reasonHtml}
       `;
@@ -113,6 +179,7 @@ async function renderCourses(applications) {
       <h3>${course.course_code}</h3>
       <p class="session-meta">${course.course_name}</p>
       <p class="session-note">${course.department}${minMarkNote}</p>
+      ${scheduleHtml}
       <button type="button" class="volunteer-btn btn btn-primary">Volunteer</button>
       <div class="mark-form" hidden>
         <div class="form-field">
@@ -354,6 +421,33 @@ function renderApplications(applications) {
 // dashboard's "Upcoming Sessions" card — a plain course application has no
 // date to show yet, and a rejected or still-pending claim isn't a real
 // commitment. Past-dated ones are excluded too — those live on My Sessions.
+// A whole-course approval has no session_date of its own — it's a standing
+// recurring commitment, not a one-off — so its "next occurrence" is derived
+// from the course's own Day_of_tut/Day_of_lab here rather than read off the
+// row. One entry per weekly Tutorial/Lab slot, showing the soonest date
+// it'll next happen.
+function recurringSessionEntries(applications) {
+  const entries = [];
+  applications
+    .filter(
+      (app) => app.status === "approved" && !app.session_date && app.courses,
+    )
+    .forEach((app) => {
+      courseSchedule(app.courses).forEach((s) => {
+        const nextDate = nextOccurrenceIso(s.day);
+        if (!nextDate) return;
+        const venueNote = s.venue ? ` &bull; ${s.venue}` : "";
+        entries.push({
+          courseCode: app.courses.course_code,
+          date: nextDate,
+          startTime: s.start,
+          label: `${s.type}: ${formatSessionDate(nextDate)}, ${formatSessionTime(s.start)}–${formatSessionTime(s.end)}${venueNote} (repeats weekly)`,
+        });
+      });
+    });
+  return entries;
+}
+
 function renderUpcomingSessions(applications) {
   if (!applications) {
     upcomingSessionsListEl.innerHTML = `<p class="empty-state">Couldn't load your sessions right now.</p>`;
@@ -361,14 +455,28 @@ function renderUpcomingSessions(applications) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = applications
+  const claimedSessions = applications
     .filter(
       (app) =>
         app.status === "approved" &&
         app.session_date &&
         app.session_date >= today,
     )
-    .sort((a, b) => a.session_date.localeCompare(b.session_date));
+    .map((app) => ({
+      courseCode: app.courses.course_code,
+      date: app.session_date,
+      startTime: app.start_time,
+      label: sessionDetailLine(app),
+    }));
+
+  const upcoming = [
+    ...claimedSessions,
+    ...recurringSessionEntries(applications),
+  ].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.startTime || "").localeCompare(b.startTime || ""),
+  );
 
   if (upcoming.length === 0) {
     upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
@@ -376,11 +484,11 @@ function renderUpcomingSessions(applications) {
   }
 
   upcomingSessionsListEl.innerHTML = "";
-  upcoming.forEach((app) => {
+  upcoming.forEach((entry) => {
     const article = document.createElement("article");
     article.innerHTML = `
-      <h3>${app.courses.course_code}</h3>
-      <p class="session-note">${sessionDetailLine(app)}</p>
+      <h3>${entry.courseCode}</h3>
+      <p class="session-note">${entry.label}</p>
     `;
     upcomingSessionsListEl.appendChild(article);
   });
