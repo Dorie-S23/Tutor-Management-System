@@ -170,11 +170,46 @@
           <section class="assign-panel" aria-labelledby="applicantsHeading">
             <header class="assign-panel-head">
               <h3 id="applicantsHeading">Applications</h3>
+              <div
+                class="preset-picker"
+                id="presetPicker"
+                role="group"
+                aria-label="Ranking balance"
+              >
+                <button
+                  type="button"
+                  class="preset-btn"
+                  data-preset="merit"
+                  aria-pressed="true"
+                >
+                  Merit
+                </button>
+                <button
+                  type="button"
+                  class="preset-btn"
+                  data-preset="balanced"
+                  aria-pressed="false"
+                >
+                  Balanced
+                </button>
+                <button
+                  type="button"
+                  class="preset-btn"
+                  data-preset="fairness"
+                  aria-pressed="false"
+                >
+                  Fair hours
+                </button>
+              </div>
             </header>
 
             <p class="hint">
               Approve fills an open tutor spot on this course; reject frees it
               up for someone else.
+            </p>
+
+            <p class="hint" id="presetHint">
+              <!-- injected: what the active balance means, and who leads -->
             </p>
 
             <ul class="tutor-list" id="applicantList">
@@ -639,6 +674,7 @@
 
     <script src="../js/onboarding.js"></script>
     <script src="../js/universal-search.js"></script>
+    <script src="../js/allocation-objectives.js"></script>
     <script src="../js/board.js"></script>
     <script src="../js/logout.js"></script>
   </body>

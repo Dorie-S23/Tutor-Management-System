@@ -14,6 +14,13 @@ const boardHtml = fs.readFileSync(
   "utf8",
 );
 const boardJs = fs.readFileSync(path.join(__dirname, "board.js"), "utf8");
+// board.js's preset picker reads window.AllocationObjectives, which the real
+// page provides via this script tag — inline it the same way so the tested
+// markup matches production.
+const allocationObjectivesJs = fs.readFileSync(
+  path.join(__dirname, "allocation-objectives.js"),
+  "utf8",
+);
 
 // Appended to board.js's own script text so it shares board.js's top-level
 // scope (COURSES, activeCourseId, renderCourseList) without board.js having
@@ -34,6 +41,10 @@ const openDoms = [];
 
 function loadBoard() {
   const html = boardHtml
+    .replace(
+      '<script src="../js/allocation-objectives.js"></script>',
+      `<script>\n${allocationObjectivesJs}\n</script>`,
+    )
     .replace(
       '<script src="../js/board.js"></script>',
       `<script>\n${boardJs}\n${testHooks}\n</script>`,

@@ -9,6 +9,74 @@ let shortfallOnly = false; // when true, course rail shows only short-staffed co
 let pendingApplicationCounts = {}; // course_id -> number of pending tutor applications
 let pendingVolunteerCounts = {}; // course_id -> number of pending student volunteers
 
+// ---------- allocation balance ----------
+//
+// Which preset of objective weights orders the applicant list (see
+// js/allocation-objectives.js, shared with the ranking API). Persisted so a
+// refresh keeps the organiser's chosen balance.
+
+const PRESET_STORAGE_KEY = "board.balancePreset";
+
+function validPreset(name) {
+  return (
+    !!window.AllocationObjectives &&
+    window.AllocationObjectives.PRESET_NAMES.includes(name)
+  );
+}
+
+function loadBalancePreset() {
+  try {
+    const stored = localStorage.getItem(PRESET_STORAGE_KEY);
+    if (validPreset(stored)) return stored;
+  } catch (err) {
+    // Storage unavailable (private mode, blocked cookies) — just default.
+  }
+  return "merit";
+}
+
+let balancePreset = loadBalancePreset();
+
+function saveBalancePreset(name) {
+  try {
+    localStorage.setItem(PRESET_STORAGE_KEY, name);
+  } catch (err) {
+    // Persisting is best-effort; the in-page switch still applies.
+  }
+}
+
+const presetPickerEl = document.getElementById("presetPicker");
+const presetHintEl = document.getElementById("presetHint");
+
+function renderPresetPicker() {
+  if (!presetPickerEl) return;
+  presetPickerEl.querySelectorAll(".preset-btn").forEach((btn) => {
+    const active = btn.dataset.preset === balancePreset;
+    btn.setAttribute("aria-pressed", String(active));
+    btn.classList.toggle("active", active);
+  });
+}
+
+function setBalancePreset(name) {
+  if (!validPreset(name) || name === balancePreset) return;
+  balancePreset = name;
+  saveBalancePreset(name);
+  renderPresetPicker();
+  // A different blend re-ranks the same applicants — drop the snapshot
+  // guard so renderApplicants() actually rebuilds the list.
+  lastApplicantsSnapshot = null;
+  if (activeCourseId) {
+    const course = COURSES.find((c) => c.id === activeCourseId);
+    if (course) renderApplicants(course);
+  }
+}
+
+presetPickerEl?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".preset-btn");
+  if (btn) setBalancePreset(btn.dataset.preset);
+});
+
+renderPresetPicker();
+
 // ---------- data loading ----------
 
 function mapCourseRow(row) {
@@ -573,14 +641,115 @@ function buildWorkloadStamp(check) {
   return `<span class="stamp ${over ? "blocked" : "ok"}">${projectedHours}/${weeklyHourCap} hrs/wk${over ? " · over cap" : ""}</span>`;
 }
 
-let lastApplicantsSnapshot = null; // most recent `${courseId}:${rowsJson}` rendered
+// ---------- balance rendering ----------
+
+function applicantDisplayName(app) {
+  return app.Tutor_name || app.tutors?.name || "Unknown";
+}
+
+// Explains the active balance under the Applications heading: what it
+// optimises for, and — when it disagrees with merit-first — who leads
+// instead. Plain text (textContent), so names need no escaping.
+function renderPresetHint(rows) {
+  if (!presetHintEl) return;
+
+  const parts = [];
+
+  const preset = window.AllocationObjectives?.PRESETS?.[balancePreset];
+  if (preset) parts.push(preset.description);
+
+  if (rows.length > 1) {
+    const leader = rows[0];
+    const meritLeader = rows.find((r) => r.ranking?.meritRank === 1);
+    if (
+      leader.ranking?.meritRank &&
+      leader.ranking.meritRank !== 1 &&
+      meritLeader
+    ) {
+      parts.push(
+        `${applicantDisplayName(leader)} leads this balance; merit-first would lead with ${applicantDisplayName(meritLeader)}.`,
+      );
+    }
+  }
+
+  presetHintEl.textContent = parts.join(" ");
+}
+
+function buildScoreStamp(app) {
+  const score = app.ranking?.score;
+  if (!Number.isFinite(score)) return "";
+  return `<span class="stamp score" title="Blended score across all five objectives under the ${balancePreset} balance">Score ${Math.round(score)}</span>`;
+}
+
+// Pareto domination is weight-independent: with several applicants, someone
+// who is at least as good on every objective and better on one beats this
+// applicant under ANY balance, which is worth flagging either way.
+function buildParetoStamp(app, applicantCount) {
+  const dominated = app.ranking?.paretoDominated;
+  if (dominated === undefined || applicantCount < 2) return "";
+  if (dominated) {
+    return `<span class="stamp warn" title="Another applicant is at least as good on every objective and strictly better on at least one, under any weighting.">Better all-round option exists</span>`;
+  }
+  return `<span class="stamp ok" title="No other applicant is better than them on every objective, whatever the weighting.">No better all-round option</span>`;
+}
+
+// The second line on an applicant row: one mini gauge per objective (filled
+// to the normalised 0-1 score) plus, when the active balance pulls against
+// merit-first, the trade-off note explaining how far they moved.
+function buildBalanceMeta(app) {
+  const objectives = app.ranking?.objectives;
+  if (!objectives) return null;
+
+  const meta = document.createElement("div");
+  meta.className = "balance-meta";
+
+  const bars = document.createElement("div");
+  bars.className = "objective-bars";
+
+  Object.entries(objectives).forEach(([name, value]) => {
+    if (!Number.isFinite(value)) return;
+
+    const objective = window.AllocationObjectives?.OBJECTIVES?.[name];
+    const label = objective ? objective.label : name;
+    const hint = objective ? ` (${objective.hint})` : "";
+    const percent = Math.round(value * 100);
+
+    const item = document.createElement("span");
+    item.className = "objective-bar";
+    item.title = `${label}${hint}: ${percent}%`;
+    item.setAttribute("aria-label", `${label}: ${percent}%`);
+
+    const fill = document.createElement("span");
+    fill.className = "objective-bar-fill";
+    fill.style.setProperty("--value", `${percent}%`);
+
+    item.appendChild(fill);
+    item.appendChild(document.createTextNode(label));
+    bars.appendChild(item);
+  });
+
+  meta.appendChild(bars);
+
+  if (app.ranking.tradeoff) {
+    const note = document.createElement("p");
+    note.className = "balance-note";
+    note.textContent = app.ranking.tradeoff;
+    meta.appendChild(note);
+  }
+
+  return meta;
+}
+
+let lastApplicantsSnapshot = null; // most recent `${courseId}:${preset}:${rowsJson}` rendered
 
 async function renderApplicants(course) {
   const requestId = ++applicantsRequestId;
 
   let rows = [];
   try {
-    const res = await fetch(`/api/tutor-applications?courseId=${course.id}`);
+    const res = await fetch(
+      `/api/tutor-applications?courseId=${course.id}&preset=${encodeURIComponent(balancePreset)}`,
+    );
     rows = await res.json();
     if (!res.ok) throw new Error(rows.error || "Failed to load applications");
   } catch (err) {
@@ -595,7 +764,8 @@ async function renderApplicants(course) {
   // Nothing about this course's applicants changed since we last actually
   // rendered them — skip the rebuild (and the assignment-check fetches
   // below) entirely, rather than flashing an identical list on every poll.
-  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  // The preset is part of the key: switching balance re-ranks the same rows.
+  const snapshot = `${course.id}:${balancePreset}:${JSON.stringify(rows)}`;
   if (snapshot === lastApplicantsSnapshot) return;
   lastApplicantsSnapshot = snapshot;
 
@@ -606,6 +776,7 @@ async function renderApplicants(course) {
 
   if (rows.length === 0) {
     applicantsEmptyEl.hidden = false;
+    renderPresetHint(rows);
     return;
   }
 
@@ -615,10 +786,12 @@ async function renderApplicants(course) {
 
   if (requestId !== applicantsRequestId) return;
 
+  renderPresetHint(rows);
+
   rows.forEach((app, i) => {
     const check = checks[i];
     const tutor = app.tutors;
-    const name = app.Tutor_name || tutor?.name || "Unknown";
+    const name = applicantDisplayName(app);
     const status = (app.status || "pending").toLowerCase();
     const levelLabel = LEVEL_LABELS[tutor?.academic_level] || "Year not set";
     const markStamp =
@@ -643,10 +816,12 @@ async function renderApplicants(course) {
         <span class="role">${levelLabel}</span>
       </span>
       <span class="stamp-row">
+        ${buildScoreStamp(app)}
         ${markStamp}
         ${availabilityStamp}
         ${buildClashStamp(check)}
         ${buildWorkloadStamp(check)}
+        ${buildParetoStamp(app, rows.length)}
         ${overrideStamp}
       </span>
       <span class="status-pill ${status}">${status}</span>
@@ -740,6 +915,10 @@ async function renderApplicants(course) {
     }
 
     li.appendChild(row);
+
+    const balanceMeta = buildBalanceMeta(app);
+    if (balanceMeta) li.appendChild(balanceMeta);
+
     applicantListEl.appendChild(li);
   });
 }

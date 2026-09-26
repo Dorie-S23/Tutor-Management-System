@@ -1,6 +1,11 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 
+// Multi-objective balancing: the shared objective definitions, presets and
+// scoring used to rank applicants — the same module the organiser board
+// loads as a plain <script> for its preset picker and objective bars.
+const AllocationObjectives = require("../../public/js/allocation-objectives");
+
 const router = express.Router();
 
 // academic_level -> numeric year, so it can be compared against a course's course_level
@@ -47,8 +52,12 @@ function courseSessions(course) {
 // ============================================================
 // GET /api/tutor-applications
 //
-// ?tutorId=...  -> a tutor's own applications
-// ?courseId=... -> all applicants for a course, ranked
+// ?tutorId=...          -> a tutor's own applications
+// ?courseId=...         -> all applicants for a course, ranked
+// ?preset=merit|balanced|fairness
+//                       -> which balance of the competing ranking
+//                          objectives to order applicants by
+//                          (default: merit, the historical ranking)
 // ============================================================
 router.get("/", async (req, res) => {
   const { tutorId, courseId } = req.query;
@@ -56,6 +65,25 @@ router.get("/", async (req, res) => {
   if (!tutorId && !courseId) {
     return res.status(400).json({
       error: "tutorId or courseId is required",
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Which balance of the competing objectives should order these
+  // applicants? Merit-first is the default and matches the historical
+  // ranking exactly; the others re-weight it (see allocation-objectives.js).
+  // Only the ranked courseId path uses a preset — a tutor's self-view
+  // never orders anyone — and it's validated before the database is
+  // touched, like every other input check in this repo.
+  // ------------------------------------------------------------
+
+  const preset =
+    req.query.preset === undefined ? "merit" : String(req.query.preset);
+
+  if (!tutorId && !AllocationObjectives.PRESET_NAMES.includes(preset)) {
+    const valid = AllocationObjectives.PRESET_NAMES.join(", ");
+    return res.status(400).json({
+      error: `Unknown preset "${preset}". Valid presets: ${valid}.`,
     });
   }
 
@@ -274,49 +302,11 @@ router.get("/", async (req, res) => {
       }
 
       // --------------------------------------------------------
-      // Calculate a ranking score
+      // The blended score itself is calculated after every applicant's
+      // facts are known — see the balance() call below — because the
+      // objectives compete with each other and need the full pool to
+      // rank, flag Pareto-dominated applicants and explain trade-offs.
       // --------------------------------------------------------
-      //
-      // The score is intentionally weighted so that academic
-      // performance is the strongest factor.
-      //
-      // Mark:             0 - 100 points
-      // Availability:     0 - 20 points
-      // No timetable clash: 0 - 20 points
-      // Academic level:   0 - 10 points
-      // Hours remaining:  0 - 10 points
-      //
-      // Maximum = 160
-      // --------------------------------------------------------
-
-      let score = 0;
-
-      // 1. Mark
-      score += mark;
-
-      // 2. Availability
-      if (available) {
-        score += 20;
-      }
-
-      // 3. Timetable clash
-      if (!timetableClash) {
-        score += 20;
-      }
-
-      // 4. Academic level
-      score += academicRank * 2;
-
-      // 5. Hours remaining
-      //
-      // If there is no cap, give the maximum workload points.
-      if (weeklyHourCap == null) {
-        score += 10;
-      } else if (weeklyHourCap > 0) {
-        const workloadRatio = hoursRemaining / Number(weeklyHourCap);
-
-        score += Math.min(Math.max(workloadRatio, 0), 1) * 10;
-      }
 
       // --------------------------------------------------------
       // Override info — was this approval pushed through past a
@@ -345,7 +335,6 @@ router.get("/", async (req, res) => {
         overrideInfo,
 
         ranking: {
-          score: Number(score.toFixed(2)),
           mark,
           available,
           timetableClash,
@@ -362,39 +351,30 @@ router.get("/", async (req, res) => {
   );
 
   // ------------------------------------------------------------
-  // Sort applicants from highest score to lowest score
+  // Blend the competing objectives (mark, availability, timetable
+  // fit, seniority, spare hours) into a single 0-100 score under
+  // the chosen preset, and order the applicants by it. The merit
+  // preset's weights are the historical point scale, so the default
+  // ordering is unchanged; the others re-weight the same facts.
   // ------------------------------------------------------------
 
-  rankedApplicants.sort((a, b) => {
-    // Primary: ranking score
-    if (b.ranking.score !== a.ranking.score) {
-      return b.ranking.score - a.ranking.score;
-    }
+  const balanced = AllocationObjectives.balance(
+    rankedApplicants.map((app) => app.ranking),
+    preset,
+  );
 
-    // Tie-breaker 1: higher mark
-    if (b.ranking.mark !== a.ranking.mark) {
-      return b.ranking.mark - a.ranking.mark;
-    }
-
-    // Tie-breaker 2: available applicant first
-    if (a.ranking.available !== b.ranking.available) {
-      return a.ranking.available ? -1 : 1;
-    }
-
-    // Tie-breaker 3: no timetable clash first
-    if (a.ranking.timetableClash !== b.ranking.timetableClash) {
-      return a.ranking.timetableClash ? 1 : -1;
-    }
-
-    // Tie-breaker 4: higher academic level
-    if (b.ranking.academicRank !== a.ranking.academicRank) {
-      return b.ranking.academicRank - a.ranking.academicRank;
-    }
-
-    return 0;
+  balanced.forEach((result) => {
+    const app = rankedApplicants[result.index];
+    app.ranking.preset = preset;
+    app.ranking.score = result.score;
+    app.ranking.objectives = result.objectives;
+    app.ranking.rank = result.rank;
+    app.ranking.meritRank = result.meritRank;
+    app.ranking.paretoDominated = result.dominated;
+    app.ranking.tradeoff = result.note;
   });
 
-  res.json(rankedApplicants);
+  res.json(balanced.map((result) => rankedApplicants[result.index]));
 });
 
 // ============================================================
