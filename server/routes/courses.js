@@ -327,16 +327,34 @@ const SESSION_FIELDS = [
   "lab_venues",
 ];
 
+// Postgres's `time` columns round-trip as "HH:MM:SS" once read back from the
+// DB, but the client only ever sends "HH:MM" (no seconds) from a plain
+// <input type="time">. Without normalizing both sides to the same shape,
+// "10:15:00" (before, freshly fetched) vs "10:15" (after, from the request
+// body) would compare unequal even when nothing actually changed — flagging
+// every single course edit, including ones that only touch min_mark or
+// course_level, as a session change.
+const TIME_FIELDS = new Set([
+  "tutor_start_time",
+  "tutor_end_time",
+  "lab_start_time",
+  "lab_end_time",
+]);
+
+function normalizeSessionField(field, value) {
+  if (value == null) return null;
+  return TIME_FIELDS.has(field) ? value.slice(0, 5) : value;
+}
+
 // Notifies every tutor and student volunteer currently approved on this
 // course when its Tutorial/Lab day, time or venue changes. Best-effort —
 // the caller swallows any error so a notification failure never blocks the
 // course edit itself from saving.
 async function notifySessionChange(courseId, before, after) {
-  // Nullish-coalesced on both sides: an unset field can come back as either
-  // `null` (an explicit no-lab row) or `undefined` (the column was never
-  // touched), and those two must compare as "no change" against each other.
   const changed = SESSION_FIELDS.some(
-    (field) => (before[field] ?? null) !== (after[field] ?? null),
+    (field) =>
+      normalizeSessionField(field, before[field]) !==
+      normalizeSessionField(field, after[field]),
   );
   if (!changed) return;
 

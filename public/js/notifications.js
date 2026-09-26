@@ -46,6 +46,44 @@ function getCurrentUser() {
     return `${days}d ago`;
   }
 
+  // Where a notification should take you when clicked, and what to
+  // highlight once you get there. Each entry maps a notification `type` to
+  // the destination page per role and the query param that page's script
+  // reads to know what to scroll to and flash — see highlightTarget.js.
+  // Anything not listed here just marks read with no navigation, so a
+  // future notification type degrades gracefully until it's added.
+  const DESTINATIONS = {
+    session_change: {
+      param: "highlightCourse",
+      tutor: "dashboard.html",
+      student: "StudentView.html",
+    },
+    application_status: {
+      param: "highlightApplication",
+      tutor: "modules.html",
+    },
+    volunteer_status: {
+      param: "highlightApplication",
+      student: "StudentView.html",
+    },
+    timesheet_status: {
+      param: "highlightWeek",
+      tutor: "timesheets.html",
+    },
+    timesheet_due: {
+      param: "highlightWeek",
+      tutor: "timesheets.html",
+    },
+  };
+
+  function destinationFor(n) {
+    if (!n.related_id) return null;
+    const entry = DESTINATIONS[n.type];
+    const page = entry?.[user.role];
+    if (!page) return null;
+    return `${page}?${entry.param}=${encodeURIComponent(n.related_id)}`;
+  }
+
   async function markRead(id) {
     try {
       await fetch(`/api/notifications/${id}`, {
@@ -82,13 +120,15 @@ function getCurrentUser() {
       meta.textContent = timeAgo(n.created_at);
       li.appendChild(meta);
 
-      if (!n.read) {
-        li.addEventListener("click", async () => {
+      li.addEventListener("click", async () => {
+        if (!n.read) {
           n.read = true;
           render(notifications);
           await markRead(n.id);
-        });
-      }
+        }
+        const dest = destinationFor(n);
+        if (dest) window.location.href = dest;
+      });
 
       list.appendChild(li);
     });

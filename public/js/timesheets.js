@@ -9,6 +9,7 @@ import {
   getWeekTotal,
   requireRole,
 } from "./storage.js";
+import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 
 // This page (timesheets.html) is tutor-only — a payroll claim for hours
 // tutored. Without this, any signed-in user could land here directly.
@@ -250,6 +251,7 @@ async function loadSubmissions() {
 
   rows.forEach((sub) => {
     const tr = document.createElement("tr");
+    tr.dataset.weekStart = sub.week_start;
     tr.innerHTML = `
       <td>${toDisplayDate(sub.week_start)}</td>
       <td>${sub.total_hours}</td>
@@ -393,4 +395,18 @@ updateSubmitWeekHint();
 
 loadProfileIntoForm();
 safeRenderClaim();
-loadSubmissions();
+
+(async () => {
+  await loadSubmissions();
+
+  // Arriving from a "timesheet reviewed" or "timesheet due" notification —
+  // scroll to and flash the week it was about.
+  const highlightWeek = consumeQueryParam("highlightWeek");
+  if (highlightWeek) {
+    scrollAndHighlight(
+      submissionsTableBody.querySelector(
+        `[data-week-start="${CSS.escape(highlightWeek)}"]`,
+      ),
+    );
+  }
+})();

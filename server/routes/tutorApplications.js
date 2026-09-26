@@ -1,6 +1,7 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
+const { notify } = require("./notificationHelpers");
 
 const router = express.Router();
 
@@ -669,7 +670,7 @@ router.post("/bulk-approve", async (req, res) => {
   for (const id of applicationIds) {
     const { data: application, error: applicationError } = await supabase
       .from("tutor_subject_preference")
-      .select("id, status, course_id, Tutor_name")
+      .select("id, status, course_id, tutor_id, Tutor_name")
       .eq("id", id)
       .single();
 
@@ -685,7 +686,7 @@ router.post("/bulk-approve", async (req, res) => {
 
     const { data: course, error: courseError } = await supabase
       .from("courses")
-      .select("no_of_tutors_assigned, tutors_needed")
+      .select("no_of_tutors_assigned, tutors_needed, course_code, course_name")
       .eq("id", application.course_id)
       .single();
 
@@ -723,6 +724,15 @@ router.post("/bulk-approve", async (req, res) => {
       results.push({ id, success: false, error: updateError.message });
       continue;
     }
+
+    notify(application.tutor_id, {
+      type: "application_status",
+      message: `You've been approved to tutor ${course.course_code}${course.course_name ? ` — ${course.course_name}` : ""}.`,
+      relatedEntity: "application",
+      relatedId: application.id,
+    }).catch((err) =>
+      console.warn("Failed to notify about application status:", err),
+    );
 
     results.push({ id, success: true, name: application.Tutor_name });
   }
@@ -946,6 +956,25 @@ router.patch("/:id", async (req, res) => {
         error: `The approval went through, but the override reason couldn't be saved: ${overrideError.message}`,
       });
     }
+  }
+
+  if (status === "approved" || status === "rejected") {
+    const courseLabel = data.courses?.course_code || "a course";
+    const message =
+      status === "approved"
+        ? `You've been approved to tutor ${courseLabel}${data.courses?.course_name ? ` — ${data.courses.course_name}` : ""}.`
+        : wasApproved
+          ? `You've been removed from ${courseLabel} — you were previously approved to tutor it: ${rejectionReason.trim()}`
+          : `Your application to tutor ${courseLabel} was rejected: ${rejectionReason.trim()}`;
+
+    notify(application.tutor_id, {
+      type: "application_status",
+      message,
+      relatedEntity: "application",
+      relatedId: application.id,
+    }).catch((err) =>
+      console.warn("Failed to notify about application status:", err),
+    );
   }
 
   res.json(data);

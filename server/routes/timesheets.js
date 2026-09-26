@@ -1,6 +1,7 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
+const { notify } = require("./notificationHelpers");
 
 const router = express.Router();
 
@@ -13,6 +14,17 @@ function addDays(dateStr, days) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
   date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+// Same Monday-start convention as public/js/storage.js's getWeekStart, done
+// in UTC for the same reason addDays above is — safe pure date-string math.
+function getWeekStart(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = date.getUTCDay(); // 0 = Sunday, 1 = Monday, ...
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  date.setUTCDate(date.getUTCDate() + diffToMonday);
   return date.toISOString().slice(0, 10);
 }
 
@@ -210,7 +222,99 @@ router.patch("/:userId/:weekStart", async (req, res) => {
       return res.status(404).json({ error: "Timesheet not found" });
     return res.status(500).json({ error: error.message });
   }
+
+  if (status === "approved" || status === "rejected") {
+    const message =
+      status === "approved"
+        ? `Your timesheet for the week of ${data.week_start} was approved.`
+        : `Your timesheet for the week of ${data.week_start} was rejected: ${reviewerNote.trim()}`;
+
+    notify(data.user_id, {
+      type: "timesheet_status",
+      message,
+      relatedEntity: "timesheet",
+      relatedId: data.week_start,
+    }).catch((err) =>
+      console.warn("Failed to notify about timesheet status:", err),
+    );
+  }
+
   res.json(data);
+});
+
+// GET /api/timesheets/due-reminder?tutorId=... — checks whether last week's
+// logged hours were never submitted, and if so, sends a one-time "timesheet
+// due" notification. There's no scheduled job in this app, so this is
+// checked (idempotently, via a lookup for a reminder already sent for that
+// week) whenever the tutor's dashboard loads, rather than on a real timer.
+router.get("/due-reminder", async (req, res) => {
+  const { tutorId } = req.query;
+  if (!tutorId) {
+    return res.status(400).json({ error: "tutorId is required" });
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const lastWeekStart = addDays(getWeekStart(today), -7);
+  const lastWeekEnd = addDays(lastWeekStart, 6);
+
+  const [
+    { data: entries, error: entriesError },
+    { data: existingTimesheet, error: timesheetError },
+  ] = await Promise.all([
+    supabase
+      .from("hour_entries")
+      .select("id")
+      .eq("user_id", tutorId)
+      .gte("date", lastWeekStart)
+      .lte("date", lastWeekEnd)
+      .limit(1),
+    supabase
+      .from("timesheets")
+      .select("user_id")
+      .eq("user_id", tutorId)
+      .eq("week_start", lastWeekStart)
+      .maybeSingle(),
+  ]);
+
+  if (entriesError) {
+    return res.status(500).json({ error: entriesError.message });
+  }
+  if (timesheetError) {
+    return res.status(500).json({ error: timesheetError.message });
+  }
+
+  if (!entries?.length || existingTimesheet) {
+    return res.json({ notified: false });
+  }
+
+  const { data: existingReminder, error: reminderError } = await supabase
+    .from("notifications")
+    .select("id")
+    .eq("user_id", tutorId)
+    .eq("type", "timesheet_due")
+    .eq("related_id", lastWeekStart)
+    .maybeSingle();
+
+  if (reminderError) {
+    return res.status(500).json({ error: reminderError.message });
+  }
+  if (existingReminder) {
+    return res.json({ notified: false });
+  }
+
+  const { error: insertError } = await supabase.from("notifications").insert({
+    user_id: tutorId,
+    type: "timesheet_due",
+    message: `You logged hours for the week of ${lastWeekStart} but haven't submitted a timesheet for it yet.`,
+    related_entity: "timesheet",
+    related_id: lastWeekStart,
+    read: false,
+  });
+
+  if (insertError) {
+    return res.status(500).json({ error: insertError.message });
+  }
+  res.json({ notified: true });
 });
 
 module.exports = router;

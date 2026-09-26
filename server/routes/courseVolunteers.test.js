@@ -21,7 +21,7 @@ function buildApp() {
 }
 
 beforeEach(() => {
-  tables = { courses: [], course_volunteers: [] };
+  tables = { courses: [], course_volunteers: [], notifications: [] };
   mockSupabase = fakeSupabase(tables, {
     course_volunteers: [["user_id", "course_id"]],
   });
@@ -223,6 +223,72 @@ describe("PATCH /api/course-volunteers/:id", () => {
 
     expect(res.status).toBe(409);
     expect(tables.course_volunteers[0].status).toBe("approved");
+  });
+
+  // The notification fan-out is fire-and-forget (not awaited before the
+  // route responds), so these flush a macrotask after the request resolves
+  // to let it land before asserting on the fake table.
+  function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  describe("notifying the student of the outcome", () => {
+    beforeEach(() => {
+      // fakeSupabase doesn't do real joins — seed the embedded shape the
+      // route's .select("*, courses(...)") expects back directly.
+      tables.course_volunteers[0].courses = { course_code: "COMS2000" };
+    });
+
+    test("approving notifies the student", async () => {
+      const res = await request(buildApp())
+        .patch("/api/course-volunteers/1")
+        .send({ status: "approved", approvalReason: "Strong mark" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(1);
+      expect(tables.notifications[0]).toMatchObject({
+        user_id: "student-1",
+        type: "volunteer_status",
+        related_entity: "volunteer_application",
+        read: false,
+      });
+      expect(tables.notifications[0].message).toContain("COMS2000");
+    });
+
+    test("rejecting a pending volunteer notifies them it was rejected, not removed", async () => {
+      const res = await request(buildApp())
+        .patch("/api/course-volunteers/1")
+        .send({ status: "rejected", rejectionReason: "Mark too low" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications[0].message).toMatch(/was rejected/);
+    });
+
+    test("rejecting a previously-approved volunteer tells them they were removed", async () => {
+      tables.course_volunteers[0].status = "approved";
+
+      const res = await request(buildApp())
+        .patch("/api/course-volunteers/1")
+        .send({ status: "rejected", rejectionReason: "Course cancelled" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications[0].message).toMatch(/removed from/);
+    });
+
+    test("resetting to pending doesn't notify anyone", async () => {
+      tables.course_volunteers[0].status = "approved";
+
+      const res = await request(buildApp())
+        .patch("/api/course-volunteers/1")
+        .send({ status: "pending" });
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(0);
+    });
   });
 });
 

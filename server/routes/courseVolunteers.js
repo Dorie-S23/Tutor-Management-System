@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { notify } = require("./notificationHelpers");
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.get("/", async (req, res) => {
   let query = supabase
     .from("course_volunteers")
     .select(
-      "*, courses(course_code, course_name, department), users(name, email)",
+      "*, courses(course_code, course_name, department, Day_of_tut, tutor_start_time, tutor_end_time), users(name, email)",
     )
     .order("created_at", { ascending: false });
 
@@ -125,7 +126,7 @@ router.patch("/:id", async (req, res) => {
 
   const { data: existing, error: existingError } = await supabase
     .from("course_volunteers")
-    .select("id, locked")
+    .select("id, status, locked")
     .eq("id", req.params.id)
     .single();
 
@@ -138,6 +139,8 @@ router.patch("/:id", async (req, res) => {
       error: "This approval is locked and can't be reconsidered.",
     });
   }
+
+  const wasApproved = existing.status === "approved";
 
   const { data, error } = await supabase
     .from("course_volunteers")
@@ -157,6 +160,25 @@ router.patch("/:id", async (req, res) => {
       return res.status(404).json({ error: "Volunteer not found" });
     }
     return res.status(500).json({ error: error.message });
+  }
+
+  if (status === "approved" || status === "rejected") {
+    const courseLabel = data.courses?.course_code || "a course";
+    const message =
+      status === "approved"
+        ? `You've been approved to volunteer for ${courseLabel}${data.courses?.course_name ? ` — ${data.courses.course_name}` : ""}.`
+        : wasApproved
+          ? `You've been removed from ${courseLabel} — you were previously approved to volunteer for it: ${rejectionReason.trim()}`
+          : `Your application to volunteer for ${courseLabel} was rejected: ${rejectionReason.trim()}`;
+
+    notify(data.user_id, {
+      type: "volunteer_status",
+      message,
+      relatedEntity: "volunteer_application",
+      relatedId: data.id,
+    }).catch((err) =>
+      console.warn("Failed to notify about volunteer status:", err),
+    );
   }
 
   res.json(data);

@@ -141,6 +141,7 @@ router.post("/register", async (req, res) => {
       email: email,
       name: name,
       role: userRole,
+      auth_provider: "password",
     });
 
     if (userError) {
@@ -485,6 +486,7 @@ router.post("/google/register", async (req, res) => {
         email: email,
         name: name,
         role: userRole,
+        auth_provider: "google",
       });
 
     if (userInsertError) {
@@ -656,6 +658,24 @@ router.post("/login", async (req, res) => {
 
     if (error) {
       console.error("Supabase login error:", error);
+
+      // Supabase intentionally returns the same generic error for "wrong
+      // password" and "this account has no password" (it never confirms
+      // whether an email is registered, to prevent account enumeration).
+      // We can still give a more useful message for the one case we do
+      // know about — an account that signed up through Google — since
+      // that's recorded in our own users table, not Supabase's.
+      const { data: existingUser } = await req.supabase
+        .from("users")
+        .select("auth_provider")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (existingUser?.auth_provider === "google") {
+        return res.status(401).json({
+          error: "You signed up with Google — please sign in with Google.",
+        });
+      }
 
       return res.status(401).json({
         error: error.message,

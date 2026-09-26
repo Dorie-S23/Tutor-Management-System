@@ -270,8 +270,12 @@ describe("PUT /api/courses/:id", () => {
         hours_per_week: 4,
         tutors_needed: 2,
         Day_of_tut: "Monday",
-        tutor_start_time: "09:00",
-        tutor_end_time: "10:00",
+        // Realistic Postgres `time` round-trip shape (with seconds) — the
+        // client's submitted payload only ever has "HH:MM", so seeding the
+        // "before" row this way is what actually exercises the
+        // notifySessionChange format-mismatch bug below.
+        tutor_start_time: "09:00:00",
+        tutor_end_time: "10:00:00",
         venues: "MSL004",
       },
     ];
@@ -368,6 +372,16 @@ describe("PUT /api/courses/:id", () => {
       const res = await request(buildApp())
         .put("/api/courses/1")
         .send(validCourse({ course_name: "Data Structures II" }));
+      expect(res.status).toBe(200);
+      await flush();
+
+      expect(tables.notifications).toHaveLength(0);
+    });
+
+    test("does not false-positive on the submitted time's missing seconds (client sends HH:MM, DB round-trips HH:MM:SS)", async () => {
+      const res = await request(buildApp())
+        .put("/api/courses/1")
+        .send(validCourse({ min_mark: 75 }));
       expect(res.status).toBe(200);
       await flush();
 

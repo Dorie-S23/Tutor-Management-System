@@ -732,6 +732,12 @@ input[type="search"]:focus-visible {
   gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
+  /* Without this, a flex item's default min-width is its content's
+     unbreakable width — here, the longest single stamp (e.g. a long
+     "Clashes with ..." message) — which stops flex-wrap from ever
+     kicking in and instead forces the whole row wider than its card,
+     showing a horizontal scrollbar and clipping the tutor's name. */
+  min-width: 0;
 }
 
 .stamp {
@@ -1111,6 +1117,17 @@ input[type="search"]:focus-visible {
   cursor: pointer;
 }
 
+/* The bell icon's width/height are only set via SVG attributes (not CSS),
+   so as a flex item it has no CSS-specified size for flexbox to respect —
+   Chromium was shrinking it down to a sliver, leaving just the unread
+   badge visibly floating with no bell underneath it. Pinning the size in
+   CSS and disabling shrink fixes that. */
+.notif-bell-btn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
 .notif-bell-btn:hover {
   background: var(--line-soft);
   color: var(--ink);
@@ -1206,6 +1223,23 @@ input[type="search"]:focus-visible {
   margin: 0;
   font-size: 0.7rem;
   color: var(--ink-faint);
+}
+
+/* Briefly flashed on whatever a notification click scrolls to, so it's
+   obvious which row the notification was actually about. */
+@keyframes highlight-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  20%,
+  60% {
+    box-shadow: 0 0 0 3px var(--navy);
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 1.4s ease-in-out;
 }
 
 .notif-empty {

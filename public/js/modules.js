@@ -1,5 +1,6 @@
 import { highlightActiveTab } from "./nav.js";
 import { requireRole } from "./storage.js";
+import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 
 // This page (modules.html) is tutor-only — applying to tutor a module isn't
 // a concept that applies to other roles.
@@ -141,6 +142,7 @@ function renderApplicationsList() {
   myApplications.forEach((app) => {
     const li = document.createElement("li");
     li.className = "application-row";
+    li.dataset.applicationId = app.id;
     const course = app.courses;
     const status = (app.status || "pending").toLowerCase();
     const label = course
@@ -358,4 +360,15 @@ applyForm?.addEventListener("submit", async (e) => {
   await fetchCourses();
   await fetchMyAcademicLevel(currentUser.id);
   await fetchMyApplications(currentUser.id);
+
+  // Arriving from an "application status changed" notification — scroll to
+  // and flash the application it was about.
+  const highlightApplicationId = consumeQueryParam("highlightApplication");
+  if (highlightApplicationId) {
+    scrollAndHighlight(
+      applicationsItemsEl.querySelector(
+        `[data-application-id="${CSS.escape(highlightApplicationId)}"]`,
+      ),
+    );
+  }
 })();
