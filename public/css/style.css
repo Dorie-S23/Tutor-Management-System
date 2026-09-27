@@ -747,6 +747,11 @@ body > footer p {
   margin-bottom: 15px;
 }
 
+/* The "+ Add class / Clear class times" row between the month nav and grid. */
+#clear-classes-row {
+  margin-bottom: 14px;
+}
+
 .calendar-nav h2 {
   font-size: 18px;
   margin-bottom: 0;
@@ -835,6 +840,121 @@ body > footer p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Weekly tutorial/lab pills on the calendar — colours set inline per course. */
+.calendar-course-pill {
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Explains each course colour, and the Cover tag. */
+.course-color-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.course-color-chip {
+  border: 1px solid #e5e5e5;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  background: white;
+}
+
+/* Upcoming Sessions: a session this volunteer is covering for a tutor. */
+.session-list article.session-cover {
+  border-left: 4px solid #2563eb;
+  background: #eef4ff;
+  padding-left: 14px;
+  padding-right: 14px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.session-list article .session-cover-badge {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+/* Another volunteer asking this one to take their session over. */
+.session-list article.session-swap-request {
+  border-left-color: #b7791f;
+  background: #fdf6e7;
+}
+
+.session-list article.session-swap-request .session-cover-badge {
+  color: #b7791f;
+}
+
+/* "Can't make it" -> pick who takes over; pending request; accept/decline. */
+.swap-controls {
+  margin-top: 10px;
+}
+
+.swap-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.swap-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+.swap-select {
+  padding: 7px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  max-width: 360px;
+}
+
+.swap-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.swap-panel .swap-buttons {
+  margin-top: 0;
+}
+
+.swap-buttons button,
+.swap-controls > button {
+  width: auto;
+  margin-top: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.session-list article .swap-pending {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b7791f;
 }
 
 /* A tutor's session this volunteer is covering (colours set inline per course). */

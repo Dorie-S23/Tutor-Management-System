@@ -26,10 +26,12 @@ if (!currentUser) {
 
 highlightActiveTab();
 
-// Tutorial/lab session pills come from this tutor's own approved course
-// assignments — meaningless for a student volunteer, who has none — so that
-// piece stays tied to the real role. Adding/editing/cancelling a class on
-// the calendar, though, is a plain scheduling tool either role can use.
+// Both roles see the weekly Tutorial/Lab sessions of the courses they're
+// approved on — a tutor via their tutor applications, a student via the
+// courses they volunteer on. On top of that a tutor sees which sessions
+// they've excused themselves from, and a student sees the sessions they're
+// covering for an excused tutor. Adding/editing/cancelling a class on the
+// calendar is a plain scheduling tool either role can use.
 const isTutor = currentUser.role === "tutor";
 const canManageSchedule = true;
 
@@ -143,14 +145,16 @@ async function fetchCovers() {
 }
 
 async function fetchCourseSessions() {
-  if (!isTutor) {
+  if (isTutor) {
+    await fetchExcusals();
+  } else {
     await fetchCovers();
-    return;
   }
-  await fetchExcusals();
   try {
     const res = await fetch(
-      `/api/tutor-applications?tutorId=${encodeURIComponent(currentUser.id)}`,
+      isTutor
+        ? `/api/tutor-applications?tutorId=${encodeURIComponent(currentUser.id)}`
+        : `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
     );
     const rows = await res.json();
     if (!res.ok)
@@ -217,6 +221,11 @@ function renderCourseColorKey() {
   for (const s of courseSessions) {
     if (!courses.has(s.courseId)) courses.set(s.courseId, s.courseCode);
   }
+  for (const covers of coversByDate.values()) {
+    for (const c of covers) {
+      if (!courses.has(c.courseId)) courses.set(c.courseId, c.courseCode);
+    }
+  }
 
   courseColorKeyEl.innerHTML = "";
   if (courses.size === 0) {
@@ -241,6 +250,14 @@ function renderCourseColorKey() {
     excusedChip.innerHTML =
       '<span class="calendar-excused-tag">Excused</span><span class="calendar-excused-label">struck through</span> = you&rsquo;ve excused yourself';
     courseColorKeyEl.appendChild(excusedChip);
+  }
+
+  if (coversByDate.size > 0) {
+    const coverChip = document.createElement("span");
+    coverChip.className = "course-color-chip";
+    coverChip.innerHTML =
+      '<span class="calendar-cover-tag">Cover</span> = you&rsquo;re covering for a tutor';
+    courseColorKeyEl.appendChild(coverChip);
   }
   courseColorKeyEl.hidden = false;
 }
@@ -430,10 +447,21 @@ async function render() {
     dayNumber.textContent = cellDay;
     cell.appendChild(dayNumber);
 
-    if (isTutor) {
+    {
       const cellWeekday = new Date(cellYear, cellMonth, cellDay).getDay();
+      const coversToday = coversByDate.get(cellDateStr) || [];
       for (const s of courseSessions) {
         if (s.dayIndex !== cellWeekday) continue;
+        // A student covering one of their own regular sessions gets just
+        // the Cover pill below, not the same session twice.
+        if (
+          coversToday.some(
+            (c) =>
+              String(c.courseId) === String(s.courseId) && c.type === s.type,
+          )
+        ) {
+          continue;
+        }
         const palette = courseColor(s.courseId);
         const excusal = findExcusal(s, cellDateStr);
         const pill = document.createElement("div");
@@ -462,7 +490,9 @@ async function render() {
         }
         cell.appendChild(pill);
       }
-    } else {
+    }
+
+    if (!isTutor) {
       for (const c of coversByDate.get(cellDateStr) || []) {
         const palette = courseColor(c.courseId);
         const pill = document.createElement("div");

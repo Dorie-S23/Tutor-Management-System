@@ -13,8 +13,6 @@
         <a href="my-sessions.html">My Sessions</a>
         <a href="log-hours.html">Log Hours</a>
         <a href="student_calender.html" aria-current="page">Calendar</a>
-        <a href="#">Messages</a>
-        <a href="profile.html">Profile</a>
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -62,6 +60,86 @@
     </header>
 
     <main>
+      <section aria-labelledby="calendar-heading">
+        <h2 id="calendar-heading">Your calendar</h2>
+        <p>
+          Your tutorials and labs, sessions you're covering for a tutor, and
+          your own classes — all in one place.
+        </p>
+      </section>
+
+      <div class="card">
+        <div class="calendar-nav">
+          <button type="button" id="prev-month-btn" class="btn-secondary">
+            &larr; Prev
+          </button>
+          <h2 id="calendar-month-label"></h2>
+          <button type="button" id="next-month-btn" class="btn-secondary">
+            Next &rarr;
+          </button>
+        </div>
+        <div class="form-actions" id="clear-classes-row">
+          <button type="button" id="add-class-btn" class="btn-primary">
+            + Add class
+          </button>
+          <button type="button" id="clear-classes-btn" class="btn-danger">
+            Clear class times
+          </button>
+        </div>
+        <div class="calendar-weekdays">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span
+          ><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+        <div class="course-color-key" id="course-color-key" hidden></div>
+      </div>
+      <div class="card" id="add-class-card" hidden>
+        <h2>Manually add a class</h2>
+        <p class="card-hint">
+          Pick a date, then fill in the details below. It'll be added just to
+          that day on the calendar.
+        </p>
+        <form id="add-class-form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="add-class-date">Date</label>
+              <input type="date" id="add-class-date" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-subject">Subject</label>
+              <input
+                type="text"
+                id="add-class-subject"
+                placeholder="e.g. COMS2011A"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="add-class-start">Start time</label>
+              <input type="time" id="add-class-start" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-end">End time</label>
+              <input type="time" id="add-class-end" required />
+            </div>
+            <div class="form-field">
+              <label for="add-class-venue">Venue</label>
+              <input type="text" id="add-class-venue" placeholder="e.g. FNB1" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Add class</button>
+              <button
+                type="button"
+                id="cancel-add-class-btn"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
       <div class="card">
         <h2>Import timetable</h2>
         <p class="card-hint">
@@ -115,78 +193,6 @@
             </button>
           </div>
         </div>
-      </div>
-
-      <div class="card" id="add-class-card" hidden>
-        <h2>Manually add a class</h2>
-        <p class="card-hint">
-          Pick a date, then fill in the details below. It'll be added just to
-          that day on the calendar.
-        </p>
-        <form id="add-class-form">
-          <div class="form-grid">
-            <div class="form-field">
-              <label for="add-class-date">Date</label>
-              <input type="date" id="add-class-date" required />
-            </div>
-            <div class="form-field">
-              <label for="add-class-subject">Subject</label>
-              <input
-                type="text"
-                id="add-class-subject"
-                placeholder="e.g. COMS2011A"
-                required
-              />
-            </div>
-            <div class="form-field">
-              <label for="add-class-start">Start time</label>
-              <input type="time" id="add-class-start" required />
-            </div>
-            <div class="form-field">
-              <label for="add-class-end">End time</label>
-              <input type="time" id="add-class-end" required />
-            </div>
-            <div class="form-field">
-              <label for="add-class-venue">Venue</label>
-              <input type="text" id="add-class-venue" placeholder="e.g. FNB1" />
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn-primary">Add class</button>
-              <button
-                type="button"
-                id="cancel-add-class-btn"
-                class="btn-secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <div class="calendar-nav">
-          <button type="button" id="prev-month-btn" class="btn-secondary">
-            &larr; Prev
-          </button>
-          <h2 id="calendar-month-label"></h2>
-          <button type="button" id="next-month-btn" class="btn-secondary">
-            Next &rarr;
-          </button>
-        </div>
-        <div class="form-actions" id="clear-classes-row">
-          <button type="button" id="add-class-btn" class="btn-primary">
-            + Add class
-          </button>
-          <button type="button" id="clear-classes-btn" class="btn-danger">
-            Clear class times
-          </button>
-        </div>
-        <div class="calendar-weekdays">
-          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span
-          ><span>Thu</span><span>Fri</span><span>Sat</span>
-        </div>
-        <div class="calendar-grid" id="calendar-grid"></div>
       </div>
     </main>
 
