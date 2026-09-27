@@ -601,10 +601,23 @@ form.addEventListener("submit", async (event) => {
   formError.hidden = true;
 
   const isEdit = Boolean(entryIdField.value);
-  if (isEdit) {
-    await updateEntry(entryIdField.value, payload);
-  } else {
-    await addEntry(payload);
+  submitBtn.disabled = true;
+  try {
+    if (isEdit) {
+      await updateEntry(entryIdField.value, payload);
+    } else {
+      await addEntry(payload);
+    }
+  } catch (err) {
+    // The server validates the session rules again and may still refuse a
+    // payload the UI thought was fine (the session just ended, an approval
+    // was revoked, ...) — show its reason instead of failing silently.
+    formError.textContent =
+      err.message || "Couldn't save this entry — try again.";
+    formError.hidden = false;
+    return;
+  } finally {
+    submitBtn.disabled = false;
   }
 
   currentWeekStart = getWeekStart(payload.date);
