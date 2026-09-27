@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { sendDueCoverReminders } = require("./sessionCover");
 
 const router = express.Router();
 
@@ -9,6 +10,14 @@ router.get("/", async (req, res) => {
   const { userId } = req.query;
   if (!userId) {
     return res.status(400).json({ error: "userId is required" });
+  }
+
+  // No scheduled jobs in this app, so the bell's poll is what delivers the
+  // day-before "you're covering a session" reminder. Never blocks the feed.
+  try {
+    await sendDueCoverReminders(userId);
+  } catch (err) {
+    console.warn("Failed to send cover reminders:", err);
   }
 
   const { data, error } = await supabase

@@ -111,7 +111,10 @@
 
       <div class="card">
         <h2>Excuse yourself from a session</h2>
-        <p>Can't make a tutorial? Let the organiser know which one and why.</p>
+        <p>
+          Can't make a tutorial or lab? Let the organiser know which one and
+          why.
+        </p>
         <button class="btn-primary" id="excuse-btn" type="button">
           Excuse yourself from a session
         </button>
@@ -172,13 +175,21 @@
         </label>
 
         <label class="field">
-          <span class="field-label">Session date</span>
-          <input
-            type="date"
-            id="excuse-date-input"
-            name="session_date"
-            required
-          />
+          <span class="field-label">Session</span>
+          <select id="excuse-session-select" name="session_type" required>
+            <option value="" disabled selected>
+              Choose a course first&hellip;
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Date</span>
+          <select id="excuse-date-input" name="session_date" required>
+            <option value="" disabled selected>
+              Choose a session first&hellip;
+            </option>
+          </select>
         </label>
 
         <label class="field">

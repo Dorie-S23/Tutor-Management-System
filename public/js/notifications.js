@@ -74,6 +74,45 @@ function getCurrentUser() {
       param: "highlightWeek",
       tutor: "timesheets.html",
     },
+    // A volunteer covering a tutor's excused session
+    cover_assigned: {
+      param: "highlightCover",
+      student: "StudentView.html",
+    },
+    cover_reminder: {
+      param: "highlightCover",
+      student: "StudentView.html",
+    },
+    cover_cancelled: {
+      param: "highlightCover",
+      student: "StudentView.html",
+    },
+    // Volunteers swapping a cover between themselves
+    swap_request: {
+      param: "highlightSwap",
+      student: "StudentView.html",
+    },
+    swap_accepted: {
+      param: "highlightCover",
+      student: "StudentView.html",
+    },
+    swap_declined: {
+      param: "highlightCover",
+      student: "StudentView.html",
+    },
+    swap_withdrawn: {
+      param: "highlightCover",
+      student: "StudentView.html",
+    },
+    // The excused tutor, hearing who (if anyone) is covering for them
+    cover_found: {
+      param: "highlightExcusal",
+      tutor: "dashboard.html",
+    },
+    cover_unavailable: {
+      param: "highlightExcusal",
+      tutor: "dashboard.html",
+    },
   };
 
   function destinationFor(n) {

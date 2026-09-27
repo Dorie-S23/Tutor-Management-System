@@ -483,3 +483,74 @@ describe("PATCH /api/courses/:id/tutors-assigned", () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe("diagonals on the course form", () => {
+  test("stores diagonal_count when diagonals are ticked", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ has_diagonals: true, diagonal_count: 3 }));
+
+    expect(res.status).toBe(201);
+    expect(tables.courses[0].diagonal_count).toBe(3);
+  });
+
+  test("ignores the count when diagonals are unticked", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ has_diagonals: false, diagonal_count: 3 }));
+
+    expect(res.status).toBe(201);
+    expect(tables.courses[0].diagonal_count).toBeNull();
+  });
+
+  test.each([1, 27, 2.5, ""])(
+    "rejects a diagonal count of %p",
+    async (diagonal_count) => {
+      const res = await request(buildApp())
+        .post("/api/courses")
+        .send(validCourse({ has_diagonals: true, diagonal_count }));
+
+      expect(res.status).toBe(400);
+      expect(tables.courses).toHaveLength(0);
+    },
+  );
+
+  test("shrinking the count unassigns anyone in a removed diagonal", async () => {
+    tables.courses = [
+      { id: 1, ...validCourse(), course_level: 4, diagonal_count: 3 },
+    ];
+    tables.tutor_subject_preference = [
+      { id: 1, course_id: 1, diagonal: "A" },
+      { id: 2, course_id: 1, diagonal: "C" },
+      { id: 3, course_id: 2, diagonal: "C" },
+    ];
+    tables.course_volunteers = [{ id: 10, course_id: 1, diagonal: "C" }];
+
+    const res = await request(buildApp())
+      .put("/api/courses/1")
+      .send(validCourse({ has_diagonals: true, diagonal_count: 2 }));
+
+    expect(res.status).toBe(200);
+    expect(tables.tutor_subject_preference.map((r) => r.diagonal)).toEqual([
+      "A",
+      null,
+      "C", // a different course's placement is left alone
+    ]);
+    expect(tables.course_volunteers[0].diagonal).toBeNull();
+  });
+
+  test("turning diagonals off clears every placement on the course", async () => {
+    tables.courses = [
+      { id: 1, ...validCourse(), course_level: 4, diagonal_count: 2 },
+    ];
+    tables.tutor_subject_preference = [{ id: 1, course_id: 1, diagonal: "A" }];
+
+    const res = await request(buildApp())
+      .put("/api/courses/1")
+      .send(validCourse({ has_diagonals: false }));
+
+    expect(res.status).toBe(200);
+    expect(tables.courses[0].diagonal_count).toBeNull();
+    expect(tables.tutor_subject_preference[0].diagonal).toBeNull();
+  });
+});

@@ -3,6 +3,7 @@ import {
   getWeekStart,
   getWeekTotal,
   todayStr,
+  toDateStr,
   requireRole,
 } from "./storage.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
@@ -108,6 +109,7 @@ const excuseForm = document.getElementById("excuse-form");
 const excuseError = document.getElementById("excuse-form-error");
 const excuseSubmitBtn = document.getElementById("excuse-submit-btn");
 const excuseCourseSelect = document.getElementById("excuse-course-select");
+const excuseSessionSelect = document.getElementById("excuse-session-select");
 const excuseDateInput = document.getElementById("excuse-date-input");
 const excuseReasonInput = document.getElementById("excuse-reason-input");
 const excusalsListEl = document.getElementById("excusals-list");
@@ -126,25 +128,68 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 2600);
 }
 
-function formatSession(course) {
-  if (!course.Day_of_tut || !course.tutor_start_time || !course.tutor_end_time)
-    return null;
-  return `${course.Day_of_tut} · ${course.tutor_start_time.slice(0, 5)}–${course.tutor_end_time.slice(0, 5)}`;
+// A course can run a Tutorial, a Lab, or both — each is its own weekly
+// session. Returns whichever of the two are fully scheduled.
+function courseSessions(course) {
+  return [
+    {
+      key: "tutorial",
+      type: "Tutorial",
+      day: course.Day_of_tut,
+      start: course.tutor_start_time,
+      end: course.tutor_end_time,
+    },
+    {
+      key: "lab",
+      type: "Lab",
+      day: course.Day_of_lab,
+      start: course.lab_start_time,
+      end: course.lab_end_time,
+    },
+  ].filter((s) => s.day && s.start && s.end);
 }
 
-// Days from today until the next occurrence of a weekly tutorial day
+function formatSession(session) {
+  return `${session.type} · ${session.day} · ${session.start.slice(0, 5)}–${session.end.slice(0, 5)}`;
+}
+
+// Days from today until the next occurrence of a weekly session
 // (0 = today, 1 = tomorrow, ... 6 = a week from today at the latest).
-function daysUntil(dayName) {
+// A session that has already ended today counts as next week's.
+function daysUntil(dayName, endTime) {
   const targetIdx = DAY_NAMES.indexOf(dayName);
   if (targetIdx === -1) return null;
-  const todayIdx = new Date().getDay();
-  return (targetIdx - todayIdx + 7) % 7;
+  const now = new Date();
+  const days = (targetIdx - now.getDay() + 7) % 7;
+  const nowHHMM = now.toTimeString().slice(0, 5);
+  return days === 0 && endTime.slice(0, 5) <= nowHHMM ? 7 : days;
 }
 
 function describeDaysAway(daysAway) {
   if (daysAway === 0) return "today";
   if (daysAway === 1) return "tomorrow";
   return `in ${daysAway} days`;
+}
+
+// The most recent sessions list, so it can be re-rendered once this tutor's
+// excusals (fetched in parallel) arrive and mark which ones they're excused from.
+let lastUpcomingSessions = [];
+
+// Local YYYY-MM-DD for a date `days` from today.
+function dateInDays(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return toDateStr(date);
+}
+
+// This tutor's excusal (if any) for one occurrence of a session.
+function excusalFor(courseId, sessionKey, dateStr) {
+  return myExcusals.find(
+    (e) =>
+      String(e.course_id) === String(courseId) &&
+      e.session_date === dateStr &&
+      (!e.session_type || e.session_type === sessionKey),
+  );
 }
 
 async function fetchUpcomingSessions(tutorId) {
@@ -159,21 +204,21 @@ async function fetchUpcomingSessions(tutorId) {
 
     sessions = rows
       .filter((app) => (app.status || "").toLowerCase() === "approved")
-      .map((app) => {
+      .flatMap((app) => {
         const course = app.courses;
-        const session = course ? formatSession(course) : null;
-        const daysAway = course ? daysUntil(course.Day_of_tut) : null;
-        if (!course || !session || daysAway === null) return null;
-        return {
-          courseId: app.course_id,
-          courseCode: course.course_code,
-          courseName: course.course_name,
-          session,
-          startTime: course.tutor_start_time,
-          daysAway,
-        };
+        if (!course) return [];
+        return courseSessions(course)
+          .map((s) => ({
+            courseId: app.course_id,
+            courseCode: course.course_code,
+            courseName: course.course_name,
+            sessionKey: s.key,
+            session: formatSession(s),
+            startTime: s.start,
+            daysAway: daysUntil(s.day, s.end),
+          }))
+          .filter((s) => s.daysAway !== null);
       })
-      .filter(Boolean)
       .sort(
         (a, b) =>
           a.daysAway - b.daysAway || a.startTime.localeCompare(b.startTime),
@@ -182,10 +227,11 @@ async function fetchUpcomingSessions(tutorId) {
     sessions = [];
     myApplications = [];
   }
+  lastUpcomingSessions = sessions;
   renderUpcomingSessions(sessions);
 }
 
-function renderUpcomingSessions(sessions) {
+function renderUpcomingSessions(sessions = lastUpcomingSessions) {
   if (sessions.length === 0) {
     upcomingListEl.hidden = true;
     upcomingEmptyEl.hidden = false;
@@ -209,10 +255,47 @@ function renderUpcomingSessions(sessions) {
       <span><strong style="color: ${palette.text}">${s.courseCode}</strong> — ${s.courseName}<br />${s.session}</span>
       <span class="status-pill" style="background: rgba(255, 255, 255, 0.6); color: ${palette.text}; border-color: ${palette.border}">${describeDaysAway(s.daysAway)}</span>
     `;
+
+    // Excused from this occurrence: say so, and who's covering it.
+    const excusal = excusalFor(
+      s.courseId,
+      s.sessionKey,
+      dateInDays(s.daysAway),
+    );
+    if (excusal) {
+      li.classList.add("application-row--excused");
+      const note = document.createElement("span");
+      note.className = "excused-note";
+      note.textContent = excusal.cover?.name
+        ? `You're excused · ${excusal.cover.name} is covering`
+        : "You're excused · finding a volunteer to cover";
+      li.querySelector("span").append(document.createElement("br"), note);
+    }
     upcomingItemsEl.appendChild(li);
   });
 
-  const next = sessions[0];
+  // "Next session" is the soonest one this tutor actually has to attend —
+  // an excused occurrence is skipped in favour of that session's next week.
+  let next = null;
+  for (const s of sessions) {
+    for (let week = 0; week < 10; week++) {
+      const daysAway = s.daysAway + week * 7;
+      if (excusalFor(s.courseId, s.sessionKey, dateInDays(daysAway))) continue;
+      if (
+        !next ||
+        daysAway < next.daysAway ||
+        (daysAway === next.daysAway && s.startTime < next.startTime)
+      ) {
+        next = { ...s, daysAway };
+      }
+      break;
+    }
+  }
+  if (!next) {
+    nextSessionEl.textContent = "—";
+    nextSessionSublabelEl.textContent = "";
+    return;
+  }
   nextSessionEl.textContent = next.session;
   nextSessionSublabelEl.textContent = `${next.courseCode} · ${describeDaysAway(next.daysAway)}`;
 }
@@ -301,6 +384,16 @@ if (tourLink) {
     );
   }
 
+  // Arriving from a "cover found / no cover" notification — flash that excusal.
+  const highlightExcusalId = consumeQueryParam("highlightExcusal");
+  if (highlightExcusalId) {
+    scrollAndHighlight(
+      excusalsItemsEl.querySelector(
+        `[data-excusal-id="${CSS.escape(highlightExcusalId)}"]`,
+      ),
+    );
+  }
+
   window.Onboarding?.start(TUTOR_TOUR_STEPS, {
     tourId: "tutor-dashboard",
     userId: user?.id,
@@ -324,12 +417,40 @@ function renderExcusalsList() {
 
   upcoming.forEach((excusal) => {
     const course = excusal.courses;
+    const session = course ? excusedSession(course, excusal) : null;
     const li = document.createElement("li");
     li.className = "application-row";
     li.innerHTML = `
-      <span>${course ? `${course.course_code} — ${excusal.session_date}` : excusal.session_date}${excusal.reason ? ` (${excusal.reason})` : ""}</span>
+      <span><strong></strong><br /><span class="excusal-detail"></span></span>
       <button type="button" class="btn-link" data-action="cancel-excusal">Cancel</button>
     `;
+    li.querySelector("strong").textContent = [
+      course?.course_code,
+      session?.type,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    li.dataset.excusalId = excusal.id;
+    const coverNote = document.createElement("span");
+    coverNote.className = excusal.cover?.name
+      ? "excusal-cover excusal-cover--found"
+      : "excusal-cover excusal-cover--pending";
+    coverNote.textContent = excusal.cover?.name
+      ? `Covered by ${excusal.cover.name}`
+      : "Finding a volunteer to cover…";
+    li.querySelector(".excusal-detail").after(
+      document.createElement("br"),
+      coverNote,
+    );
+    li.querySelector(".excusal-detail").textContent = [
+      formatExcuseDate(excusal.session_date),
+      session
+        ? `${session.start.slice(0, 5)}–${session.end.slice(0, 5)}`
+        : null,
+      excusal.reason ? `(${excusal.reason})` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     li.querySelector('[data-action="cancel-excusal"]').addEventListener(
       "click",
       () => cancelExcusal(excusal.id),
@@ -350,6 +471,7 @@ async function fetchMyExcusals(tutorId) {
     myExcusals = [];
   }
   renderExcusalsList();
+  renderUpcomingSessions();
 }
 
 async function cancelExcusal(id) {
@@ -370,6 +492,117 @@ async function cancelExcusal(id) {
   }
 }
 
+// Which of a course's sessions an excusal is for — its stored session_type,
+// or for an older excusal without one, whichever session meets that weekday.
+function excusedSession(course, excusal) {
+  const sessions = courseSessions(course);
+  if (excusal.session_type) {
+    return sessions.find((s) => s.key === excusal.session_type) || null;
+  }
+  const weekday =
+    DAY_NAMES[new Date(`${excusal.session_date}T00:00:00`).getDay()];
+  return sessions.find((s) => s.day === weekday) || null;
+}
+
+function formatExcuseDate(dateStr) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// The next few dates a weekly session meets on, soonest first — today is
+// included only if the session hasn't finished yet.
+const EXCUSE_WEEKS_AHEAD = 10;
+
+function upcomingSessionDates(session) {
+  const first = daysUntil(session.day, session.end);
+  if (first === null) return [];
+  return Array.from({ length: EXCUSE_WEEKS_AHEAD }, (_, week) => {
+    const date = new Date();
+    date.setDate(date.getDate() + first + week * 7);
+    return toDateStr(date);
+  });
+}
+
+function selectedExcuseCourse() {
+  return myApplications.find(
+    (a) => String(a.course_id) === excuseCourseSelect.value,
+  )?.courses;
+}
+
+function populateExcuseSessionSelect() {
+  const course = selectedExcuseCourse();
+  const sessions = course ? courseSessions(course) : [];
+
+  excuseSessionSelect.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  placeholder.textContent = !course
+    ? "Choose a course first…"
+    : sessions.length === 0
+      ? "This course has no scheduled sessions"
+      : "Choose a session…";
+  excuseSessionSelect.appendChild(placeholder);
+
+  sessions.forEach((s) => {
+    const option = document.createElement("option");
+    option.value = s.key;
+    option.textContent = formatSession(s);
+    excuseSessionSelect.appendChild(option);
+  });
+
+  // Nothing to choose between when the course only runs one session.
+  if (sessions.length === 1) excuseSessionSelect.value = sessions[0].key;
+  populateExcuseDateSelect();
+}
+
+function populateExcuseDateSelect() {
+  const course = selectedExcuseCourse();
+  const session = course
+    ? courseSessions(course).find((s) => s.key === excuseSessionSelect.value)
+    : null;
+  const alreadyExcused = new Set(
+    myExcusals
+      .filter(
+        (e) =>
+          String(e.course_id) === excuseCourseSelect.value &&
+          course &&
+          excusedSession(course, e)?.key === session?.key,
+      )
+      .map((e) => e.session_date),
+  );
+
+  excuseDateInput.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  placeholder.textContent = session
+    ? "Choose a date…"
+    : "Choose a session first…";
+  excuseDateInput.appendChild(placeholder);
+
+  if (!session) return;
+  upcomingSessionDates(session).forEach((dateStr) => {
+    const option = document.createElement("option");
+    option.value = dateStr;
+    option.textContent = formatExcuseDate(dateStr);
+    if (alreadyExcused.has(dateStr)) {
+      option.textContent += " (already excused)";
+      option.disabled = true;
+    }
+    excuseDateInput.appendChild(option);
+  });
+}
+
+excuseCourseSelect?.addEventListener("change", populateExcuseSessionSelect);
+excuseSessionSelect?.addEventListener("change", populateExcuseDateSelect);
+
 function populateExcuseCourseSelect() {
   const approvedCourses = myApplications
     .filter((a) => a.status === "approved")
@@ -389,6 +622,12 @@ function populateExcuseCourseSelect() {
       excuseCourseSelect.appendChild(option);
     });
 
+  if (approvedCourses.length === 1) {
+    excuseCourseSelect.value = String(
+      myApplications.find((a) => a.status === "approved").course_id,
+    );
+  }
+
   return approvedCourses;
 }
 
@@ -401,8 +640,8 @@ function openExcuseModal() {
 
   excuseForm.reset();
   excuseError.hidden = true;
-  excuseDateInput.min = todayStr();
   const approvedCourses = populateExcuseCourseSelect();
+  populateExcuseSessionSelect();
 
   if (approvedCourses.length === 0) {
     showToast("You need an approved course assignment first.");
@@ -440,6 +679,7 @@ excuseForm?.addEventListener("submit", async (e) => {
   const payload = {
     tutorId: user.id,
     courseId: Number(excuseCourseSelect.value),
+    sessionType: excuseSessionSelect.value,
     sessionDate: excuseDateInput.value,
     reason: excuseReasonInput.value.trim(),
   };

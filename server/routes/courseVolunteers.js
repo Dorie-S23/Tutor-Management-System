@@ -1,6 +1,7 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { notify } = require("./notificationHelpers");
+const { fillUncoveredForCourse, reassignCoversOf } = require("./sessionCover");
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ router.get("/", async (req, res) => {
   let query = supabase
     .from("course_volunteers")
     .select(
-      "*, courses(course_code, course_name, department, Day_of_tut, tutor_start_time, tutor_end_time), users(name, email)",
+      "*, courses(course_code, course_name, department, Day_of_tut, tutor_start_time, tutor_end_time, venues, Day_of_lab, lab_start_time, lab_end_time, lab_venues), users(name, email)",
     )
     .order("created_at", { ascending: false });
 
@@ -178,6 +179,18 @@ router.patch("/:id", async (req, res) => {
       relatedId: data.id,
     }).catch((err) =>
       console.warn("Failed to notify about volunteer status:", err),
+    );
+  }
+
+  // Keep session covers in step: a newly approved volunteer can fill any
+  // uncovered upcoming sessions, and one taken off the course hands theirs on.
+  if (status === "approved" && !wasApproved) {
+    fillUncoveredForCourse(data.course_id).catch((err) =>
+      console.warn("Failed to fill uncovered sessions:", err),
+    );
+  } else if (wasApproved && status !== "approved") {
+    reassignCoversOf(data.user_id, data.course_id).catch((err) =>
+      console.warn("Failed to reassign session covers:", err),
     );
   }
 

@@ -54,7 +54,6 @@ const hoursDisplay = document.getElementById("hours-display");
 const startTimeField = document.getElementById("startTime");
 const endTimeField = document.getElementById("endTime");
 const taskTypeField = document.getElementById("taskType");
-const subjectField = document.getElementById("subject");
 const courseSelectField = document.getElementById("courseSelect");
 const notesField = document.getElementById("notes");
 const formTitle = document.getElementById("form-title");
@@ -72,9 +71,8 @@ let currentWeekStart = getWeekStart(todayStr());
 
 dateField.value = todayStr();
 
-// Populates the optional course picker used to tie a logged entry to an
-// actual course (by id) for the organiser's Hours & Budget report — the
-// free-text "Course code" field above stays as the entry's display label.
+// Every entry must be tied to a course so the organiser's Hours & Budget
+// report can cost it; the server labels the entry with that course's code.
 async function loadCourseOptions() {
   try {
     const res = await fetch("/api/courses");
@@ -87,8 +85,9 @@ async function loadCourseOptions() {
       courseSelectField.appendChild(option);
     });
   } catch (err) {
-    // The course picker is a nice-to-have for reporting — logging hours
-    // still works without it, so a failed fetch shouldn't block the form.
+    // Without the course list the form can't be submitted, so say why.
+    formError.textContent = "Couldn't load courses. Refresh to try again.";
+    formError.hidden = false;
   }
 }
 loadCourseOptions();
@@ -209,7 +208,6 @@ function enterEditMode(entry) {
   startTimeField.value = entry.startTime || "";
   endTimeField.value = entry.endTime || "";
   taskTypeField.value = entry.taskType || "Tutoring";
-  subjectField.value = entry.subject;
   courseSelectField.value = entry.courseId ?? "";
   notesField.value = entry.notes;
   formTitle.textContent = "Edit entry";
@@ -295,8 +293,7 @@ form.addEventListener("submit", async (event) => {
     startTime: startTimeField.value,
     endTime: endTimeField.value,
     taskType: taskTypeField.value,
-    subject: subjectField.value.trim(),
-    courseId: courseSelectField.value ? Number(courseSelectField.value) : null,
+    courseId: Number(courseSelectField.value),
     notes: notesField.value.trim(),
   };
 

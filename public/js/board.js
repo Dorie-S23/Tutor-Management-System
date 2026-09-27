@@ -41,6 +41,7 @@ function mapCourseRow(row) {
     labStartTime: row.lab_start_time,
     labEndTime: row.lab_end_time,
     labVenues: row.lab_venues,
+    diagonalCount: row.diagonal_count ?? 0,
     tutorialSession:
       row.Day_of_tut && row.tutor_start_time && row.tutor_end_time
         ? {
@@ -517,6 +518,7 @@ function renderDetail() {
 
   renderAssignmentCard(course);
   renderApplicants(course);
+  renderDiagonals(course);
   renderExcusals(course);
   renderVolunteers(course);
 }
@@ -966,6 +968,27 @@ const excusalsEmptyEl = document.getElementById("excusalsEmpty");
 let excusalsRequestId = 0;
 let lastExcusalsSnapshot = null;
 
+// Which of the course's sessions an excusal is for — its stored
+// session_type, or for an older excusal without one, whichever session
+// meets on that weekday.
+function excusedSession(course, excusal) {
+  const sessions = [
+    course.tutorialSession && {
+      key: "tutorial",
+      type: "Tutorial",
+      ...course.tutorialSession,
+    },
+    course.labSession && { key: "lab", type: "Lab", ...course.labSession },
+  ].filter(Boolean);
+  if (excusal.session_type) {
+    return sessions.find((s) => s.key === excusal.session_type) || null;
+  }
+  const weekday = new Date(
+    `${excusal.session_date}T00:00:00`,
+  ).toLocaleDateString("en-US", { weekday: "long" });
+  return sessions.find((s) => s.day === weekday) || null;
+}
+
 async function renderExcusals(course) {
   const requestId = ++excusalsRequestId;
 
@@ -999,6 +1022,14 @@ async function renderExcusals(course) {
 
   upcoming.forEach((excusal) => {
     const name = excusal.tutors?.name || "Unknown";
+    const session = excusedSession(course, excusal);
+    const when = new Date(
+      `${excusal.session_date}T00:00:00`,
+    ).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
 
     const li = document.createElement("li");
     const row = document.createElement("div");
@@ -1007,14 +1038,87 @@ async function renderExcusals(course) {
     row.innerHTML = `
       <span class="avatar">${initials(name)}</span>
       <span class="name-block">
-        <span class="name">${name}</span>
-        <span class="role">${excusal.session_date}${excusal.reason ? ` — ${excusal.reason}` : ""}</span>
+        <span class="name"></span>
+        <span class="role"></span>
       </span>
+      <span class="stamp-row"></span>
     `;
+    row.querySelector(".name").textContent = name;
+    row.querySelector(".role").textContent = [
+      when,
+      session ? `${session.start}–${session.end}` : null,
+      excusal.reason,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (session) {
+      const stamp = document.createElement("span");
+      stamp.className = "stamp";
+      stamp.textContent = session.type;
+      row.querySelector(".stamp-row").appendChild(stamp);
+    }
+
+    // Which volunteer (if any) was automatically put in to cover it.
+    const coverStamp = document.createElement("span");
+    coverStamp.className = excusal.cover?.name ? "stamp ok" : "stamp warn";
+    coverStamp.textContent = excusal.cover?.name
+      ? `Covered by ${excusal.cover.name}`
+      : "No cover";
+    row.querySelector(".stamp-row").appendChild(coverStamp);
+
+    if (excusal.swap_to_user_id) {
+      const swapStamp = document.createElement("span");
+      swapStamp.className = "stamp warn";
+      swapStamp.textContent = `Swap asked → ${excusal.swap_to?.name || "volunteer"}`;
+      row.querySelector(".stamp-row").appendChild(swapStamp);
+    }
+
+    const actions = document.createElement("span");
+    actions.className = "applicant-actions";
+    actions.appendChild(
+      makeApplicantActionBtn(
+        excusal.cover?.name ? "Reassign" : "Find cover",
+        "",
+        () => findCover(course, excusal, name),
+      ),
+    );
+    row.appendChild(actions);
 
     li.appendChild(row);
     excusalListEl.appendChild(li);
   });
+}
+
+// Re-runs the automatic cover assignment for one excusal — fills it if it's
+// uncovered, or hands it to the next best volunteer if it's covered.
+async function findCover(course, excusal, tutorName) {
+  if (
+    excusal.cover?.name &&
+    !confirm(
+      `Take ${excusal.cover.name} off covering ${tutorName}'s session and pick another volunteer?`,
+    )
+  ) {
+    return;
+  }
+  try {
+    const res = await fetch(
+      `/api/session-excusals/${encodeURIComponent(excusal.id)}/find-cover`,
+      { method: "POST" },
+    );
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't find a cover.");
+      return;
+    }
+    showToast(
+      body.cover?.name
+        ? `${body.cover.name} will cover ${tutorName}'s session.`
+        : `No approved volunteer on ${course.code} is free for that session.`,
+    );
+    renderExcusals(course);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
 }
 
 // ---------- volunteers ----------
@@ -1178,6 +1282,7 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
     }
 
     renderVolunteers(course);
+    renderDiagonals(course);
     fetchVolunteerCounts();
     renderCourseList();
   } catch (err) {
@@ -1222,6 +1327,190 @@ function renderAssignmentCard(course) {
   assignmentCardEl.className = className;
   assignmentCardEl.innerHTML = html;
 }
+
+// ---------- diagonals ----------
+// A large course can be split into diagonals (A, B, C…); each approved tutor
+// and student volunteer is placed in one. The count is set from the course
+// form's "Split into diagonals" checkbox; placement happens here.
+
+const diagonalsPanelEl = document.getElementById("diagonalsPanel");
+const diagonalGridEl = document.getElementById("diagonalGrid");
+const splitDiagonalsBtn = document.getElementById("splitDiagonalsBtn");
+
+let diagonalsRequestId = 0;
+let lastDiagonalsSnapshot = null;
+
+function pluralise(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+async function renderDiagonals(course) {
+  const requestId = ++diagonalsRequestId;
+
+  if (!course.diagonalCount) {
+    diagonalsPanelEl.hidden = true;
+    lastDiagonalsSnapshot = null;
+    return;
+  }
+  diagonalsPanelEl.hidden = false;
+
+  let data;
+  try {
+    const res = await fetch(`/api/courses/${course.id}/diagonals`);
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load diagonals");
+  } catch (err) {
+    if (requestId === diagonalsRequestId)
+      showToast("Couldn't load diagonals for this course.");
+    return;
+  }
+
+  // the active course may have changed while this request was in flight
+  if (requestId !== diagonalsRequestId) return;
+
+  const snapshot = `${course.id}:${JSON.stringify(data)}`;
+  if (snapshot === lastDiagonalsSnapshot) return;
+  lastDiagonalsSnapshot = snapshot;
+
+  const labels = data.diagonals.map((d) => d.label);
+  const groups = [...data.diagonals];
+  const unassignedCount =
+    data.unassigned.tutors.length + data.unassigned.volunteers.length;
+  if (unassignedCount > 0) {
+    groups.push({ label: null, ...data.unassigned });
+  }
+
+  diagonalGridEl.innerHTML = "";
+  groups.forEach((group) => {
+    diagonalGridEl.appendChild(buildDiagonalCard(course, group, labels));
+  });
+}
+
+function buildDiagonalCard(course, group, labels) {
+  const card = document.createElement("section");
+  card.className =
+    "diagonal-card" + (group.label ? "" : " diagonal-card--unassigned");
+
+  const head = document.createElement("header");
+  head.className = "diagonal-card-head";
+  const title = document.createElement("h4");
+  title.textContent = group.label ? `Diagonal ${group.label}` : "Unassigned";
+  const counts = document.createElement("p");
+  counts.className = "diagonal-card-counts";
+  counts.textContent = `${pluralise(group.tutors.length, "tutor")} · ${pluralise(group.volunteers.length, "student")}`;
+  head.append(title, counts);
+  card.appendChild(head);
+
+  [
+    ["tutor", "Tutors", group.tutors],
+    ["volunteer", "Students", group.volunteers],
+  ].forEach(([kind, heading, members]) => {
+    const sub = document.createElement("p");
+    sub.className = "diagonal-card-sub";
+    sub.textContent = heading;
+    card.appendChild(sub);
+
+    if (members.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "empty-copy";
+      empty.textContent = "None yet.";
+      card.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement("ul");
+    list.className = "diagonal-member-list";
+    members.forEach((member) => {
+      list.appendChild(buildDiagonalMember(course, kind, member, labels));
+    });
+    card.appendChild(list);
+  });
+
+  return card;
+}
+
+function buildDiagonalMember(course, kind, member, labels) {
+  const li = document.createElement("li");
+  li.className = "diagonal-member";
+
+  const name = document.createElement("span");
+  name.className = "diagonal-member-name";
+  name.textContent = member.name;
+  name.title = member.email;
+
+  const select = document.createElement("select");
+  select.className = "diagonal-member-select";
+  select.setAttribute("aria-label", `Diagonal for ${member.name}`);
+  [...labels, ""].forEach((label) => {
+    const option = document.createElement("option");
+    option.value = label;
+    option.textContent = label ? `Diagonal ${label}` : "Unassigned";
+    select.appendChild(option);
+  });
+  select.value = labels.includes(member.diagonal) ? member.diagonal : "";
+  select.addEventListener("change", () =>
+    moveDiagonalMember(course, kind, member, select.value || null, select),
+  );
+
+  li.append(name, select);
+  return li;
+}
+
+async function moveDiagonalMember(course, kind, member, diagonal, select) {
+  select.disabled = true;
+  try {
+    const res = await fetch(`/api/courses/${course.id}/diagonals/members`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, id: member.id, diagonal }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't move them to that diagonal.");
+    } else {
+      showToast(
+        diagonal
+          ? `${member.name} moved to diagonal ${diagonal}`
+          : `${member.name} taken out of their diagonal`,
+      );
+    }
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+  renderDiagonals(course);
+}
+
+splitDiagonalsBtn.addEventListener("click", async () => {
+  const course = COURSES.find((c) => c.id === activeCourseId);
+  if (!course?.diagonalCount) return;
+  if (
+    !confirm(
+      `Split ${course.code}'s approved tutors and students evenly across ${course.diagonalCount} diagonals? This replaces everyone's current diagonal.`,
+    )
+  ) {
+    return;
+  }
+
+  splitDiagonalsBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/courses/${course.id}/diagonals/split`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't split this course into diagonals.");
+      return;
+    }
+    showToast(`${course.code} split across ${course.diagonalCount} diagonals.`);
+    renderDiagonals(course);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    splitDiagonalsBtn.disabled = false;
+  }
+});
 
 // ---------- bulk-fill obvious assignments ----------
 
@@ -1387,6 +1676,10 @@ const hasTutorialInput = document.getElementById("hasTutorialInput");
 const hasLabInput = document.getElementById("hasLabInput");
 const tutorialFieldsEl = document.getElementById("tutorialFields");
 const labFieldsEl = document.getElementById("labFields");
+const hasDiagonalsInput = document.getElementById("hasDiagonalsInput");
+const diagonalFieldsEl = document.getElementById("diagonalFields");
+const diagonalCountInput = document.getElementById("diagonalCountInput");
+const diagonalCountHint = document.getElementById("diagonalCountHint");
 
 let editingCourseId = null; // null = adding a new course, otherwise id of course being edited
 
@@ -1425,6 +1718,42 @@ function updateLabVisibility() {
 
 hasTutorialInput.addEventListener("change", updateTutorialVisibility);
 hasLabInput.addEventListener("change", updateLabVisibility);
+
+// Previews how the course's approved tutors/students would divide across
+// the chosen number of diagonals, e.g. "A: 2 tutors, 40 students · B: …".
+function updateDiagonalHint() {
+  const n = Number(diagonalCountInput.value);
+  if (!Number.isInteger(n) || n < 2 || n > 26) {
+    diagonalCountHint.textContent =
+      "Diagonals are labelled A, B, C… (between 2 and 26).";
+    return;
+  }
+  const labels = Array.from({ length: n }, (_, i) =>
+    String.fromCharCode(65 + i),
+  );
+  if (editingCourseId === null) {
+    diagonalCountHint.textContent = `Diagonals ${labels[0]}–${labels[n - 1]}. Approved tutors and students can be split across them from the course page.`;
+    return;
+  }
+  const course = COURSES.find((c) => c.id === editingCourseId);
+  const tutors = course?.tutorsAssigned ?? 0;
+  const students = volunteerCounts[editingCourseId] ?? 0;
+  const perDiagonal = (total) => {
+    const low = Math.floor(total / n);
+    return total % n === 0 ? `${low}` : `${low}–${low + 1}`;
+  };
+  diagonalCountHint.textContent = `Diagonals ${labels[0]}–${labels[n - 1]}: roughly ${perDiagonal(tutors)} of ${tutors} tutors and ${perDiagonal(students)} of ${students} approved students each.`;
+}
+
+function updateDiagonalVisibility() {
+  const checked = hasDiagonalsInput.checked;
+  diagonalFieldsEl.hidden = !checked;
+  diagonalCountInput.required = checked;
+  updateDiagonalHint();
+}
+
+hasDiagonalsInput.addEventListener("change", updateDiagonalVisibility);
+diagonalCountInput.addEventListener("input", updateDiagonalHint);
 
 function openCourseModal(course = null) {
   editingCourseId = course ? course.id : null;
@@ -1467,13 +1796,18 @@ function openCourseModal(course = null) {
       : "";
     labVenuesInput.value = course.labVenues ?? "";
     hasLabInput.checked = !!(course.dayOfLab || course.labVenues);
+
+    hasDiagonalsInput.checked = course.diagonalCount > 0;
+    diagonalCountInput.value = course.diagonalCount || "";
   } else {
     hasTutorialInput.checked = false;
     hasLabInput.checked = false;
+    hasDiagonalsInput.checked = false;
   }
 
   updateTutorialVisibility();
   updateLabVisibility();
+  updateDiagonalVisibility();
 
   addCourseModal.showModal();
   document.getElementById("courseCodeInput").focus();
@@ -1672,9 +2006,29 @@ addCourseForm.addEventListener("submit", async (e) => {
       labChecked && labStartTimeValue !== "" ? labStartTimeValue : null,
     lab_end_time: labChecked && labEndTimeValue !== "" ? labEndTimeValue : null,
     lab_venues: labChecked ? labVenuesInput.value.trim() || null : null,
+    has_diagonals: hasDiagonalsInput.checked,
+    diagonal_count: hasDiagonalsInput.checked
+      ? Number(diagonalCountInput.value)
+      : null,
   };
 
   const isEditing = editingCourseId !== null;
+
+  const previousDiagonals =
+    COURSES.find((c) => c.id === editingCourseId)?.diagonalCount ?? 0;
+  const nextDiagonals = payload.diagonal_count ?? 0;
+  if (
+    isEditing &&
+    nextDiagonals < previousDiagonals &&
+    !confirm(
+      nextDiagonals === 0
+        ? "Turn off diagonals? Everyone's diagonal placement on this course will be cleared."
+        : `Reduce to ${nextDiagonals} diagonals? Anyone in a diagonal past ${String.fromCharCode(64 + nextDiagonals)} goes back to unassigned.`,
+    )
+  ) {
+    return;
+  }
+
   addCourseSubmitBtn.disabled = true;
   addCourseSubmitBtn.textContent = isEditing ? "Saving…" : "Adding…";
 

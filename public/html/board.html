@@ -185,6 +185,34 @@
             </p>
           </section>
 
+          <section
+            class="assign-panel"
+            id="diagonalsPanel"
+            aria-labelledby="diagonalsHeading"
+            hidden
+          >
+            <header class="assign-panel-head">
+              <h3 id="diagonalsHeading">Diagonals</h3>
+              <button
+                class="btn btn-ghost btn-small-pad"
+                id="splitDiagonalsBtn"
+                type="button"
+              >
+                Split evenly
+              </button>
+            </header>
+
+            <p class="hint" id="diagonalsHint">
+              Approved tutors and student volunteers are grouped into diagonals.
+              Split evenly to spread everyone out, then move individuals with
+              the dropdown next to their name.
+            </p>
+
+            <div class="diagonal-grid" id="diagonalGrid">
+              <!-- injected -->
+            </div>
+          </section>
+
           <section class="assign-panel" aria-labelledby="excusalsHeading">
             <header class="assign-panel-head">
               <h3 id="excusalsHeading">Session Excusals</h3>
@@ -192,7 +220,8 @@
 
             <p class="hint">
               Tutors who've excused themselves from an upcoming session on this
-              course — find cover if you need to.
+              course. An approved student volunteer is put in to cover each one
+              automatically — use Find cover if nobody was free.
             </p>
 
             <ul class="tutor-list" id="excusalList">
@@ -427,6 +456,29 @@
                 placeholder="e.g. FNB2"
               />
             </label>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-checkbox">
+            <input type="checkbox" id="hasDiagonalsInput" />
+            <span>Split into diagonals</span>
+          </label>
+
+          <div id="diagonalFields" class="field-subgroup" hidden>
+            <label class="field">
+              <span class="field-label">Number of diagonals</span>
+              <input
+                type="number"
+                id="diagonalCountInput"
+                name="diagonal_count"
+                min="2"
+                max="26"
+                step="1"
+                placeholder="e.g. 3"
+              />
+            </label>
+            <p class="hint" id="diagonalCountHint"></p>
           </div>
         </div>
 

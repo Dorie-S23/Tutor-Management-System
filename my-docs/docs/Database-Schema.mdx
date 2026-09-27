@@ -93,6 +93,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `lab_start_time`, `lab_end_time` (time)
 - `lab_venues` (text)
 - `budget` (numeric)
+- `diagonal_count` (smallint, 2–26) — how many diagonals (student groups labelled A, B, C…) a large course is split into; null when it isn't split. Set from the organiser's Add/Edit Course form
 
 #### `course_volunteers`
 
@@ -104,6 +105,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `course_id` (integer, required, FK → `courses.id`)
 - `mark` (integer)
 - `status` (text, required, default `pending`) — `pending`, `approved` or `rejected`
+- `diagonal` (text) — the diagonal (`A`–`Z`) an approved volunteer is placed in, when the course is split into diagonals; null = unassigned
 - `created_at` (timestamptz, required, default now)
 
 #### `tutor_subject_preference`
@@ -119,6 +121,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `tutor_mark` (integer) — the mark the tutor scored for the course
 - `Availability` (bool) — whether the tutor is free at the course's scheduled times
 - `locked` (bool, required)
+- `diagonal` (text) — the diagonal (`A`–`Z`) an approved tutor is placed in, when the course is split into diagonals; null = unassigned
 
 #### `allocation_overrides`
 
@@ -162,13 +165,21 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 #### `session_excusals`
 
 - A tutor excusing themselves from one scheduled session of a course they are approved for.
+- An approved student volunteer on the course is automatically assigned to cover it (`cover_user_id`), reminded the day before, and can hand it on if they can't make it.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
 - `tutor_id` (uuid, required, FK → `tutors.id`)
 - `course_id` (smallint, required, FK → `courses.id`)
 - `session_date` (date, required)
+- `session_type` (text) — `tutorial` or `lab`: which of the course's sessions the tutor is excused from; null on excusals recorded before this was tracked
 - `reason` (text)
+- `cover_user_id` (uuid, FK → `users.id`) — the student volunteer covering the session; null when no volunteer was free
+- `cover_assigned_at` (timestamptz) — when the current cover was assigned
+- `cover_reminded_at` (timestamptz) — when the day-before reminder went out, so it's only sent once
+- `cover_declined_by` (uuid[], required, default `{}`) — volunteers who said they can't make it, so they aren't picked again
+- `swap_to_user_id` (uuid, FK → `users.id`) — another volunteer the cover has asked to take the session over; the cover only moves once they accept. Null = no pending request
+- `swap_requested_at` (timestamptz) — when that swap was asked for
 - `created_at` (timestamptz, required, default now)
 
 #### `session_swaps`

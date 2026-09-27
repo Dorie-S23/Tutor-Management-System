@@ -26,7 +26,7 @@ welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
 // ---------- upcoming sessions ----------
 
 // Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching
-// JS Date.getDay(), so a course's weekly Day_of_tut can be projected onto
+// JS Date.getDay(), so a course's weekly session day can be projected onto
 // the next real calendar date.
 const DAY_NAMES = [
   "Sunday",
@@ -38,19 +38,57 @@ const DAY_NAMES = [
   "Saturday",
 ];
 
-function formatSession(course) {
-  if (!course.Day_of_tut || !course.tutor_start_time || !course.tutor_end_time)
-    return null;
-  return `${course.Day_of_tut} · ${course.tutor_start_time.slice(0, 5)}–${course.tutor_end_time.slice(0, 5)}`;
+// A course can run a Tutorial, a Lab, or both — each is its own weekly
+// session. Returns whichever of the two are fully scheduled.
+function courseSessions(course) {
+  return [
+    {
+      key: "tutorial",
+      type: "Tutorial",
+      day: course.Day_of_tut,
+      start: course.tutor_start_time,
+      end: course.tutor_end_time,
+      venue: course.venues,
+    },
+    {
+      key: "lab",
+      type: "Lab",
+      day: course.Day_of_lab,
+      start: course.lab_start_time,
+      end: course.lab_end_time,
+      venue: course.lab_venues,
+    },
+  ].filter((s) => s.day && s.start && s.end);
 }
 
-// Days from today until the next occurrence of a weekly tutorial day
-// (0 = today, 1 = tomorrow, ... 6 = a week from today at the latest).
-function daysUntil(dayName) {
+function formatTimes(session) {
+  return `${session.start.slice(0, 5)}–${session.end.slice(0, 5)}`;
+}
+
+function toLocalDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Days from today until the next occurrence of a weekly session
+// (0 = today ... 6). A session that has already ended today counts as
+// next week's.
+function daysUntil(dayName, endTime) {
   const targetIdx = DAY_NAMES.indexOf(dayName);
   if (targetIdx === -1) return null;
-  const todayIdx = new Date().getDay();
-  return (targetIdx - todayIdx + 7) % 7;
+  const now = new Date();
+  const days = (targetIdx - now.getDay() + 7) % 7;
+  const nowHHMM = now.toTimeString().slice(0, 5);
+  return days === 0 && endTime.slice(0, 5) <= nowHHMM ? 7 : days;
+}
+
+function daysBetweenTodayAnd(dateStr) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${dateStr}T00:00:00`);
+  return Math.round((target - today) / 86400000);
 }
 
 function describeDaysAway(daysAway) {
@@ -59,39 +97,105 @@ function describeDaysAway(daysAway) {
   return `in ${daysAway} days`;
 }
 
-async function fetchUpcomingSessions() {
-  let sessions = [];
-  try {
-    const res = await fetch(
-      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
-    );
-    const rows = await res.json();
-    if (!res.ok) throw new Error(rows.error || "Failed to load sessions");
+function formatDate(dateStr) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
 
-    sessions = rows
-      .filter((app) => (app.status || "").toLowerCase() === "approved")
-      .map((app) => {
-        const course = app.courses;
-        const session = course ? formatSession(course) : null;
-        const daysAway = course ? daysUntil(course.Day_of_tut) : null;
-        if (!course || !session || daysAway === null) return null;
-        return {
+// The next occurrence of each Tutorial/Lab on the courses this student is
+// approved to volunteer on.
+async function fetchRegularSessions() {
+  const res = await fetch(
+    `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+  );
+  const rows = await res.json();
+  if (!res.ok) throw new Error(rows.error || "Failed to load sessions");
+
+  return rows
+    .filter((app) => (app.status || "").toLowerCase() === "approved")
+    .flatMap((app) => {
+      const course = app.courses;
+      if (!course) return [];
+      return courseSessions(course)
+        .map((s) => ({
+          kind: "regular",
           courseId: app.course_id,
           courseCode: course.course_code,
           courseName: course.course_name,
-          session,
-          startTime: course.tutor_start_time,
-          daysAway,
-        };
-      })
-      .filter(Boolean)
-      .sort(
-        (a, b) =>
-          a.daysAway - b.daysAway || a.startTime.localeCompare(b.startTime),
-      );
-  } catch {
-    sessions = [];
+          label: `${s.type} · ${s.day} · ${formatTimes(s)}`,
+          startTime: s.start,
+          daysAway: daysUntil(s.day, s.end),
+        }))
+        .filter((s) => s.daysAway !== null);
+    });
+}
+
+// Sessions this student has been assigned to cover for an excused tutor.
+// Turns an excusal row into an upcoming-sessions entry — either a session
+// this student is covering (kind "cover") or one another volunteer has
+// asked them to take over (kind "swap_request"). Null once it's over.
+function toCoverEntry(excusal, kind) {
+  const course = excusal.courses;
+  const session = course
+    ? courseSessions(course).find((s) => s.key === excusal.session_type)
+    : null;
+  const daysAway = daysBetweenTodayAnd(excusal.session_date);
+  if (!course || daysAway < 0) return null;
+  if (
+    daysAway === 0 &&
+    session &&
+    session.end.slice(0, 5) <= new Date().toTimeString().slice(0, 5)
+  ) {
+    return null; // already happened today
   }
+  return {
+    kind,
+    excusalId: excusal.id,
+    courseId: excusal.course_id,
+    courseCode: course.course_code,
+    courseName: course.course_name,
+    tutorName: excusal.tutors?.name || "a tutor",
+    coverName: excusal.cover?.name || "Another volunteer",
+    swapToName: excusal.swap_to_user_id
+      ? excusal.swap_to?.name || "another volunteer"
+      : null,
+    label: [
+      session?.type,
+      formatDate(excusal.session_date),
+      session ? formatTimes(session) : null,
+      session?.venue,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    startTime: session?.start || "00:00",
+    daysAway,
+  };
+}
+
+async function fetchExcusalsWhere(param, kind) {
+  const res = await fetch(
+    `/api/session-excusals?${param}=${encodeURIComponent(currentUser.id)}`,
+  );
+  const rows = await res.json();
+  if (!res.ok) throw new Error(rows.error || "Failed to load covers");
+  return rows.map((excusal) => toCoverEntry(excusal, kind)).filter(Boolean);
+}
+
+async function fetchUpcomingSessions() {
+  const results = await Promise.allSettled([
+    fetchExcusalsWhere("swapToUserId", "swap_request"),
+    fetchExcusalsWhere("coverUserId", "cover"),
+    fetchRegularSessions(),
+  ]);
+  const sessions = results
+    .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+    .sort(
+      (a, b) =>
+        a.daysAway - b.daysAway || a.startTime.localeCompare(b.startTime),
+    );
   renderUpcomingSessions(sessions);
 }
 
@@ -108,12 +212,222 @@ function renderUpcomingSessions(sessions) {
     const article = document.createElement("article");
     article.dataset.courseId = s.courseId;
     article.innerHTML = `
-      <h3>${s.courseCode} — ${s.courseName}</h3>
-      <p>${s.session}</p>
-      <span class="status-pill">${describeDaysAway(s.daysAway)}</span>
+      <h3></h3>
+      <p class="session-when"></p>
+      <span class="status-pill"></span>
     `;
+    article.querySelector("h3").textContent =
+      `${s.courseCode} — ${s.courseName}`;
+    article.querySelector(".session-when").textContent = s.label;
+    article.querySelector(".status-pill").textContent = describeDaysAway(
+      s.daysAway,
+    );
+
+    if (s.kind === "cover") {
+      article.classList.add("session-cover");
+      article.dataset.coverId = s.excusalId;
+      article.prepend(badge(`Covering for ${s.tutorName}`));
+      article.appendChild(
+        s.swapToName ? buildPendingSwap(s) : buildCantMakeIt(s),
+      );
+    } else if (s.kind === "swap_request") {
+      article.classList.add("session-cover", "session-swap-request");
+      article.dataset.swapId = s.excusalId;
+      article.prepend(
+        badge(
+          `${s.coverName} asked you to take this over (covering for ${s.tutorName})`,
+        ),
+      );
+      article.appendChild(buildSwapAnswer(s));
+    }
+
     upcomingSessionsListEl.appendChild(article);
   });
+}
+
+function badge(text) {
+  const el = document.createElement("p");
+  el.className = "session-cover-badge";
+  el.textContent = text;
+  return el;
+}
+
+function actionButton(label, className, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = className;
+  btn.textContent = label;
+  btn.addEventListener("click", () => onClick(btn));
+  return btn;
+}
+
+// POSTs to one of an excusal's cover/swap actions, toasting the outcome and
+// refreshing the list on success. Returns whether it worked.
+async function coverAction(excusalId, action, body, successMessage) {
+  try {
+    const res = await fetch(
+      `/api/session-excusals/${encodeURIComponent(excusalId)}/${action}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, ...body }),
+      },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(data.error || "Something went wrong — try again.");
+      return false;
+    }
+    showToast(successMessage);
+    fetchUpcomingSessions();
+    return true;
+  } catch {
+    showToast("Network error — couldn't reach the server.");
+    return false;
+  }
+}
+
+// "Can't make it" opens a picker: ask a specific volunteer to take over
+// (they have to accept), or let the system hand it to whoever's free.
+const AUTO_PICK = "__auto__";
+
+function buildCantMakeIt(cover) {
+  const wrap = document.createElement("div");
+  wrap.className = "swap-controls";
+
+  const openBtn = actionButton("Can't make it", "btn-cancel", () => {
+    openBtn.hidden = true;
+    panel.hidden = false;
+    loadSwapCandidates(cover, select, sendBtn);
+  });
+
+  const panel = document.createElement("div");
+  panel.className = "swap-panel";
+  panel.hidden = true;
+
+  const label = document.createElement("label");
+  label.className = "swap-label";
+  label.textContent = "Who should take it over?";
+  const select = document.createElement("select");
+  select.className = "swap-select";
+  label.appendChild(select);
+
+  const sendBtn = actionButton("Send request", "btn-primary", async (btn) => {
+    if (!select.value) {
+      showToast("Choose who should take it over first.");
+      return;
+    }
+    btn.disabled = true;
+    const ok =
+      select.value === AUTO_PICK
+        ? await coverAction(
+            cover.excusalId,
+            "decline-cover",
+            {},
+            "It's been handed to another available volunteer.",
+          )
+        : await coverAction(
+            cover.excusalId,
+            "swap-request",
+            { toUserId: select.value },
+            `Request sent to ${select.selectedOptions[0].textContent} — you're still covering it until they accept.`,
+          );
+    if (!ok) btn.disabled = false;
+  });
+
+  const cancelBtn = actionButton("Cancel", "btn-secondary", () => {
+    panel.hidden = true;
+    openBtn.hidden = false;
+  });
+
+  const buttons = document.createElement("div");
+  buttons.className = "swap-buttons";
+  buttons.append(sendBtn, cancelBtn);
+  panel.append(label, buttons);
+  wrap.append(openBtn, panel);
+  return wrap;
+}
+
+async function loadSwapCandidates(cover, select, sendBtn) {
+  select.innerHTML = "<option>Loading volunteers…</option>";
+  select.disabled = true;
+  sendBtn.disabled = true;
+
+  let candidates = [];
+  try {
+    const res = await fetch(
+      `/api/session-excusals/${encodeURIComponent(cover.excusalId)}/swap-candidates?userId=${encodeURIComponent(currentUser.id)}`,
+    );
+    candidates = await res.json();
+    if (!res.ok) throw new Error(candidates.error);
+  } catch (err) {
+    showToast(err.message || "Couldn't load the other volunteers.");
+    candidates = [];
+  }
+
+  select.innerHTML = "";
+  const placeholder = new Option(
+    candidates.length
+      ? "Choose a volunteer…"
+      : "No other volunteer is free then",
+    "",
+  );
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.appendChild(placeholder);
+  candidates.forEach((c) => select.appendChild(new Option(c.name, c.user_id)));
+  select.appendChild(
+    new Option("Anyone free — let the system choose", AUTO_PICK),
+  );
+  select.disabled = false;
+  sendBtn.disabled = false;
+}
+
+// Waiting on the volunteer who was asked — the requester can withdraw.
+function buildPendingSwap(cover) {
+  const wrap = document.createElement("div");
+  wrap.className = "swap-controls";
+  const note = document.createElement("p");
+  note.className = "swap-pending";
+  note.textContent = `Waiting for ${cover.swapToName} to accept your swap request — you're still covering it until they do.`;
+  wrap.append(
+    note,
+    actionButton("Withdraw request", "btn-secondary", async (btn) => {
+      btn.disabled = true;
+      const ok = await coverAction(
+        cover.excusalId,
+        "swap-withdraw",
+        {},
+        "Swap request withdrawn — you're still covering it.",
+      );
+      if (!ok) btn.disabled = false;
+    }),
+  );
+  return wrap;
+}
+
+// Another volunteer asked this student to take their session over.
+function buildSwapAnswer(request) {
+  const wrap = document.createElement("div");
+  wrap.className = "swap-buttons";
+  const respond = (accept) => async (btn) => {
+    wrap.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    const ok = await coverAction(
+      request.excusalId,
+      "swap-respond",
+      { accept },
+      accept
+        ? `You're now covering ${request.courseCode} (${request.label}).`
+        : `Declined — ${request.coverName} is still covering it.`,
+    );
+    if (!ok)
+      wrap.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  };
+  wrap.append(
+    actionButton("Accept", "btn-primary", respond(true)),
+    actionButton("Decline", "btn-secondary", respond(false)),
+  );
+  return wrap;
 }
 
 async function renderHoursVolunteered() {
@@ -411,6 +725,27 @@ if (tourLink) {
     scrollAndHighlight(
       upcomingSessionsListEl.querySelector(
         `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
+      ),
+    );
+  }
+
+  // Arriving from a "you're covering a session" notification — flash that
+  // cover (it may be gone if it was cancelled or handed on; that's fine).
+  const highlightCoverId = consumeQueryParam("highlightCover");
+  if (highlightCoverId) {
+    scrollAndHighlight(
+      upcomingSessionsListEl.querySelector(
+        `[data-cover-id="${CSS.escape(highlightCoverId)}"]`,
+      ),
+    );
+  }
+
+  // Arriving from a "someone asked you to take over a session" notification.
+  const highlightSwapId = consumeQueryParam("highlightSwap");
+  if (highlightSwapId) {
+    scrollAndHighlight(
+      upcomingSessionsListEl.querySelector(
+        `[data-swap-id="${CSS.escape(highlightSwapId)}"]`,
       ),
     );
   }

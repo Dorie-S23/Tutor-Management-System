@@ -1,5 +1,6 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { MAX_DIAGONALS, diagonalLabels } = require("./courseDiagonals");
 
 const router = express.Router();
 
@@ -186,6 +187,8 @@ function parseCoursePayload(body) {
     lab_end_time,
     lab_venues,
     budget,
+    has_diagonals,
+    diagonal_count,
   } = body ?? {};
 
   if (typeof course_code !== "string" || !course_code.trim()) {
@@ -292,6 +295,22 @@ function parseCoursePayload(body) {
     }
   }
 
+  // Optional — only large courses get split into diagonals (A, B, C…).
+  // Unticked means no diagonals at all, whatever count the client sent.
+  let diagonalCount = null;
+  if (has_diagonals) {
+    diagonalCount = Number(diagonal_count);
+    if (
+      !Number.isInteger(diagonalCount) ||
+      diagonalCount < 2 ||
+      diagonalCount > MAX_DIAGONALS
+    ) {
+      return {
+        error: `number of diagonals must be an integer between 2 and ${MAX_DIAGONALS}`,
+      };
+    }
+  }
+
   return {
     values: {
       course_code: course_code.trim(),
@@ -310,8 +329,34 @@ function parseCoursePayload(body) {
       lab_end_time: lab.end,
       lab_venues: lab.venue,
       budget: budgetNum,
+      diagonal_count: diagonalCount,
     },
   };
+}
+
+// After a course's diagonal count shrinks (or diagonals are switched off),
+// anyone still placed in a diagonal that no longer exists is moved back to
+// unassigned, so they don't silently sit in a hidden "diagonal E".
+async function clearStaleDiagonals(courseId, diagonalCount) {
+  const valid = new Set(diagonalLabels(diagonalCount));
+  for (const table of ["tutor_subject_preference", "course_volunteers"]) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("id, diagonal")
+      .eq("course_id", courseId);
+    if (error) throw error;
+
+    const staleIds = (data || [])
+      .filter((row) => row.diagonal != null && !valid.has(row.diagonal))
+      .map((row) => row.id);
+    if (staleIds.length === 0) continue;
+
+    const { error: updateError } = await supabase
+      .from(table)
+      .update({ diagonal: null })
+      .in("id", staleIds);
+    if (updateError) throw updateError;
+  }
 }
 
 // The only Tutorial/Lab fields that matter to someone already assigned —
@@ -457,7 +502,7 @@ router.put("/:id", async (req, res) => {
   // notifying already-assigned tutors/volunteers about.
   const { data: before } = await supabase
     .from("courses")
-    .select(SESSION_FIELDS.join(", "))
+    .select([...SESSION_FIELDS, "diagonal_count"].join(", "))
     .eq("id", id)
     .maybeSingle();
 
@@ -484,6 +529,14 @@ router.put("/:id", async (req, res) => {
     notifySessionChange(id, before, values).catch((err) =>
       console.warn("Failed to notify about session change:", err),
     );
+  }
+
+  if ((before?.diagonal_count ?? 0) > (values.diagonal_count ?? 0)) {
+    try {
+      await clearStaleDiagonals(id, values.diagonal_count);
+    } catch (err) {
+      console.warn("Failed to clear stale diagonal placements:", err);
+    }
   }
 
   res.json(data);

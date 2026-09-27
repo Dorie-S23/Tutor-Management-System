@@ -6,6 +6,7 @@ const app = express();
 
 const authRoutes = require("./routes/auth");
 const coursesRoutes = require("./server/routes/courses");
+const courseDiagonalsRoutes = require("./server/routes/courseDiagonals");
 const tutorsRoutes = require("./server/routes/tutors");
 const hourEntriesRoutes = require("./server/routes/hourEntries");
 const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
@@ -63,6 +64,9 @@ app.use("/api/auth", authRoutes);
 
 // Course management routes
 app.use("/api/courses", coursesRoutes);
+
+// Splitting a large course's tutors and volunteers into diagonals (A, B, C…)
+app.use("/api/courses/:courseId/diagonals", courseDiagonalsRoutes);
 
 // Tutor management routes
 app.use("/api/tutors", tutorsRoutes);

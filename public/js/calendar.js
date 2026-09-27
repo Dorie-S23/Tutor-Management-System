@@ -71,8 +71,83 @@ function courseColor(courseId) {
 // shown on the calendar, same as the organiser's timetable grid does.
 let courseSessions = [];
 
+// The tutor's own session excusals, keyed so render() can look up whether a
+// given course session on a given date is excused:
+// "<courseId>|<date>|<tutorial|lab>". Excusals recorded before session_type
+// existed have none, and are keyed "<courseId>|<date>|*" (any session that day).
+let excusalsByKey = new Map();
+
+function excusalKey(courseId, dateStr, sessionType) {
+  return `${courseId}|${dateStr}|${sessionType || "*"}`;
+}
+
+function findExcusal(session, dateStr) {
+  return (
+    excusalsByKey.get(
+      excusalKey(session.courseId, dateStr, session.type.toLowerCase()),
+    ) || excusalsByKey.get(excusalKey(session.courseId, dateStr, null))
+  );
+}
+
+async function fetchExcusals() {
+  try {
+    const res = await fetch(
+      `/api/session-excusals?tutorId=${encodeURIComponent(currentUser.id)}`,
+    );
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load excusals");
+    excusalsByKey = new Map(
+      rows.map((e) => [
+        excusalKey(e.course_id, e.session_date, e.session_type),
+        e,
+      ]),
+    );
+  } catch {
+    excusalsByKey = new Map();
+  }
+}
+
+// For a student volunteer: the tutors' sessions they've been assigned to
+// cover, keyed by date, so render() can drop a "Cover" pill onto that day.
+let coversByDate = new Map();
+
+async function fetchCovers() {
+  try {
+    const res = await fetch(
+      `/api/session-excusals?coverUserId=${encodeURIComponent(currentUser.id)}`,
+    );
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load covers");
+    coversByDate = new Map();
+    for (const excusal of rows) {
+      const course = excusal.courses || {};
+      const isLab = excusal.session_type === "lab";
+      const start = isLab ? course.lab_start_time : course.tutor_start_time;
+      const end = isLab ? course.lab_end_time : course.tutor_end_time;
+      const cover = {
+        courseId: excusal.course_id,
+        courseCode: course.course_code || "Session",
+        type: isLab ? "Lab" : "Tutorial",
+        start: start ? start.slice(0, 5) : "",
+        end: end ? end.slice(0, 5) : "",
+        venue: (isLab ? course.lab_venues : course.venues) || "",
+        tutorName: excusal.tutors?.name || "a tutor",
+      };
+      const list = coversByDate.get(excusal.session_date) || [];
+      list.push(cover);
+      coversByDate.set(excusal.session_date, list);
+    }
+  } catch {
+    coversByDate = new Map();
+  }
+}
+
 async function fetchCourseSessions() {
-  if (!isTutor) return;
+  if (!isTutor) {
+    await fetchCovers();
+    return;
+  }
+  await fetchExcusals();
   try {
     const res = await fetch(
       `/api/tutor-applications?tutorId=${encodeURIComponent(currentUser.id)}`,
@@ -158,6 +233,14 @@ function renderCourseColorKey() {
     chip.style.color = palette.text;
     chip.textContent = courseCode;
     courseColorKeyEl.appendChild(chip);
+  }
+
+  if (excusalsByKey.size > 0) {
+    const excusedChip = document.createElement("span");
+    excusedChip.className = "course-color-chip";
+    excusedChip.innerHTML =
+      '<span class="calendar-excused-tag">Excused</span><span class="calendar-excused-label">struck through</span> = you&rsquo;ve excused yourself';
+    courseColorKeyEl.appendChild(excusedChip);
   }
   courseColorKeyEl.hidden = false;
 }
@@ -352,13 +435,49 @@ async function render() {
       for (const s of courseSessions) {
         if (s.dayIndex !== cellWeekday) continue;
         const palette = courseColor(s.courseId);
+        const excusal = findExcusal(s, cellDateStr);
         const pill = document.createElement("div");
         pill.className = "calendar-course-pill";
         pill.style.background = palette.bg;
         pill.style.borderColor = palette.border;
         pill.style.color = palette.text;
-        pill.textContent = `${s.start} ${s.courseCode} · ${s.type === "Lab" ? "Lab" : "Tut"}`;
-        pill.title = `${s.courseCode} ${s.type} · ${s.start}–${s.end}${s.venue ? ` · ${s.venue}` : ""}`;
+        const label = `${s.start} ${s.courseCode} · ${s.type === "Lab" ? "Lab" : "Tut"}`;
+        const details = `${s.courseCode} ${s.type} · ${s.start}–${s.end}${s.venue ? ` · ${s.venue}` : ""}`;
+        if (excusal) {
+          pill.classList.add("calendar-course-pill--excused");
+          const tag = document.createElement("span");
+          tag.className = "calendar-excused-tag";
+          tag.textContent = "Excused";
+          const text = document.createElement("span");
+          text.className = "calendar-excused-label";
+          text.textContent = label;
+          pill.append(tag, text);
+          const coverText = excusal.cover?.name
+            ? ` · ${excusal.cover.name} is covering`
+            : " · no volunteer cover yet";
+          pill.title = `You're excused from this session — ${details}${coverText}${excusal.reason ? ` · Reason: ${excusal.reason}` : ""}`;
+        } else {
+          pill.textContent = label;
+          pill.title = details;
+        }
+        cell.appendChild(pill);
+      }
+    } else {
+      for (const c of coversByDate.get(cellDateStr) || []) {
+        const palette = courseColor(c.courseId);
+        const pill = document.createElement("div");
+        pill.className = "calendar-course-pill calendar-course-pill--cover";
+        pill.style.background = palette.bg;
+        pill.style.borderColor = palette.border;
+        pill.style.color = palette.text;
+        const tag = document.createElement("span");
+        tag.className = "calendar-cover-tag";
+        tag.textContent = "Cover";
+        pill.append(
+          tag,
+          `${c.start} ${c.courseCode} · ${c.type === "Lab" ? "Lab" : "Tut"}`,
+        );
+        pill.title = `You're covering ${c.courseCode} ${c.type} for ${c.tutorName} · ${c.start}–${c.end}${c.venue ? ` · ${c.venue}` : ""}`;
         cell.appendChild(pill);
       }
     }

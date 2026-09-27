@@ -4,6 +4,23 @@ const { getRatesMap } = require("./academicLevelRates");
 
 const router = express.Router();
 
+// Every hour entry must be tied to a real course so the budget report can
+// cost it. The entry's display label (subject) is taken from that course's
+// code rather than trusted from the client, so the two can never disagree.
+async function resolveCourse(courseId) {
+  if (courseId == null || courseId === "") {
+    return { status: 400, error: "courseId is required" };
+  }
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id, course_code")
+    .eq("id", Number(courseId))
+    .maybeSingle();
+  if (error) return { status: 500, error: error.message };
+  if (!data) return { status: 400, error: "Unknown course" };
+  return { course: data };
+}
+
 // GET /api/hour-entries?userId=...
 router.get("/", async (req, res) => {
   const { userId } = req.query;
@@ -21,18 +38,12 @@ router.get("/", async (req, res) => {
 
 // POST /api/hour-entries
 router.post("/", async (req, res) => {
-  const {
-    userId,
-    date,
-    hours,
-    startTime,
-    endTime,
-    taskType,
-    subject,
-    notes,
-    courseId,
-  } = req.body;
+  const { userId, date, hours, startTime, endTime, taskType, notes, courseId } =
+    req.body;
   if (!userId) return res.status(400).json({ error: "userId is required" });
+
+  const { course, status, error: courseError } = await resolveCourse(courseId);
+  if (courseError) return res.status(status).json({ error: courseError });
 
   const { data, error } = await supabase
     .from("hour_entries")
@@ -43,9 +54,9 @@ router.post("/", async (req, res) => {
       start_time: startTime || null,
       end_time: endTime || null,
       task_type: taskType || "Tutoring",
-      subject: subject || "",
+      subject: course.course_code,
       notes: notes || "",
-      course_id: courseId || null,
+      course_id: course.id,
     })
     .select()
     .single();
@@ -56,16 +67,11 @@ router.post("/", async (req, res) => {
 
 // PUT /api/hour-entries/:id
 router.put("/:id", async (req, res) => {
-  const {
-    date,
-    hours,
-    startTime,
-    endTime,
-    taskType,
-    subject,
-    notes,
-    courseId,
-  } = req.body;
+  const { date, hours, startTime, endTime, taskType, notes, courseId } =
+    req.body;
+
+  const { course, status, error: courseError } = await resolveCourse(courseId);
+  if (courseError) return res.status(status).json({ error: courseError });
 
   const { data, error } = await supabase
     .from("hour_entries")
@@ -75,9 +81,9 @@ router.put("/:id", async (req, res) => {
       start_time: startTime || null,
       end_time: endTime || null,
       task_type: taskType || "Tutoring",
-      subject: subject || "",
+      subject: course.course_code,
       notes: notes || "",
-      course_id: courseId || null,
+      course_id: course.id,
       updated_at: new Date().toISOString(),
     })
     .eq("id", req.params.id)

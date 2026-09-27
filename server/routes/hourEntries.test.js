@@ -26,27 +26,89 @@ beforeEach(() => {
 });
 
 describe("POST /api/hour-entries", () => {
-  test("stores an optional courseId alongside the entry", async () => {
+  beforeEach(() => {
+    tables.courses = [{ id: 5, course_code: "COMS1018" }];
+  });
+
+  test("links the entry to the course and labels it with the course code", async () => {
     const res = await request(buildApp()).post("/api/hour-entries").send({
       userId: "t1",
       date: "2026-09-01",
       hours: 2,
       courseId: 5,
+      subject: "something else",
     });
 
     expect(res.status).toBe(201);
     expect(res.body.course_id).toBe(5);
+    expect(res.body.subject).toBe("COMS1018");
   });
 
-  test("defaults courseId to null when not given", async () => {
+  test("rejects an entry with no courseId", async () => {
     const res = await request(buildApp()).post("/api/hour-entries").send({
       userId: "t1",
       date: "2026-09-01",
       hours: 2,
     });
 
-    expect(res.status).toBe(201);
-    expect(res.body.course_id).toBeNull();
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("courseId is required");
+    expect(tables.hour_entries).toHaveLength(0);
+  });
+
+  test("rejects an entry for a course that doesn't exist", async () => {
+    const res = await request(buildApp()).post("/api/hour-entries").send({
+      userId: "t1",
+      date: "2026-09-01",
+      hours: 2,
+      courseId: 999,
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Unknown course");
+    expect(tables.hour_entries).toHaveLength(0);
+  });
+});
+
+describe("PUT /api/hour-entries/:id", () => {
+  beforeEach(() => {
+    tables.courses = [
+      { id: 5, course_code: "COMS1018" },
+      { id: 6, course_code: "MATH1036" },
+    ];
+    tables.hour_entries = [
+      {
+        id: "e1",
+        user_id: "t1",
+        date: "2026-09-01",
+        hours: 2,
+        course_id: 5,
+        subject: "COMS1018",
+      },
+    ];
+  });
+
+  test("moves the entry to another course and relabels it", async () => {
+    const res = await request(buildApp()).put("/api/hour-entries/e1").send({
+      date: "2026-09-01",
+      hours: 2,
+      courseId: 6,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.course_id).toBe(6);
+    expect(res.body.subject).toBe("MATH1036");
+  });
+
+  test("won't unlink an entry from its course", async () => {
+    const res = await request(buildApp()).put("/api/hour-entries/e1").send({
+      date: "2026-09-01",
+      hours: 2,
+      courseId: null,
+    });
+
+    expect(res.status).toBe(400);
+    expect(tables.hour_entries[0].course_id).toBe(5);
   });
 });
 

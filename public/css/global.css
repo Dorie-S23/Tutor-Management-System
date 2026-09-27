@@ -768,6 +768,91 @@ input[type="search"]:focus-visible {
   background: var(--red-bg);
 }
 
+/* ---------- diagonals ---------- */
+
+.diagonal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.diagonal-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.diagonal-card--unassigned {
+  border-style: dashed;
+  background: var(--amber-bg);
+  border-color: var(--amber-line);
+}
+
+.diagonal-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.diagonal-card-head h4 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 15px;
+}
+
+.diagonal-card-counts {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.diagonal-card-sub {
+  margin: 10px 0 4px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.diagonal-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.diagonal-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.diagonal-member-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagonal-member-select {
+  flex-shrink: 0;
+  width: auto;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
 /* ---------- confirm bar ---------- */
 
 .confirm-bar {
@@ -2008,6 +2093,100 @@ body.student-app {
   color: #777;
 }
 
+/* A session this volunteer is covering for an excused tutor. */
+.student-app .session-list article.session-cover {
+  border-left: 4px solid #3457d5;
+  background: #eef2fd;
+  padding-left: 14px;
+  padding-right: 14px;
+  border-radius: 6px;
+}
+
+.student-app .session-list article .session-cover-badge {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3457d5;
+}
+
+/* Another volunteer asking this student to take their session over. */
+.student-app .session-list article.session-swap-request {
+  border-left-color: #a66a17;
+  background: #fbf4e6;
+}
+
+.student-app .session-swap-request .session-cover-badge {
+  color: #a66a17;
+}
+
+/* "Can't make it" → pick who takes over; pending request; accept/decline. */
+.student-app .swap-controls {
+  margin-top: 10px;
+}
+
+.student-app .swap-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.student-app .swap-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+.student-app .swap-select {
+  padding: 7px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  max-width: 360px;
+}
+
+.student-app .swap-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.student-app .swap-panel .swap-buttons {
+  margin-top: 0;
+}
+
+.student-app .swap-buttons button,
+.student-app .swap-controls > button {
+  width: auto;
+  margin-top: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.student-app .swap-buttons .btn-secondary {
+  background: white;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.student-app .swap-buttons .btn-secondary:hover {
+  background: #f3f3f3;
+}
+
+.student-app .session-list article .swap-pending {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a66a17;
+}
+
 .student-app .btn-cancel {
   width: auto;
   display: block;
@@ -2578,6 +2757,32 @@ body.tutor-app {
   font-size: 0.9rem;
 }
 
+/* An upcoming session the tutor has excused themselves from. */
+.tutor-app .application-row--excused {
+  border-style: dashed !important;
+  opacity: 0.85;
+}
+
+.tutor-app .excused-note {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a03d2c;
+}
+
+/* Who's covering an excusal — or that nobody is yet. */
+.tutor-app .excusal-cover {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tutor-app .excusal-cover--found {
+  color: #2f6b4f;
+}
+
+.tutor-app .excusal-cover--pending {
+  color: #a66a17;
+}
+
 .tutor-app .placeholder {
   text-align: center;
   color: var(--ta-text-muted);
@@ -2706,6 +2911,51 @@ body.tutor-app {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A session the tutor has excused themselves from — kept on the calendar
+   so they can still see it, but struck through, faded and tagged. */
+.tutor-app .calendar-course-pill--excused {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.tutor-app .calendar-excused-label {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+/* A tutor's session a student volunteer is covering. */
+.tutor-app .calendar-course-pill--cover {
+  border-width: 2px;
+}
+
+.tutor-app .calendar-cover-tag {
+  display: inline-block;
+  margin-right: 0.3rem;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: #3457d5;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+.tutor-app .calendar-excused-tag {
+  display: inline-block;
+  margin-right: 0.3rem;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: #a03d2c;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
 }
 
 .tutor-app #timetable-debug-text {
