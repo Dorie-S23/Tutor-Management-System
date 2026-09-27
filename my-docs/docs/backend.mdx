@@ -97,6 +97,20 @@ models/
 
 An unknown preset gets a `400` listing the valid names. Each applicant's `ranking` object now carries, alongside the familiar facts, the blended `score` (0–100 under the active preset), the normalised `objectives`, `rank` and `meritRank` (position under this balance vs merit-first), `paretoDominated` (another applicant is at least as good on every objective and strictly better on one — true under any weighting), and a `tradeoff` note whenever the two orderings disagree.
 
+### Allocation drafts and side-by-side comparison
+
+Auto-allocation never writes approved assignments directly — it writes a **draft** (`allocation_drafts` plus its `allocation_draft_assignments` pick rows) that an organiser reviews before committing:
+
+- `POST /api/allocation-drafts/auto-allocate` — proposes picks for every course with an open slot in one pass (locked applications skipped, mark bar and weekly hour caps enforced cumulatively across the run, timetable clash used as a tie-break). Returns `{ draft, assignments, skipped }`; `draft: null` when nothing qualifies.
+- `GET /api/allocation-drafts?status=draft|published|reverted` — lists drafts newest first with an `assignmentCount` each. `GET /api/allocation-drafts/:id` returns one draft with its assignments enriched with tutor and course details.
+- `PATCH /api/allocation-drafts/:id` — renames an open draft (`{ name }`).
+- `POST /api/allocation-drafts/:id/assignments/remove` — permanently drops picks from an open draft (`{ assignmentIds: [...] }`) and returns the remaining assignments. Publish's `excludeAssignmentIds` only excludes a row for that one publish; this edits the draft itself, so a pared-down version is still pared down when reopened.
+- `POST /api/allocation-drafts/:id/publish` — commits a draft: each pick approves the matching still-pending application and bumps its course's assigned-tutor count, re-checking pending state, course capacity and hour caps at publish time; anything that no longer applies is skipped rather than failing the run. Takes `{ organiserId, excludeAssignmentIds? }`.
+- `POST /api/allocation-drafts/:id/restore` — undoes a published draft using the pre-publish snapshot stored in the audit log.
+- `DELETE /api/allocation-drafts/:id` — discards an open draft along with its picks.
+
+Rename/remove/discard only apply while a draft is open (`status: "draft"`); published or reverted drafts are history and answer `409`. Several open drafts can coexist — the board's **Allocation drafts** workspace opens up to three of them side by side with picks that differ between them flagged, unchecking a pick stages its removal until _Save picks_, and publishing commits the checked picks of exactly one draft.
+
 ## Development Guide
 
 ### Branching & commit conventions

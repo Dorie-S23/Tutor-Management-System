@@ -1858,6 +1858,556 @@ autoAllocatePublishBtn.addEventListener("click", async () => {
   }
 });
 
+// ---------- allocation drafts workspace ----------
+//
+// The auto-allocate modal always reviews the single freshest draft. This
+// workspace is for the slower question: several open drafts (run at
+// different times, each a different set of picks) can be opened side by
+// side and compared before one of them is committed:
+//   - picks that aren't shared by all the open drafts are flagged, so the
+//     difference between candidate allocations is visible at a glance;
+//   - unchecking a pick stages its removal and "Save picks" persists it,
+//     so a draft the organiser pared down is still pared down when
+//     reopened (publish's exclusions are only a one-shot);
+//   - drafts can be renamed and discarded, so abandoned runs don't pile up
+//     the way cancelling the auto-allocate modal leaves them;
+//   - publishing commits exactly one draft through the same guarded
+//     endpoint, with still-unchecked picks passed as exclusions.
+
+const MAX_COMPARED_DRAFTS = 3;
+
+const draftsBtn = document.getElementById("draftsBtn");
+const draftsModal = document.getElementById("allocationDraftsModal");
+const draftsListEl = document.getElementById("draftsList");
+const draftsColumnsEl = document.getElementById("draftsColumns");
+const draftsEmptyEl = document.getElementById("draftsEmpty");
+const draftsHintEl = document.getElementById("draftsHint");
+
+let openDrafts = []; // from GET /api/allocation-drafts?status=draft
+let draftDetails = new Map(); // id -> { draft, assignments } from GET /:id
+let comparedDraftIds = []; // ticked in the rail, capped at MAX_COMPARED_DRAFTS
+let stagedRemovals = new Map(); // id -> Set of assignment ids unchecked but not saved yet
+
+function closeDraftsModal() {
+  draftsModal.close();
+}
+
+async function openDraftsModal() {
+  openDrafts = [];
+  comparedDraftIds = [];
+  draftDetails = new Map();
+  stagedRemovals = new Map();
+  draftsListEl.innerHTML = "";
+  draftsColumnsEl.innerHTML = "";
+  draftsHintEl.textContent = "Loading drafts…";
+  draftsModal.showModal();
+  await loadDrafts();
+}
+
+async function loadDrafts() {
+  let drafts;
+  try {
+    const res = await fetch("/api/allocation-drafts?status=draft");
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "Couldn't load drafts");
+    drafts = body;
+  } catch (err) {
+    draftsHintEl.textContent = "Couldn't load drafts — try again.";
+    return;
+  }
+
+  openDrafts = drafts;
+  comparedDraftIds = comparedDraftIds.filter((id) =>
+    openDrafts.some((d) => d.id === id),
+  );
+  await loadComparedDrafts();
+  renderDraftsWorkspace();
+}
+
+async function loadComparedDrafts() {
+  await Promise.all(
+    comparedDraftIds
+      .filter((id) => !draftDetails.has(id))
+      .map(async (id) => {
+        try {
+          const res = await fetch(`/api/allocation-drafts/${id}`);
+          if (res.ok) draftDetails.set(id, await res.json());
+        } catch (err) {
+          // The column falls back to a "couldn't load" note.
+        }
+      }),
+  );
+}
+
+function formatDraftDate(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "unknown date" : date.toLocaleString();
+}
+
+function renderDraftsWorkspace() {
+  renderDraftsRail();
+  renderDraftColumns();
+}
+
+function renderDraftsRail() {
+  draftsListEl.innerHTML = "";
+
+  draftsHintEl.textContent =
+    openDrafts.length === 0
+      ? 'No drafts are waiting to be committed — "Auto-allocate whole school" creates one to review.'
+      : `${openDrafts.length} open draft${openDrafts.length === 1 ? "" : "s"} — tick up to ${MAX_COMPARED_DRAFTS} to compare them side by side, then publish one.`;
+
+  const atCap = comparedDraftIds.length >= MAX_COMPARED_DRAFTS;
+  openDrafts.forEach((draft) => {
+    const selected = comparedDraftIds.includes(draft.id);
+    const li = document.createElement("li");
+    li.className = "draft-card" + (selected ? " selected" : "");
+    li.dataset.draftId = draft.id;
+    li.innerHTML = `
+      <label class="draft-card-head">
+        <input type="checkbox" class="draft-compare-check" data-id="${draft.id}"
+          ${selected ? "checked" : ""} ${atCap && !selected ? "disabled" : ""}>
+        <span class="name draft-name">${draft.name}</span>
+      </label>
+      <p class="draft-meta">${draft.assignmentCount} pick${draft.assignmentCount === 1 ? "" : "s"} · ${formatDraftDate(draft.created_at)}</p>
+      <div class="draft-card-actions">
+        <button class="btn-small neutral draft-rename-btn" type="button" data-id="${draft.id}">Rename</button>
+        <button class="btn-small draft-discard-btn" type="button" data-id="${draft.id}">Discard</button>
+      </div>
+    `;
+    draftsListEl.appendChild(li);
+  });
+}
+
+function renderDraftColumns() {
+  draftsColumnsEl.innerHTML = "";
+
+  if (comparedDraftIds.length === 0) {
+    draftsColumnsEl.hidden = true;
+    draftsEmptyEl.hidden = false;
+    return;
+  }
+  draftsColumnsEl.hidden = false;
+  draftsEmptyEl.hidden = true;
+
+  // A pick counts as shared when every compared draft proposes the same
+  // tutor/course pairing; anything less gets flagged in that draft's column.
+  const pickCounts = new Map();
+  comparedDraftIds.forEach((id) => {
+    (draftDetails.get(id)?.assignments || []).forEach((a) => {
+      const key = `${a.tutor_id}:${a.course_id}`;
+      pickCounts.set(key, (pickCounts.get(key) || 0) + 1);
+    });
+  });
+
+  comparedDraftIds.forEach((id) => {
+    const column = document.createElement("section");
+    column.className = "draft-column";
+    column.dataset.draftId = id;
+
+    const details = draftDetails.get(id);
+    if (!details) {
+      column.innerHTML = `<p class="hint">Couldn't load this draft — close and reopen.</p>`;
+      draftsColumnsEl.appendChild(column);
+      return;
+    }
+
+    const listed = openDrafts.find((d) => d.id === id);
+    const name = listed?.name || details.draft?.name || "Draft";
+    const assignments = details.assignments || [];
+    const staged = stagedRemovals.get(id) || new Set();
+
+    const head = document.createElement("header");
+    head.className = "draft-column-head";
+    head.innerHTML = `
+      <h3>${name}</h3>
+      <span class="draft-meta">${assignments.length} pick${assignments.length === 1 ? "" : "s"}</span>
+    `;
+    column.appendChild(head);
+
+    if (assignments.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.textContent =
+        "Every pick has been removed — discard this draft or run auto-allocate again.";
+      column.appendChild(empty);
+    }
+
+    const byCourse = new Map();
+    assignments.forEach((a) => {
+      const key = a.course?.course_code || String(a.course_id);
+      if (!byCourse.has(key)) byCourse.set(key, []);
+      byCourse.get(key).push(a);
+    });
+
+    const list = document.createElement("ul");
+    list.className = "tutor-list draft-pick-list";
+    byCourse.forEach((group, courseKey) => {
+      const heading = document.createElement("li");
+      heading.className = "obvious-fill-course-head";
+      heading.textContent = `${courseKey} — ${group[0].course?.course_name || ""} (${group.length})`;
+      list.appendChild(heading);
+
+      group.forEach((assignment) => {
+        const pickCount =
+          pickCounts.get(`${assignment.tutor_id}:${assignment.course_id}`) || 0;
+        const shared = pickCount === comparedDraftIds.length;
+        const isStaged = staged.has(assignment.id);
+
+        const li = document.createElement("li");
+        const row = document.createElement("label");
+        row.className =
+          "tutor-row" +
+          (shared ? "" : " draft-diff") +
+          (isStaged ? " draft-staged" : "");
+        row.innerHTML = `
+          <input type="checkbox" class="draft-pick-check" data-draft-id="${id}" data-id="${assignment.id}" ${isStaged ? "" : "checked"}>
+          <span class="name-block">
+            <span class="name">${assignment.tutor?.name || "Unknown"}</span>
+            <span class="role">${assignment.explanation || ""}</span>
+          </span>
+          ${shared ? "" : `<span class="stamp draft-diff-badge">in ${pickCount} of ${comparedDraftIds.length}</span>`}
+        `;
+        li.appendChild(row);
+        list.appendChild(li);
+      });
+    });
+    if (assignments.length > 0) column.appendChild(list);
+
+    const stagingHint = document.createElement("p");
+    stagingHint.className = "hint draft-staging-hint";
+    stagingHint.hidden = staged.size === 0;
+    stagingHint.textContent = stagedRemovalText(staged.size);
+    column.appendChild(stagingHint);
+
+    const foot = document.createElement("div");
+    foot.className = "draft-column-foot";
+    foot.innerHTML = `
+      <button class="btn-small approve draft-save-btn" type="button" data-id="${id}" ${staged.size === 0 ? "disabled" : ""}>${staged.size === 0 ? "Save picks" : `Save picks (remove ${staged.size})`}</button>
+      <button class="btn-small-primary draft-publish-btn" type="button" data-id="${id}">Publish draft</button>
+    `;
+    column.appendChild(foot);
+
+    draftsColumnsEl.appendChild(column);
+  });
+}
+
+function stagedRemovalText(count) {
+  return `${count} pick${count === 1 ? "" : "s"} staged for removal — Save picks makes it stick.`;
+}
+
+// Re-renders just the staged-removal bits of one column after a checkbox
+// toggles, so the horizontal scroll position of three open columns (and
+// the focus on the checkbox just clicked) survives every toggle.
+function refreshColumnStaging(draftId) {
+  const column = draftsColumnsEl.querySelector(
+    `.draft-column[data-draft-id="${draftId}"]`,
+  );
+  if (!column) return;
+
+  const staged = stagedRemovals.get(draftId) || new Set();
+  const hint = column.querySelector(".draft-staging-hint");
+  if (hint) {
+    hint.hidden = staged.size === 0;
+    hint.textContent = stagedRemovalText(staged.size);
+  }
+
+  const saveBtn = column.querySelector(".draft-save-btn");
+  if (saveBtn) {
+    saveBtn.disabled = staged.size === 0;
+    saveBtn.textContent =
+      staged.size === 0 ? "Save picks" : `Save picks (remove ${staged.size})`;
+  }
+
+  const meta = column.querySelector(".draft-column-head .draft-meta");
+  const total = draftDetails.get(draftId)?.assignments?.length || 0;
+  if (meta) {
+    meta.textContent =
+      staged.size === 0
+        ? `${total} pick${total === 1 ? "" : "s"}`
+        : `${total - staged.size} of ${total} picks included`;
+  }
+}
+
+async function toggleDraftComparison(draftId, checked) {
+  if (checked) {
+    if (!comparedDraftIds.includes(draftId)) {
+      comparedDraftIds.push(draftId);
+      await loadComparedDrafts();
+    }
+  } else {
+    comparedDraftIds = comparedDraftIds.filter((id) => id !== draftId);
+  }
+  renderDraftsWorkspace();
+}
+
+function startRenameDraft(draftId) {
+  const card = draftsListEl.querySelector(
+    `.draft-card[data-draft-id="${draftId}"]`,
+  );
+  const listed = openDrafts.find((d) => d.id === draftId);
+  const nameSpan = card?.querySelector(".draft-name");
+  if (
+    !card ||
+    !listed ||
+    !nameSpan ||
+    card.querySelector("input[type='text']")
+  ) {
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "draft-rename-input";
+  input.value = listed.name;
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let finished = false;
+  async function finish(save) {
+    if (finished) return;
+    finished = true;
+
+    const newName = input.value.trim();
+    if (!save || !newName || newName === listed.name) {
+      renderDraftsRail();
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/allocation-drafts/${draftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        showToast(body.error || "Couldn't rename that draft.");
+        renderDraftsRail();
+        return;
+      }
+      listed.name = body.draft.name;
+      const details = draftDetails.get(draftId);
+      if (details) details.draft = body.draft;
+      renderDraftsWorkspace();
+    } catch (err) {
+      showToast("Network error — couldn't reach the server.");
+      renderDraftsRail();
+    }
+  }
+
+  // Enter saves; Escape (or clicking away) leaves the name as it was.
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      finish(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener("blur", () => finish(false));
+}
+
+async function discardDraft(draftId) {
+  const listed = openDrafts.find((d) => d.id === draftId);
+  if (!listed) return;
+  if (
+    !confirm(
+      `Discard draft "${listed.name}"? Nothing has been committed from it yet, so the board won't change.`,
+    )
+  ) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/allocation-drafts/${draftId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Couldn't discard that draft.");
+      return;
+    }
+    openDrafts = openDrafts.filter((d) => d.id !== draftId);
+    comparedDraftIds = comparedDraftIds.filter((id) => id !== draftId);
+    draftDetails.delete(draftId);
+    stagedRemovals.delete(draftId);
+    renderDraftsWorkspace();
+    showToast(`Draft "${listed.name}" discarded.`);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+}
+
+async function saveDraftEdits(draftId) {
+  const staged = stagedRemovals.get(draftId);
+  if (!staged || staged.size === 0) return;
+
+  const saveBtn = draftsColumnsEl.querySelector(
+    `.draft-save-btn[data-id="${draftId}"]`,
+  );
+  const restoreLabel = () => {
+    if (!saveBtn) return;
+    saveBtn.disabled = false;
+    saveBtn.textContent = `Save picks (remove ${staged.size})`;
+  };
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+  }
+
+  try {
+    const res = await fetch(
+      `/api/allocation-drafts/${draftId}/assignments/remove`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignmentIds: [...staged].map(String) }),
+      },
+    );
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't remove those picks from the draft.");
+      restoreLabel();
+      return;
+    }
+
+    draftDetails.set(draftId, body);
+    stagedRemovals.delete(draftId);
+    const listed = openDrafts.find((d) => d.id === draftId);
+    if (listed) listed.assignmentCount = body.assignments.length;
+    renderDraftsWorkspace();
+    showToast(
+      `${staged.size} pick${staged.size === 1 ? "" : "s"} removed from this draft.`,
+    );
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    restoreLabel();
+  }
+}
+
+async function publishDraft(draftId) {
+  const details = draftDetails.get(draftId);
+  const listed = openDrafts.find((d) => d.id === draftId);
+  const staged = stagedRemovals.get(draftId) || new Set();
+  const name = listed?.name || details?.draft?.name || "this draft";
+  const included = (details?.assignments || []).filter(
+    (a) => !staged.has(a.id),
+  ).length;
+
+  if (included === 0) {
+    showToast(
+      "This draft has no picks left to publish — discard it or run auto-allocate again.",
+    );
+    return;
+  }
+  if (
+    !confirm(
+      `Publish "${name}"? This commits its ${included} pick${included === 1 ? "" : "s"} for real — anything that has changed in the meantime is skipped, and History can restore it.`,
+    )
+  ) {
+    return;
+  }
+
+  const publishBtn = draftsColumnsEl.querySelector(
+    `.draft-publish-btn[data-id="${draftId}"]`,
+  );
+  if (publishBtn) {
+    publishBtn.disabled = true;
+    publishBtn.textContent = "Publishing…";
+  }
+
+  try {
+    const res = await fetch(`/api/allocation-drafts/${draftId}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organiserId: getSessionUserId(),
+        excludeAssignmentIds: [...staged].map(String),
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't publish that draft.");
+      if (publishBtn) {
+        publishBtn.disabled = false;
+        publishBtn.textContent = "Publish draft";
+      }
+      return;
+    }
+
+    const succeeded = body.results.filter((r) => r.success).length;
+    const failed = body.results.filter(
+      (r) => !r.success && r.reason !== "excluded",
+    ).length;
+    showToast(
+      failed === 0
+        ? `${succeeded} assignment${succeeded === 1 ? "" : "s"} published from "${name}".`
+        : `${succeeded} published, ${failed} couldn't be — something changed since this draft was proposed. See History for details.`,
+    );
+    closeDraftsModal();
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    if (publishBtn) {
+      publishBtn.disabled = false;
+      publishBtn.textContent = "Publish draft";
+    }
+  }
+}
+
+draftsListEl.addEventListener("change", (e) => {
+  const cb = e.target.closest(".draft-compare-check");
+  if (cb) toggleDraftComparison(Number(cb.dataset.id), cb.checked);
+});
+
+draftsListEl.addEventListener("click", (e) => {
+  const renameBtn = e.target.closest(".draft-rename-btn");
+  if (renameBtn) {
+    startRenameDraft(Number(renameBtn.dataset.id));
+    return;
+  }
+  const discardBtn = e.target.closest(".draft-discard-btn");
+  if (discardBtn) discardDraft(Number(discardBtn.dataset.id));
+});
+
+draftsColumnsEl.addEventListener("change", (e) => {
+  const cb = e.target.closest(".draft-pick-check");
+  if (!cb) return;
+  const draftId = Number(cb.dataset.draftId);
+  const assignmentId = Number(cb.dataset.id);
+  const staged = stagedRemovals.get(draftId) || new Set();
+  if (cb.checked) staged.delete(assignmentId);
+  else staged.add(assignmentId);
+  stagedRemovals.set(draftId, staged);
+  const row = cb.closest(".tutor-row");
+  if (row) row.classList.toggle("draft-staged", !cb.checked);
+  refreshColumnStaging(draftId);
+});
+
+draftsColumnsEl.addEventListener("click", (e) => {
+  const saveBtn = e.target.closest(".draft-save-btn");
+  if (saveBtn) {
+    saveDraftEdits(Number(saveBtn.dataset.id));
+    return;
+  }
+  const publishBtn = e.target.closest(".draft-publish-btn");
+  if (publishBtn) publishDraft(Number(publishBtn.dataset.id));
+});
+
+draftsBtn.addEventListener("click", openDraftsModal);
+document
+  .getElementById("draftsCloseBtn")
+  .addEventListener("click", closeDraftsModal);
+document
+  .getElementById("draftsCancelBtn")
+  .addEventListener("click", closeDraftsModal);
+draftsModal.addEventListener("click", (e) => {
+  if (e.target === draftsModal) closeDraftsModal();
+});
+
 // ---------- add / edit course modal ----------
 
 const addCourseBtn = document.getElementById("addCourseBtn");

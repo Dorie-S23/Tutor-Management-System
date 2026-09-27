@@ -136,7 +136,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 #### `allocation_drafts`
 
 - A saved draft of a proposed tutor allocation, which can be edited and later published.
-- Not yet read or written by the application API — managed directly in Supabase.
+- Read and written by the application API (`server/routes/allocationDrafts.js`): created by auto-allocate, renamed or pruned while open, then published or discarded.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
@@ -149,7 +149,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 #### `allocation_draft_assignments`
 
 - One tutor–course pairing inside a draft allocation.
-- Not yet read or written by the application API — managed directly in Supabase.
+- Read and written by the application API (`server/routes/allocationDrafts.js`): proposed by auto-allocate, removed when an organiser prunes an open draft, applied on publish.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)

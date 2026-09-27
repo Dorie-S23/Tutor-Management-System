@@ -824,3 +824,214 @@ describe("POST /api/allocation-drafts/:id/restore", () => {
     expect(tables.tutor_subject_preference[0].status).toBe("rejected");
   });
 });
+
+describe("PATCH /api/allocation-drafts/:id", () => {
+  test("requires a non-blank name", async () => {
+    tables.allocation_drafts = [{ id: 1, name: "Old name", status: "draft" }];
+
+    const missing = await request(buildApp())
+      .patch("/api/allocation-drafts/1")
+      .send({});
+    const blank = await request(buildApp())
+      .patch("/api/allocation-drafts/1")
+      .send({ name: "   " });
+
+    expect(missing.status).toBe(400);
+    expect(blank.status).toBe(400);
+    expect(tables.allocation_drafts[0].name).toBe("Old name");
+  });
+
+  test("404s for a draft that doesn't exist", async () => {
+    const res = await request(buildApp())
+      .patch("/api/allocation-drafts/999")
+      .send({ name: "New name" });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("refuses to rename a draft that's already been published", async () => {
+    tables.allocation_drafts = [
+      { id: 1, name: "Published one", status: "published" },
+    ];
+
+    const res = await request(buildApp())
+      .patch("/api/allocation-drafts/1")
+      .send({ name: "New name" });
+
+    expect(res.status).toBe(409);
+    expect(tables.allocation_drafts[0].name).toBe("Published one");
+  });
+
+  test("renames an open draft, trimming the name", async () => {
+    tables.allocation_drafts = [{ id: 1, name: "Old name", status: "draft" }];
+
+    const res = await request(buildApp())
+      .patch("/api/allocation-drafts/1")
+      .send({ name: "  Coverage plan A  " });
+
+    expect(res.status).toBe(200);
+    expect(res.body.draft.name).toBe("Coverage plan A");
+    expect(tables.allocation_drafts[0].name).toBe("Coverage plan A");
+  });
+});
+
+describe("POST /api/allocation-drafts/:id/assignments/remove", () => {
+  function seedDraftWithPicks() {
+    tables.allocation_drafts = [
+      { id: 1, name: "Plan A", created_by: "organiser-1", status: "draft" },
+    ];
+    tables.courses = [
+      { id: 5, course_code: "C5", course_name: "Five" },
+      { id: 6, course_code: "C6", course_name: "Six" },
+    ];
+    tables.tutors = [
+      { id: "t1", name: "Ann", email: "ann@example.com" },
+      { id: "t2", name: "Ben", email: "ben@example.com" },
+    ];
+    tables.allocation_draft_assignments = [
+      { id: 1, draft_id: 1, tutor_id: "t1", course_id: 5, explanation: "a" },
+      { id: 2, draft_id: 1, tutor_id: "t2", course_id: 5, explanation: "b" },
+      { id: 3, draft_id: 1, tutor_id: "t1", course_id: 6, explanation: "c" },
+    ];
+  }
+
+  test("requires a non-empty assignmentIds array", async () => {
+    const missing = await request(buildApp())
+      .post("/api/allocation-drafts/1/assignments/remove")
+      .send({});
+    const empty = await request(buildApp())
+      .post("/api/allocation-drafts/1/assignments/remove")
+      .send({ assignmentIds: [] });
+
+    expect(missing.status).toBe(400);
+    expect(empty.status).toBe(400);
+  });
+
+  test("400s when the ids aren't numbers", async () => {
+    seedDraftWithPicks();
+
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/1/assignments/remove")
+      .send({ assignmentIds: ["not-a-number"] });
+
+    expect(res.status).toBe(400);
+    expect(tables.allocation_draft_assignments).toHaveLength(3);
+  });
+
+  test("404s for a draft that doesn't exist", async () => {
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/999/assignments/remove")
+      .send({ assignmentIds: [1] });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("refuses to edit a draft that's already been published", async () => {
+    seedDraftWithPicks();
+    tables.allocation_drafts[0].status = "published";
+
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/1/assignments/remove")
+      .send({ assignmentIds: [1] });
+
+    expect(res.status).toBe(409);
+    expect(tables.allocation_draft_assignments).toHaveLength(3);
+  });
+
+  test("404s when an id belongs to another draft, removing nothing", async () => {
+    seedDraftWithPicks();
+    tables.allocation_drafts.push({
+      id: 2,
+      name: "Plan B",
+      created_by: "organiser-1",
+      status: "draft",
+    });
+    tables.allocation_draft_assignments.push({
+      id: 4,
+      draft_id: 2,
+      tutor_id: "t2",
+      course_id: 6,
+      explanation: "d",
+    });
+
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/1/assignments/remove")
+      .send({ assignmentIds: [1, 4] });
+
+    expect(res.status).toBe(404);
+    expect(tables.allocation_draft_assignments).toHaveLength(4);
+  });
+
+  test("404s when an id no longer exists, removing nothing", async () => {
+    seedDraftWithPicks();
+
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/1/assignments/remove")
+      .send({ assignmentIds: [1, 999] });
+
+    expect(res.status).toBe(404);
+    expect(tables.allocation_draft_assignments).toHaveLength(3);
+  });
+
+  test("removes the given picks and returns the rest, enriched", async () => {
+    seedDraftWithPicks();
+
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/1/assignments/remove")
+      .send({ assignmentIds: ["1", "3"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.draft.id).toBe(1);
+    expect(res.body.assignments.map((a) => a.id)).toEqual([2]);
+    expect(res.body.assignments[0].tutor.name).toBe("Ben");
+    expect(res.body.assignments[0].course.course_code).toBe("C5");
+    expect(tables.allocation_draft_assignments.map((a) => a.id)).toEqual([2]);
+  });
+});
+
+describe("DELETE /api/allocation-drafts/:id", () => {
+  test("400s for a non-numeric id", async () => {
+    const res = await request(buildApp()).delete("/api/allocation-drafts/abc");
+
+    expect(res.status).toBe(400);
+  });
+
+  test("404s for a draft that doesn't exist", async () => {
+    const res = await request(buildApp()).delete("/api/allocation-drafts/999");
+
+    expect(res.status).toBe(404);
+  });
+
+  test("refuses to discard a draft that's already been published", async () => {
+    tables.allocation_drafts = [
+      { id: 1, name: "Committed", status: "published" },
+    ];
+    tables.allocation_draft_assignments = [
+      { id: 1, draft_id: 1, tutor_id: "t1", course_id: 5 },
+    ];
+
+    const res = await request(buildApp()).delete("/api/allocation-drafts/1");
+
+    expect(res.status).toBe(409);
+    expect(tables.allocation_drafts).toHaveLength(1);
+    expect(tables.allocation_draft_assignments).toHaveLength(1);
+  });
+
+  test("discards the draft along with its picks, leaving others alone", async () => {
+    tables.allocation_drafts = [
+      { id: 1, name: "Abandoned", status: "draft" },
+      { id: 2, name: "Keep me", status: "draft" },
+    ];
+    tables.allocation_draft_assignments = [
+      { id: 1, draft_id: 1, tutor_id: "t1", course_id: 5 },
+      { id: 2, draft_id: 1, tutor_id: "t2", course_id: 6 },
+      { id: 3, draft_id: 2, tutor_id: "t3", course_id: 7 },
+    ];
+
+    const res = await request(buildApp()).delete("/api/allocation-drafts/1");
+
+    expect(res.status).toBe(204);
+    expect(tables.allocation_drafts.map((d) => d.id)).toEqual([2]);
+    expect(tables.allocation_draft_assignments.map((a) => a.id)).toEqual([3]);
+  });
+});
