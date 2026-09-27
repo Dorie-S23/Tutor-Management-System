@@ -31,6 +31,7 @@ beforeEach(() => {
     academic_level_rates: [],
     notifications: [],
     audit_log: [],
+    tutor_busy_times: [],
   };
   mockSupabase = fakeSupabase(tables);
 });
@@ -996,5 +997,203 @@ describe("POST /api/tutor-applications/bulk-approve — audit log", () => {
       .send({ applicationIds: ["app-1"] });
 
     expect(tables.audit_log).toHaveLength(0);
+  });
+});
+
+// Multi-objective balancing: the ranked GET blends the competing ranking
+// objectives (mark, availability, timetable fit, seniority, spare hours)
+// with a ?preset= of weights. fakeSupabase doesn't join, so each application
+// row carries its nested tutors/courses objects directly.
+describe("GET /api/tutor-applications (ranked)", () => {
+  // Ada: strongest on paper, but already carries 8 of her 10 weekly hours.
+  // Ben: a slightly weaker mark, fully fresh.
+  // Cara: weaker than Ada on every objective (mark, availability, timetable
+  // fit, level, headroom) — Pareto-dominated by both.
+  function seedApplicants() {
+    tables.courses = [
+      {
+        id: 1,
+        course_code: "COMS1000",
+        course_name: "Intro to Programming",
+        min_mark: 60,
+        hours_per_week: 3,
+        tutors_needed: 2,
+        no_of_tutors_assigned: 0,
+        Day_of_tut: "Monday",
+        tutor_start_time: "10:00",
+        tutor_end_time: "11:00",
+      },
+    ];
+    tables.tutor_busy_times = [
+      // Cara's Monday overlap with the course's tutorial slot.
+      {
+        tutor_id: "t3",
+        title: "Lab duty",
+        day_of_week: "Monday",
+        start_time: "10:00",
+        end_time: "11:00",
+      },
+    ];
+    // The route reads courseId from the query string ("1"), and
+    // fakeSupabase's eq is strict, so the seeded course_id is a string too.
+    tables.tutor_subject_preference = [
+      {
+        id: "a1",
+        course_id: "1",
+        tutor_id: "t1",
+        tutor_mark: 90,
+        Availability: true,
+        Tutor_name: "Ada",
+        status: "pending",
+        tutors: { academic_level: "third_year", weekly_hour_cap: 10 },
+        courses: { course_code: "COMS1000", hours_per_week: 3 },
+      },
+      {
+        id: "a2",
+        course_id: "1",
+        tutor_id: "t2",
+        tutor_mark: 75,
+        Availability: true,
+        Tutor_name: "Ben",
+        status: "pending",
+        tutors: { academic_level: "third_year", weekly_hour_cap: 10 },
+        courses: { course_code: "COMS1000", hours_per_week: 3 },
+      },
+      {
+        id: "a3",
+        course_id: "1",
+        tutor_id: "t3",
+        tutor_mark: 70,
+        Availability: false,
+        Tutor_name: "Cara",
+        status: "pending",
+        tutors: { academic_level: "second_year", weekly_hour_cap: 10 },
+        courses: { course_code: "COMS1000", hours_per_week: 3 },
+      },
+      // Ada's existing approved course elsewhere: 8 hrs/week of load.
+      {
+        id: "a1-elsewhere",
+        course_id: "99",
+        tutor_id: "t1",
+        tutor_mark: 85,
+        Availability: true,
+        Tutor_name: "Ada",
+        status: "approved",
+        courses: {
+          course_code: "COMS2000",
+          hours_per_week: 8,
+          Day_of_tut: null,
+        },
+      },
+      // Cara's existing approved course elsewhere: 9 hrs/week of load.
+      {
+        id: "a3-elsewhere",
+        course_id: "98",
+        tutor_id: "t3",
+        tutor_mark: 80,
+        Availability: true,
+        Tutor_name: "Cara",
+        status: "approved",
+        courses: {
+          course_code: "COMS3000",
+          hours_per_week: 9,
+          Day_of_tut: null,
+        },
+      },
+    ];
+  }
+
+  test("defaults to merit-first ordering, matching the historical ranking", async () => {
+    seedApplicants();
+
+    const res = await request(buildApp()).get(
+      "/api/tutor-applications?courseId=1",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((a) => a.Tutor_name)).toEqual(["Ada", "Ben", "Cara"]);
+
+    const ada = res.body[0].ranking;
+    expect(ada.preset).toBe("merit");
+    expect(ada.mark).toBe(90);
+    expect(ada.currentAssignedHours).toBe(8);
+    expect(ada.projectedHours).toBe(11);
+    expect(ada.objectives).toEqual({
+      merit: 0.9,
+      availability: 1,
+      clashFree: 1,
+      seniority: 0.5,
+      headroom: 0.2,
+    });
+    expect(ada.rank).toBe(1);
+    expect(ada.meritRank).toBe(1);
+    expect(ada.paretoDominated).toBe(false);
+    expect(ada.tradeoff).toBeNull();
+
+    // Pareto domination is weight-independent: Cara loses to Ada on every
+    // objective (weaker mark, unavailable, timetable clash, lower level,
+    // less headroom), so she's flagged under the default preset too.
+    expect(res.body[2].ranking.paretoDominated).toBe(true);
+  });
+
+  test("preset=fairness re-orders toward spare capacity and explains the trade-off", async () => {
+    seedApplicants();
+
+    const res = await request(buildApp()).get(
+      "/api/tutor-applications?courseId=1&preset=fairness",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((a) => a.Tutor_name)).toEqual(["Ben", "Ada", "Cara"]);
+
+    const ben = res.body[0].ranking;
+    expect(ben.preset).toBe("fairness");
+    expect(ben.rank).toBe(1);
+    expect(ben.meritRank).toBe(2);
+    expect(ben.tradeoff).toBe(
+      "Merit-first would rank them #2; this balance ranks them #1.",
+    );
+
+    const ada = res.body[1].ranking;
+    expect(ada.rank).toBe(2);
+    expect(ada.meritRank).toBe(1);
+    expect(ada.tradeoff).toBe(
+      "Merit-first would rank them #1; this balance ranks them #2.",
+    );
+  });
+
+  test("rejects an unknown preset with the valid names", async () => {
+    seedApplicants();
+
+    const res = await request(buildApp()).get(
+      "/api/tutor-applications?courseId=1&preset=strongest",
+    );
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(
+      'Unknown preset "strongest". Valid presets: merit, balanced, fairness.',
+    );
+  });
+
+  test("leaves a tutor's own applications untouched, even with a bogus preset", async () => {
+    tables.tutor_subject_preference = [
+      {
+        id: "a1",
+        course_id: 1,
+        tutor_id: "t1",
+        tutor_mark: 90,
+        Availability: true,
+        Tutor_name: "Ada",
+        status: "pending",
+      },
+    ];
+
+    const res = await request(buildApp()).get(
+      "/api/tutor-applications?tutorId=t1&preset=nonsense",
+    );
+
+    // Self-views never order anyone, so the preset is simply ignored.
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([tables.tutor_subject_preference[0]]);
   });
 });

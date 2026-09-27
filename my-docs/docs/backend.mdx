@@ -60,10 +60,14 @@ server/
     ├── tutors.js             # /api/tutors
     ├── hourEntries.js        # /api/hour-entries — a student's logged hours
     ├── courseVolunteers.js   # /api/course-volunteers — mark-gated volunteer applications
-    └── tutorApplications.js  # /api/tutor-applications — year-gated tutor applications
+    └── tutorApplications.js  # /api/tutor-applications — year-gated tutor applications + multi-objective ranked listing
 models/
 └── User.js                  # plain User data class
 ```
+
+:::info Shared code across the API/frontend boundary
+`public/js/allocation-objectives.js` is written once and loaded twice: the browser pulls it in as a plain `<script>` (exposing the `AllocationObjectives` global the organiser board uses for its preset picker), while `server/routes/tutorApplications.js` `require()`s the same file for the ranked applicants endpoint. It's UMD-wrapped and dependency-free so both environments can share the objective definitions, presets and scoring — one source of truth for how applicants are balanced, not two copies that drift.
+:::
 
 :::info Two Supabase clients
 `app.js` builds its own Supabase client and attaches it to every request as `req.supabase` (used by `routes/auth.js`). Separately, `server/supabaseClient.js` exports its own instance, imported directly by everything under `server/routes/`. Both read the same env vars, so they behave identically — it's two instantiations rather than one shared one.
@@ -82,6 +86,16 @@ models/
   - `500` — the database/Supabase call itself failed
 - No API versioning and no OpenAPI/Swagger spec — routes are small and read top-to-bottom instead.
 - Validation (required fields, numeric ranges, business rules like "mark must be ≥ course minimum") happens in the route handler itself, before any database call — never trust the client to have already checked.
+
+### Multi-objective applicant ranking
+
+`GET /api/tutor-applications?courseId=...` ranks a course's applicants by blending five objectives that pull against each other — **merit** (mark), **availability** (free at the tutorial time), **timetable fit** (no clash), **seniority** (academic level) and **headroom** (spare weekly-hour capacity). The strongest applicant is often the most loaded one, so the blend is controllable:
+
+- `?preset=merit` (default) — the historical weighting, where mark dominates. Ordering matches the ranking the system has always used.
+- `?preset=balanced` — every objective weighs equally.
+- `?preset=fairness` — spare capacity dominates, so work spreads across tutors instead of stacking on the strongest.
+
+An unknown preset gets a `400` listing the valid names. Each applicant's `ranking` object now carries, alongside the familiar facts, the blended `score` (0–100 under the active preset), the normalised `objectives`, `rank` and `meritRank` (position under this balance vs merit-first), `paretoDominated` (another applicant is at least as good on every objective and strictly better on one — true under any weighting), and a `tradeoff` note whenever the two orderings disagree.
 
 ## Development Guide
 
