@@ -122,6 +122,57 @@ describe("my-sessions.js", () => {
     expect(pastText).not.toContain("SOON1000");
   });
 
+  test("includes an approved whole-course application's recurring slot in Upcoming", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "c1",
+          status: "approved",
+          mark: 80,
+          courses: {
+            course_code: "RECUR1000",
+            course_name: "Recurring",
+            Day_of_tut: "Thursday",
+            tutor_start_time: "14:15:00",
+            tutor_end_time: "17:00:00",
+            venues: "FNB1",
+          },
+        },
+        // Still pending — its slot isn't a commitment yet, so it must
+        // not appear on this page any more than on the dashboard's card.
+        {
+          id: "c2",
+          status: "pending",
+          mark: 75,
+          courses: {
+            course_code: "PENDING2000",
+            course_name: "Pending course",
+            Day_of_lab: "Monday",
+            lab_start_time: "10:00:00",
+            lab_end_time: "11:00:00",
+            lab_venues: "MSL001",
+          },
+        },
+      ],
+    });
+    await wait();
+
+    const upcomingText =
+      window.document.getElementById("upcomingList").textContent;
+
+    expect(upcomingText).toContain("RECUR1000");
+    expect(upcomingText).toContain("Tutorial:");
+    expect(upcomingText).toContain("FNB1");
+    expect(upcomingText).toContain("repeats weekly");
+    expect(upcomingText).not.toContain("PENDING2000");
+
+    // No per-week attendance history exists for recurring slots, so Past
+    // stays one-off claimed sessions only.
+    expect(window.document.getElementById("pastList").textContent).toContain(
+      "No past sessions",
+    );
+  });
+
   test("shows empty-state copy for both lists when there's nothing", async () => {
     const { window } = loadPage({ applications: [] });
     await wait();
