@@ -894,7 +894,7 @@ async function renderApplicants(course) {
         );
       }
       actionsEl.appendChild(
-        makeApplicantActionBtn("Reject", "", () =>
+        makeApplicantActionBtn("Reject", "reject", () =>
           openReasonModal(
             `Reject ${name}'s application?`,
             "Reject with this reason",
@@ -1391,7 +1391,7 @@ async function renderVolunteers(course) {
         ),
       );
       actionsEl.appendChild(
-        makeApplicantActionBtn("Reject", "", () =>
+        makeApplicantActionBtn("Reject", "reject", () =>
           openReasonModal(
             `Reject ${name}'s volunteer request?`,
             "Reject with this reason",

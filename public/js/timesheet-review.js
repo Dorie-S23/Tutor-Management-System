@@ -38,6 +38,16 @@ function toDisplayDate(dateStr) {
   return `${d}/${m}/${y}`;
 }
 
+// "September 2026" — the calendar month a submission covers (week_start
+// stores the month's first day).
+function formatMonthLabel(monthStart) {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function makeActionBtn(label, variant, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
@@ -132,7 +142,7 @@ function renderSubmission(sub) {
       <span class="role">${user?.email || ""}</span>
     </span>
     <span class="stamp-row">
-      <span class="stamp">Week of ${toDisplayDate(sub.week_start)}</span>
+      <span class="stamp">${formatMonthLabel(sub.week_start)}</span>
       <span class="stamp">${sub.total_hours} hrs</span>
     </span>
     <span class="status-pill ${status}">${status}</span>
@@ -167,7 +177,7 @@ function renderSubmission(sub) {
       ),
     );
     actionsEl.appendChild(
-      makeActionBtn("Reject", "", () =>
+      makeActionBtn("Reject", "reject", () =>
         openReasonModal({
           title: "Reject timesheet",
           fieldLabel: "Reason for rejection",

@@ -5,9 +5,8 @@ import {
   getProfile,
   saveProfile,
   todayStr,
-  getWeekStart,
-  getWeekTotal,
-  addDays,
+  getMonthStart,
+  getMonthTotal,
   requireRole,
 } from "./storage.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
@@ -40,9 +39,9 @@ const headOfSchoolField = document.getElementById("headOfSchool");
 const rangeFromField = document.getElementById("rangeFrom");
 const rangeToField = document.getElementById("rangeTo");
 const printBtn = document.getElementById("printBtn");
-const submitWeekStartField = document.getElementById("submitWeekStart");
+const submitMonthField = document.getElementById("submitMonth");
 const submitTimesheetBtn = document.getElementById("submitTimesheetBtn");
-const submitWeekHint = document.getElementById("submitWeekHint");
+const submitMonthHint = document.getElementById("submitMonthHint");
 const timesheetHint = document.getElementById("timesheet-hint");
 const claimWrapper = document.getElementById("claimWrapper");
 const claimRowsEl = document.getElementById("claimRows");
@@ -56,8 +55,9 @@ const disputeModalContext = document.getElementById("disputeModalContext");
 const disputeMessageInput = document.getElementById("disputeMessageInput");
 const disputeSubmitBtn = document.getElementById("disputeSubmitBtn");
 
-// This tutor's most recent dispute per submitted week, keyed by weekStart —
-// only need the latest one to know whether "Dispute" or a status badge shows.
+// This tutor's most recent dispute per submitted month, keyed by weekStart
+// (the stored period key, "YYYY-MM-01") — only need the latest one to know
+// whether "Dispute" or a status badge shows.
 let latestDisputeByWeek = new Map();
 let pendingDispute = null; // { weekStart } for whichever row opened the modal
 
@@ -77,18 +77,13 @@ function toDisplayDate(dateStr) {
   return `${d}/${m}/${y}`;
 }
 
-// "28 Sep – 4 Oct 2026" within one month, "29 Sep – 5 Oct 2026" across two.
-function formatWeekRange(weekStart) {
-  const start = new Date(`${weekStart}T00:00:00`);
-  const end = new Date(`${addDays(weekStart, 6)}T00:00:00`);
-
-  const startMonth = start.toLocaleDateString(undefined, { month: "short" });
-  const endMonth = end.toLocaleDateString(undefined, { month: "short" });
-  const year = end.getFullYear();
-
-  return startMonth === endMonth
-    ? `${start.getDate()}–${end.getDate()} ${endMonth} ${year}`
-    : `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth} ${year}`;
+// "September 2026" — the calendar month one submission covers.
+function formatMonthLabel(monthStart) {
+  const date = new Date(`${monthStart}T00:00:00`);
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function formatDuration(hours) {
@@ -220,7 +215,7 @@ async function loadDisputes(userId) {
     const disputes = await res.json();
     if (!res.ok) throw new Error(disputes.error);
 
-    // The API orders newest-first, so the first one seen per week is the latest.
+    // The API orders newest-first, so the first one seen per month is the latest.
     latestDisputeByWeek = new Map();
     disputes.forEach((d) => {
       if (!latestDisputeByWeek.has(d.timesheet_week_start)) {
@@ -277,7 +272,7 @@ async function loadSubmissions() {
     row.dataset.weekStart = sub.week_start;
     row.innerHTML = `
       <div>
-        <p class="ts-row__week">${formatWeekRange(sub.week_start)}</p>
+        <p class="ts-row__week">${formatMonthLabel(sub.week_start)}</p>
         ${note ? `<p class="ts-row__dispute">${note}</p>` : ""}
       </div>
       <span class="status-pill ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>
@@ -291,26 +286,27 @@ async function loadSubmissions() {
   });
 }
 
-async function updateSubmitWeekHint() {
-  const weekStart = submitWeekStartField.value;
-  if (!weekStart) {
-    submitWeekHint.textContent = "";
+async function updateSubmitMonthHint() {
+  const monthValue = submitMonthField.value; // "YYYY-MM"
+  if (!monthValue) {
+    submitMonthHint.textContent = "";
     return;
   }
-  const total = await getWeekTotal(weekStart);
-  submitWeekHint.textContent = `${total} hrs logged for the week of ${toDisplayDate(weekStart)}.`;
+  const monthStart = getMonthStart(monthValue);
+  const total = await getMonthTotal(monthStart);
+  submitMonthHint.textContent = `${total} hrs logged for ${formatMonthLabel(monthStart)}.`;
 }
 
-submitWeekStartField.addEventListener("change", () => {
-  // Snap whatever date is picked to that week's Monday.
-  submitWeekStartField.value = getWeekStart(submitWeekStartField.value);
-  updateSubmitWeekHint();
-});
+submitMonthField.addEventListener("change", updateSubmitMonthHint);
 
 submitTimesheetBtn.addEventListener("click", async () => {
   const user = getCurrentUser();
   if (!user) {
     showToast("You need to be signed in to submit a timesheet.", "danger");
+    return;
+  }
+  if (!submitMonthField.value) {
+    showToast("Pick a month to submit.", "danger");
     return;
   }
 
@@ -321,7 +317,8 @@ submitTimesheetBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tutorId: user.id,
-        weekStart: submitWeekStartField.value,
+        // The picker gives "YYYY-MM"; the server wants a date in the month.
+        weekStart: getMonthStart(submitMonthField.value),
       }),
     });
     const body = await res.json();
@@ -342,7 +339,7 @@ function openDisputeModal(weekStart) {
   pendingDispute = { weekStart };
   disputeForm.reset();
   disputeFormError.hidden = true;
-  disputeModalContext.textContent = `Raising a dispute about the week of ${toDisplayDate(weekStart)}.`;
+  disputeModalContext.textContent = `Raising a dispute about ${formatMonthLabel(weekStart)}.`;
   disputeModal.showModal();
   disputeMessageInput.focus();
 }
@@ -413,16 +410,17 @@ rangeToField.addEventListener("change", safeRenderClaim);
 
 // The head's "New timesheet" button points at the submit tool below.
 document.getElementById("new-timesheet-btn").addEventListener("click", () => {
-  submitWeekStartField.focus({ preventScroll: true });
-  submitWeekStartField.scrollIntoView({ behavior: "smooth", block: "center" });
+  submitMonthField.focus({ preventScroll: true });
+  submitMonthField.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
 const { from, to } = defaultRange();
 rangeFromField.value = from;
 rangeToField.value = to;
 
-submitWeekStartField.value = getWeekStart(todayStr());
-updateSubmitWeekHint();
+// Pre-select the current calendar month.
+submitMonthField.value = todayStr().slice(0, 7);
+updateSubmitMonthHint();
 
 loadProfileIntoForm();
 safeRenderClaim();
@@ -431,7 +429,7 @@ safeRenderClaim();
   await loadSubmissions();
 
   // Arriving from a "timesheet reviewed" or "timesheet due" notification —
-  // scroll to and flash the week it was about.
+  // scroll to and flash the month it was about.
   const highlightWeek = consumeQueryParam("highlightWeek");
   if (highlightWeek) {
     scrollAndHighlight(

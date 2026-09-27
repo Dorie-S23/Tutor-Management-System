@@ -12,6 +12,12 @@
    `steps` is an array of { selector, title, body, placement }.
    Each tour is only auto-shown once per (tourId, userId) pair,
    tracked in localStorage. Pass `force: true` to replay it.
+
+   While a step is on screen the page behind it is locked down: a
+   full-viewport click shield, a capture-phase click guard, and
+   `inert` on the rest of the page stop pointer and keyboard input
+   from reaching (or triggering) real controls mid-tour, so the tour
+   can only be advanced from its own controls or left via "Skip tour".
    ============================================================ */
 (function () {
   function tourKey(tourId, userId) {
@@ -87,14 +93,55 @@
     }
   }
 
+  // Everything except the tour's own elements is switched off while a
+  // step shows. The click shield already eats pointer input; `inert`
+  // stops keyboard focus from reaching (and Enter/Space from
+  // activating) page controls behind the overlay too.
+  const TOUR_UI_CLASSES = [
+    "onboarding-backdrop",
+    "onboarding-shield",
+    "onboarding-ring",
+    "onboarding-tooltip",
+  ];
+
+  function setPageInert(on) {
+    for (const el of document.body.children) {
+      if (TOUR_UI_CLASSES.some((cls) => el.classList.contains(cls))) continue;
+      if (on) {
+        // Don't stomp on inert that was already there for another reason.
+        if (!el.hasAttribute("inert")) {
+          el.setAttribute("inert", "");
+          el.setAttribute("data-onboarding-inert", "");
+        }
+      } else if (el.hasAttribute("data-onboarding-inert")) {
+        el.removeAttribute("inert");
+        el.removeAttribute("data-onboarding-inert");
+      }
+    }
+  }
+
+  // Capture-phase backstop for the shield: any click that would reach a
+  // real control (or a link that would navigate away) is swallowed, so
+  // the tour can't fire actual actions or end itself from under the user.
+  // Clicks inside the tooltip — Next, Back, Skip — pass through.
+  function onGuardClick(e) {
+    if (!activeTour) return;
+    const tooltip = document.querySelector(".onboarding-tooltip");
+    if (tooltip && tooltip.contains(e.target)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+
   function teardown() {
     document
       .querySelectorAll(
-        ".onboarding-backdrop, .onboarding-ring, .onboarding-tooltip",
+        ".onboarding-backdrop, .onboarding-shield, .onboarding-ring, .onboarding-tooltip",
       )
       .forEach((el) => el.remove());
     window.removeEventListener("resize", renderStep);
     document.removeEventListener("keydown", onKeydown);
+    document.removeEventListener("click", onGuardClick, true);
+    setPageInert(false);
     setScrollLock(false);
   }
 
@@ -206,6 +253,21 @@
     });
     document.body.appendChild(backdrop);
 
+    // Transparent full-viewport layer above the page but below the
+    // tooltip: pointer input aimed at the spotlit control lands here and
+    // goes nowhere, so the tour can't be derailed by a click on the very
+    // button it is highlighting.
+    const shield = document.createElement("div");
+    shield.className = "onboarding-shield";
+    shield.setAttribute("aria-hidden", "true");
+    Object.assign(shield.style, {
+      position: "fixed",
+      inset: "0",
+      zIndex: "1001",
+      cursor: "default",
+    });
+    document.body.appendChild(shield);
+
     const ring = document.createElement("div");
     ring.className = "onboarding-ring";
     Object.assign(ring.style, {
@@ -294,6 +356,8 @@
 
     window.addEventListener("resize", renderStep, { once: true });
     document.addEventListener("keydown", onKeydown, { once: true });
+    document.addEventListener("click", onGuardClick, true);
+    setPageInert(true);
 
     nextBtn.focus();
   }

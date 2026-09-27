@@ -39,7 +39,7 @@
         <a href="StudentView.html">Dashboard</a>
         <a href="volunteer-log-hours.html" aria-current="page">Log Hours</a>
         <a href="student_calender.html">Calendar</a>
-        <a href="volunteer-timesheets.html">Timesheets</a>
+        <a href="volunteer-timesheets.html">Completed sessions</a>
       </nav>
 
       <div class="navbar-right">
@@ -112,9 +112,9 @@
         <div>
           <h1>Log attendance</h1>
           <p class="page-sub">
-            Choose an assigned course and one of its organiser-scheduled
-            sessions. Your attendance will be sent to the organiser for
-            verification.
+            Sessions you're covering because the tutor can't attend. Pick one
+            and log it while it's running &mdash; logging closes 10 minutes
+            after the session ends.
           </p>
         </div>
       </div>
@@ -123,7 +123,7 @@
         <div class="log-main">
           <section class="log-step" aria-labelledby="courses-step-label">
             <p class="step-label" id="courses-step-label">
-              1. Assigned courses
+              1. Modules you cover
             </p>
             <div class="chip-row" id="courseChips">
               <!-- rendered by volunteer-log-hours.js -->
@@ -137,7 +137,7 @@
             hidden
           >
             <p class="step-label" id="session-step-label">
-              2. Available scheduled session
+              2. Sessions you're covering
             </p>
             <div class="chip-row" id="sessionChips">
               <!-- rendered by volunteer-log-hours.js -->
@@ -151,12 +151,14 @@
             hidden
           >
             <p class="step-label" id="attendance-step-label">
-              3. Actual attendance
+              3. Your attendance
             </p>
 
             <div class="scheduled-box">
               <div>
-                <p class="scheduled-label">Scheduled by organiser</p>
+                <p class="scheduled-label" id="scheduledLabel">
+                  Covering for the tutor
+                </p>
                 <p class="scheduled-when" id="scheduledWhen"></p>
               </div>
               <div class="scheduled-venue-col">
@@ -169,11 +171,11 @@
               <div class="form-grid">
                 <div class="form-field">
                   <label for="startTime">Starting time</label>
-                  <input type="time" id="startTime" required />
+                  <input type="time" id="startTime" required readonly />
                 </div>
                 <div class="form-field">
                   <label for="endTime">Ending time</label>
-                  <input type="time" id="endTime" required />
+                  <input type="time" id="endTime" required readonly />
                 </div>
                 <div class="form-field full-width">
                   <label for="notes">Session notes</label>

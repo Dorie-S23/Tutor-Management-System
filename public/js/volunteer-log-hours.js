@@ -1,12 +1,17 @@
-// Volunteer "Log attendance": pick an assigned module (one you've been
-// approved to volunteer for), pick one of its upcoming organiser-scheduled
-// sessions, then submit what actually happened (starting/ending time +
-// notes). Submissions land in the same hour_entries store the tutor Log
-// Hours page uses, tagged "Peer support" so the volunteer timesheet reads
-// them back by week.
+// Volunteer "Log attendance": only the sessions you've been assigned to
+// cover — a tutor can't attend, so you take their tutorial or lab. Pick one
+// of those sessions and log it while it's running, up to 10 minutes after
+// it ends (the same window the server enforces). Submissions land in the
+// same hour_entries store the tutor Log Hours page uses, tagged "Peer
+// support" so the completed sessions page reads them back by month.
 
 import { addEntry, findDuplicateEntry, requireRole } from "./storage.js";
 import { highlightActiveTab } from "./nav.js";
+import {
+  windowStatus,
+  windowNote,
+  windowBlockMessage,
+} from "./sessionTiming.js";
 
 const currentUser = requireRole("volunteer");
 if (!currentUser) {
@@ -14,18 +19,6 @@ if (!currentUser) {
 }
 
 highlightActiveTab();
-
-// Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching
-// JS Date.getDay().
-const DAY_NAMES = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
 
 const CHIP_ACCENTS = [
   "chip-icon--blue",
@@ -41,6 +34,7 @@ const courseChipsEl = document.getElementById("courseChips");
 const sessionStepEl = document.getElementById("sessionStep");
 const sessionChipsEl = document.getElementById("sessionChips");
 const attendanceCardEl = document.getElementById("attendanceCard");
+const scheduledLabelEl = document.getElementById("scheduledLabel");
 const scheduledWhenEl = document.getElementById("scheduledWhen");
 const scheduledVenueEl = document.getElementById("scheduledVenue");
 const form = document.getElementById("attendance-form");
@@ -51,6 +45,10 @@ const formError = document.getElementById("form-error");
 const durationValueEl = document.getElementById("duration-value");
 const submitBtn = document.getElementById("submit-btn");
 
+// Sessions this volunteer is covering, soonest first; filled by the init
+// IIFE once /api/session-excusals answers. Course chips are drawn from the
+// courses those sessions belong to.
+let mySessions = [];
 let selectedCourse = null;
 let selectedSession = null;
 
@@ -59,6 +57,13 @@ function toDateStr(date) {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+// "YYYY-MM-DD" strings (session dates) parse as local dates so the weekday
+// shown never shifts by a timezone.
+function parseDateStr(dateStr) {
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
 
 function formatDate(date) {
@@ -73,46 +78,20 @@ function sliceTime(time) {
   return (time || "").slice(0, 5);
 }
 
-// The next few occurrences of a course's weekly Tutorial/Lab, soonest
-// first — the "sessions the organiser scheduled" a volunteer can attend.
-function upcomingSessions(course, count = 4) {
-  const definitions = [
-    {
-      type: "Tutorial",
-      day: course.Day_of_tut,
-      start: course.tutor_start_time,
-      end: course.tutor_end_time,
-      venue: course.venues,
-    },
-    {
-      type: "Lab",
-      day: course.Day_of_lab,
-      start: course.lab_start_time,
-      end: course.lab_end_time,
-      venue: course.lab_venues,
-    },
-  ].filter((s) => s.day && s.start && s.end);
-
-  const now = new Date();
-  const nowHHMM = now.toTimeString().slice(0, 5);
-  const occurrences = [];
-
-  definitions.forEach((definition) => {
-    const targetIdx = DAY_NAMES.indexOf(definition.day);
-    if (targetIdx === -1) return;
-    for (let week = 0; week < count; week += 1) {
-      const days = ((targetIdx - now.getDay() + 7) % 7) + week * 7;
-      // Today's session only counts while it hasn't ended yet.
-      if (week === 0 && days === 0 && sliceTime(definition.end) <= nowHHMM) {
-        continue;
-      }
-      const date = new Date(now);
-      date.setDate(date.getDate() + days);
-      occurrences.push({ ...definition, date });
-    }
-  });
-
-  return occurrences.sort((a, b) => a.date - b.date).slice(0, count);
+// One session_excusals row (a session I'm covering) as the picker shows it:
+// the covered slot's times and venue come from the course's timetable.
+function sessionFromExcusal(row) {
+  const course = { id: row.course_id, ...(row.courses || {}) };
+  const isLab = row.session_type === "lab";
+  return {
+    course,
+    date: parseDateStr(row.session_date),
+    type: isLab ? "Lab" : "Tutorial",
+    start: isLab ? course.lab_start_time : course.tutor_start_time,
+    end: isLab ? course.lab_end_time : course.tutor_end_time,
+    venue: (isLab ? course.lab_venues : course.venues) || "",
+    tutorName: row.tutors?.name || "",
+  };
 }
 
 // ---------- logged duration (sidebar) ----------
@@ -141,7 +120,7 @@ function renderCourseChips(courses) {
   courseChipsEl.innerHTML = "";
 
   if (courses.length === 0) {
-    courseChipsEl.innerHTML = `<p class="empty-state">You're not assigned to any modules yet — apply for one and it will show up here.</p>`;
+    courseChipsEl.innerHTML = `<p class="empty-state">You aren't covering any sessions right now — when a tutor can't attend and you're assigned to take over, the session shows up here.</p>`;
     return;
   }
 
@@ -149,6 +128,7 @@ function renderCourseChips(courses) {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "course-chip";
+    chip.dataset.courseId = course.id;
     chip.innerHTML = `
       <span class="chip-icon ${CHIP_ACCENTS[index % CHIP_ACCENTS.length]}">${MODULE_ICON}</span>
       <span class="course-chip__text">
@@ -176,27 +156,36 @@ function renderSessionChips(course) {
   attendanceCardEl.hidden = true;
   sessionStepEl.hidden = false;
 
-  const sessions = upcomingSessions(course);
+  const sessions = mySessions.filter(
+    (session) => String(session.course.id) === String(course.id),
+  );
 
   if (sessions.length === 0) {
-    sessionChipsEl.innerHTML = `<p class="empty-state">No scheduled sessions for this module yet — check back once the timetable is set.</p>`;
+    sessionChipsEl.innerHTML = `<p class="empty-state">Nothing to cover for this module right now — check back once a session is assigned to you.</p>`;
     return;
   }
 
   sessionChipsEl.innerHTML = "";
   sessions.forEach((session) => {
+    const dateStr = toDateStr(session.date);
+    const status = windowStatus(dateStr, session.start, session.end);
     const chip = document.createElement("button");
     chip.type = "button";
-    chip.className = "session-chip";
+    chip.className = `session-chip ${status === "open" ? "is-open" : "is-locked"}`;
     chip.innerHTML = `
       <span class="session-chip__date">${CALENDAR_ICON}<span class="session-chip__day"></span></span>
       <span class="session-chip__time"></span>
+      <span class="session-chip__note"></span>
     `;
-    chip.querySelector(".session-chip__day").textContent = formatDate(
-      session.date,
-    );
+    chip.querySelector(".session-chip__day").textContent =
+      `${formatDate(session.date)} · ${session.type}`;
     chip.querySelector(".session-chip__time").textContent =
       `${sliceTime(session.start)}–${sliceTime(session.end)}${session.venue ? ` · ${session.venue}` : ""}`;
+    chip.querySelector(".session-chip__note").textContent = windowNote(
+      dateStr,
+      session.start,
+      session.end,
+    );
     chip.addEventListener("click", () => selectSession(session, chip));
     sessionChipsEl.appendChild(chip);
   });
@@ -208,14 +197,30 @@ function selectSession(session, chip) {
     el.classList.toggle("is-selected", el === chip);
   });
 
+  scheduledLabelEl.textContent = session.tutorName
+    ? `Covering for ${session.tutorName}`
+    : "Covering for the tutor";
   scheduledWhenEl.textContent = `${formatDate(session.date)} · ${sliceTime(session.start)}–${sliceTime(session.end)}`;
   scheduledVenueEl.textContent = session.venue || "TBC";
 
   startTimeField.value = sliceTime(session.start);
   endTimeField.value = sliceTime(session.end);
   notesField.value = "";
-  formError.hidden = true;
   updateDuration();
+
+  // Flag a session that can't be logged yet (or any more) as soon as it's
+  // picked, so filling the form never ends in a surprise refusal.
+  const dateStr = toDateStr(session.date);
+  if (windowStatus(dateStr, session.start, session.end) === "open") {
+    formError.hidden = true;
+  } else {
+    formError.textContent = windowBlockMessage(
+      dateStr,
+      session.start,
+      session.end,
+    );
+    formError.hidden = false;
+  }
 
   attendanceCardEl.hidden = false;
   attendanceCardEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -236,6 +241,22 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedCourse || !selectedSession) return;
 
+  // The session must be happening right now — its own day, from its start
+  // until 10 minutes after it ends. The server re-checks this; doing it
+  // here too means the volunteer sees why without a round-trip.
+  const dateStr = toDateStr(selectedSession.date);
+  if (
+    windowStatus(dateStr, selectedSession.start, selectedSession.end) !== "open"
+  ) {
+    formError.textContent = windowBlockMessage(
+      dateStr,
+      selectedSession.start,
+      selectedSession.end,
+    );
+    formError.hidden = false;
+    return;
+  }
+
   const hours = computeHours();
   if (!hours) {
     formError.textContent = "The ending time must be after the starting time.";
@@ -250,7 +271,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   const payload = {
-    date: toDateStr(selectedSession.date),
+    date: dateStr,
     hours: Number(hours.toFixed(1)),
     startTime: startTimeField.value,
     endTime: endTimeField.value,
@@ -272,7 +293,7 @@ form.addEventListener("submit", async (event) => {
   try {
     await addEntry(payload);
     notesField.value = "";
-    showToast("Attendance submitted — it's on your timesheets.");
+    showToast("Attendance submitted — it's under Completed sessions.");
   } catch (err) {
     formError.textContent =
       err.message || "Couldn't submit your attendance — try again.";
@@ -282,38 +303,48 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-// ---------- init ----------
+// ---------- init: load the sessions this volunteer is covering ----------
 
 (async () => {
-  let courses = null;
+  let rows = null;
   try {
     const res = await fetch(
-      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+      `/api/session-excusals?coverUserId=${encodeURIComponent(currentUser.id)}`,
     );
-    const rows = await res.json();
-    if (!res.ok) throw new Error(rows.error);
-
-    // Modules I'm approved on — each approved application's joined course.
-    const byCourse = new Map();
-    rows
-      .filter(
-        (app) => (app.status || "").toLowerCase() === "approved" && app.courses,
-      )
-      .forEach((app) => {
-        const course = {
-          ...app.courses,
-          id: app.course_id ?? app.courses.id,
-        };
-        if (!byCourse.has(course.id)) byCourse.set(course.id, course);
-      });
-    courses = [...byCourse.values()];
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error);
+    rows = body;
   } catch {
-    courses = null;
+    rows = null;
   }
 
-  if (!courses) {
-    courseChipsEl.innerHTML = `<p class="empty-state">Couldn't load your modules right now — try again later.</p>`;
+  if (!rows) {
+    courseChipsEl.innerHTML = `<p class="empty-state">Couldn't load your covers right now — try again later.</p>`;
     return;
   }
-  renderCourseChips(courses);
+
+  // Only covers that can still be logged — a session whose window already
+  // closed stays in the completed sessions list instead of the picker.
+  mySessions = rows
+    .map(sessionFromExcusal)
+    .filter(
+      (session) =>
+        session.start &&
+        session.end &&
+        windowStatus(toDateStr(session.date), session.start, session.end) !==
+          "expired",
+    )
+    .sort(
+      (a, b) =>
+        a.date - b.date || sliceTime(a.start).localeCompare(sliceTime(b.start)),
+    );
+
+  // One chip per course among those sessions, in the order they appear.
+  const byCourse = new Map();
+  mySessions.forEach((session) => {
+    if (!byCourse.has(session.course.id)) {
+      byCourse.set(session.course.id, session.course);
+    }
+  });
+  renderCourseChips([...byCourse.values()]);
 })();

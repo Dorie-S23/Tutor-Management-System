@@ -812,7 +812,7 @@ const VOLUNTEER_TOUR_STEPS = [
   {
     selector: "a[href='volunteer-log-hours.html']",
     title: "Log your hours",
-    body: "After a session, submit your attendance here so it shows up on your timesheets.",
+    body: "After a session, submit your attendance here so it shows up under Completed sessions.",
     placement: "bottom",
   },
 ];

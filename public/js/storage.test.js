@@ -23,9 +23,13 @@ const EXPORTED_NAMES = [
   "findDuplicateEntry",
   "getEntriesForWeek",
   "getWeekTotal",
+  "getEntriesForMonth",
+  "getMonthTotal",
   "getEntriesForDate",
   "getWeekStart",
   "addDays",
+  "getMonthStart",
+  "addMonths",
   "todayStr",
   "getProfile",
   "saveProfile",
@@ -275,6 +279,45 @@ describe("date helpers", () => {
     const window = loadStorage();
     expect(window.__storage.addDays("2026-01-30", 3)).toBe("2026-02-02");
     expect(window.__storage.addDays("2026-02-02", -3)).toBe("2026-01-30");
+  });
+
+  test("getMonthStart snaps a date to the first of its calendar month", () => {
+    const window = loadStorage();
+    expect(window.__storage.getMonthStart("2026-01-15")).toBe("2026-01-01");
+    expect(window.__storage.getMonthStart("2026-12-31")).toBe("2026-12-01");
+  });
+
+  test("addMonths steps whole months both ways, crossing year boundaries", () => {
+    const window = loadStorage();
+    expect(window.__storage.addMonths("2026-01-01", -1)).toBe("2025-12-01");
+    expect(window.__storage.addMonths("2026-12-01", 1)).toBe("2027-01-01");
+  });
+});
+
+// Timesheets are submitted per calendar month, so entries must group by
+// month ("YYYY-MM-01") rather than by week.
+describe("monthly entry totals", () => {
+  const entries = [
+    { id: "m1", date: "2026-08-31", hours: 2 },
+    { id: "m2", date: "2026-09-01", hours: 1.5 },
+    { id: "m3", date: "2026-09-30", hours: 2.5 },
+    { id: "m4", date: "2026-10-01", hours: 4 },
+  ];
+
+  test("getEntriesForMonth returns exactly that calendar month's entries", async () => {
+    const window = loadStorage(entries);
+    setCurrentUser(window, { id: "tutor-1", role: "tutor" });
+
+    const september = await window.__storage.getEntriesForMonth("2026-09-01");
+    expect(september.map((e) => e.id)).toEqual(["m2", "m3"]);
+  });
+
+  test("getMonthTotal sums the month's hours across its full length", async () => {
+    const window = loadStorage(entries);
+    setCurrentUser(window, { id: "tutor-1", role: "tutor" });
+
+    // 30-day September: 1.5 + 2.5 — the 31 Aug and 1 Oct entries excluded.
+    expect(await window.__storage.getMonthTotal("2026-09-01")).toBe(4);
   });
 });
 

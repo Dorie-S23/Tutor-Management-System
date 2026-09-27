@@ -220,87 +220,54 @@
       </section>
 
       <div class="org-layout org-layout--tutors">
-        <aside class="org-rail" aria-labelledby="formHeading">
-          <header class="rail-head">
-            <h2 id="formHeading">Add a tutor</h2>
-          </header>
-          <p class="hint">
-            New tutors appear in the roster below straight away.
-          </p>
-          <form id="tutorForm">
-            <input type="hidden" id="tutorId" />
-            <label class="field">
-              <span class="field-label">Name</span>
-              <input type="text" id="name" required />
-            </label>
-            <label class="field">
-              <span class="field-label">Student number</span>
-              <input type="text" id="studentNumber" required />
-            </label>
-            <label class="field">
-              <span class="field-label">Email</span>
-              <input type="email" id="email" required />
-            </label>
-            <label class="field">
-              <span class="field-label">Academic level</span>
-              <select id="academicLevel" required>
-                <option value="">—</option>
-                <option value="third_year">3rd year</option>
-                <option value="honours">Honours</option>
-                <option value="masters">Masters</option>
-                <option value="phd">PhD</option>
-              </select>
-            </label>
-            <div class="form-actions">
-              <button type="submit" class="btn-primary" id="submitBtn">
-                Add tutor
-              </button>
-              <button
-                type="button"
-                class="btn-secondary"
-                id="cancelEditBtn"
-                hidden
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </aside>
-
-        <section class="org-detail" aria-label="Tutor roster and workload">
-          <div class="panel">
-            <h2 class="side-panel__title">The roster</h2>
-            <div class="table-wrap">
-              <table class="tutors-table">
-                <thead>
-                  <tr>
-                    <th>Tutor</th>
-                    <th>Student #</th>
-                    <th>Email</th>
-                    <th>Rate</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="tutorsTableBody"></tbody>
-              </table>
-            </div>
-            <p class="empty-copy" id="emptyCopy" hidden>
-              No tutors yet — add one in the panel on the left.
-            </p>
-          </div>
-
-          <div class="panel">
-            <h2 class="side-panel__title">Workload spread</h2>
+        <div class="tutor-boards">
+          <aside class="org-rail" aria-labelledby="formHeading">
+            <header class="rail-head">
+              <h2 id="formHeading">Add a tutor</h2>
+            </header>
             <p class="hint">
-              Each tutor's approved course hours against the weekly cap, busiest
-              first.
+              New tutors appear in the roster below straight away.
             </p>
-            <div class="workload-list" id="workloadList"></div>
-            <p class="empty-copy" id="workloadEmpty" hidden>No tutors yet.</p>
-          </div>
-        </section>
+            <form id="tutorForm">
+              <input type="hidden" id="tutorId" />
+              <label class="field">
+                <span class="field-label">Name</span>
+                <input type="text" id="name" required />
+              </label>
+              <label class="field">
+                <span class="field-label">Student number</span>
+                <input type="text" id="studentNumber" required />
+              </label>
+              <label class="field">
+                <span class="field-label">Email</span>
+                <input type="email" id="email" required />
+              </label>
+              <label class="field">
+                <span class="field-label">Academic level</span>
+                <select id="academicLevel" required>
+                  <option value="">—</option>
+                  <option value="third_year">3rd year</option>
+                  <option value="honours">Honours</option>
+                  <option value="masters">Masters</option>
+                  <option value="phd">PhD</option>
+                </select>
+              </label>
+              <div class="form-actions">
+                <button type="submit" class="btn-primary" id="submitBtn">
+                  Add tutor
+                </button>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  id="cancelEditBtn"
+                  hidden
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </aside>
 
-        <aside class="org-side" aria-label="Settings">
           <div class="side-panel">
             <h2 class="side-panel__title">Weekly hour cap</h2>
             <p class="hint">
@@ -401,7 +368,40 @@
               </button>
             </div>
           </div>
-        </aside>
+        </div>
+
+        <section class="org-detail" aria-label="Tutor roster and workload">
+          <div class="panel">
+            <h2 class="side-panel__title">The roster</h2>
+            <div class="table-wrap">
+              <table class="tutors-table">
+                <thead>
+                  <tr>
+                    <th>Tutor</th>
+                    <th>Student #</th>
+                    <th>Email</th>
+                    <th>Rate</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tutorsTableBody"></tbody>
+              </table>
+            </div>
+            <p class="empty-copy" id="emptyCopy" hidden>
+              No tutors yet — add one in the panel above.
+            </p>
+          </div>
+
+          <div class="panel">
+            <h2 class="side-panel__title">Workload spread</h2>
+            <p class="hint">
+              Each tutor's approved course hours against the weekly cap, busiest
+              first.
+            </p>
+            <div class="workload-list" id="workloadList"></div>
+            <p class="empty-copy" id="workloadEmpty" hidden>No tutors yet.</p>
+          </div>
+        </section>
       </div>
     </main>
 

@@ -113,9 +113,9 @@
         <div>
           <h1>Log hours</h1>
           <p class="page-sub">
-            Pick one of your modules, then choose the upcoming tutorial or lab
-            session you worked &mdash; the session's allocated time is what gets
-            logged.
+            Pick one of your modules, then choose the tutorial or lab session
+            you worked &mdash; you can log it while it's running, up to 10
+            minutes after it ends.
           </p>
         </div>
       </div>
@@ -213,18 +213,18 @@
             </form>
           </section>
 
-          <section class="panel" aria-label="This week's entries">
+          <section class="panel" aria-label="This month's entries">
             <div class="week-nav">
-              <button type="button" id="prev-week-btn" class="btn-secondary">
-                &larr; Prev week
+              <button type="button" id="prev-month-btn" class="btn-secondary">
+                &larr; Prev month
               </button>
-              <span class="week-label" id="week-label"></span>
-              <button type="button" id="next-week-btn" class="btn-secondary">
-                Next week &rarr;
+              <span class="week-label" id="month-label"></span>
+              <button type="button" id="next-month-btn" class="btn-secondary">
+                Next month &rarr;
               </button>
             </div>
             <p class="week-total">
-              Total this week: <strong id="week-total">0</strong> hours
+              Total this month: <strong id="month-total">0</strong> hours
             </p>
             <table>
               <thead>
@@ -240,7 +240,7 @@
               <tbody id="entries-body"></tbody>
             </table>
             <p id="empty-state" class="empty-state" hidden>
-              No entries logged for this week yet.
+              No entries logged for this month yet.
             </p>
           </section>
         </div>
@@ -290,7 +290,7 @@
             </svg>
             <p class="side-card__heading">Presence verification</p>
             <p class="side-card__caption">
-              Your entries roll up into your weekly timesheet, which your
+              Your entries roll up into your monthly timesheet, which your
               organiser reviews before the hours are approved.
             </p>
           </div>

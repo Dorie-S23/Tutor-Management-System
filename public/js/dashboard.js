@@ -10,6 +10,7 @@
 
 import { highlightActiveTab } from "./nav.js";
 import {
+  getMonthStart,
   getWeekStart,
   getWeekTotal,
   getEntries,
@@ -255,7 +256,7 @@ async function renderStats() {
         : "You're over your weekly cap.";
 }
 
-// Weeks with logged hours (before the current one) that were never submitted
+// Months with logged hours (before the current one) that were never submitted
 // as a timesheet — the same condition the server's due-reminder checks.
 async function renderTimesheetsDue() {
   try {
@@ -266,17 +267,19 @@ async function renderTimesheetsDue() {
     if (!res.ok) throw new Error("Failed to load timesheets");
     const rows = await res.json();
 
-    const submitted = new Set(rows.map((r) => r.week_start));
-    const currentWeekStart = getWeekStart(todayStr());
-    const weeks = new Set(
+    // Normalised to month starts so both monthly keys and any legacy
+    // weekly submissions count as "that month has been submitted".
+    const submitted = new Set(rows.map((r) => getMonthStart(r.week_start)));
+    const currentMonthStart = getMonthStart(todayStr());
+    const months = new Set(
       entries
-        .map((e) => getWeekStart(e.date))
-        .filter((w) => w < currentWeekStart),
+        .map((e) => getMonthStart(e.date))
+        .filter((m) => m < currentMonthStart),
     );
 
     let due = 0;
-    weeks.forEach((week) => {
-      if (!submitted.has(week)) due += 1;
+    months.forEach((month) => {
+      if (!submitted.has(month)) due += 1;
     });
 
     timesheetsDueEl.textContent = String(due);
@@ -847,7 +850,7 @@ if (tourLink) {
   renderMyCourses();
 
   // No scheduled job in this app — the "you haven't submitted last
-  // week's timesheet" reminder is instead checked (idempotently, server
+  // month's timesheet" reminder is instead checked (idempotently, server
   // decides if a new one is actually due) each time the dashboard loads.
   // Fire-and-forget: the bell's own polling picks up any new notification.
   fetch(

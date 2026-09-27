@@ -145,7 +145,7 @@
           </div>
           <p class="empty-state" id="submissionsEmpty" hidden>
             No timesheets submitted yet — submit one below once you've logged
-            your hours for the week.
+            your hours for the month.
           </p>
         </section>
 
@@ -234,16 +234,16 @@
           </section>
 
           <section class="panel" aria-labelledby="submit-heading">
-            <h2 id="submit-heading">Submit a weekly timesheet</h2>
+            <h2 id="submit-heading">Submit a monthly timesheet</h2>
             <p class="hint">
-              Submitting locks in that week's logged hours for organiser
+              Submitting locks in that month's logged hours for organiser
               sign-off — later edits to your logged hours won't change a
-              submitted week.
+              submitted month.
             </p>
             <div class="form-grid">
               <div class="form-field full-width">
-                <label for="submitWeekStart">Week starting (Monday)</label>
-                <input type="date" id="submitWeekStart" />
+                <label for="submitMonth">Month</label>
+                <input type="month" id="submitMonth" />
               </div>
               <div class="form-actions full-width">
                 <button
@@ -255,7 +255,7 @@
                 </button>
               </div>
             </div>
-            <p class="hint" id="submitWeekHint"></p>
+            <p class="hint" id="submitMonthHint"></p>
           </section>
         </div>
 

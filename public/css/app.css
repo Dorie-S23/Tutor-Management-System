@@ -994,6 +994,30 @@ textarea {
   border-color: var(--blue-line);
 }
 
+/* A session whose logging window is open right now — the only kind that
+   can be logged. Kept before the is-selected rules so a selected chip's
+   navy background still wins. */
+.session-chip.is-open {
+  border-color: var(--blue-line);
+  background: var(--blue-tint-2);
+}
+
+/* Upcoming session whose window hasn't opened yet — selectable, but the
+   form will wait for the session's own time. */
+.session-chip.is-locked {
+  opacity: 0.7;
+}
+
+.session-chip__note {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.session-chip.is-open .session-chip__note {
+  color: var(--blue-dark);
+}
+
 .session-chip.is-selected {
   background: var(--navy);
   border-color: var(--navy);
@@ -1028,6 +1052,10 @@ textarea {
 }
 
 .session-chip.is-selected .session-chip__time {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.session-chip.is-selected .session-chip__note {
   color: rgba(255, 255, 255, 0.85);
 }
 
@@ -1671,6 +1699,195 @@ td {
   font-weight: 600;
   color: var(--ink-3);
   white-space: nowrap;
+}
+
+/* Day view — calendar.js builds this when a day cell is clicked: hour lines
+   with time stamps down the left, sessions/classes as blocks sized to their
+   real times (overlaps sit side by side), and empty slots that open the
+   add-class form pre-filled for that day and time. */
+.day-view {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+
+.day-view-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 0;
+}
+
+.day-view-head h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  color: var(--ink);
+}
+
+.day-view-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink-3);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.day-view-close:hover {
+  background: var(--page);
+  color: var(--ink);
+}
+
+.day-view-hint {
+  padding: 0 20px;
+}
+
+.day-view-empty {
+  margin-top: 8px;
+  padding: 0 20px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.day-view-scroll {
+  overflow-y: auto;
+  padding: 14px 20px 18px;
+}
+
+.day-view-grid {
+  position: relative;
+}
+
+/* Hour rule + time stamp; half-hour rules run between hours, unlabelled. */
+.day-view-hour {
+  position: absolute;
+  left: 58px;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--line);
+}
+
+.day-view-hour--half {
+  border-top: 1px dashed #eef2f7;
+}
+
+.day-view-time {
+  position: absolute;
+  left: -58px;
+  top: -7px;
+  width: 50px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.day-view-lane {
+  position: absolute;
+  left: 58px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  cursor: pointer;
+}
+
+.day-view-event {
+  position: absolute;
+  padding: 5px 9px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  cursor: default;
+}
+
+.day-view-event-time {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.day-view-event-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Your own added classes read like the month pills: white with a blue outline. */
+.day-view-event--class {
+  background: #fff;
+  border-color: var(--blue-line);
+  color: var(--blue-dark);
+}
+
+.day-view-event--editable {
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.day-view-event--class.day-view-event--editable:hover {
+  border-color: #60a5fa;
+}
+
+.day-view-event--cover {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.day-view-event--hours {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.day-view-event--cancelled {
+  border-style: dashed;
+  border-color: #fca5a5;
+  background: #fff5f5;
+  color: #b91c1c;
+}
+
+.day-view-event--cancelled .day-view-event-label {
+  text-decoration: line-through;
+}
+
+.day-view-event--excused {
+  border-style: dashed;
+  opacity: 0.78;
+}
+
+.day-view-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.day-view-extra-chip {
+  padding: 4px 10px 5px;
+  border: 1px solid var(--blue-line);
+  border-radius: 999px;
+  background: var(--blue-tint-2);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue-dark);
 }
 
 /* ---------- Responsive ---------- */
@@ -2528,8 +2745,8 @@ body[data-theme="tutor"] textarea:focus {
 /* ============================================================
    Organiser pages (Courses / Manage Tutors / Timetable /
    Timesheets / Budget Report) — from the Figma Make organiser
-   screens: violet accent, stat strips, course rail, three-column
-   activity layout, side panels, timetable + budget report.
+   screens: violet accent, stat strips, course rail, stacked activity
+   boards, side panels, timetable + budget report.
    ============================================================ */
 
 :root {
@@ -2966,11 +3183,13 @@ body[data-theme="organiser"] textarea:focus {
   font-weight: 500;
 }
 
-/* ---------- Activity columns (applications / excusals / volunteers) ---------- */
+/* ---------- Activity boards (applications / excusals / volunteers) ---------- */
 
+/* The three boards are full-width horizontal bands stacked one after the
+   other, so each gets the whole row to spread its cards across. */
 .activity-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-top: 14px;
 }
@@ -3061,7 +3280,10 @@ body[data-theme="organiser"] textarea:focus {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
+/* Cards flow left-to-right inside a board and wrap; each card keeps its
+   own stacked layout. */
 .activity-col .tutor-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 8px;
 }
 
@@ -3086,6 +3308,15 @@ body[data-theme="organiser"] textarea:focus {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+/* The stacked card layout separates its two zones: requirement/status
+   stamps above, actions below the dashed divider. Only drawn when there
+   are real action buttons — a lone "Locked" stamp stays with the info. */
+.activity-col .applicant-actions:has(.btn-small) {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
 }
 
 .activity-col .avatar {
@@ -3236,6 +3467,83 @@ body[data-theme="organiser"] textarea:focus {
 .btn-small:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ---------- Action buttons in applicant/review rows ---------- */
+/* These rows also carry requirement stamps and status pills, which are
+   soft pastel chips — buttons that act on the row must not look like
+   them: solid fill, rounded-rect, elevation, bolder label. */
+
+.applicant-actions .btn-small {
+  padding: 6px 13px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: rgb(71, 85, 105);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.22);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.05s ease;
+}
+
+.applicant-actions .btn-small:hover {
+  background: rgb(51, 65, 85);
+  border-color: transparent;
+}
+
+.applicant-actions .btn-small:active {
+  transform: translateY(1px);
+}
+
+.applicant-actions .btn-small:focus-visible {
+  outline: 2px solid var(--blue-line);
+  outline-offset: 1px;
+}
+
+.applicant-actions .btn-small:disabled {
+  box-shadow: none;
+}
+
+.applicant-actions .btn-small.approve {
+  background: var(--blue);
+}
+
+.applicant-actions .btn-small.approve:hover {
+  background: var(--blue-dark);
+}
+
+.applicant-actions .btn-small.override {
+  background: rgb(217, 119, 6);
+  color: #fff;
+}
+
+.applicant-actions .btn-small.override:hover {
+  background: rgb(180, 83, 9);
+}
+
+.applicant-actions .btn-small.reject {
+  background: rgb(220, 38, 38);
+}
+
+.applicant-actions .btn-small.reject:hover {
+  background: rgb(185, 28, 28);
+}
+
+/* Tertiary actions (Details, View dispute) stay quiet but keep the
+   scoped shape/weight so they never blend into the stamp chips. */
+.applicant-actions .btn-small.btn-small-neutral {
+  background: #fff;
+  border-color: rgb(203, 213, 225);
+  color: var(--ink-2);
+  box-shadow: none;
+}
+
+.applicant-actions .btn-small.btn-small-neutral:hover {
+  background: rgb(248, 250, 252);
+  border-color: rgb(148, 163, 184);
 }
 
 .empty-copy {
@@ -4314,6 +4622,24 @@ body[data-theme="organiser"] textarea:focus {
   width: 100%;
 }
 
+/* Three boards — add a tutor, weekly cap, hourly rates — sit in one row
+   under the stats strip; the roster and workload panels stack full width
+   below them. */
+.org-layout.org-layout--tutors {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tutor-boards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.org-layout--tutors .org-detail {
+  display: grid;
+  gap: 18px;
+}
+
 /* ---------- Timesheets page ---------- */
 
 .review-toolbar {
@@ -4371,31 +4697,15 @@ body[data-theme="organiser"] textarea:focus {
   }
 }
 
-/* Tutors page keeps the settings column (weekly cap + hourly rates)
-   beside the roster while there is room; below 1081px the two settings
-   panels fall back to a full-width two-up row. */
-@media (max-width: 1280px) and (min-width: 1081px) {
-  .org-layout--tutors {
-    grid-template-columns: 260px minmax(0, 1fr) 260px;
-  }
-
-  .org-layout--tutors .org-side {
-    grid-column: auto;
-    grid-template-columns: 1fr;
-  }
-}
-
+/* Tutors page: the three top boards fold from three-up to two-up, then to
+   one-up on narrow screens; the roster below always spans the full width. */
 @media (max-width: 1080px) and (min-width: 901px) {
-  .org-layout--tutors .org-side {
+  .tutor-boards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1080px) {
-  .activity-grid {
-    grid-template-columns: 1fr;
-  }
-
   .detail-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4407,6 +4717,10 @@ body[data-theme="organiser"] textarea:focus {
   }
 
   .org-side {
+    grid-template-columns: 1fr;
+  }
+
+  .tutor-boards {
     grid-template-columns: 1fr;
   }
 

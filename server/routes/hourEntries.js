@@ -2,6 +2,7 @@ const express = require("express");
 const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
 const { DAY_NAMES } = require("../dayNames");
+const { GRACE_MINUTES, isWithinLoggingWindow } = require("../loggingWindow");
 
 const router = express.Router();
 
@@ -26,56 +27,63 @@ async function resolveCourse(courseId) {
   return { course: data };
 }
 
-// ---------- tutor session rules ----------
-// Tutors log the hours of the sessions the timetable allocated to them: an
-// entry must belong to a course the tutor is approved for and line up
-// exactly with that course's weekly tutorial or lab slot — the same Log
-// Hours flow volunteers get, where only scheduled sessions can be picked.
-// Volunteers ("Peer support") and any other role pass straight through.
+// ---------- session logging rules ----------
+// Every entry must belong to a real scheduled session, be created while
+// that session is happening (from its start until GRACE_MINUTES after its
+// end), and belong to the right person:
+//   - tutors log the sessions the timetable allocated to them: a course
+//     they're approved for, on the slot's weekday at exactly its
+//     allocated tutorial/lab times;
+//   - volunteers log the sessions assigned to them to cover because the
+//     tutor can't attend (session_excusals.cover_user_id) — nothing else.
+// `requireWindow` is only relaxed for edits, so fixing an older entry
+// doesn't require deleting and re-logging it.
 
 function sliceTime(value) {
   return value == null ? "" : String(value).slice(0, 5);
 }
 
-function localDateStr(date) {
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${m}-${d}`;
-}
-
-// True when the time range is exactly one of the course's two weekly
-// slots: its tutorial (Day_of_tut / tutor_*) or its lab (Day_of_lab /
-// lab_*). Day names are stored the same way DAY_NAMES spells them.
-function matchesScheduledSlot(course, date, startTime, endTime) {
-  if (!date || !startTime || !endTime) return false;
+// Which of the course's two weekly slots the submitted time range matches:
+// its tutorial (Day_of_tut / tutor_*) or its lab (Day_of_lab / lab_*), or
+// an empty array when it matches neither. Day names are stored the same way
+// DAY_NAMES spells them.
+function matchingSlotTypes(course, date, startTime, endTime) {
+  if (!date || !startTime || !endTime) return [];
   const [y, m, d] = String(date).split("-").map(Number);
-  if (!y || !m || !d) return false;
+  if (!y || !m || !d) return [];
   const weekday = DAY_NAMES[new Date(y, m - 1, d).getDay()];
   const start = sliceTime(startTime);
   const end = sliceTime(endTime);
   return [
-    [course.Day_of_tut, course.tutor_start_time, course.tutor_end_time],
-    [course.Day_of_lab, course.lab_start_time, course.lab_end_time],
-  ].some(
-    ([day, slotStart, slotEnd]) =>
-      Boolean(day) &&
-      day === weekday &&
-      sliceTime(slotStart) === start &&
-      sliceTime(slotEnd) === end,
-  );
+    [
+      "tutorial",
+      course.Day_of_tut,
+      course.tutor_start_time,
+      course.tutor_end_time,
+    ],
+    ["lab", course.Day_of_lab, course.lab_start_time, course.lab_end_time],
+  ]
+    .filter(
+      ([, day, slotStart, slotEnd]) =>
+        Boolean(day) &&
+        day === weekday &&
+        sliceTime(slotStart) === start &&
+        sliceTime(slotEnd) === end,
+    )
+    .map(([type]) => type);
 }
 
-// A session counts as upcoming while it is today and hasn't finished yet,
-// or on any later date — the same window the session chips on the Log
-// Hours page offer.
-function isUpcomingSession(date, endTime, now = new Date()) {
-  const today = localDateStr(now);
-  if (String(date) > today) return true;
-  if (String(date) < today) return false;
-  const nowHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes(),
-  ).padStart(2, "0")}`;
-  return sliceTime(endTime) > nowHHMM;
+// True when this user is the assigned cover for one of those slots on that
+// date — the volunteer side of the rules.
+async function isCoveringSession(userId, courseId, date, slotTypes) {
+  const { data, error } = await supabase
+    .from("session_excusals")
+    .select("session_type")
+    .eq("cover_user_id", userId)
+    .eq("course_id", Number(courseId))
+    .eq("session_date", date);
+  if (error) return false;
+  return (data || []).some((row) => slotTypes.includes(row.session_type));
 }
 
 async function isTutor(userId) {
@@ -100,33 +108,50 @@ async function isApprovedForCourse(userId, courseId) {
 }
 
 // Returns { status, error } when the entry breaks the session rules, or
-// null when it's allowed. `requireUpcoming` is only relaxed for edits, so
-// fixing an older entry doesn't require deleting and re-logging it.
-async function tutorSessionError(
+// null when it's allowed.
+async function sessionRulesError(
   userId,
   course,
   { date, startTime, endTime },
-  { requireUpcoming },
+  { requireWindow },
 ) {
-  if (!(await isTutor(userId))) return null;
-  if (!(await isApprovedForCourse(userId, course.id))) {
+  const slotTypes = matchingSlotTypes(course, date, startTime, endTime);
+  const slotError = {
+    status: 400,
+    error:
+      "Log the course's scheduled tutorial or lab slot — other times aren't allowed",
+  };
+  const windowError = {
+    status: 400,
+    error: `You can only log a session while it's happening — logging opens when it starts and closes ${GRACE_MINUTES} minutes after it ends`,
+  };
+
+  if (await isTutor(userId)) {
+    if (!(await isApprovedForCourse(userId, course.id))) {
+      return {
+        status: 403,
+        error: "You can only log hours for modules you're approved to tutor",
+      };
+    }
+    if (slotTypes.length === 0) return slotError;
+    if (requireWindow && !isWithinLoggingWindow(date, startTime, endTime)) {
+      return windowError;
+    }
+    return null;
+  }
+
+  // Everyone else is a volunteer: only the sessions assigned to them to
+  // cover for a tutor who can't attend can be logged.
+  if (slotTypes.length === 0) return slotError;
+  if (!(await isCoveringSession(userId, course.id, date, slotTypes))) {
     return {
       status: 403,
-      error: "You can only log hours for modules you're approved to tutor",
-    };
-  }
-  if (!matchesScheduledSlot(course, date, startTime, endTime)) {
-    return {
-      status: 400,
       error:
-        "Log the course's scheduled tutorial or lab slot — other times aren't allowed",
+        "You can only log sessions you're covering for a tutor — this one wasn't assigned to you",
     };
   }
-  if (requireUpcoming && !isUpcomingSession(date, endTime)) {
-    return {
-      status: 400,
-      error: "You can only log upcoming sessions — that one has already ended",
-    };
+  if (requireWindow && !isWithinLoggingWindow(date, startTime, endTime)) {
+    return windowError;
   }
   return null;
 }
@@ -155,11 +180,11 @@ router.post("/", async (req, res) => {
   const { course, status, error: courseError } = await resolveCourse(courseId);
   if (courseError) return res.status(status).json({ error: courseError });
 
-  const ruleError = await tutorSessionError(
+  const ruleError = await sessionRulesError(
     userId,
     course,
     { date, startTime, endTime },
-    { requireUpcoming: true },
+    { requireWindow: true },
   );
   if (ruleError) {
     return res.status(ruleError.status).json({ error: ruleError.error });
@@ -195,9 +220,10 @@ router.put("/:id", async (req, res) => {
 
   // An edit that leaves the course/date/start/end untouched (fixing notes,
   // say) is always allowed, so historical entries stay correctable. Moving
-  // an entry must land it back on one of the course's scheduled slots,
-  // exactly like a new entry — but a past date stays allowed here, since
-  // correcting an older entry shouldn't force a delete and re-log.
+  // an entry must land it back on a session the user could log — the same
+  // slot and cover rules as a new entry — but the live window is not
+  // required here, since correcting an older entry shouldn't force a delete
+  // and re-log.
   const { data: stored } = await supabase
     .from("hour_entries")
     .select("*")
@@ -210,11 +236,11 @@ router.put("/:id", async (req, res) => {
       sliceTime(stored.end_time) !== sliceTime(endTime) ||
       String(stored.course_id) !== String(course.id);
     if (structureChanged) {
-      const ruleError = await tutorSessionError(
+      const ruleError = await sessionRulesError(
         stored.user_id,
         course,
         { date, startTime, endTime },
-        { requireUpcoming: false },
+        { requireWindow: false },
       );
       if (ruleError) {
         return res.status(ruleError.status).json({ error: ruleError.error });

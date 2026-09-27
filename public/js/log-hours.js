@@ -1,10 +1,11 @@
-// Tutor "Log hours": pick one of the modules you tutor, then choose an
-// upcoming scheduled session (its tutorial or lab). The date and times are
-// locked to that session's allocated slot — the same rule the server
-// enforces — and the entry lands in the week table below, rolling up into
-// the Timesheets page. Rebuilt on the app.css design system (teal tutor
-// theme) while keeping every legacy hook — the #entry-form and the
-// per-week table — intact.
+// Tutor "Log hours": pick one of the modules you tutor, then choose one of
+// its scheduled sessions (its tutorial or lab). The date and times are
+// locked to that session's allocated slot, and it can only be logged while
+// it's happening — from its start until 10 minutes after it ends — the same
+// rules the server enforces. Entries land in the month table below, rolling
+// up into the Timesheets page. Rebuilt on the app.css design system (teal
+// tutor theme) while keeping every legacy hook — the #entry-form and the
+// per-month table — intact.
 
 import {
   requireRole,
@@ -12,12 +13,17 @@ import {
   updateEntry,
   deleteEntry,
   findDuplicateEntry,
-  getWeekStart,
-  addDays,
-  getEntriesForWeek,
+  getMonthStart,
+  addMonths,
+  getEntriesForMonth,
   todayStr,
   toDateStr,
 } from "./storage.js";
+import {
+  windowStatus,
+  windowNote,
+  windowBlockMessage,
+} from "./sessionTiming.js";
 
 const currentUser = requireRole("tutor");
 if (!currentUser) {
@@ -71,10 +77,10 @@ const submitBtn = document.getElementById("submit-btn");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
 const formError = document.getElementById("form-error");
 
-const prevWeekBtn = document.getElementById("prev-week-btn");
-const nextWeekBtn = document.getElementById("next-week-btn");
-const weekLabel = document.getElementById("week-label");
-const weekTotalEl = document.getElementById("week-total");
+const prevMonthBtn = document.getElementById("prev-month-btn");
+const nextMonthBtn = document.getElementById("next-month-btn");
+const monthLabelEl = document.getElementById("month-label");
+const monthTotalEl = document.getElementById("month-total");
 const entriesBody = document.getElementById("entries-body");
 const emptyState = document.getElementById("empty-state");
 
@@ -83,7 +89,7 @@ const emptyState = document.getElementById("empty-state");
 let myCourses = [];
 let selectedCourse = null;
 let selectedSession = null;
-let currentWeekStart = getWeekStart(todayStr());
+let currentMonthStart = getMonthStart(todayStr());
 
 dateField.value = todayStr();
 
@@ -129,7 +135,6 @@ function upcomingSessions(course, count = 4) {
   ].filter((s) => s.day && s.start && s.end);
 
   const now = new Date();
-  const nowHHMM = now.toTimeString().slice(0, 5);
   const occurrences = [];
 
   definitions.forEach((definition) => {
@@ -137,12 +142,17 @@ function upcomingSessions(course, count = 4) {
     if (targetIdx === -1) return;
     for (let week = 0; week < count; week += 1) {
       const days = ((targetIdx - now.getDay() + 7) % 7) + week * 7;
-      // Today's session only counts while it hasn't ended yet.
-      if (week === 0 && days === 0 && sliceTime(definition.end) <= nowHHMM) {
-        continue;
-      }
       const date = new Date(now);
       date.setDate(date.getDate() + days);
+      // Once the grace period after a session has passed, its logging
+      // window is closed for good — it drops off the picker entirely.
+      const status = windowStatus(
+        toDateStr(date),
+        definition.start,
+        definition.end,
+        now,
+      );
+      if (status === "expired") continue;
       occurrences.push({ ...definition, date });
     }
   });
@@ -268,18 +278,26 @@ function renderSessionChips(course) {
 
   sessionChipsEl.innerHTML = "";
   sessions.forEach((session) => {
+    const dateStr = toDateStr(session.date);
+    const status = windowStatus(dateStr, session.start, session.end);
     const chip = document.createElement("button");
     chip.type = "button";
-    chip.className = "session-chip";
+    chip.className = `session-chip ${status === "open" ? "is-open" : "is-locked"}`;
     chip.innerHTML = `
       <span class="session-chip__date">${CALENDAR_ICON}<span class="session-chip__day"></span></span>
       <span class="session-chip__time"></span>
+      <span class="session-chip__note"></span>
     `;
     chip.querySelector(".session-chip__day").textContent = formatDate(
       session.date,
     );
     chip.querySelector(".session-chip__time").textContent =
       `${sliceTime(session.start)}–${sliceTime(session.end)}${session.venue ? ` · ${session.venue}` : ""}`;
+    chip.querySelector(".session-chip__note").textContent = windowNote(
+      dateStr,
+      session.start,
+      session.end,
+    );
     chip.addEventListener("click", () => selectSession(session, chip));
     sessionChipsEl.appendChild(chip);
   });
@@ -299,7 +317,20 @@ function selectSession(session, chip) {
 
   setScheduledBox(...sessionBoxValues(session));
   notesField.value = "";
-  formError.hidden = true;
+
+  // Tell the tutor straight away when this session can't be logged yet (or
+  // any more) instead of letting them fill the form and fail on submit.
+  const dateStr = toDateStr(session.date);
+  if (windowStatus(dateStr, session.start, session.end) === "open") {
+    formError.hidden = true;
+  } else {
+    formError.textContent = windowBlockMessage(
+      dateStr,
+      session.start,
+      session.end,
+    );
+    formError.hidden = false;
+  }
 
   attendanceCardEl.hidden = false;
   attendanceCardEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -429,18 +460,14 @@ function showConfirm(message, confirmLabel = "Confirm") {
   });
 }
 
-// ---------- week table ----------
+// ---------- month table ----------
 
-function formatWeekLabel(weekStart) {
-  const start = new Date(weekStart);
-  const end = new Date(addDays(weekStart, 6));
-  const opts = { month: "short", day: "numeric" };
-  const startStr = start.toLocaleDateString(undefined, opts);
-  const endStr = end.toLocaleDateString(undefined, {
-    ...opts,
+function formatMonthLabel(monthStart) {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
     year: "numeric",
   });
-  return `${startStr} - ${endStr}`;
 }
 
 function exitEditMode() {
@@ -502,10 +529,10 @@ async function enterEditMode(entry) {
 }
 
 async function render() {
-  weekLabel.textContent = formatWeekLabel(currentWeekStart);
+  monthLabelEl.textContent = formatMonthLabel(currentMonthStart);
 
-  const entries = await getEntriesForWeek(currentWeekStart);
-  weekTotalEl.textContent = entries.reduce(
+  const entries = await getEntriesForMonth(currentMonthStart);
+  monthTotalEl.textContent = entries.reduce(
     (sum, e) => sum + Number(e.hours),
     0,
   );
@@ -569,6 +596,26 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  // A brand-new entry only counts while the picked session's logging
+  // window is open; the server re-checks this too, but catching it here
+  // gives the tutor the reason without a round-trip. Edits are exempt —
+  // they exist to correct older entries.
+  if (!entryIdField.value && selectedSession) {
+    const dateStr = toDateStr(selectedSession.date);
+    if (
+      windowStatus(dateStr, selectedSession.start, selectedSession.end) !==
+      "open"
+    ) {
+      formError.textContent = windowBlockMessage(
+        dateStr,
+        selectedSession.start,
+        selectedSession.end,
+      );
+      formError.hidden = false;
+      return;
+    }
+  }
+
   // hours is a hidden field with no native validation of its own now that
   // it's derived rather than typed in — check it explicitly instead.
   if (!hoursField.value) {
@@ -620,7 +667,7 @@ form.addEventListener("submit", async (event) => {
     submitBtn.disabled = false;
   }
 
-  currentWeekStart = getWeekStart(payload.date);
+  currentMonthStart = getMonthStart(payload.date);
   exitEditMode();
   // A fresh entry leaves the module selected but clears the session, ready
   // for the next pick; an edited one keeps whatever session was showing.
@@ -631,13 +678,13 @@ form.addEventListener("submit", async (event) => {
 
 cancelEditBtn.addEventListener("click", exitEditMode);
 
-prevWeekBtn.addEventListener("click", async () => {
-  currentWeekStart = addDays(currentWeekStart, -7);
+prevMonthBtn.addEventListener("click", async () => {
+  currentMonthStart = addMonths(currentMonthStart, -1);
   await render();
 });
 
-nextWeekBtn.addEventListener("click", async () => {
-  currentWeekStart = addDays(currentWeekStart, 7);
+nextMonthBtn.addEventListener("click", async () => {
+  currentMonthStart = addMonths(currentMonthStart, 1);
   await render();
 });
 

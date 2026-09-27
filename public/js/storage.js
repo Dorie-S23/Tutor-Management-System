@@ -155,6 +155,19 @@ export async function getWeekTotal(weekStart) {
   return entries.reduce((sum, e) => sum + Number(e.hours), 0);
 }
 
+// A calendar month's entries — the period timesheets are submitted for.
+// monthStart is the month's first day ("YYYY-MM-01").
+export async function getEntriesForMonth(monthStart) {
+  const monthEnd = addDays(addMonths(monthStart, 1), -1);
+  const entries = await getEntries();
+  return entries.filter((e) => e.date >= monthStart && e.date <= monthEnd);
+}
+
+export async function getMonthTotal(monthStart) {
+  const entries = await getEntriesForMonth(monthStart);
+  return entries.reduce((sum, e) => sum + Number(e.hours), 0);
+}
+
 export async function getEntriesForDate(dateStr) {
   const entries = await getEntries();
   return entries.filter((e) => e.date === dateStr);
@@ -162,7 +175,9 @@ export async function getEntriesForDate(dateStr) {
 
 // --- Date helpers (pure, no network) ----------------------------------
 
-// Monday-based week start for a given 'YYYY-MM-DD' date string.
+// Monday-based week start for a given 'YYYY-MM-DD' date string. Timesheets
+// moved to months (getMonthStart below), but this is still used for the
+// dashboard's "hours this week" stat against the weekly hours cap.
 export function getWeekStart(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -177,6 +192,18 @@ export function addDays(dateStr, days) {
   const date = new Date(y, m - 1, d);
   date.setDate(date.getDate() + days);
   return toDateStr(date);
+}
+
+// First day of the calendar month a 'YYYY-MM-DD' date falls in — the period
+// key timesheets are stored under ("YYYY-MM-01").
+export function getMonthStart(dateStr) {
+  return `${dateStr.slice(0, 7)}-01`;
+}
+
+// Month-start + n months (n may be negative), landing on a month's first day.
+export function addMonths(monthStart, months) {
+  const [y, m] = monthStart.split("-").map(Number);
+  return toDateStr(new Date(y, m - 1 + months, 1));
 }
 
 export function toDateStr(date) {
