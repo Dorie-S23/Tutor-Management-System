@@ -4,17 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StudyConnect | Student Volunteer</title>
-    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/global.css" />
   </head>
 
   <body>
-    <header>
-      <nav aria-label="Main navigation">
-        <a href="StudentView.html" aria-current="page">Dashboard</a>
-        <a href="my-sessions.html">My Sessions</a>
-        <a href="log-hours.html">Log Hours</a>
-        <a href="student_calender.html">Calendar</a>
-        <a href="#" id="tour-link">Take the tour</a>
+    <header class="board-header board-header--brand">
+      <hgroup class="header-left">
+        <p class="eyebrow">
+          <img src="../images/images.png" alt="" class="eyebrow-logo" />
+          School of Computer Science &amp; Applied Mathematics
+        </p>
+        <h1 id="welcome-heading">Welcome!</h1>
+      </hgroup>
+
+      <img
+        src="../images/Wits-890x664.png"
+        alt="University of the Witwatersrand"
+        class="header-wits-logo"
+      />
+
+      <div class="header-actions">
+        <a class="btn btn-ghost" href="my-sessions.html">My Sessions</a>
+        <a class="btn btn-ghost" href="log-hours.html">Log Hours</a>
+        <a class="btn btn-ghost" href="student_calender.html">Calendar</a>
+        <a class="btn btn-ghost" href="#" id="tour-link">Take the tour</a>
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -57,52 +76,66 @@
             </p>
           </div>
         </div>
-        <a href="#" id="logout-button">Logout</a>
-      </nav>
+      </div>
+      <button class="btn btn-danger" id="logout-button" type="button">
+        Logout
+      </button>
     </header>
 
-    <main>
-      <section aria-labelledby="welcome-heading">
-        <h2 id="welcome-heading">Welcome!</h2>
+    <main class="dashboard-layout">
+      <section class="card" aria-labelledby="stats-heading">
+        <h2 id="stats-heading">Your Progress</h2>
+        <div class="header-stat" style="align-items: flex-start">
+          <span class="stat-value" id="stat-hours-volunteered">0</span>
+          <span class="stat-label">Hours Volunteered</span>
+        </div>
       </section>
 
-      <section aria-labelledby="stats-heading">
-        <article>
-          <h3 id="stat-hours-volunteered">0</h3>
-          <p>Hours Volunteered</p>
-        </article>
-      </section>
+      <section class="card" aria-labelledby="courses-heading">
+        <h2 id="courses-heading">Modules You Can Tutor</h2>
+        <p class="hint">Courses currently looking for student volunteers.</p>
 
-      <section aria-labelledby="courses-heading">
-        <header>
-          <h2 id="courses-heading">Modules You Can Tutor</h2>
-          <p>Courses currently looking for student volunteers.</p>
-        </header>
-
-        <section aria-label="Available courses" id="courseList">
-          <!-- rendered by studentview.js -->
-        </section>
-      </section>
-
-      <section class="card" aria-labelledby="pending-heading">
-        <h2 id="pending-heading">Applications</h2>
-        <p class="card-hint">
-          Modules you've volunteered for — pending, approved, or rejected — with
-          any note from the organiser.
-        </p>
-
-        <div class="session-list" id="pendingList">
+        <div class="course-list" aria-label="Available courses" id="courseList">
           <!-- rendered by studentview.js -->
         </div>
       </section>
 
-      <section aria-labelledby="sessions-heading">
-        <header>
-          <h2 id="sessions-heading">Upcoming Sessions</h2>
-          <a href="#">View all</a>
-        </header>
+      <section class="card" aria-labelledby="open-sessions-heading">
+        <h2 id="open-sessions-heading">Open Sessions You Can Cover</h2>
+        <p class="hint">
+          Specific gaps an organiser has flagged — a one-off session with nobody
+          to run it, not a standing weekly commitment.
+        </p>
 
-        <div id="upcomingSessionsList">
+        <div
+          class="course-list"
+          aria-label="Open sessions"
+          id="openSessionsList"
+        >
+          <!-- rendered by studentview.js -->
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="pending-heading">
+        <h2 id="pending-heading">My Applications</h2>
+        <p class="hint">
+          Every module you've volunteered for — pending, approved, or rejected.
+        </p>
+
+        <div class="course-list" id="pendingList">
+          <!-- rendered by studentview.js -->
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="sessions-heading">
+        <div class="assign-panel-head">
+          <h2 id="sessions-heading">Upcoming Sessions</h2>
+          <a class="btn btn-ghost btn-small-pad" href="my-sessions.html"
+            >View all</a
+          >
+        </div>
+
+        <div class="course-list" id="upcomingSessionsList">
           <!-- rendered by studentview.js -->
         </div>
       </section>

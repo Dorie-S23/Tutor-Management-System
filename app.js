@@ -14,6 +14,8 @@ const timesheetsRoutes = require("./server/routes/timesheets");
 const timesheetDisputesRoutes = require("./server/routes/timesheetDisputes");
 const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
 const notificationsRoutes = require("./server/routes/notifications");
+const auditLogRoutes = require("./server/routes/auditLog");
+const allocationDraftsRoutes = require("./server/routes/allocationDrafts");
 
 // Supabase client
 const supabase = createClient(
@@ -85,5 +87,11 @@ app.use("/api/session-excusals", sessionExcusalsRoutes);
 
 // Per-user in-app notification feed
 app.use("/api/notifications", notificationsRoutes);
+
+// Full change history across allocation decisions
+app.use("/api/audit-log", auditLogRoutes);
+
+// Whole-school auto allocation drafts + publish/restore
+app.use("/api/allocation-drafts", allocationDraftsRoutes);
 
 module.exports = app;

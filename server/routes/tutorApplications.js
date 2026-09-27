@@ -2,6 +2,7 @@ const express = require("express");
 const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
 const { notify } = require("./notificationHelpers");
+const { recordAudit } = require("../utils/auditLog");
 
 const router = express.Router();
 
@@ -734,6 +735,15 @@ router.post("/bulk-approve", async (req, res) => {
       console.warn("Failed to notify about application status:", err),
     );
 
+    await recordAudit({
+      entityType: "tutor_subject_preference",
+      entityId: id,
+      action: "approved",
+      actorId: req.body?.organiserId ?? null,
+      before: { status: application.status },
+      after: { status: "approved", via: "bulk-approve" },
+    });
+
     results.push({ id, success: true, name: application.Tutor_name });
   }
 
@@ -977,6 +987,21 @@ router.patch("/:id", async (req, res) => {
     );
   }
 
+  // Awaited (not fire-and-forget) so the write actually happens before the
+  // response ends — this runs on Cloudflare Workers in production, where
+  // execution can be torn down right after the response is sent.
+  await recordAudit({
+    entityType: "tutor_subject_preference",
+    entityId: application.id,
+    action: status,
+    actorId: organiserId ?? null,
+    before: { status: application.status },
+    after: {
+      status,
+      overridden: bypassedRules.map((r) => r.rule_overridden),
+    },
+  });
+
   res.json(data);
 });
 
@@ -1083,6 +1108,16 @@ router.delete("/:id", async (req, res) => {
     .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });
+
+  await recordAudit({
+    entityType: "tutor_subject_preference",
+    entityId: application.id,
+    action: "withdrawn",
+    actorId: application.tutor_id,
+    before: { status: application.status },
+    after: null,
+  });
+
   res.status(204).end();
 });
 

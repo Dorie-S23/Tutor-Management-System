@@ -493,6 +493,65 @@ input[type="search"]:focus-visible {
   border-color: var(--red-line);
 }
 
+/* ---------- student volunteer dashboard ----------
+   Single-column stack of .card sections under the shared board-header. Each
+   list (courses / open sessions / applications / upcoming sessions) reuses
+   .course-list as its container; studentview.js renders each row as a bare
+   <article>, styled here the same way .course-card looks elsewhere. */
+
+.dashboard-layout {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px clamp(20px, 4vw, 48px) 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.course-list > article {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.course-list > article h3 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+}
+
+.session-meta {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+  margin: 3px 0 6px;
+}
+
+.session-note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+}
+
+.course-list > article .status-pill {
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.mark-form {
+  margin-top: 10px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ---------- detail pane ---------- */
 
 .detail-pane {
@@ -653,6 +712,10 @@ input[type="search"]:focus-visible {
 
 .assign-panel-head h3 {
   font-size: 17px;
+}
+
+.assign-panel-head h2 {
+  margin-bottom: 0;
 }
 .assign-panel-head input[type="search"] {
   max-width: 180px;

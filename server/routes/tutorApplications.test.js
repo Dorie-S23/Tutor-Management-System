@@ -30,6 +30,7 @@ beforeEach(() => {
     allocation_overrides: [],
     academic_level_rates: [],
     notifications: [],
+    audit_log: [],
   };
   mockSupabase = fakeSupabase(tables);
 });
@@ -904,5 +905,96 @@ describe("DELETE /api/tutor-applications/:id", () => {
 
     expect(res.status).toBe(204);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("records a withdrawal in the audit log with the tutor as actor", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 2, no_of_tutors_assigned: 1 }];
+    tables.tutor_subject_preference = [
+      { id: "app-1", status: "approved", course_id: 10, tutor_id: "t1" },
+    ];
+
+    await request(buildApp()).delete("/api/tutor-applications/app-1");
+
+    expect(tables.audit_log).toHaveLength(1);
+    expect(tables.audit_log[0]).toMatchObject({
+      entity_type: "tutor_subject_preference",
+      entity_id: "app-1",
+      action: "withdrawn",
+      actor_id: "t1",
+      before: { status: "approved" },
+    });
+  });
+});
+
+describe("PATCH /api/tutor-applications/:id — audit log", () => {
+  test("records an approval with the organiser as actor and the prior status", async () => {
+    tables.courses = [
+      { id: 10, tutors_needed: 2, no_of_tutors_assigned: 0, hours_per_week: 3 },
+    ];
+    tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+    tables.tutor_subject_preference = [
+      { id: "app-1", status: "pending", course_id: 10, tutor_id: "t1" },
+    ];
+
+    await request(buildApp()).patch("/api/tutor-applications/app-1").send({
+      status: "approved",
+      approvalReason: "Strong mark",
+      organiserId: "organiser-1",
+    });
+
+    expect(tables.audit_log).toHaveLength(1);
+    expect(tables.audit_log[0]).toMatchObject({
+      entity_type: "tutor_subject_preference",
+      entity_id: "app-1",
+      action: "approved",
+      actor_id: "organiser-1",
+      before: { status: "pending" },
+      after: { status: "approved" },
+    });
+  });
+
+  test("doesn't write an audit entry when the status is invalid", async () => {
+    await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({ status: "maybe" });
+
+    expect(tables.audit_log).toHaveLength(0);
+  });
+});
+
+describe("POST /api/tutor-applications/bulk-approve — audit log", () => {
+  test("records one audit entry per successfully approved application", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 2, no_of_tutors_assigned: 0 }];
+    tables.tutor_subject_preference = [
+      { id: "app-1", status: "pending", course_id: 10, Tutor_name: "A" },
+      { id: "app-2", status: "pending", course_id: 10, Tutor_name: "B" },
+    ];
+
+    await request(buildApp())
+      .post("/api/tutor-applications/bulk-approve")
+      .send({ applicationIds: ["app-1", "app-2"], organiserId: "organiser-1" });
+
+    expect(tables.audit_log).toHaveLength(2);
+    expect(tables.audit_log.map((e) => e.entity_id).sort()).toEqual([
+      "app-1",
+      "app-2",
+    ]);
+    expect(tables.audit_log[0]).toMatchObject({
+      action: "approved",
+      actor_id: "organiser-1",
+    });
+  });
+
+  test("doesn't write an audit entry for an application that fails to approve", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 1, no_of_tutors_assigned: 1 }];
+    tables.tutor_subject_preference = [
+      { id: "app-1", status: "pending", course_id: 10, Tutor_name: "A" },
+    ];
+
+    await request(buildApp())
+      .post("/api/tutor-applications/bulk-approve")
+      .send({ applicationIds: ["app-1"] });
+
+    expect(tables.audit_log).toHaveLength(0);
   });
 });

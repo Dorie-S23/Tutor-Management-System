@@ -1,0 +1,666 @@
+// studentview.js is a real ES module (imports from ./storage.js and
+// ./highlightTarget.js), so — same problem as board.js's keyboard-nav test,
+// plus jsdom doesn't reliably run <script type="module"> at all even with
+// runScripts: "dangerously" — we load it as a classic script with both
+// modules' imports stubbed out, sharing scope with test hooks the same way
+// the board.js test does. window.fetch has to be stubbed inside
+// beforeParse, not after `new JSDOM(...)` returns — the inline script runs
+// synchronously during parsing, so anything set afterward is too late for
+// the page's own init IIFE.
+const fs = require("fs");
+const path = require("path");
+const { JSDOM } = require("jsdom");
+
+const html = fs.readFileSync(
+  path.join(__dirname, "..", "html", "StudentView.html"),
+  "utf8",
+);
+const studentviewSrc = fs
+  .readFileSync(path.join(__dirname, "studentview.js"), "utf8")
+  .replace(
+    /^import \{[^}]*\} from ".\/(?:storage|highlightTarget)\.js";$/gm,
+    "",
+  );
+
+const stubs = `
+function requireRole() {
+  return { id: "student-1", name: "Test Student", role: "student" };
+}
+async function getEntries() { return []; }
+function consumeQueryParam() { return null; }
+function scrollAndHighlight() {}
+`;
+
+function loadPage({ courses = [], applications = [], openSessions = [] } = {}) {
+  const script = `<script>${stubs}\n${studentviewSrc}\n</script>`;
+  const pageHtml = html
+    .replace(
+      '<script type="module" src="../js/studentview.js"></script>',
+      script,
+    )
+    .replace('<script src="../js/onboarding.js"></script>', "")
+    .replace('<script src="../js/logout.js"></script>', "");
+
+  const calls = [];
+
+  const dom = new JSDOM(pageHtml, {
+    url: "http://localhost/StudentView.html",
+    runScripts: "dangerously",
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      if (!window.CSS) window.CSS = {};
+      if (!window.CSS.escape) {
+        window.CSS.escape = (s) => String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+      }
+
+      window.fetch = async (url, opts) => {
+        calls.push({ url: String(url), opts });
+        const u = String(url);
+        if (u.includes("/api/courses")) {
+          return { ok: true, json: async () => courses };
+        }
+        if (u.includes("/api/course-volunteers") && opts?.method === "DELETE") {
+          return { ok: true, status: 204, json: async () => ({}) };
+        }
+        if (u.includes("/api/course-volunteers?status=open")) {
+          return { ok: true, json: async () => openSessions };
+        }
+        if (u.includes("/api/course-volunteers")) {
+          return { ok: true, json: async () => applications };
+        }
+        return { ok: true, json: async () => [] };
+      };
+    },
+  });
+
+  return { window: dom.window, calls };
+}
+
+function wait(ms = 50) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+describe("studentview.js — My Applications", () => {
+  test("shows pending, approved and rejected applications together, not just pending", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 82,
+          status: "pending",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+        {
+          id: "a2",
+          course_id: 2,
+          mark: 70,
+          status: "approved",
+          courses: { course_code: "COMS2000", course_name: "Data Structures" },
+        },
+        {
+          id: "a3",
+          course_id: 3,
+          mark: 40,
+          status: "rejected",
+          rejection_reason: "Mark below the course minimum",
+          courses: { course_code: "COMS3000", course_name: "Advanced Topics" },
+        },
+      ],
+    });
+    await wait();
+
+    const cards = window.document.querySelectorAll("#pendingList article");
+    expect(cards.length).toBe(3);
+
+    const text = window.document.getElementById("pendingList").textContent;
+    expect(text).toContain("COMS1000");
+    expect(text).toContain("COMS2000");
+    expect(text).toContain("COMS3000");
+  });
+
+  test("shows the rejection reason on a rejected application", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "a3",
+          course_id: 3,
+          mark: 40,
+          status: "rejected",
+          rejection_reason: "Mark below the course minimum",
+          courses: { course_code: "COMS3000", course_name: "Advanced Topics" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(window.document.getElementById("pendingList").textContent).toContain(
+      "Mark below the course minimum",
+    );
+  });
+
+  test("a pending application gets a Withdraw button, an approved one gets none", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 82,
+          status: "pending",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+        {
+          id: "a2",
+          course_id: 2,
+          mark: 70,
+          status: "approved",
+          courses: { course_code: "COMS2000", course_name: "Data Structures" },
+        },
+      ],
+    });
+    await wait();
+
+    const cards = Array.from(
+      window.document.querySelectorAll("#pendingList article"),
+    );
+    const pendingCard = cards.find((c) => c.textContent.includes("COMS1000"));
+    const approvedCard = cards.find((c) => c.textContent.includes("COMS2000"));
+
+    expect(pendingCard.querySelector("button")?.textContent).toBe("Withdraw");
+    expect(approvedCard.querySelector("button")).toBeNull();
+  });
+
+  test("a rejected application gets a Remove button, not a dead end", async () => {
+    const { window, calls } = loadPage({
+      applications: [
+        {
+          id: "a3",
+          course_id: 3,
+          mark: 40,
+          status: "rejected",
+          rejection_reason: "Mark below the course minimum",
+          courses: { course_code: "COMS3000", course_name: "Advanced Topics" },
+        },
+      ],
+    });
+    await wait();
+
+    const removeBtn = window.document.querySelector(
+      "#pendingList article button",
+    );
+    expect(removeBtn.textContent).toBe("Remove");
+
+    removeBtn.click();
+    await wait();
+
+    const deleteCall = calls.find((c) => c.opts?.method === "DELETE");
+    expect(deleteCall).toBeDefined();
+    expect(deleteCall.url).toContain("courseId=3");
+  });
+
+  test("clicking Withdraw calls DELETE with the signed-in student's id and the right course", async () => {
+    const { window, calls } = loadPage({
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 82,
+          status: "pending",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const withdrawBtn = window.document.querySelector(
+      "#pendingList article button",
+    );
+    withdrawBtn.click();
+    await wait();
+
+    const deleteCall = calls.find((c) => c.opts?.method === "DELETE");
+    expect(deleteCall).toBeDefined();
+    expect(deleteCall.url).toContain("userId=student-1");
+    expect(deleteCall.url).toContain("courseId=1");
+  });
+});
+
+describe("studentview.js — Modules You Can Tutor reflects existing applications", () => {
+  const openCourse = {
+    id: 1,
+    course_code: "COMS1000",
+    course_name: "Intro",
+    department: "Computer Science",
+    tutors_needed: 2,
+    no_of_tutors_assigned: 0,
+  };
+
+  test("a course with no existing application still shows a Volunteer button", async () => {
+    const { window } = loadPage({ courses: [openCourse], applications: [] });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).not.toBeNull();
+    expect(card.querySelector(".status-pill")).toBeNull();
+  });
+
+  test("shows the course's minimum mark up front", async () => {
+    const { window } = loadPage({
+      courses: [{ ...openCourse, min_mark: 65 }],
+      applications: [],
+    });
+    await wait();
+
+    expect(
+      window.document.querySelector("#courseList article").textContent,
+    ).toContain("Min mark 65");
+  });
+
+  test("shows the course's recurring Tutorial/Lab schedule before volunteering", async () => {
+    const { window } = loadPage({
+      courses: [
+        {
+          ...openCourse,
+          Day_of_tut: "Monday",
+          tutor_start_time: "10:00:00",
+          tutor_end_time: "12:00:00",
+          venues: "MSL004",
+          Day_of_lab: "Wednesday",
+          lab_start_time: "14:00:00",
+          lab_end_time: "16:00:00",
+          lab_venues: "MSL010",
+        },
+      ],
+      applications: [],
+    });
+    await wait();
+
+    const text = window.document.querySelector(
+      "#courseList article",
+    ).textContent;
+    expect(text).toContain("Tutorial Monday 10:00–12:00 (MSL004)");
+    expect(text).toContain("Lab Wednesday 14:00–16:00 (MSL010)");
+  });
+
+  test("still shows the schedule once already applied, so it's not lost after applying", async () => {
+    const { window } = loadPage({
+      courses: [
+        {
+          ...openCourse,
+          Day_of_tut: "Monday",
+          tutor_start_time: "10:00:00",
+          tutor_end_time: "12:00:00",
+        },
+      ],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          status: "pending",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.querySelector("#courseList article").textContent,
+    ).toContain("Tutorial Monday 10:00–12:00");
+  });
+
+  test("blocks a below-minimum mark before ever hitting the server", async () => {
+    const { window, calls } = loadPage({
+      courses: [{ ...openCourse, min_mark: 65 }],
+      applications: [],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    card.querySelector(".volunteer-btn").click();
+    const input = card.querySelector(".mark-input");
+    input.value = "50";
+    card.querySelector(".submit-mark-btn").click();
+    await wait();
+
+    expect(
+      calls.some(
+        (c) =>
+          c.url.includes("/api/course-volunteers") && c.opts?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
+  test("a course already applied for shows its status instead of a Volunteer button", async () => {
+    const { window } = loadPage({
+      courses: [openCourse],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 82,
+          status: "pending",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).toBeNull();
+    expect(card.querySelector(".status-pill").textContent).toBe("Pending");
+  });
+
+  test("a course already approved for doesn't invite a second application", async () => {
+    const { window } = loadPage({
+      courses: [openCourse],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 82,
+          status: "approved",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).toBeNull();
+    expect(card.querySelector(".status-pill").textContent).toBe("Approved");
+  });
+
+  test("a course rejected for shows the reason on the course card too", async () => {
+    const { window } = loadPage({
+      courses: [openCourse],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 40,
+          status: "rejected",
+          rejection_reason: "Mark below the course minimum",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector(".volunteer-btn")).toBeNull();
+    expect(card.querySelector(".status-pill").textContent).toBe("Rejected");
+    expect(card.textContent).toContain("Mark below the course minimum");
+  });
+});
+
+describe("studentview.js — Open Sessions You Can Cover", () => {
+  test("renders an open session with course, date/time/venue and a Claim button", async () => {
+    const { window } = loadPage({
+      openSessions: [
+        {
+          id: "s1",
+          course_id: 1,
+          session_date: "2026-09-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          venue: "FNB1",
+          reason: "Regular tutor is away",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const text = window.document.getElementById("openSessionsList").textContent;
+    expect(text).toContain("COMS1000");
+    expect(text).toContain("25/09/2026");
+    expect(text).toContain("14:00–16:00");
+    expect(text).toContain("FNB1");
+    expect(text).toContain("Regular tutor is away");
+
+    const claimBtn = window.document.querySelector(
+      "#openSessionsList article button",
+    );
+    expect(claimBtn.textContent).toBe("Claim");
+  });
+
+  test("clicking Claim PATCHes the session's claim endpoint with the signed-in student's id", async () => {
+    const { window, calls } = loadPage({
+      openSessions: [
+        {
+          id: "s1",
+          course_id: 1,
+          session_date: "2026-09-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    window.document.querySelector("#openSessionsList article button").click();
+    await wait();
+
+    const claimCall = calls.find((c) => c.url.includes("/claim"));
+    expect(claimCall).toBeDefined();
+    expect(claimCall.url).toContain("/api/course-volunteers/s1/claim");
+    expect(claimCall.opts.method).toBe("PATCH");
+    expect(JSON.parse(claimCall.opts.body)).toEqual({ userId: "student-1" });
+  });
+
+  test("shows an empty state when there are no open sessions", async () => {
+    const { window } = loadPage({ openSessions: [] });
+    await wait();
+
+    expect(
+      window.document.getElementById("openSessionsList").textContent,
+    ).toContain("No open sessions right now");
+  });
+});
+
+describe("studentview.js — a claimed session in My Applications", () => {
+  test("shows the session date/time instead of a mark for a session-claim row", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "s1",
+          course_id: 1,
+          status: "pending",
+          session_date: "2026-09-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const text = window.document.getElementById("pendingList").textContent;
+    expect(text).toContain("25/09/2026");
+    expect(text).not.toContain("Mark submitted");
+  });
+});
+
+describe("studentview.js — Upcoming Sessions", () => {
+  test("shows only approved, future-dated claimed sessions, soonest first", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "s1",
+          course_id: 1,
+          status: "approved",
+          session_date: "2099-12-25",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          courses: { course_code: "LATER1000", course_name: "Later" },
+        },
+        {
+          id: "s2",
+          course_id: 2,
+          status: "approved",
+          session_date: "2099-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "SOON1000", course_name: "Soon" },
+        },
+        {
+          id: "s3",
+          course_id: 3,
+          status: "pending",
+          session_date: "2099-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "PENDING1000", course_name: "Pending" },
+        },
+        {
+          id: "s4",
+          course_id: 4,
+          status: "approved",
+          session_date: "2020-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "PAST1000", course_name: "Past" },
+        },
+        {
+          id: "a1",
+          course_id: 5,
+          status: "approved",
+          mark: 80,
+          courses: { course_code: "COURSEONLY1000", course_name: "No session" },
+        },
+      ],
+    });
+    await wait();
+
+    const cards = window.document.querySelectorAll(
+      "#upcomingSessionsList article",
+    );
+    const codes = Array.from(cards).map(
+      (c) => c.querySelector("h3").textContent,
+    );
+
+    expect(codes).toEqual(["SOON1000", "LATER1000"]);
+  });
+
+  test("an approved whole-course application shows its recurring slot's next occurrence", async () => {
+    const DAY_NAMES = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const todayName = DAY_NAMES[new Date().getDay()];
+
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          status: "approved",
+          mark: 80,
+          courses: {
+            course_code: "COMS1000",
+            course_name: "Intro",
+            Day_of_tut: todayName,
+            tutor_start_time: "10:00:00",
+            tutor_end_time: "12:00:00",
+            venues: "MSL004",
+          },
+        },
+      ],
+    });
+    await wait();
+
+    const cards = window.document.querySelectorAll(
+      "#upcomingSessionsList article",
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0].querySelector("h3").textContent).toBe("COMS1000");
+    expect(cards[0].textContent).toContain("Tutorial:");
+    expect(cards[0].textContent).toContain("10:00–12:00");
+    expect(cards[0].textContent).toContain("MSL004");
+    expect(cards[0].textContent).toContain("repeats weekly");
+  });
+
+  test("a whole-course application with no set schedule doesn't produce an upcoming-session entry", async () => {
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          status: "approved",
+          mark: 80,
+          courses: {
+            course_code: "COURSEONLY1000",
+            course_name: "No schedule",
+          },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingSessionsList").textContent,
+    ).toContain("No upcoming sessions");
+  });
+
+  test("a recurring whole-course slot and a claimed session sort together, soonest first", async () => {
+    const DAY_NAMES = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const todayName = DAY_NAMES[new Date().getDay()];
+
+    const { window } = loadPage({
+      applications: [
+        {
+          id: "s1",
+          course_id: 2,
+          status: "approved",
+          session_date: "2099-01-01",
+          start_time: "09:00:00",
+          end_time: "11:00:00",
+          courses: { course_code: "FARAWAY1000", course_name: "Far away" },
+        },
+        {
+          id: "a1",
+          course_id: 1,
+          status: "approved",
+          mark: 80,
+          courses: {
+            course_code: "SOON1000",
+            course_name: "Recurring",
+            Day_of_tut: todayName,
+            tutor_start_time: "10:00:00",
+            tutor_end_time: "12:00:00",
+          },
+        },
+      ],
+    });
+    await wait();
+
+    const codes = Array.from(
+      window.document.querySelectorAll("#upcomingSessionsList article h3"),
+    ).map((h) => h.textContent);
+
+    expect(codes).toEqual(["SOON1000", "FARAWAY1000"]);
+  });
+
+  test("shows the empty state when there's nothing upcoming", async () => {
+    const { window } = loadPage({ applications: [] });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingSessionsList").textContent,
+    ).toContain("No upcoming sessions");
+  });
+});

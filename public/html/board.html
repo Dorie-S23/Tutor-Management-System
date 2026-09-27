@@ -63,12 +63,16 @@
           <button class="btn btn-primary" id="obviousFillBtn" type="button">
             Fill obvious assignments
           </button>
+          <button class="btn btn-primary" id="autoAllocateBtn" type="button">
+            Auto-allocate whole school
+          </button>
           <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
           <a class="btn btn-ghost" href="timetable.html">Timetable</a>
           <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
           <a class="btn btn-ghost" href="hours-budget-report.html"
             >Budget report</a
           >
+          <a class="btn btn-ghost" href="allocation-history.html">History</a>
           <button class="btn btn-ghost" id="tour-button" type="button">
             Take the tour
           </button>
@@ -206,11 +210,18 @@
           <section class="assign-panel" aria-labelledby="volunteersHeading">
             <header class="assign-panel-head">
               <h3 id="volunteersHeading">Student Volunteers</h3>
+              <button
+                class="btn btn-ghost btn-small-pad"
+                id="postOverflowSessionBtn"
+                type="button"
+              >
+                + Post overflow session
+              </button>
             </header>
 
             <p class="hint">
-              Approve or reject students who've volunteered to be tutored in
-              this module.
+              Approve or reject students who've volunteered to help tutor this
+              module, or post a specific gap below for someone to claim.
             </p>
 
             <ul class="tutor-list" id="volunteerList">
@@ -505,6 +516,86 @@
     </dialog>
 
     <dialog
+      class="modal"
+      id="postOverflowSessionModal"
+      aria-labelledby="postOverflowSessionModalHeading"
+    >
+      <form method="dialog" class="modal-form" id="postOverflowSessionForm">
+        <header class="modal-head">
+          <h2 id="postOverflowSessionModalHeading">Post overflow session</h2>
+          <button
+            class="modal-close"
+            id="postOverflowSessionModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="postOverflowSessionFormError" hidden></p>
+
+        <p class="hint" id="postOverflowSessionModalContext"></p>
+
+        <label class="field">
+          <span class="field-label">Date</span>
+          <input type="date" id="overflowSessionDateInput" required />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Start time</span>
+          <input type="time" id="overflowSessionStartInput" required />
+        </label>
+
+        <label class="field">
+          <span class="field-label">End time</span>
+          <input type="time" id="overflowSessionEndInput" required />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Venue (optional)</span>
+          <input
+            type="text"
+            id="overflowSessionVenueInput"
+            placeholder="e.g. FNB1"
+          />
+        </label>
+
+        <label class="field">
+          <span class="field-label"
+            >Why this session needs covering (optional)</span
+          >
+          <textarea
+            id="overflowSessionReasonInput"
+            rows="2"
+            placeholder="e.g. Regular tutor is away that week"
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="postOverflowSessionCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="postOverflowSessionSubmitBtn"
+              type="submit"
+            >
+              Post session
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog
       class="modal modal-wide"
       id="obviousFillModal"
       aria-labelledby="obviousFillHeading"
@@ -550,6 +641,57 @@
               type="button"
             >
               Approve selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <dialog
+      class="modal modal-wide"
+      id="autoAllocateModal"
+      aria-labelledby="autoAllocateHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="autoAllocateHeading">Auto-allocate whole school</h2>
+          <button
+            class="modal-close"
+            id="autoAllocateCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="autoAllocateHint"></p>
+
+        <ul class="tutor-list" id="autoAllocateList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="autoAllocateEmpty" hidden>
+          No course currently has both an open slot and an eligible pending
+          applicant.
+        </p>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="autoAllocateCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="autoAllocatePublishBtn"
+              type="button"
+            >
+              Publish selected
             </button>
           </li>
         </menu>

@@ -1056,12 +1056,21 @@ async function renderVolunteers(course) {
 
   rows.forEach((vol) => {
     const student = vol.users;
-    const name = student?.name || "Unknown";
     const status = (vol.status || "pending").toLowerCase();
-    const markStamp =
-      typeof vol.mark === "number"
-        ? `<span class="stamp ok">Mark ${vol.mark}</span>`
-        : "";
+    const isOpenSession = status === "open";
+    const name = isOpenSession
+      ? "Open — unclaimed"
+      : student?.name || "Unknown";
+
+    let detailStamp = "";
+    if (typeof vol.mark === "number") {
+      detailStamp = `<span class="stamp ok">Mark ${vol.mark}</span>`;
+    } else if (vol.session_date) {
+      const [y, m, d] = vol.session_date.split("-");
+      const time = `${vol.start_time?.slice(0, 5)}–${vol.end_time?.slice(0, 5)}`;
+      const venue = vol.venue ? ` · ${vol.venue}` : "";
+      detailStamp = `<span class="stamp">${d}/${m}/${y} · ${time}${venue}</span>`;
+    }
 
     const li = document.createElement("li");
     const row = document.createElement("div");
@@ -1074,7 +1083,7 @@ async function renderVolunteers(course) {
         <span class="role">${student?.email || ""}</span>
       </span>
       <span class="stamp-row">
-        ${markStamp}
+        ${detailStamp}
       </span>
       <span class="status-pill ${status}">${status}</span>
       <span class="applicant-actions"></span>
@@ -1133,7 +1142,7 @@ async function renderVolunteers(course) {
           }),
         );
       }
-    } else {
+    } else if (!isOpenSession) {
       actionsEl.appendChild(
         makeApplicantActionBtn("Reconsider", "", () =>
           setVolunteerStatus(course, vol, "pending", name),
@@ -1153,7 +1162,12 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
     const res = await fetch(`/api/course-volunteers/${vol.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejectionReason, approvalReason }),
+      body: JSON.stringify({
+        status,
+        rejectionReason,
+        approvalReason,
+        organiserId: getSessionUserId(),
+      }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -1179,7 +1193,11 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
 
     renderVolunteers(course);
     fetchVolunteerCounts();
-    renderCourseList();
+    // Approving/un-approving a volunteer now changes the course's
+    // assigned-tutor count too (see courseVolunteers.js), so the shortfall/
+    // staffed pill needs a real re-fetch, not just a re-render of the stale
+    // in-memory COURSES array.
+    await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
@@ -1205,6 +1223,126 @@ async function setVolunteerLock(course, vol, name) {
 }
 
 let lastAssignmentCardSnapshot = null;
+
+// ---------- post overflow session modal ----------
+
+let pendingOverflowCourse = null;
+
+const postOverflowSessionBtn = document.getElementById(
+  "postOverflowSessionBtn",
+);
+const postOverflowSessionModal = document.getElementById(
+  "postOverflowSessionModal",
+);
+const postOverflowSessionForm = document.getElementById(
+  "postOverflowSessionForm",
+);
+const postOverflowSessionFormError = document.getElementById(
+  "postOverflowSessionFormError",
+);
+const postOverflowSessionModalContext = document.getElementById(
+  "postOverflowSessionModalContext",
+);
+const overflowSessionDateInput = document.getElementById(
+  "overflowSessionDateInput",
+);
+const overflowSessionStartInput = document.getElementById(
+  "overflowSessionStartInput",
+);
+const overflowSessionEndInput = document.getElementById(
+  "overflowSessionEndInput",
+);
+const overflowSessionVenueInput = document.getElementById(
+  "overflowSessionVenueInput",
+);
+const overflowSessionReasonInput = document.getElementById(
+  "overflowSessionReasonInput",
+);
+const postOverflowSessionSubmitBtn = document.getElementById(
+  "postOverflowSessionSubmitBtn",
+);
+
+function openPostOverflowSessionModal() {
+  const course = COURSES.find((c) => c.id === activeCourseId);
+  if (!course) return;
+  pendingOverflowCourse = course;
+  postOverflowSessionForm.reset();
+  postOverflowSessionFormError.hidden = true;
+  postOverflowSessionModalContext.textContent = `Post a specific gap in ${course.code} for a volunteer to claim — a regular slot with nobody to cover it, not a standing weekly commitment.`;
+  postOverflowSessionModal.showModal();
+  overflowSessionDateInput.focus();
+}
+
+function closePostOverflowSessionModal() {
+  postOverflowSessionModal.close();
+  pendingOverflowCourse = null;
+}
+
+postOverflowSessionBtn.addEventListener("click", openPostOverflowSessionModal);
+document
+  .getElementById("postOverflowSessionModalCloseBtn")
+  .addEventListener("click", closePostOverflowSessionModal);
+document
+  .getElementById("postOverflowSessionCancelBtn")
+  .addEventListener("click", closePostOverflowSessionModal);
+postOverflowSessionModal.addEventListener("click", (e) => {
+  if (e.target === postOverflowSessionModal) closePostOverflowSessionModal();
+});
+
+postOverflowSessionForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  postOverflowSessionFormError.hidden = true;
+  if (!pendingOverflowCourse) return;
+
+  const course = pendingOverflowCourse;
+  const sessionDate = overflowSessionDateInput.value;
+  const startTime = overflowSessionStartInput.value;
+  const endTime = overflowSessionEndInput.value;
+
+  if (endTime <= startTime) {
+    postOverflowSessionFormError.textContent =
+      "End time must be after start time.";
+    postOverflowSessionFormError.hidden = false;
+    return;
+  }
+
+  postOverflowSessionSubmitBtn.disabled = true;
+  postOverflowSessionSubmitBtn.textContent = "Posting…";
+  try {
+    const res = await fetch("/api/course-volunteers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        courseId: course.id,
+        sessionDate,
+        startTime,
+        endTime,
+        venue: overflowSessionVenueInput.value.trim(),
+        reason: overflowSessionReasonInput.value.trim(),
+        organiserId: getSessionUserId(),
+      }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      postOverflowSessionFormError.textContent =
+        body.error || "Couldn't post that session.";
+      postOverflowSessionFormError.hidden = false;
+      return;
+    }
+
+    closePostOverflowSessionModal();
+    showToast(`Posted a ${course.code} session for volunteers to claim`);
+    renderVolunteers(course);
+  } catch (err) {
+    postOverflowSessionFormError.textContent =
+      "Network error — couldn't reach the server.";
+    postOverflowSessionFormError.hidden = false;
+  } finally {
+    postOverflowSessionSubmitBtn.disabled = false;
+    postOverflowSessionSubmitBtn.textContent = "Post session";
+  }
+});
 
 function renderAssignmentCard(course) {
   const isFull =
@@ -1346,6 +1484,198 @@ obviousFillConfirmBtn.addEventListener("click", async () => {
   } finally {
     obviousFillConfirmBtn.disabled = false;
     obviousFillConfirmBtn.textContent = "Approve selected";
+  }
+});
+
+// ---------- auto-allocate whole school ----------
+//
+// Same reviewable-list shape as Obvious Fill, but backed by a real draft:
+// opening the modal calls auto-allocate to propose assignments for every
+// course in one pass (unambiguous slots picked outright, ambiguous ones
+// ranked by mark), and Publish applies only the still-checked rows. The
+// draft itself already exists in allocation_drafts the moment the modal
+// opens — cancelling just leaves it unpublished, nothing to clean up.
+
+const autoAllocateBtn = document.getElementById("autoAllocateBtn");
+const autoAllocateModal = document.getElementById("autoAllocateModal");
+const autoAllocateList = document.getElementById("autoAllocateList");
+const autoAllocateEmpty = document.getElementById("autoAllocateEmpty");
+const autoAllocateHint = document.getElementById("autoAllocateHint");
+const autoAllocatePublishBtn = document.getElementById(
+  "autoAllocatePublishBtn",
+);
+
+let activeAutoAllocateDraftId = null;
+
+function closeAutoAllocateModal() {
+  autoAllocateModal.close();
+}
+
+async function openAutoAllocateModal() {
+  activeAutoAllocateDraftId = null;
+  autoAllocateList.innerHTML = "";
+  autoAllocateEmpty.hidden = true;
+  autoAllocateHint.textContent = "Proposing assignments…";
+  autoAllocatePublishBtn.hidden = false;
+  autoAllocatePublishBtn.disabled = true;
+  autoAllocateModal.showModal();
+
+  let draft, assignments, skipped;
+  try {
+    const res = await fetch("/api/allocation-drafts/auto-allocate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organiserId: getSessionUserId() }),
+    });
+    const body = await res.json();
+    if (!res.ok)
+      throw new Error(body.error || "Failed to propose an allocation");
+    ({ draft, assignments, skipped } = body);
+  } catch (err) {
+    autoAllocateHint.textContent =
+      "Couldn't propose an allocation — try again.";
+    autoAllocatePublishBtn.hidden = true;
+    return;
+  }
+
+  if (!draft || assignments.length === 0) {
+    autoAllocateHint.textContent = "";
+    autoAllocateEmpty.hidden = false;
+    autoAllocatePublishBtn.hidden = true;
+    renderSkippedCandidates(skipped);
+    return;
+  }
+
+  activeAutoAllocateDraftId = draft.id;
+  autoAllocateHint.textContent = `${assignments.length} assignment${assignments.length === 1 ? "" : "s"} proposed across every course with an open slot — uncheck anything you'd rather decide yourself.`;
+
+  const byCourse = new Map();
+  assignments.forEach((a) => {
+    const key = a.course?.course_code || String(a.course_id);
+    if (!byCourse.has(key)) byCourse.set(key, []);
+    byCourse.get(key).push(a);
+  });
+
+  byCourse.forEach((group, courseKey) => {
+    const heading = document.createElement("li");
+    heading.className = "obvious-fill-course-head";
+    heading.textContent = `${courseKey} — ${group[0].course?.course_name || ""}`;
+    autoAllocateList.appendChild(heading);
+
+    group.forEach((assignment) => {
+      const li = document.createElement("li");
+      const row = document.createElement("label");
+      row.className = "tutor-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <input type="checkbox" class="auto-allocate-check" data-id="${assignment.id}" checked>
+        <span class="name-block">
+          <span class="name">${assignment.tutor?.name || "Unknown"}</span>
+          <span class="role">${assignment.explanation}</span>
+        </span>
+      `;
+      li.appendChild(row);
+      autoAllocateList.appendChild(li);
+    });
+  });
+
+  renderSkippedCandidates(skipped);
+
+  autoAllocatePublishBtn.disabled = false;
+}
+
+// Every eligible-but-not-proposed applicant (locked, over the tutor's hour
+// cap, or simply outranked for a slot) is still shown here — not as
+// something to publish, just so the organiser can see why they didn't make
+// the cut instead of the run looking like it silently ignored them.
+function renderSkippedCandidates(skipped) {
+  if (!skipped || skipped.length === 0) return;
+
+  const heading = document.createElement("li");
+  heading.className = "obvious-fill-course-head";
+  heading.textContent = "Not proposed";
+  autoAllocateList.appendChild(heading);
+
+  skipped.forEach((skip) => {
+    const course = COURSES.find((c) => c.id === skip.courseId);
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "tutor-row";
+    row.style.cursor = "default";
+    row.innerHTML = `
+      <span class="name-block">
+        <span class="name">${skip.tutorName || "Unknown"} &mdash; ${course?.code || `course ${skip.courseId}`}</span>
+        <span class="role">${skip.reason}</span>
+      </span>
+    `;
+    li.appendChild(row);
+    autoAllocateList.appendChild(li);
+  });
+}
+
+autoAllocateBtn.addEventListener("click", openAutoAllocateModal);
+document
+  .getElementById("autoAllocateCloseBtn")
+  .addEventListener("click", closeAutoAllocateModal);
+document
+  .getElementById("autoAllocateCancelBtn")
+  .addEventListener("click", closeAutoAllocateModal);
+autoAllocateModal.addEventListener("click", (e) => {
+  if (e.target === autoAllocateModal) closeAutoAllocateModal();
+});
+
+autoAllocatePublishBtn.addEventListener("click", async () => {
+  if (!activeAutoAllocateDraftId) {
+    closeAutoAllocateModal();
+    return;
+  }
+
+  const allChecks = Array.from(
+    autoAllocateList.querySelectorAll(".auto-allocate-check"),
+  );
+  const excludeAssignmentIds = allChecks
+    .filter((cb) => !cb.checked)
+    .map((cb) => cb.dataset.id);
+
+  if (excludeAssignmentIds.length === allChecks.length) {
+    closeAutoAllocateModal();
+    return;
+  }
+
+  autoAllocatePublishBtn.disabled = true;
+  autoAllocatePublishBtn.textContent = "Publishing…";
+
+  try {
+    const res = await fetch(
+      `/api/allocation-drafts/${activeAutoAllocateDraftId}/publish`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organiserId: getSessionUserId(),
+          excludeAssignmentIds,
+        }),
+      },
+    );
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't publish that allocation.");
+      return;
+    }
+    const failed = body.results.filter((r) => !r.success);
+    const succeeded = body.results.length - failed.length;
+    showToast(
+      failed.length === 0
+        ? `${succeeded} assignment${succeeded === 1 ? "" : "s"} published.`
+        : `${succeeded} published, ${failed.length} couldn't be — something changed since you opened this. See History for details.`,
+    );
+    closeAutoAllocateModal();
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    autoAllocatePublishBtn.disabled = false;
+    autoAllocatePublishBtn.textContent = "Publish selected";
   }
 });
 
