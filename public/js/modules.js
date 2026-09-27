@@ -24,7 +24,9 @@ const yearSelect = document.getElementById("apply-year-select");
 const markInput = document.getElementById("apply-mark-input");
 const availabilitySelect = document.getElementById("apply-availability-select");
 const availabilityLabel = document.getElementById("apply-availability-label");
-const applicationsListEl = document.getElementById("applications-list");
+const moduleGridEl = document.getElementById("module-grid");
+const applicationsPanelEl = document.getElementById("applications-panel");
+const applicationsCountEl = document.getElementById("applications-count");
 const applicationsItemsEl = document.getElementById("applications-items");
 const toastEl = document.getElementById("toast");
 
@@ -34,13 +36,25 @@ let myAcademicLevel = null;
 
 // course_level is stored as a numeric rank (see server/routes/tutorApplications.js's
 // LEVEL_RANK) — shown back to the tutor as the label they'd recognise from their own
-// year-of-study dropdown.
+// year-of-study dropdown, and compared against their academic level to badge each card.
 const COURSE_LEVEL_LABEL = {
   3: "3rd year",
   4: "Honours",
   5: "Masters",
   6: "PhD",
 };
+const LEVEL_RANK = {
+  third_year: 3,
+  honours: 4,
+  masters: 5,
+  phd: 6,
+};
+
+// The prototype's module cards cycle through four accent colours.
+const CARD_ACCENTS = ["blue", "violet", "amber", "rose"];
+
+const MODULE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M8.5 9.5h7M8.5 13h7M8.5 16.5h4" /></svg>`;
+const CHECK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>`;
 
 function showToast(message, type = "success") {
   toastEl.textContent = message;
@@ -104,6 +118,7 @@ async function fetchCourses() {
     showToast("Couldn't load modules from the database.", "danger");
     COURSES = [];
   }
+  renderModuleCards();
 }
 
 async function fetchMyAcademicLevel(tutorId) {
@@ -115,6 +130,7 @@ async function fetchMyAcademicLevel(tutorId) {
   } catch {
     myAcademicLevel = null;
   }
+  renderModuleCards();
 }
 
 async function fetchMyApplications(tutorId) {
@@ -129,14 +145,146 @@ async function fetchMyApplications(tutorId) {
     myApplications = [];
   }
   renderApplicationsList();
+  updateApplicationsCount();
+  renderModuleCards();
+}
+
+// The prototype badges each card with how well the module matches the tutor's
+// record: a level above the module's requirement reads "Strong match", an exact
+// match reads "Eligible", and anything below is flagged as needing a higher year.
+function matchBadge(course) {
+  const myRank = LEVEL_RANK[myAcademicLevel];
+  if (!myRank || !course.course_level) return "";
+
+  if (myRank > course.course_level) {
+    return '<span class="badge badge--eligible">Strong match</span>';
+  }
+  if (myRank === course.course_level) {
+    return '<span class="badge badge--applied">Eligible</span>';
+  }
+  const levelLabel = COURSE_LEVEL_LABEL[course.course_level];
+  return `<span class="badge badge--mismatch">Needs ${levelLabel || "a higher level"}</span>`;
+}
+
+function applicationFor(courseId) {
+  return myApplications.find(
+    (app) => String(app.course_id ?? app.courses?.id) === String(courseId),
+  );
+}
+
+function metaLines(course) {
+  const lines = [];
+
+  const levelLabel = COURSE_LEVEL_LABEL[course.course_level];
+  lines.push(
+    levelLabel ? `${levelLabel} level or higher` : "Open to all years",
+  );
+
+  const perWeek = course.hours_per_week
+    ? `Up to ${course.hours_per_week}h per week`
+    : null;
+  const minMark =
+    course.min_mark != null ? `Minimum ${course.min_mark}%` : null;
+  const requirements = [perWeek, minMark].filter(Boolean).join(" · ");
+  if (requirements) lines.push(requirements);
+
+  const session = formatSession(course);
+  lines.push(
+    session ? `Tutorial · ${session}` : "Tutorial day/time not set yet",
+  );
+
+  if (course.venues) lines.push(course.venues);
+
+  return lines;
+}
+
+// The card's bottom control reflects the application state: not applied yet gets
+// the solid "Apply for module" action, everything else a soft non-interactive chip.
+function cardControl(course, app) {
+  const status = app ? (app.status || "pending").toLowerCase() : null;
+
+  if (status === "pending" || status === "approved" || status === "rejected") {
+    const soft = document.createElement("span");
+    soft.className = "btn-soft";
+    soft.textContent =
+      status === "pending"
+        ? "Application submitted"
+        : status === "approved"
+          ? "You tutor this module"
+          : "Application not approved";
+    return soft;
+  }
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn-primary";
+  btn.dataset.applyCourse = course.id;
+  btn.textContent = "Apply for module";
+  return btn;
+}
+
+function renderModuleCards() {
+  if (!moduleGridEl) return;
+  moduleGridEl.innerHTML = "";
+
+  if (COURSES.length === 0) {
+    moduleGridEl.innerHTML =
+      '<p class="empty-state module-grid__empty">No modules are open for applications right now — check back soon.</p>';
+    return;
+  }
+
+  COURSES.forEach((course, index) => {
+    const app = applicationFor(course.id);
+
+    const card = document.createElement("article");
+    card.className = `module-card module-card--${CARD_ACCENTS[index % CARD_ACCENTS.length]}`;
+
+    const top = document.createElement("div");
+    top.className = "module-card__top";
+    top.innerHTML = `<span class="module-card__icon">${MODULE_ICON}</span>${matchBadge(course)}`;
+
+    const heading = document.createElement("div");
+    heading.className = "module-card__heading";
+    const code = document.createElement("span");
+    code.className = "module-card__code";
+    code.textContent = course.course_code || "Module";
+    const name = document.createElement("span");
+    name.className = "module-card__name";
+    name.textContent = course.course_name || "";
+    heading.append(code, name);
+
+    const meta = document.createElement("div");
+    meta.className = "module-card__meta";
+    metaLines(course).forEach((line) => {
+      const lineEl = document.createElement("span");
+      lineEl.textContent = line;
+      meta.appendChild(lineEl);
+    });
+
+    card.append(top, heading, meta, cardControl(course, app));
+    moduleGridEl.appendChild(card);
+  });
+}
+
+function updateApplicationsCount() {
+  if (!applicationsCountEl) return;
+  const count = myApplications.length;
+  applicationsCountEl.hidden = count === 0;
+  if (count === 0) {
+    applicationsCountEl.innerHTML = "";
+    return;
+  }
+  applicationsCountEl.innerHTML = `${CHECK_ICON}<span></span>`;
+  applicationsCountEl.querySelector("span").textContent =
+    `${count} application${count === 1 ? "" : "s"} submitted`;
 }
 
 function renderApplicationsList() {
   if (myApplications.length === 0) {
-    applicationsListEl.hidden = true;
+    applicationsPanelEl.hidden = true;
     return;
   }
-  applicationsListEl.hidden = false;
+  applicationsPanelEl.hidden = false;
   applicationsItemsEl.innerHTML = "";
 
   myApplications.forEach((app) => {
@@ -169,12 +317,11 @@ function renderApplicationsList() {
       removeBtn.className = "btn-link";
       removeBtn.textContent = "Remove & apply again";
       removeBtn.addEventListener("click", async () => {
-        if (
-          !confirm(
-            `Remove this application for ${label}? You'll be able to apply again.`,
-          )
-        )
-          return;
+        const confirmed = await showConfirm(
+          `Remove this application for ${label}? You'll be able to apply again.`,
+          "Remove application",
+        );
+        if (!confirmed) return;
 
         removeBtn.disabled = true;
         try {
@@ -183,14 +330,17 @@ function renderApplicationsList() {
           });
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            showToast(body.error || "Couldn't remove that application.");
+            showToast(
+              body.error || "Couldn't remove that application.",
+              "danger",
+            );
             removeBtn.disabled = false;
             return;
           }
           showToast("Application removed.");
           await fetchMyApplications(currentUser.id);
         } catch {
-          showToast("Network error — couldn't reach the server.");
+          showToast("Network error — couldn't reach the server.", "danger");
           removeBtn.disabled = false;
         }
       });
@@ -288,12 +438,18 @@ function updateCourseMeta() {
     : "Are you free at the tutorial time?";
 }
 
-function openApplyModal() {
+// Opened from the page-head button (no preselect) or a module card's "Apply for
+// module" button, which preselects that card's module in the dropdown.
+function openApplyModal(preselectCourseId) {
   applyForm.reset();
   applyError.hidden = true;
   populateCourseSelect();
   updateCourseMeta();
   if (myAcademicLevel) yearSelect.value = myAcademicLevel;
+  if (preselectCourseId) {
+    courseSelect.value = String(preselectCourseId);
+    updateCourseMeta();
+  }
   applyModal.showModal();
 }
 
@@ -301,7 +457,7 @@ function closeApplyModal() {
   applyModal.close();
 }
 
-applyBtn?.addEventListener("click", openApplyModal);
+applyBtn?.addEventListener("click", () => openApplyModal());
 document
   .getElementById("apply-modal-close-btn")
   ?.addEventListener("click", closeApplyModal);
@@ -312,6 +468,10 @@ applyModal?.addEventListener("click", (e) => {
   if (e.target === applyModal) closeApplyModal();
 });
 courseSelect?.addEventListener("change", updateCourseMeta);
+moduleGridEl?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-apply-course]");
+  if (btn) openApplyModal(btn.dataset.applyCourse);
+});
 
 applyForm?.addEventListener("submit", async (e) => {
   e.preventDefault();

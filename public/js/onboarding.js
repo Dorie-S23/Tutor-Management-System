@@ -61,6 +61,32 @@
     renderStep();
   }
 
+  // While a step is on screen the ring and tooltip sit in viewport
+  // coordinates, so the page must not move underneath them. The lock is
+  // overflow: hidden on both scrollers — that stops wheel, keyboard,
+  // and scrollbar scrolling — while renderStep lifts and re-applies it
+  // around its scrollIntoView so step positioning still works.
+  let scrollLockState = null;
+
+  function setScrollLock(on) {
+    const html = document.documentElement;
+    const body = document.body;
+    if (on) {
+      if (!scrollLockState) {
+        scrollLockState = {
+          html: html.style.overflow,
+          body: body.style.overflow,
+        };
+      }
+      html.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+    } else if (scrollLockState) {
+      html.style.overflow = scrollLockState.html;
+      body.style.overflow = scrollLockState.body;
+      scrollLockState = null;
+    }
+  }
+
   function teardown() {
     document
       .querySelectorAll(
@@ -69,6 +95,7 @@
       .forEach((el) => el.remove());
     window.removeEventListener("resize", renderStep);
     document.removeEventListener("keydown", onKeydown);
+    setScrollLock(false);
   }
 
   function finish() {
@@ -161,6 +188,9 @@
     }
 
     target.scrollIntoView({ block: "center", behavior: "auto" });
+    // Freeze the page again now the target is in place; the highlight
+    // geometry below is measured against the locked layout.
+    setScrollLock(true);
 
     const rect = target.getBoundingClientRect();
     const pad = 6;

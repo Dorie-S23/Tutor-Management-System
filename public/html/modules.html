@@ -3,18 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Module Application | Tutor Management System</title>
-    <link rel="stylesheet" href="../css/global.css" />
+    <title>Module Application | TutorX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/app.css" />
   </head>
-  <body class="tutor-app">
-    <header class="app-header">
-      <h1>Module Application</h1>
-      <nav class="tab-nav">
+
+  <body data-theme="tutor">
+    <header class="app-navbar">
+      <a class="brand-mark" href="dashboard.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
+
+      <nav class="tab-nav" aria-label="Main navigation">
         <a href="dashboard.html">Dashboard</a>
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html">Calendar</a>
         <a href="timesheets.html">Timesheets</a>
         <a href="modules.html" aria-current="page">Module Application</a>
+      </nav>
+
+      <div class="navbar-right">
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -57,29 +86,58 @@
             </p>
           </div>
         </div>
-        <a href="#" id="logout-button">Logout</a>
-      </nav>
+
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Tutor</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
     </header>
 
-    <main>
-      <div class="card">
-        <h2>Tutor a module</h2>
-        <p>
-          Apply to tutor one of the modules that need tutors. We'll check your
-          mark and availability before it goes to the board.
-        </p>
-        <button class="btn-primary" id="apply-to-tutor-btn" type="button">
-          Apply to tutor a module
-        </button>
-
-        <div id="applications-list" class="applications-list" hidden>
-          <h3>Your applications</h3>
-          <ul id="applications-items"></ul>
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <h1>Module applications</h1>
+          <p class="page-sub">
+            Apply for modules that match your academic record and weekly
+            availability.
+          </p>
+        </div>
+        <div class="head-actions">
+          <span class="submitted-chip" id="applications-count" hidden></span>
+          <button class="btn-primary" id="apply-to-tutor-btn" type="button">
+            Apply to tutor a module
+          </button>
         </div>
       </div>
-    </main>
 
-    <output class="toast" id="toast" role="status" aria-live="polite"></output>
+      <div class="page-stack">
+        <div class="module-grid" id="module-grid">
+          <!-- rendered by modules.js -->
+        </div>
+
+        <section class="panel" id="applications-panel" hidden>
+          <h2>Your applications</h2>
+          <div class="applications-list" id="applications-list">
+            <ul id="applications-items"></ul>
+          </div>
+        </section>
+      </div>
+    </main>
 
     <dialog
       class="modal"
@@ -108,7 +166,7 @@
           </select>
         </label>
 
-        <p class="course-meta" id="apply-course-meta" hidden></p>
+        <p class="hint" id="apply-course-meta" hidden></p>
 
         <label class="field">
           <span class="field-label">Your year of study</span>
@@ -194,6 +252,9 @@
       </div>
     </dialog>
 
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="../js/user-badge.js"></script>
     <script type="module" src="../js/modules.js"></script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>

@@ -3,68 +3,260 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hours &amp; Budget Report | Tutor Management System</title>
+    <title>Budget Report | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
   </head>
-  <body>
-    <header class="board-header board-header--brand">
-      <hgroup class="header-left">
-        <p class="eyebrow">
-          <img src="../images/images.png" alt="" class="eyebrow-logo" />
-          School of Computer Science &amp; Applied Mathematics
-        </p>
-        <h1>Hours &amp; Budget Report</h1>
-      </hgroup>
 
-      <img
-        src="../images/Wits-890x664.png"
-        alt="University of the Witwatersrand"
-        class="header-wits-logo"
-      />
+  <body data-theme="organiser">
+    <header class="app-navbar">
+      <a class="brand-mark" href="board.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
 
-      <div class="header-actions">
-        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
-      </div>
-      <button class="btn btn-danger" id="logout-button" type="button">
-        Logout
-      </button>
-    </header>
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="board.html">Courses</a>
+        <a href="tutors.html">Manage Tutors</a>
+        <a href="timetable.html">Timetable</a>
+        <a href="timesheet-review.html">Timesheets</a>
+        <a href="hours-budget-report.html" aria-current="page">Budget Report</a>
+      </nav>
 
-    <main class="tutors-layout">
-      <section class="card" aria-labelledby="filtersHeading">
-        <h2 id="filtersHeading">Date range</h2>
-        <p class="hint">
-          Leave both blank to include every logged tutoring hour on record.
-        </p>
-        <div class="form-grid">
-          <div class="form-field">
-            <label for="fromDate">From</label>
-            <input type="date" id="fromDate" />
-          </div>
-          <div class="form-field">
-            <label for="toDate">To</label>
-            <input type="date" id="toDate" />
-          </div>
-          <div class="form-actions">
-            <button class="btn btn-primary" id="applyFilterBtn" type="button">
-              Apply
-            </button>
-            <button class="btn btn-ghost" id="clearFilterBtn" type="button">
-              Clear
-            </button>
+      <div class="navbar-right">
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
           </div>
         </div>
+
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Organiser</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <header class="page-head">
+        <div>
+          <h1>Budget Report</h1>
+          <p class="page-sub">
+            Logged tutoring hours and cost against each course's budget.
+          </p>
+        </div>
+        <div class="head-actions">
+          <div class="universal-search">
+            <input
+              type="search"
+              id="universalSearchInput"
+              class="universal-search-input"
+              placeholder="Search courses, tutors, timesheets…"
+              aria-label="Universal search"
+            />
+            <ul
+              class="universal-search-results"
+              id="universalSearchResults"
+              hidden
+            ></ul>
+          </div>
+        </div>
+      </header>
+
+      <section class="org-stats" aria-label="Report totals">
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Hours logged
+          </p>
+          <p class="org-stat__value" id="statTotalHours">0h</p>
+        </article>
+
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <circle cx="12" cy="12" r="2" />
+              <path d="M6 12h.01M18 12h.01" />
+            </svg>
+            Total cost
+          </p>
+          <p class="org-stat__value" id="statTotalCost">R0</p>
+        </article>
+
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+              <path d="M22 12A10 10 0 0 0 12 2v10z" />
+            </svg>
+            Budget used
+          </p>
+          <p class="org-stat__value" id="statBudgetUsed">—</p>
+        </article>
+
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Courses over budget
+          </p>
+          <p class="org-stat__value" id="statOverBudget">0</p>
+        </article>
       </section>
 
-      <p class="field-error" id="unlinkedWarning" hidden></p>
+      <div class="org-toolbar">
+        <input
+          type="date"
+          id="fromDate"
+          class="toolbar-date"
+          aria-label="From date"
+        />
+        <span class="hint">to</span>
+        <input
+          type="date"
+          id="toDate"
+          class="toolbar-date"
+          aria-label="To date"
+        />
+        <button class="btn-secondary" id="applyFilterBtn" type="button">
+          Apply
+        </button>
+        <button class="btn-link" id="clearFilterBtn" type="button">
+          Clear
+        </button>
+        <div class="org-toolbar__spacer"></div>
+        <p class="hint">Leave blank to include every logged hour on record.</p>
+      </div>
 
-      <section id="reportSections" aria-label="Hours and budget by course">
+      <p class="field-warning" id="unlinkedWarning" hidden></p>
+
+      <section class="panel" aria-labelledby="allocationHeading">
+        <h2 id="allocationHeading" class="side-panel__title">
+          Budget allocation
+        </h2>
+        <div class="budget-bars" id="budgetBars"></div>
+        <p class="empty-copy" id="budgetBarsEmpty" hidden>
+          No course budgets to show yet.
+        </p>
+      </section>
+
+      <section
+        class="page-stack"
+        id="reportSections"
+        aria-label="Cost breakdown by course"
+      >
         <!-- injected -->
       </section>
 
@@ -75,7 +267,16 @@
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+    <script src="../js/user-badge.js"></script>
+    <script src="../js/universal-search.js"></script>
     <script src="../js/hours-budget-report.js"></script>
+    <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
+    <script type="module">
+      // Organiser-only page — bounce signed-out visitors to login and any
+      // other signed-in role back to their own home page.
+      import { requireRole } from "../js/storage.js";
+      requireRole("organiser");
+    </script>
   </body>
 </html>

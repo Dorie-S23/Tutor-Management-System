@@ -1,7 +1,18 @@
+/* ============================================================
+   Tutor dashboard (dashboard.html)
+
+   Stat cards (courses assigned / hours this week / timesheets
+   due), upcoming sessions with per-session "Excuse me", the
+   excusals list, and the at-a-glance side panels (notifications,
+   my courses, weekly capacity). Every renderer guards on its
+   container existing so a missing one degrades quietly.
+   ============================================================ */
+
 import { highlightActiveTab } from "./nav.js";
 import {
   getWeekStart,
   getWeekTotal,
+  getEntries,
   todayStr,
   toDateStr,
   requireRole,
@@ -11,58 +22,20 @@ import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 // This page (dashboard.html) is tutor-only. Without this, any signed-in
 // user (e.g. a student volunteer who wandered in via a stale nav link) could
 // land here and see a tutor's dashboard instead of being sent back to theirs.
-if (!requireRole("tutor")) {
+const currentUser = requireRole("tutor");
+if (!currentUser) {
   throw new Error("Not authorized");
 }
 
-const WEEKLY_HOUR_LIMIT = 6;
-
 highlightActiveTab();
 
-const hoursWorkedEl = document.getElementById("stat-hours-worked");
-const hoursRemainingEl = document.getElementById("stat-hours-remaining");
-const hoursSublabelEl = document.getElementById("stat-hours-sublabel");
-const welcomeHeadingEl = document.getElementById("welcome-heading");
+// ---------- icons (inline SVG, matching the Figma cards) ----------
 
-function getCurrentUser() {
-  const raw = sessionStorage.getItem("user");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
+const CALENDAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+const CLOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+const PIN_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
 
-function renderWelcome() {
-  const user = getCurrentUser();
-  if (user?.name) welcomeHeadingEl.textContent = `Welcome, ${user.name}`;
-}
-
-async function renderHoursStats() {
-  const weekStart = getWeekStart(todayStr());
-  const worked = await getWeekTotal(weekStart);
-  const remaining = WEEKLY_HOUR_LIMIT - worked;
-
-  hoursWorkedEl.textContent = worked;
-
-  if (remaining >= 0) {
-    hoursRemainingEl.textContent = remaining;
-    hoursRemainingEl.classList.remove("danger");
-    hoursSublabelEl.textContent = `of ${WEEKLY_HOUR_LIMIT} hrs/week limit`;
-  } else {
-    hoursRemainingEl.textContent = 0;
-    hoursRemainingEl.classList.add("danger");
-    hoursSublabelEl.textContent = `over the ${WEEKLY_HOUR_LIMIT} hrs/week limit by ${-remaining}`;
-  }
-}
-
-renderHoursStats().catch((err) => {
-  console.error("Failed to load hours stats:", err);
-});
-renderWelcome();
-
-// ---------- upcoming sessions ----------
+// ---------- shared helpers ----------
 
 // Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching
 // JS Date.getDay(), so a course's weekly Day_of_tut can be projected onto
@@ -78,7 +51,7 @@ const DAY_NAMES = [
 ];
 
 // A light pastel palette, cycled by course id, so each course's row in
-// "Upcoming sessions" gets a consistent colour instead of one flat grey list.
+// "My courses" gets a consistent colour instead of one flat grey list.
 const COURSE_COLORS = [
   { bg: "#e6eeef", text: "#26424b", border: "#26424b" }, // navy
   { bg: "#e3eee6", text: "#2f6b4f", border: "#b9d2c1" }, // green
@@ -95,15 +68,54 @@ function courseColor(courseId) {
   return COURSE_COLORS[Number(courseId) % COURSE_COLORS.length];
 }
 
+// Local YYYY-MM-DD for a date `days` from today.
+function dateInDays(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return toDateStr(date);
+}
+
+// "10" for whole hours, "7.5" for the fractional ones legacy entries carry.
+function formatHours(value) {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+// "Mon 18 Aug" for a YYYY-MM-DD date string.
+function formatSessionDate(dateStr) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+// ---------- element handles ----------
+
+const coursesAssignedEl = document.getElementById("stat-courses-assigned");
+const hoursWorkedEl = document.getElementById("stat-hours-worked");
+const hoursSublabelEl = document.getElementById("stat-hours-sublabel");
+const timesheetsDueEl = document.getElementById("stat-timesheets-due");
+const timesheetsSublabelEl = document.getElementById(
+  "stat-timesheets-sublabel",
+);
+
+const capacityValueEl = document.getElementById("capacity-value");
+const capacityMaxEl = document.getElementById("capacity-max");
+const capacityBarFillEl = document.getElementById("capacity-bar-fill");
+const capacityCaptionEl = document.getElementById("capacity-caption");
+
 const upcomingListEl = document.getElementById("upcoming-sessions-list");
 const upcomingItemsEl = document.getElementById("upcoming-sessions-items");
 const upcomingEmptyEl = document.getElementById("upcoming-sessions-empty");
-const nextSessionEl = document.getElementById("stat-next-session");
-const nextSessionSublabelEl = document.getElementById(
-  "stat-next-session-sublabel",
-);
 
-const excuseBtn = document.getElementById("excuse-btn");
+const coursesListEl = document.getElementById("dashCoursesList");
+const coursesEmptyEl = document.getElementById("dashCoursesEmpty");
+
+const excusalsListEl = document.getElementById("excusals-list");
+const excusalsItemsEl = document.getElementById("excusals-items");
+const toastEl = document.getElementById("toast");
+
 const excuseModal = document.getElementById("excuse-modal");
 const excuseForm = document.getElementById("excuse-form");
 const excuseError = document.getElementById("excuse-form-error");
@@ -112,14 +124,13 @@ const excuseCourseSelect = document.getElementById("excuse-course-select");
 const excuseSessionSelect = document.getElementById("excuse-session-select");
 const excuseDateInput = document.getElementById("excuse-date-input");
 const excuseReasonInput = document.getElementById("excuse-reason-input");
-const excusalsListEl = document.getElementById("excusals-list");
-const excusalsItemsEl = document.getElementById("excusals-items");
-const toastEl = document.getElementById("toast");
 
 // Populated by fetchUpcomingSessions() — reused here so the excuse-yourself
 // modal's course dropdown doesn't need its own extra fetch.
 let myApplications = [];
 let myExcusals = [];
+// The tutor's weekly hour cap (from their profile), or null when unset.
+let weeklyCap = null;
 
 function showToast(message) {
   toastEl.textContent = message;
@@ -165,22 +176,166 @@ function daysUntil(dayName, endTime) {
   return days === 0 && endTime.slice(0, 5) <= nowHHMM ? 7 : days;
 }
 
-function describeDaysAway(daysAway) {
-  if (daysAway === 0) return "today";
-  if (daysAway === 1) return "tomorrow";
-  return `in ${daysAway} days`;
+function approvedApps() {
+  return myApplications.filter(
+    (a) => (a.status || "").toLowerCase() === "approved",
+  );
 }
+
+// ---------- stat cards + weekly capacity panel ----------
+
+async function fetchWeeklyCap(tutorId) {
+  try {
+    const res = await fetch(`/api/tutors/${encodeURIComponent(tutorId)}`);
+    const body = await res.json();
+    if (!res.ok) return null;
+    return body.weekly_hour_cap != null ? Number(body.weekly_hour_cap) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fallback when GET /api/tutors/:id didn't answer: the applications join
+// carries tutors.weekly_hour_cap too.
+function capFromApplications() {
+  for (const app of myApplications) {
+    if (app.tutors?.weekly_hour_cap != null) {
+      return Number(app.tutors.weekly_hour_cap);
+    }
+  }
+  return null;
+}
+
+function setCapacityBar(pct, over) {
+  capacityBarFillEl.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+  capacityBarFillEl.classList.toggle("capacity-bar__fill--over", over);
+}
+
+async function renderStats() {
+  coursesAssignedEl.textContent = String(approvedApps().length);
+
+  const worked = await getWeekTotal(getWeekStart(todayStr()));
+  if (weeklyCap == null) weeklyCap = capFromApplications();
+
+  const used = formatHours(worked);
+
+  if (weeklyCap == null) {
+    hoursWorkedEl.textContent = used;
+    hoursSublabelEl.classList.remove("stat-sublabel--danger");
+    hoursSublabelEl.textContent = "No weekly cap set";
+    capacityValueEl.textContent = `${used}h used`;
+    capacityMaxEl.textContent = "";
+    setCapacityBar(0, false);
+    capacityCaptionEl.textContent = "No weekly cap set — ask your organiser.";
+    return;
+  }
+
+  hoursWorkedEl.innerHTML = `${used}<span class="stat-value__frac">/${formatHours(weeklyCap)}h</span>`;
+
+  const remaining = weeklyCap - worked;
+  if (remaining > 0) {
+    hoursSublabelEl.classList.remove("stat-sublabel--danger");
+    hoursSublabelEl.textContent = `${formatHours(remaining)}h remaining`;
+  } else if (remaining === 0) {
+    hoursSublabelEl.classList.remove("stat-sublabel--danger");
+    hoursSublabelEl.textContent = "Weekly cap reached";
+  } else {
+    hoursSublabelEl.classList.add("stat-sublabel--danger");
+    hoursSublabelEl.textContent = `${formatHours(-remaining)}h over your weekly cap`;
+  }
+
+  capacityValueEl.textContent = `${used}h used`;
+  capacityMaxEl.textContent = `of ${formatHours(weeklyCap)}h max`;
+  setCapacityBar(weeklyCap > 0 ? (worked / weeklyCap) * 100 : 0, remaining < 0);
+  capacityCaptionEl.textContent =
+    remaining > 0
+      ? `${formatHours(remaining)}h remaining this week`
+      : remaining === 0
+        ? "Full weekly cap used."
+        : "You're over your weekly cap.";
+}
+
+// Weeks with logged hours (before the current one) that were never submitted
+// as a timesheet — the same condition the server's due-reminder checks.
+async function renderTimesheetsDue() {
+  try {
+    const [entries, res] = await Promise.all([
+      getEntries(),
+      fetch(`/api/timesheets?tutorId=${encodeURIComponent(currentUser.id)}`),
+    ]);
+    if (!res.ok) throw new Error("Failed to load timesheets");
+    const rows = await res.json();
+
+    const submitted = new Set(rows.map((r) => r.week_start));
+    const currentWeekStart = getWeekStart(todayStr());
+    const weeks = new Set(
+      entries
+        .map((e) => getWeekStart(e.date))
+        .filter((w) => w < currentWeekStart),
+    );
+
+    let due = 0;
+    weeks.forEach((week) => {
+      if (!submitted.has(week)) due += 1;
+    });
+
+    timesheetsDueEl.textContent = String(due);
+    timesheetsSublabelEl.textContent =
+      due === 0 ? "All caught up" : "Awaiting submission";
+  } catch {
+    timesheetsDueEl.textContent = "—";
+    timesheetsSublabelEl.textContent = "Couldn't load timesheets";
+  }
+}
+
+// ---------- my courses panel ----------
+
+function renderMyCourses() {
+  if (!coursesListEl) return;
+  const approved = approvedApps().filter((a) => a.courses);
+
+  coursesListEl.innerHTML = "";
+  coursesEmptyEl.hidden = approved.length > 0;
+
+  approved.forEach((app) => {
+    const course = app.courses;
+    const sessions = courseSessions(course);
+
+    const row = document.createElement("div");
+    row.className = "dash-course";
+    row.dataset.courseId = app.course_id;
+
+    const dot = document.createElement("span");
+    dot.className = "course-dot";
+    dot.style.background = courseColor(app.course_id).text;
+
+    const body = document.createElement("div");
+    const code = document.createElement("p");
+    code.className = "dash-course__code";
+    code.textContent = course.course_code;
+    const times = document.createElement("p");
+    times.className = "dash-course__times";
+    times.textContent =
+      sessions.length > 0
+        ? sessions
+            .map(
+              (s) =>
+                `${s.type} · ${s.day.slice(0, 3)} ${s.start.slice(0, 5)}–${s.end.slice(0, 5)}`,
+            )
+            .join(" · ")
+        : "Schedule to be announced";
+
+    body.append(code, times);
+    row.append(dot, body);
+    coursesListEl.appendChild(row);
+  });
+}
+
+// ---------- upcoming sessions ----------
 
 // The most recent sessions list, so it can be re-rendered once this tutor's
 // excusals (fetched in parallel) arrive and mark which ones they're excused from.
 let lastUpcomingSessions = [];
-
-// Local YYYY-MM-DD for a date `days` from today.
-function dateInDays(days) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return toDateStr(date);
-}
 
 // This tutor's excusal (if any) for one occurrence of a session.
 function excusalFor(courseId, sessionKey, dateStr) {
@@ -213,11 +368,14 @@ async function fetchUpcomingSessions(tutorId) {
             courseCode: course.course_code,
             courseName: course.course_name,
             sessionKey: s.key,
-            session: formatSession(s),
+            type: s.type,
+            venue: s.key === "lab" ? course.lab_venues : course.venues,
             startTime: s.start,
+            endTime: s.end,
             daysAway: daysUntil(s.day, s.end),
           }))
-          .filter((s) => s.daysAway !== null);
+          .filter((s) => s.daysAway !== null)
+          .map((s) => ({ ...s, dateStr: dateInDays(s.daysAway) }));
       })
       .sort(
         (a, b) =>
@@ -232,11 +390,10 @@ async function fetchUpcomingSessions(tutorId) {
 }
 
 function renderUpcomingSessions(sessions = lastUpcomingSessions) {
+  if (!upcomingListEl) return;
   if (sessions.length === 0) {
     upcomingListEl.hidden = true;
     upcomingEmptyEl.hidden = false;
-    nextSessionEl.textContent = "—";
-    nextSessionSublabelEl.textContent = "";
     return;
   }
 
@@ -245,160 +402,67 @@ function renderUpcomingSessions(sessions = lastUpcomingSessions) {
   upcomingItemsEl.innerHTML = "";
 
   sessions.forEach((s) => {
-    const palette = courseColor(s.courseId);
-    const li = document.createElement("li");
-    li.className = "application-row application-row--course";
-    li.dataset.courseId = s.courseId;
-    li.style.background = palette.bg;
-    li.style.borderColor = palette.border;
-    li.innerHTML = `
-      <span><strong style="color: ${palette.text}">${s.courseCode}</strong> — ${s.courseName}<br />${s.session}</span>
-      <span class="status-pill" style="background: rgba(255, 255, 255, 0.6); color: ${palette.text}; border-color: ${palette.border}">${describeDaysAway(s.daysAway)}</span>
+    const card = document.createElement("article");
+    card.className = "session-card";
+    card.dataset.courseId = s.courseId;
+    card.innerHTML = `
+      <div class="session-card__body">
+        <p class="session-code"></p>
+        <p class="session-title"></p>
+        <div class="session-meta">
+          <span>${CALENDAR_ICON}<span class="session-meta__date"></span></span>
+          <span>${CLOCK_ICON}${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}</span>
+          <span class="session-meta__venue" hidden>${PIN_ICON}<span class="session-meta__venue-text"></span></span>
+        </div>
+        <p class="session-note"></p>
+      </div>
     `;
 
-    // Excused from this occurrence: say so, and who's covering it.
-    const excusal = excusalFor(
-      s.courseId,
-      s.sessionKey,
-      dateInDays(s.daysAway),
+    card.querySelector(".session-code").textContent = s.courseCode;
+    card.querySelector(".session-title").textContent = s.courseName;
+    card.querySelector(".session-meta__date").textContent = formatSessionDate(
+      s.dateStr,
     );
+    if (s.venue) {
+      const venue = card.querySelector(".session-meta__venue");
+      venue.hidden = false;
+      venue.querySelector(".session-meta__venue-text").textContent = s.venue;
+    }
+    card.querySelector(".session-note").textContent = `${s.type} session`;
+
+    // Excused from this occurrence: say so, and who's covering it — and
+    // offer no "Excuse me" button, since it's already done.
+    const excusal = excusalFor(s.courseId, s.sessionKey, s.dateStr);
     if (excusal) {
-      li.classList.add("application-row--excused");
-      const note = document.createElement("span");
+      const note = document.createElement("p");
       note.className = "excused-note";
       note.textContent = excusal.cover?.name
         ? `You're excused · ${excusal.cover.name} is covering`
         : "You're excused · finding a volunteer to cover";
-      li.querySelector("span").append(document.createElement("br"), note);
+      card.querySelector(".session-card__body").appendChild(note);
+
+      const pill = document.createElement("span");
+      pill.className = "status-pill";
+      pill.textContent = "Excused";
+      card.appendChild(pill);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-secondary";
+      btn.textContent = "Excuse me";
+      btn.addEventListener("click", () =>
+        openExcuseModal({
+          courseId: s.courseId,
+          sessionKey: s.sessionKey,
+          dateStr: s.dateStr,
+        }),
+      );
+      card.appendChild(btn);
     }
-    upcomingItemsEl.appendChild(li);
-  });
 
-  // "Next session" is the soonest one this tutor actually has to attend —
-  // an excused occurrence is skipped in favour of that session's next week.
-  let next = null;
-  for (const s of sessions) {
-    for (let week = 0; week < 10; week++) {
-      const daysAway = s.daysAway + week * 7;
-      if (excusalFor(s.courseId, s.sessionKey, dateInDays(daysAway))) continue;
-      if (
-        !next ||
-        daysAway < next.daysAway ||
-        (daysAway === next.daysAway && s.startTime < next.startTime)
-      ) {
-        next = { ...s, daysAway };
-      }
-      break;
-    }
-  }
-  if (!next) {
-    nextSessionEl.textContent = "—";
-    nextSessionSublabelEl.textContent = "";
-    return;
-  }
-  nextSessionEl.textContent = next.session;
-  nextSessionSublabelEl.textContent = `${next.courseCode} · ${describeDaysAway(next.daysAway)}`;
-}
-
-// ---------- guided tour ----------
-
-const TUTOR_TOUR_STEPS = [
-  {
-    selector: ".card:has(#welcome-heading)",
-    title: "Welcome",
-    body: "Your tutoring hub — log hours for the week, review timesheets, and keep an eye on your weekly limit from here.",
-    placement: "bottom",
-  },
-  {
-    selector: ".card:has(#apply-to-tutor-btn)",
-    title: "Apply to tutor a subject",
-    body: "Pick a course that needs tutors, confirm your mark and availability, and it'll go to the organiser board for approval. Track the status of your applications right here once you've applied.",
-    placement: "bottom",
-  },
-  {
-    selector: ".card:has(#excuse-btn)",
-    title: "Excuse yourself from a session",
-    body: "Can't make a tutorial? Let the organiser know which session and why — they can find cover if needed.",
-    placement: "bottom",
-  },
-  {
-    selector: ".stat-grid",
-    title: "Your week at a glance",
-    body: "Hours worked so far this week, how many you have left before your weekly limit, and your next upcoming session.",
-    placement: "top",
-  },
-  {
-    selector: ".tile-grid",
-    title: "Quick links",
-    body: "Jump straight to logging hours, reviewing timesheets, or your calendar — where your imported class schedule lives, with support for cancelling or editing a single class occurrence.",
-    placement: "top",
-  },
-  {
-    selector: ".tab-nav",
-    title: "Get around",
-    body: "These tabs are always here at the top, wherever you are in the app.",
-    placement: "bottom",
-  },
-];
-
-const tourLink = document.getElementById("tour-link");
-if (tourLink) {
-  tourLink.addEventListener("click", (e) => {
-    e.preventDefault();
-    window.Onboarding?.start(TUTOR_TOUR_STEPS, {
-      tourId: "tutor-dashboard",
-      userId: getCurrentUser()?.id,
-      force: true,
-    });
+    upcomingItemsEl.appendChild(card);
   });
 }
-
-(async function initUpcomingSessions() {
-  const user = getCurrentUser();
-  if (user) {
-    // Independent endpoints — no need to wait for one before starting the
-    // other. allSettled so a failure in one never blocks the highlight
-    // logic below, which only depends on fetchUpcomingSessions.
-    await Promise.allSettled([
-      fetchUpcomingSessions(user.id),
-      fetchMyExcusals(user.id),
-    ]);
-
-    // No scheduled job in this app — the "you haven't submitted last
-    // week's timesheet" reminder is instead checked (idempotently, server
-    // decides if a new one is actually due) each time the dashboard loads.
-    // Fire-and-forget: the bell's own polling picks up any new notification.
-    fetch(
-      `/api/timesheets/due-reminder?tutorId=${encodeURIComponent(user.id)}`,
-    ).catch(() => {});
-  }
-
-  // Arriving from a "session changed" notification — scroll to and flash
-  // the course it was about, now that the list containing it has rendered.
-  const highlightCourseId = consumeQueryParam("highlightCourse");
-  if (highlightCourseId) {
-    scrollAndHighlight(
-      upcomingItemsEl.querySelector(
-        `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
-      ),
-    );
-  }
-
-  // Arriving from a "cover found / no cover" notification — flash that excusal.
-  const highlightExcusalId = consumeQueryParam("highlightExcusal");
-  if (highlightExcusalId) {
-    scrollAndHighlight(
-      excusalsItemsEl.querySelector(
-        `[data-excusal-id="${CSS.escape(highlightExcusalId)}"]`,
-      ),
-    );
-  }
-
-  window.Onboarding?.start(TUTOR_TOUR_STEPS, {
-    tourId: "tutor-dashboard",
-    userId: user?.id,
-  });
-})();
 
 // ---------- excuse yourself from a session ----------
 
@@ -485,8 +549,7 @@ async function cancelExcusal(id) {
       return;
     }
     showToast("Excusal cancelled.");
-    const user = getCurrentUser();
-    if (user) await fetchMyExcusals(user.id);
+    await fetchMyExcusals(currentUser.id);
   } catch {
     showToast("Network error — couldn't reach the server.");
   }
@@ -604,48 +667,61 @@ excuseCourseSelect?.addEventListener("change", populateExcuseSessionSelect);
 excuseSessionSelect?.addEventListener("change", populateExcuseDateSelect);
 
 function populateExcuseCourseSelect() {
-  const approvedCourses = myApplications
-    .filter((a) => a.status === "approved")
-    .map((a) => a.courses)
-    .filter(Boolean);
+  const approved = approvedApps().filter((a) => a.courses);
 
   excuseCourseSelect.innerHTML =
     '<option value="" disabled selected>Choose a course&hellip;</option>';
-  myApplications
-    .filter((a) => a.status === "approved")
-    .forEach((a) => {
-      const option = document.createElement("option");
-      option.value = a.course_id;
-      option.textContent = a.courses
-        ? `${a.courses.course_code} — ${a.courses.course_name}`
-        : `Course ${a.course_id}`;
-      excuseCourseSelect.appendChild(option);
-    });
+  approved.forEach((a) => {
+    const option = document.createElement("option");
+    option.value = a.course_id;
+    option.textContent = `${a.courses.course_code} — ${a.courses.course_name}`;
+    excuseCourseSelect.appendChild(option);
+  });
 
-  if (approvedCourses.length === 1) {
-    excuseCourseSelect.value = String(
-      myApplications.find((a) => a.status === "approved").course_id,
-    );
+  if (approved.length === 1) {
+    excuseCourseSelect.value = String(approved[0].course_id);
   }
 
-  return approvedCourses;
+  return approved;
 }
 
-function openExcuseModal() {
-  const user = getCurrentUser();
-  if (!user) {
-    showToast("Please log in as a tutor to excuse yourself.");
+// Opens the excusal dialog, optionally pre-filled from a session card's
+// "Excuse me" button (course, session type, and that occurrence's date).
+function openExcuseModal(prefill = {}) {
+  excuseForm.reset();
+  excuseError.hidden = true;
+
+  const approved = populateExcuseCourseSelect();
+  if (approved.length === 0) {
+    showToast("You need an approved course assignment first.");
     return;
   }
 
-  excuseForm.reset();
-  excuseError.hidden = true;
-  const approvedCourses = populateExcuseCourseSelect();
+  if (prefill.courseId != null) {
+    const wanted = String(prefill.courseId);
+    const option = Array.from(excuseCourseSelect.options).find(
+      (o) => o.value === wanted,
+    );
+    if (option) excuseCourseSelect.value = wanted;
+  }
+
   populateExcuseSessionSelect();
 
-  if (approvedCourses.length === 0) {
-    showToast("You need an approved course assignment first.");
-    return;
+  if (prefill.sessionKey && excuseSessionSelect.value !== prefill.sessionKey) {
+    const option = Array.from(excuseSessionSelect.options).find(
+      (o) => o.value === prefill.sessionKey,
+    );
+    if (option) {
+      excuseSessionSelect.value = prefill.sessionKey;
+      populateExcuseDateSelect();
+    }
+  }
+
+  if (prefill.dateStr) {
+    const option = Array.from(excuseDateInput.options).find(
+      (o) => o.value === prefill.dateStr && !o.disabled,
+    );
+    if (option) excuseDateInput.value = prefill.dateStr;
   }
 
   excuseModal.showModal();
@@ -655,7 +731,6 @@ function closeExcuseModal() {
   excuseModal.close();
 }
 
-excuseBtn?.addEventListener("click", openExcuseModal);
 document
   .getElementById("excuse-modal-close-btn")
   ?.addEventListener("click", closeExcuseModal);
@@ -670,14 +745,8 @@ excuseForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   excuseError.hidden = true;
 
-  const user = getCurrentUser();
-  if (!user) {
-    showToast("Please log in as a tutor to excuse yourself.");
-    return;
-  }
-
   const payload = {
-    tutorId: user.id,
+    tutorId: currentUser.id,
     courseId: Number(excuseCourseSelect.value),
     sessionType: excuseSessionSelect.value,
     sessionDate: excuseDateInput.value,
@@ -703,7 +772,7 @@ excuseForm?.addEventListener("submit", async (e) => {
 
     closeExcuseModal();
     showToast("You're excused from that session.");
-    await fetchMyExcusals(user.id);
+    await fetchMyExcusals(currentUser.id);
   } catch {
     excuseError.textContent = "Network error — couldn't reach the server.";
     excuseError.hidden = false;
@@ -712,3 +781,110 @@ excuseForm?.addEventListener("submit", async (e) => {
     excuseSubmitBtn.textContent = "Excuse me from this session";
   }
 });
+
+// ---------- guided tour ----------
+
+const TUTOR_TOUR_STEPS = [
+  {
+    selector: ".stat-grid",
+    title: "Your week at a glance",
+    body: "Courses assigned, hours logged this week against your weekly cap, and timesheets still waiting on submission.",
+    placement: "bottom",
+  },
+  {
+    selector: "section:has(#upcoming-heading)",
+    title: "Upcoming sessions",
+    body: "Your tutorials and labs, soonest first. Log hours from here, or excuse yourself from a session you can't make.",
+    placement: "bottom",
+  },
+  {
+    selector: ".dash-panel--notif",
+    title: "Notifications",
+    body: "Cover updates, timesheet statuses, and session changes land here.",
+    placement: "left",
+  },
+  {
+    selector: ".dash-panel--capacity",
+    title: "Weekly capacity",
+    body: "How much of your weekly hour cap you've used — the bar turns red once you go over.",
+    placement: "left",
+  },
+  {
+    selector: ".tab-nav",
+    title: "Get around",
+    body: "These tabs are always here at the top, wherever you are in the app.",
+    placement: "bottom",
+  },
+];
+
+const tourLink = document.getElementById("tour-link");
+if (tourLink) {
+  tourLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.Onboarding?.start(TUTOR_TOUR_STEPS, {
+      tourId: "tutor-dashboard",
+      userId: currentUser.id,
+      force: true,
+    });
+  });
+}
+
+// ---------- init ----------
+
+(async function init() {
+  // Independent endpoints — no need to wait for one before starting the
+  // other. allSettled so a failure in one never blocks the rest, including
+  // the highlight logic below, which needs the lists above to have rendered.
+  await Promise.allSettled([
+    fetchUpcomingSessions(currentUser.id),
+    fetchMyExcusals(currentUser.id),
+    fetchWeeklyCap(currentUser.id).then((cap) => {
+      weeklyCap = cap;
+    }),
+  ]);
+
+  await Promise.allSettled([renderStats(), renderTimesheetsDue()]);
+  renderMyCourses();
+
+  // No scheduled job in this app — the "you haven't submitted last
+  // week's timesheet" reminder is instead checked (idempotently, server
+  // decides if a new one is actually due) each time the dashboard loads.
+  // Fire-and-forget: the bell's own polling picks up any new notification.
+  fetch(
+    `/api/timesheets/due-reminder?tutorId=${encodeURIComponent(currentUser.id)}`,
+  ).catch(() => {});
+
+  // Arriving from a "session changed" notification — scroll to and flash
+  // the course it was about, now that the lists containing it have rendered.
+  const highlightCourseId = consumeQueryParam("highlightCourse");
+  if (highlightCourseId) {
+    const target =
+      upcomingItemsEl.querySelector(
+        `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
+      ) ||
+      coursesListEl?.querySelector(
+        `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
+      );
+    scrollAndHighlight(target);
+  }
+
+  // Arriving from a "cover found / no cover" notification — flash that excusal.
+  const highlightExcusalId = consumeQueryParam("highlightExcusal");
+  if (highlightExcusalId) {
+    scrollAndHighlight(
+      excusalsItemsEl.querySelector(
+        `[data-excusal-id="${CSS.escape(highlightExcusalId)}"]`,
+      ),
+    );
+  }
+
+  // ?tour=1 is set by the "Take a Tour" links on the other tutor pages,
+  // which bounce visitors here because the tour points at the dashboard.
+  const wantsTour = consumeQueryParam("tour") === "1";
+
+  window.Onboarding?.start(TUTOR_TOUR_STEPS, {
+    tourId: "tutor-dashboard",
+    userId: currentUser.id,
+    force: wantsTour,
+  });
+})();

@@ -303,3 +303,298 @@ describe("GET /api/hour-entries/report", () => {
     expect(res.body.rows[0].cost).toBeNull();
   });
 });
+
+describe("tutor session logging rules", () => {
+  const DAY_NAMES = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+
+  function toDateStr(date) {
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${date.getFullYear()}-${m}-${d}`;
+  }
+
+  // The next occurrence of a weekday strictly after today, so the
+  // "upcoming session" rule is exercised against the real clock without
+  // freezing time.
+  function weekdayDate(dayName) {
+    const target = DAY_NAMES.indexOf(dayName);
+    const date = new Date();
+    for (let i = 1; i <= 7; i += 1) {
+      date.setDate(date.getDate() + 1);
+      if (date.getDay() === target) break;
+    }
+    return toDateStr(date);
+  }
+
+  // The most recent occurrence of a weekday strictly before today.
+  function pastWeekdayDate(dayName) {
+    const target = DAY_NAMES.indexOf(dayName);
+    const date = new Date();
+    for (let i = 1; i <= 7; i += 1) {
+      date.setDate(date.getDate() - 1);
+      if (date.getDay() === target) break;
+    }
+    return toDateStr(date);
+  }
+
+  beforeEach(() => {
+    tables.tutors = [{ id: "t1", name: "Oupa" }];
+    tables.tutor_subject_preference = [
+      { tutor_id: "t1", course_id: 5, status: "approved" },
+    ];
+    tables.courses = [
+      {
+        id: 5,
+        course_code: "COMS1018A",
+        Day_of_tut: "Monday",
+        tutor_start_time: "10:00:00",
+        tutor_end_time: "12:00:00",
+        Day_of_lab: "Wednesday",
+        lab_start_time: "14:00:00",
+        lab_end_time: "15:00:00",
+      },
+      {
+        id: 6,
+        course_code: "MATH1036",
+        Day_of_tut: "Friday",
+        tutor_start_time: "09:00:00",
+        tutor_end_time: "10:00:00",
+      },
+    ];
+  });
+
+  test("accepts a tutor's entry for the course's upcoming tutorial slot", async () => {
+    const res = await request(buildApp())
+      .post("/api/hour-entries")
+      .send({
+        userId: "t1",
+        date: weekdayDate("Monday"),
+        hours: 2,
+        startTime: "10:00",
+        endTime: "12:00",
+        taskType: "Tutoring",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.course_id).toBe(5);
+    expect(tables.hour_entries).toHaveLength(1);
+  });
+
+  test("accepts the lab slot as well", async () => {
+    const res = await request(buildApp())
+      .post("/api/hour-entries")
+      .send({
+        userId: "t1",
+        date: weekdayDate("Wednesday"),
+        hours: 1,
+        startTime: "14:00",
+        endTime: "15:00",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(201);
+    expect(tables.hour_entries).toHaveLength(1);
+  });
+
+  test("rejects times that don't match any scheduled slot", async () => {
+    const res = await request(buildApp())
+      .post("/api/hour-entries")
+      .send({
+        userId: "t1",
+        date: weekdayDate("Monday"),
+        hours: 6,
+        startTime: "09:00",
+        endTime: "16:00",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/scheduled tutorial or lab/);
+    expect(tables.hour_entries).toHaveLength(0);
+  });
+
+  test("rejects a date that isn't the slot's weekday", async () => {
+    const res = await request(buildApp())
+      .post("/api/hour-entries")
+      .send({
+        userId: "t1",
+        date: weekdayDate("Tuesday"),
+        hours: 2,
+        startTime: "10:00",
+        endTime: "12:00",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(400);
+    expect(tables.hour_entries).toHaveLength(0);
+  });
+
+  test("rejects a session that has already passed", async () => {
+    const res = await request(buildApp())
+      .post("/api/hour-entries")
+      .send({
+        userId: "t1",
+        date: pastWeekdayDate("Monday"),
+        hours: 2,
+        startTime: "10:00",
+        endTime: "12:00",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/upcoming/);
+    expect(tables.hour_entries).toHaveLength(0);
+  });
+
+  test("rejects a course the tutor isn't approved for", async () => {
+    const res = await request(buildApp())
+      .post("/api/hour-entries")
+      .send({
+        userId: "t1",
+        date: weekdayDate("Friday"),
+        hours: 1,
+        startTime: "09:00",
+        endTime: "10:00",
+        courseId: 6,
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/approved/);
+    expect(tables.hour_entries).toHaveLength(0);
+  });
+
+  test("still accepts free-form entries from non-tutors (volunteers)", async () => {
+    const res = await request(buildApp()).post("/api/hour-entries").send({
+      userId: "vol1",
+      date: "2026-09-01",
+      hours: 1.5,
+      startTime: "08:00",
+      endTime: "09:30",
+      taskType: "Peer support",
+      courseId: 5,
+    });
+
+    expect(res.status).toBe(201);
+    expect(tables.hour_entries).toHaveLength(1);
+  });
+
+  test("lets a tutor edit notes without touching the session", async () => {
+    const legacyDate = pastWeekdayDate("Monday");
+    tables.hour_entries = [
+      {
+        id: "e9",
+        user_id: "t1",
+        date: legacyDate,
+        hours: 2,
+        course_id: 5,
+        start_time: "08:00:00",
+        end_time: "10:00:00",
+        task_type: "Marking",
+        notes: "",
+      },
+    ];
+
+    const res = await request(buildApp()).put("/api/hour-entries/e9").send({
+      date: legacyDate,
+      hours: 2,
+      startTime: "08:00",
+      endTime: "10:00",
+      taskType: "Marking",
+      notes: "fixed a typo",
+      courseId: 5,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.notes).toBe("fixed a typo");
+  });
+
+  test("rejects moving an entry's time away from a scheduled slot", async () => {
+    tables.hour_entries = [
+      {
+        id: "e10",
+        user_id: "t1",
+        date: weekdayDate("Monday"),
+        hours: 2,
+        course_id: 5,
+        start_time: "10:00:00",
+        end_time: "12:00:00",
+      },
+    ];
+
+    const res = await request(buildApp())
+      .put("/api/hour-entries/e10")
+      .send({
+        date: weekdayDate("Monday"),
+        hours: 3,
+        startTime: "09:00",
+        endTime: "12:00",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(400);
+    expect(tables.hour_entries[0].start_time).toBe("10:00:00");
+  });
+
+  test("allows re-pointing an entry onto a real slot, even in a past week", async () => {
+    tables.hour_entries = [
+      {
+        id: "e11",
+        user_id: "t1",
+        date: weekdayDate("Monday"),
+        hours: 2,
+        course_id: 5,
+        start_time: "10:00:00",
+        end_time: "12:00:00",
+      },
+    ];
+
+    const res = await request(buildApp())
+      .put("/api/hour-entries/e11")
+      .send({
+        date: pastWeekdayDate("Monday"),
+        hours: 2,
+        startTime: "10:00",
+        endTime: "12:00",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(200);
+    expect(tables.hour_entries[0].date).toBe(pastWeekdayDate("Monday"));
+  });
+
+  test("rejects moving a tutor's entry to a course they aren't approved for", async () => {
+    tables.hour_entries = [
+      {
+        id: "e12",
+        user_id: "t1",
+        date: weekdayDate("Monday"),
+        hours: 2,
+        course_id: 5,
+        start_time: "10:00:00",
+        end_time: "12:00:00",
+      },
+    ];
+
+    const res = await request(buildApp())
+      .put("/api/hour-entries/e12")
+      .send({
+        date: weekdayDate("Monday"),
+        hours: 2,
+        startTime: "10:00",
+        endTime: "12:00",
+        courseId: 6,
+      });
+
+    expect(res.status).toBe(403);
+    expect(tables.hour_entries[0].course_id).toBe(5);
+  });
+});

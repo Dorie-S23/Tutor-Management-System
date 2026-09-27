@@ -121,13 +121,25 @@
       const googleEmail = sessionStorage.getItem("googleEmail");
       const googleName = sessionStorage.getItem("googleName");
 
+      const message = document.getElementById("google-register-message");
+
+      // Mirrors auth.js setMessage — toggles the state classes that colour
+      // the shared .form-message element (see auth-global.css).
+      function setMessage(text, kind) {
+        message.textContent = text;
+        message.classList.toggle("is-error", kind === "error");
+        message.classList.toggle("is-success", kind === "success");
+      }
+
       /* ================================================
          MAKE SURE GOOGLE USER INFORMATION EXISTS
          ================================================ */
 
       if (!googleUserId || !googleEmail) {
-        document.getElementById("google-register-message").textContent =
-          "Google account information could not be found. Please try signing in again.";
+        setMessage(
+          "Google account information could not be found. Please try signing in again.",
+          "error",
+        );
       }
 
       /* ================================================
@@ -166,14 +178,15 @@
          ================================================ */
 
       const form = document.getElementById("google-register-form");
-      const message = document.getElementById("google-register-message");
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
 
         if (!googleUserId || !googleEmail) {
-          message.textContent =
-            "Your Google session has expired. Please sign in again.";
+          setMessage(
+            "Your Google session has expired. Please sign in again.",
+            "error",
+          );
           return;
         }
 
@@ -191,7 +204,7 @@
         };
 
         try {
-          message.textContent = "Creating your account...";
+          setMessage("Creating your account...");
 
           const response = await fetch("/api/auth/google/register", {
             method: "POST",
@@ -204,12 +217,12 @@
           const result = await response.json();
 
           if (!response.ok) {
-            message.textContent = result.error || "Registration failed.";
+            setMessage(result.error || "Registration failed.", "error");
             console.error("Google registration error:", result);
             return;
           }
 
-          message.textContent = "Registration successful! Redirecting...";
+          setMessage("Registration successful! Redirecting...", "success");
 
           // Same sessionStorage keys public/js/auth.js sets for password
           // logins, so pages reading getCurrentUser() recognize this session.
@@ -245,8 +258,10 @@
           }
         } catch (error) {
           console.error("Google registration error:", error);
-          message.textContent =
-            "Could not connect to the server. Please try again.";
+          setMessage(
+            "Could not connect to the server. Please try again.",
+            "error",
+          );
         }
       });
     </script>

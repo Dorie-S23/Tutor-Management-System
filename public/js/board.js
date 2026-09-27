@@ -18,6 +18,9 @@ let volunteerCounts = {}; // course_id -> number of approved volunteers
 let shortfallOnly = false; // when true, course rail shows only short-staffed courses, worst-first
 let pendingApplicationCounts = {}; // course_id -> number of pending tutor applications
 let pendingVolunteerCounts = {}; // course_id -> number of pending student volunteers
+let weeklyBudget = { planned: 0 }; // projected weekly spend across all assigned tutors
+let workloadRows = []; // latest /api/tutors/workload rows for the side panel
+let lastApplicantRows = { courseId: null, rows: null }; // most recent applicants for the active course
 
 // ---------- data loading ----------
 
@@ -201,10 +204,12 @@ async function fetchTutorCount() {
 
 // No dedicated "pending applications across all courses" endpoint exists,
 // so this fetches per-course the same way renderApplicants() already does,
-// just for every course at once, and keeps only the counts.
+// just for every course at once, and keeps only the counts. The same rows
+// also feed the weekly budget projection (assigned rate × hours/week).
 async function fetchPendingApplicationCounts() {
   if (COURSES.length === 0) {
     pendingApplicationCounts = {};
+    setBudgetProjection([]);
     renderCourseList();
     return;
   }
@@ -220,16 +225,33 @@ async function fetchPendingApplicationCounts() {
         const pending = rows.filter(
           (a) => (a.status || "pending").toLowerCase() === "pending",
         ).length;
-        return [course.id, pending];
+        const plannedCost = rows
+          .filter((a) => (a.status || "").toLowerCase() === "approved")
+          .reduce((sum, a) => {
+            const rate = a.tutors?.hourly_rate;
+            return sum + (rate != null ? rate * (course.hoursNeeded || 0) : 0);
+          }, 0);
+        return { id: course.id, pending, plannedCost };
       }),
     );
-    pendingApplicationCounts = Object.fromEntries(results);
+    pendingApplicationCounts = Object.fromEntries(
+      results.map((r) => [r.id, r.pending]),
+    );
+    setBudgetProjection(results);
   } catch (err) {
     // Fails open, same as the rest of the board: badges just show 0 rather
     // than blocking the page if one course's fetch has a hiccup.
     pendingApplicationCounts = {};
+    setBudgetProjection([]);
   }
   renderCourseList();
+}
+
+function setBudgetProjection(results) {
+  weeklyBudget = {
+    planned: results.reduce((sum, r) => sum + r.plannedCost, 0),
+  };
+  renderBudgetPanel();
 }
 
 // Assumes /api/course-volunteers/counts accepts status=pending the same
@@ -244,6 +266,147 @@ async function fetchPendingVolunteerCounts() {
     pendingVolunteerCounts = {};
   }
   renderCourseList();
+}
+
+// ---------- side panels (weekly budget / tutor load / needs attention) ----------
+
+const statBudgetEl = document.getElementById("statBudget");
+const weekBudgetUsedEl = document.getElementById("weekBudgetUsed");
+const weekBudgetTotalEl = document.getElementById("weekBudgetTotal");
+const weekBudgetBarEl = document.getElementById("weekBudgetBar");
+const weekBudgetNoteEl = document.getElementById("weekBudgetNote");
+const tutorLoadListEl = document.getElementById("tutorLoadList");
+const tutorLoadEmptyEl = document.getElementById("tutorLoadEmpty");
+const attentionListEl = document.getElementById("attentionList");
+
+function formatMoneyCompact(value) {
+  return `R${Math.round(Number(value) || 0).toLocaleString("en-ZA")}`;
+}
+
+function weeklyCap() {
+  const stored = localStorage.getItem("tms_global_weekly_cap");
+  return stored != null ? Number(stored) : 6;
+}
+
+function renderBudgetPanel() {
+  if (!statBudgetEl) return;
+  const cap = COURSES.reduce((sum, c) => sum + (c.budget || 0), 0);
+  const planned = weeklyBudget.planned;
+
+  if (!cap) {
+    statBudgetEl.textContent = "\u2014";
+    weekBudgetUsedEl.textContent = formatMoneyCompact(planned);
+    weekBudgetTotalEl.textContent = "set per course";
+    weekBudgetBarEl.style.width = "0%";
+    weekBudgetBarEl.classList.remove("budget-bar__fill--over");
+    weekBudgetNoteEl.textContent =
+      "Set a budget on a course to track this against it.";
+    return;
+  }
+
+  const pct = (planned / cap) * 100;
+  statBudgetEl.textContent = `${Math.round(pct)}%`;
+  weekBudgetUsedEl.textContent = formatMoneyCompact(planned);
+  weekBudgetTotalEl.textContent = `of ${formatMoneyCompact(cap)}`;
+  weekBudgetBarEl.style.width = `${Math.min(100, pct)}%`;
+  weekBudgetBarEl.classList.toggle("budget-bar__fill--over", planned > cap);
+  const remaining = cap - planned;
+  weekBudgetNoteEl.textContent =
+    remaining >= 0
+      ? `${formatMoneyCompact(remaining)} remaining this week.`
+      : `${formatMoneyCompact(Math.abs(remaining))} over the weekly budget.`;
+}
+
+async function fetchTutorWorkload() {
+  try {
+    const res = await fetch("/api/tutors/workload");
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load workload");
+    workloadRows = rows;
+  } catch (err) {
+    workloadRows = [];
+  }
+  renderTutorLoad();
+  renderAttention();
+}
+
+function renderTutorLoad() {
+  if (!tutorLoadListEl) return;
+  tutorLoadListEl.innerHTML = "";
+  const rows = [...workloadRows].sort(
+    (a, b) => (b.assignedHours || 0) - (a.assignedHours || 0),
+  );
+  tutorLoadEmptyEl.hidden = rows.length > 0;
+  const cap = weeklyCap();
+
+  rows.slice(0, 6).forEach((tutor) => {
+    const ratio = cap > 0 ? (tutor.assignedHours || 0) / cap : 0;
+    const fillClass =
+      ratio > 1
+        ? " load-item__fill--over"
+        : ratio >= 0.8
+          ? " load-item__fill--warn"
+          : "";
+    const item = document.createElement("div");
+    item.className = "load-item";
+    item.innerHTML = `
+      <span class="load-item__name"></span>
+      <span class="load-item__hours">${tutor.assignedHours || 0}/${cap}h</span>
+      <span class="load-item__track"><span class="load-item__fill${fillClass}" style="width: ${Math.min(100, ratio * 100)}%"></span></span>
+    `;
+    item.querySelector(".load-item__name").textContent =
+      tutor.name || "Unnamed tutor";
+    item.title = tutor.courses?.length
+      ? tutor.courses
+          .map((c) => `${c.course_code} (${c.hours_per_week}h)`)
+          .join(", ")
+      : "No approved courses";
+    tutorLoadListEl.appendChild(item);
+  });
+}
+
+const ATTENTION_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+const OK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
+function renderAttention() {
+  if (!attentionListEl) return;
+  const understaffed = COURSES.filter((c) => shortfall(c) > 0).length;
+  const pendingDecisions = COURSES.reduce((sum, c) => sum + pendingCount(c), 0);
+  const cap = weeklyCap();
+  const overCap = workloadRows.filter(
+    (t) => cap > 0 && (t.assignedHours || 0) > cap,
+  ).length;
+
+  const items = [];
+  if (understaffed > 0)
+    items.push(
+      `${understaffed} ${understaffed === 1 ? "course is" : "courses are"} still understaffed.`,
+    );
+  if (pendingDecisions > 0)
+    items.push(
+      `${pendingDecisions} ${pendingDecisions === 1 ? "decision" : "decisions"} waiting on applications or volunteers.`,
+    );
+  if (overCap > 0)
+    items.push(
+      `${overCap} ${overCap === 1 ? "tutor is" : "tutors are"} over their weekly hour cap.`,
+    );
+
+  attentionListEl.innerHTML = "";
+  if (items.length === 0) {
+    const li = document.createElement("li");
+    li.className = "is-clear";
+    li.innerHTML = `${OK_ICON}<span></span>`;
+    li.querySelector("span").textContent =
+      "All caught up \u2014 nothing needs attention right now.";
+    attentionListEl.appendChild(li);
+    return;
+  }
+  items.forEach((text) => {
+    const li = document.createElement("li");
+    li.innerHTML = `${ATTENTION_ICON}<span></span>`;
+    li.querySelector("span").textContent = text;
+    attentionListEl.appendChild(li);
+  });
 }
 
 // ---------- helpers ----------
@@ -311,6 +474,8 @@ function renderCourseList() {
   const totalPending = COURSES.reduce((sum, c) => sum + pendingCount(c), 0);
   statPendingEl.textContent = totalPending;
   statPendingEl.classList.toggle("stat-value--attention", totalPending > 0);
+  renderAttention();
+  renderBudgetPanel();
 
   courseListEl.innerHTML = "";
 
@@ -344,14 +509,24 @@ function renderCourseList() {
     // every single one to get anywhere else on the page.
     btn.tabIndex = course.id === activeCourseId ? 0 : -1;
     btn.dataset.courseId = String(course.id);
+    const needed = course.tutorsNeeded ?? 0;
+    const pct =
+      needed > 0 ? Math.min(100, (course.tutorsAssigned / needed) * 100) : 0;
+    const barClass = isFull ? "" : " course-card__bar--short";
     btn.innerHTML = `
-        <span class="course-code">${course.code}</span>
-        <span class="course-name">${course.name}</span>
-        <div class="card-foot">
-          <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned, ${volunteerCounts[course.id] ?? 0} volunteered</span>
-          <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : shortfall(course) > 0 ? `Short ${shortfall(course)}` : "Open"}</span>
-          ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
-        </div>
+        <span class="course-card__top">
+          <span class="course-card__code">${course.code}</span>
+          <span class="course-card__fill">${course.tutorsAssigned} / ${course.tutorsNeeded ?? "\u2014"}</span>
+        </span>
+        <span class="course-card__name">${course.name}</span>
+        <span class="course-card__track"><span class="course-card__bar${barClass}" style="width: ${pct}%"></span></span>
+        <span class="course-card__foot">
+          <span class="course-card__meta">${volunteerCounts[course.id] ?? 0} volunteered</span>
+          <span class="course-card__pills">
+            <span class="status-pill ${isFull ? "approved" : shortfall(course) > 0 ? "rejected" : "pending"}">${isFull ? "Staffed" : shortfall(course) > 0 ? `Short ${shortfall(course)}` : "Open"}</span>
+            ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
+          </span>
+        </span>
       `;
     btn.addEventListener("click", () => {
       selectCourse(course.id);
@@ -508,15 +683,21 @@ function renderDetail() {
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
   document.getElementById("dSession").textContent = buildSessionSummary(course);
-  document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
+  document.getElementById("dHours").textContent =
+    course.hoursNeeded ?? "\u2014";
+  document.getElementById("dMinMark").textContent =
+    course.minMark != null ? `${course.minMark}%` : "\u2014";
   document.getElementById("dTutorsAssigned").textContent =
-    `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
+    `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "\u2014"}`;
   document.getElementById("dVolunteered").textContent =
     volunteerCounts[course.id] ?? 0;
   document.getElementById("dBudget").textContent = formatMoney(course.budget);
-  document.getElementById("dRemainingBudget").textContent = "—";
+  document.getElementById("dRemainingBudget").textContent = "\u2014";
 
-  renderAssignmentCard(course);
+  renderAssignmentCard(
+    course,
+    lastApplicantRows.courseId === course.id ? lastApplicantRows.rows : null,
+  );
   renderApplicants(course);
   renderDiagonals(course);
   renderExcusals(course);
@@ -535,6 +716,7 @@ const LEVEL_LABELS = {
 
 const applicantListEl = document.getElementById("applicantList");
 const applicantsEmptyEl = document.getElementById("applicantsEmpty");
+const applicantsCountEl = document.getElementById("applicantsCount");
 
 let applicantsRequestId = 0;
 
@@ -615,7 +797,11 @@ async function renderApplicants(course) {
   applicantListEl.innerHTML = "";
   applicantsEmptyEl.hidden = true;
 
+  lastApplicantRows = { courseId: course.id, rows };
   renderRemainingBudget(course, rows);
+  renderAssignmentCard(course, rows);
+  applicantsCountEl.textContent = String(rows.length);
+  applicantsCountEl.hidden = rows.length === 0;
 
   if (rows.length === 0) {
     applicantsEmptyEl.hidden = false;
@@ -964,6 +1150,7 @@ overrideForm.addEventListener("submit", async (e) => {
 
 const excusalListEl = document.getElementById("excusalList");
 const excusalsEmptyEl = document.getElementById("excusalsEmpty");
+const excusalsCountEl = document.getElementById("excusalsCount");
 
 let excusalsRequestId = 0;
 let lastExcusalsSnapshot = null;
@@ -1014,6 +1201,9 @@ async function renderExcusals(course) {
 
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = rows.filter((e) => e.session_date >= today);
+
+  excusalsCountEl.textContent = String(upcoming.length);
+  excusalsCountEl.hidden = upcoming.length === 0;
 
   if (upcoming.length === 0) {
     excusalsEmptyEl.hidden = false;
@@ -1311,14 +1501,38 @@ async function setVolunteerLock(course, vol, name) {
 
 let lastAssignmentCardSnapshot = null;
 
-function renderAssignmentCard(course) {
+function renderAssignmentCard(course, applicantRows = null) {
   const isFull =
     !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
   const className =
     "assignment-card " + (course.tutorsAssigned > 0 ? "filled" : "empty");
-  const html = isFull
-    ? `<p class="empty-copy">This course is fully staffed — ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
-    : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "—"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
+
+  let html;
+  if (applicantRows) {
+    const approved = applicantRows.filter(
+      (app) => (app.status || "").toLowerCase() === "approved",
+    );
+    const chips = approved
+      .map((app) => {
+        const name = app.Tutor_name || app.tutors?.name || "Unknown";
+        return `<span class="tutor-chip"><span class="avatar">${initials(name)}</span>${name}</span>`;
+      })
+      .join("");
+    const open = Math.max(
+      0,
+      (course.tutorsNeeded ?? 0) - course.tutorsAssigned,
+    );
+    const summary = isFull
+      ? `<span class="slots-done">All ${course.tutorsNeeded} slots filled</span>`
+      : `<span class="slots-open">${pluralise(open, "slot")} still open</span>`;
+    html =
+      `<p class="assignment-card__title">Assigned tutors</p>` +
+      `<div class="tutor-chips">${chips || `<span class="empty-copy">Nobody assigned yet.</span>`}${summary}</div>`;
+  } else {
+    html = isFull
+      ? `<p class="empty-copy">This course is fully staffed \u2014 ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
+      : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "\u2014"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
+  }
 
   const snapshot = `${course.id}:${className}:${html}`;
   if (snapshot === lastAssignmentCardSnapshot) return;
@@ -2116,64 +2330,53 @@ function getSessionUserId() {
 
 const ORGANISER_TOUR_STEPS = [
   {
-    selector: ".header-right",
+    selector: ".org-stats",
     title: "Your snapshot",
-    body: "At a glance: how many courses are fully staffed, how many tutors are on the roll, and how many applications or volunteers still need a decision.",
+    body: "At a glance: how many courses are fully staffed, how many tutors are on the roll, and how much of this week's budget is already committed.",
     placement: "bottom",
   },
   {
-    selector: "#statPending",
-    title: "Needs review",
-    body: 'This counts every pending tutor application and student volunteer across all courses. Courses with something waiting also get a "to review" badge in the list on the left.',
+    selector: ".org-toolbar",
+    title: "Search and shortcuts",
+    body: "Search across courses, tutors, and timesheets from one box — and use the fill-with-casuals shortcut when you need to close staffing gaps in bulk.",
     placement: "bottom",
   },
   {
-    selector: "#courseSearch",
-    title: "Find a course",
-    body: "Search by course code or name to jump straight to it.",
-    placement: "bottom",
-  },
-  {
-    selector: ".shortfall-toggle",
-    title: "Spot the gaps",
-    body: "Toggle this to show only short-staffed courses, worst shortfall first — handy when you're trying to close gaps quickly.",
-    placement: "bottom",
-  },
-  {
-    selector: "#addCourseBtn",
-    title: "Add a course",
-    body: "New course to staff? Add it here with its code, department, hours needed, and session time.",
-    placement: "bottom",
-  },
-  {
-    selector: "#courseList",
-    title: "Pick a course",
-    body: "Click any course to see who's assigned, who's applied, who's volunteered, and any session excusals — approve or reject right from there.",
+    selector: ".org-rail",
+    title: "Your course register",
+    body: "Every course lives here with its fill rate and status. Search it, filter to short-staffed courses only, or add a new course to staff.",
     placement: "right",
   },
   {
-    selector: "a[href='tutors.html']",
-    title: "Manage tutors",
-    body: "The full tutor roster lives here — add, edit, or remove tutors, and set hourly rates and weekly hour caps.",
+    selector: "#emptyState",
+    title: "Work a course",
+    body: "Pick a course from the register to see its applications and volunteers, then approve or reject right from there.",
     placement: "bottom",
   },
   {
-    selector: "a[href='timesheet-review.html']",
-    title: "Review timesheets",
-    body: "Logged hours from tutors show up here for you to review.",
+    selector: ".detail-card",
+    title: "The selected course",
+    body: "Staffing progress, assigned tutors, budget, and every decision waiting on you for the course you've selected.",
     placement: "bottom",
   },
   {
-    selector: "a[href='hours-budget-report.html']",
-    title: "Hours & budget report",
-    body: "See logged tutoring hours broken down by tutor and course, with cost calculated against each course's budget.",
+    selector: ".org-side",
+    title: "This week, at a glance",
+    body: "Track weekly budget spend, tutor workloads against their caps, and anything that needs your attention.",
+    placement: "left",
+  },
+  {
+    selector: ".tab-nav",
+    title: "Get around",
+    body: "Jump between courses, tutors, the timetable, timesheet review, and the budget report from here.",
     placement: "bottom",
   },
 ];
 
-const tourBtn = document.getElementById("tour-button");
-if (tourBtn) {
-  tourBtn.addEventListener("click", () => {
+const tourLinkEl = document.getElementById("tour-link");
+if (tourLinkEl) {
+  tourLinkEl.addEventListener("click", (e) => {
+    e.preventDefault();
     window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
       tourId: "organiser-board",
       userId: getSessionUserId(),
@@ -2229,6 +2432,7 @@ async function refreshBoard() {
       fetchVolunteerCounts(),
       fetchPendingApplicationCounts(),
       fetchPendingVolunteerCounts(),
+      fetchTutorWorkload(),
     ]);
     lastSyncedAt = new Date();
     tickSyncStatusLabel();
@@ -2262,6 +2466,7 @@ async function init() {
   fetchVolunteerCounts();
   fetchPendingApplicationCounts();
   fetchPendingVolunteerCounts();
+  fetchTutorWorkload();
   lastSyncedAt = new Date();
   tickSyncStatusLabel();
   startPollingSync();
@@ -2286,9 +2491,14 @@ async function init() {
     }
   }
 
+  // ?tour=1 — set by the "Take a Tour" link on the other organiser pages —
+  // replays the tour even for organisers who've already seen it.
+  const wantsTour = params.get("tour") === "1";
+
   window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
     tourId: "organiser-board",
     userId: getSessionUserId(),
+    force: wantsTour,
   });
 }
 

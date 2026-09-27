@@ -3,77 +3,249 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Timesheet Review | Tutor Management System</title>
+    <title>Timesheet Review | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
   </head>
-  <body>
-    <header class="board-header board-header--brand">
-      <hgroup class="header-left">
-        <p class="eyebrow">
-          <img src="../images/images.png" alt="" class="eyebrow-logo" />
-          School of Computer Science &amp; Applied Mathematics
-        </p>
-        <h1>Timesheet Review</h1>
-      </hgroup>
 
-      <img
-        src="../images/Wits-890x664.png"
-        alt="University of the Witwatersrand"
-        class="header-wits-logo"
-      />
+  <body data-theme="organiser">
+    <header class="app-navbar">
+      <a class="brand-mark" href="board.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
 
-      <div class="header-actions">
-        <div class="universal-search">
-          <input
-            type="search"
-            id="universalSearchInput"
-            class="universal-search-input"
-            placeholder="Search courses, tutors, timesheets…"
-            aria-label="Universal search"
-          />
-          <ul
-            class="universal-search-results"
-            id="universalSearchResults"
-            hidden
-          ></ul>
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="board.html">Courses</a>
+        <a href="tutors.html">Manage Tutors</a>
+        <a href="timetable.html">Timetable</a>
+        <a href="timesheet-review.html" aria-current="page">Timesheets</a>
+        <a href="hours-budget-report.html">Budget Report</a>
+      </nav>
+
+      <div class="navbar-right">
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
         </div>
 
-        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Organiser</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
       </div>
-      <button class="btn btn-danger" id="logout-button" type="button">
-        Logout
-      </button>
     </header>
 
-    <main class="board-layout timesheet-review-layout">
-      <section class="detail-pane" aria-label="Timesheet submissions">
-        <section class="assign-panel" aria-labelledby="submissionsHeading">
-          <header class="assign-panel-head">
-            <h3 id="submissionsHeading">Submitted timesheets</h3>
-            <select id="statusFilter" aria-label="Filter by status">
-              <option value="pending" selected>Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="">All</option>
-            </select>
-            <button class="btn btn-ghost" id="exportPayrollBtn" type="button">
-              Export payroll (CSV)
-            </button>
-          </header>
-
-          <ul class="tutor-list" id="submissionList">
-            <!-- injected -->
-          </ul>
-          <p class="empty-copy" id="submissionsEmpty" hidden>
-            No timesheets to show for this filter.
+    <main class="app-main">
+      <header class="page-head">
+        <div>
+          <h1>Timesheet Review</h1>
+          <p class="page-sub">
+            Verify logged hours, resolve disputes, then export payroll.
           </p>
-        </section>
+        </div>
+        <div class="head-actions">
+          <div class="universal-search">
+            <input
+              type="search"
+              id="universalSearchInput"
+              class="universal-search-input"
+              placeholder="Search courses, tutors, timesheets…"
+              aria-label="Universal search"
+            />
+            <ul
+              class="universal-search-results"
+              id="universalSearchResults"
+              hidden
+            ></ul>
+          </div>
+          <button class="btn-secondary" id="exportPayrollBtn" type="button">
+            Export payroll (CSV)
+          </button>
+        </div>
+      </header>
+
+      <section class="verify-grid" aria-label="Review summary">
+        <article class="verify-card verify-card--violet">
+          <span class="verify-card__icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+              <path
+                d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+              />
+            </svg>
+          </span>
+          <div class="verify-card__body">
+            <p class="verify-card__title">Awaiting your review</p>
+            <p class="verify-card__meta">
+              <span id="verifyPendingMeta">Checking…</span>
+              <span id="verifyDecidedMeta"></span>
+            </p>
+            <div class="verify-card__actions">
+              <button
+                type="button"
+                class="btn-small btn-small-neutral"
+                id="reviewPendingBtn"
+              >
+                Show pending
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <article class="verify-card verify-card--teal">
+          <span class="verify-card__icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </span>
+          <div class="verify-card__body">
+            <p class="verify-card__title">Open disputes</p>
+            <p class="verify-card__meta">
+              <span id="verifyDisputeMeta">Checking…</span>
+              <span id="verifyRejectedMeta"></span>
+            </p>
+            <div class="verify-card__actions">
+              <button
+                type="button"
+                class="btn-small btn-small-neutral"
+                id="viewDisputesBtn"
+                disabled
+              >
+                Review disputes
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel" aria-labelledby="submissionsHeading">
+        <header class="review-toolbar">
+          <h2 id="submissionsHeading">Submitted timesheets</h2>
+
+          <div
+            class="filter-chips"
+            id="statusChips"
+            aria-label="Filter by status"
+          >
+            <button type="button" class="filter-chip" data-status="pending">
+              Pending
+            </button>
+            <button type="button" class="filter-chip" data-status="approved">
+              Approved
+            </button>
+            <button type="button" class="filter-chip" data-status="rejected">
+              Rejected
+            </button>
+            <button type="button" class="filter-chip" data-status="">
+              All
+            </button>
+          </div>
+
+          <select id="statusFilter" aria-label="Filter by status" hidden>
+            <option value="pending" selected>Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="">All</option>
+          </select>
+        </header>
+
+        <ul class="review-list" id="submissionList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="submissionsEmpty" hidden>
+          No timesheets to show for this filter.
+        </p>
       </section>
     </main>
 
@@ -100,12 +272,12 @@
 
         <menu class="modal-actions">
           <li>
-            <button class="btn btn-ghost" id="reasonCancelBtn" type="button">
+            <button class="btn-secondary" id="reasonCancelBtn" type="button">
               Cancel
             </button>
           </li>
           <li>
-            <button class="btn btn-primary" id="reasonSubmitBtn" type="submit">
+            <button class="btn-primary" id="reasonSubmitBtn" type="submit">
               Confirm
             </button>
           </li>
@@ -135,16 +307,12 @@
 
         <menu class="modal-actions">
           <li>
-            <button class="btn btn-ghost" id="disputeCloseBtn" type="button">
+            <button class="btn-secondary" id="disputeCloseBtn" type="button">
               Close
             </button>
           </li>
           <li>
-            <button
-              class="btn btn-primary"
-              id="disputeResolveBtn"
-              type="button"
-            >
+            <button class="btn-primary" id="disputeResolveBtn" type="button">
               Mark resolved
             </button>
           </li>
@@ -154,8 +322,16 @@
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+    <script src="../js/user-badge.js"></script>
     <script src="../js/universal-search.js"></script>
     <script src="../js/timesheet-review.js"></script>
+    <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
+    <script type="module">
+      // Organiser-only page — bounce signed-out visitors to login and any
+      // other signed-in role back to their own home page.
+      import { requireRole } from "../js/storage.js";
+      requireRole("organiser");
+    </script>
   </body>
 </html>

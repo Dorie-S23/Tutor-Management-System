@@ -7,6 +7,7 @@ import {
   todayStr,
   getWeekStart,
   getWeekTotal,
+  addDays,
   requireRole,
 } from "./storage.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
@@ -45,7 +46,7 @@ const submitWeekHint = document.getElementById("submitWeekHint");
 const timesheetHint = document.getElementById("timesheet-hint");
 const claimWrapper = document.getElementById("claimWrapper");
 const claimRowsEl = document.getElementById("claimRows");
-const submissionsTableBody = document.getElementById("submissionsTableBody");
+const submissionsListEl = document.getElementById("submissionsList");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 
 const disputeModal = document.getElementById("disputeModal");
@@ -74,6 +75,20 @@ function toDisplayDate(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
+}
+
+// "28 Sep – 4 Oct 2026" within one month, "29 Sep – 5 Oct 2026" across two.
+function formatWeekRange(weekStart) {
+  const start = new Date(`${weekStart}T00:00:00`);
+  const end = new Date(`${addDays(weekStart, 6)}T00:00:00`);
+
+  const startMonth = start.toLocaleDateString(undefined, { month: "short" });
+  const endMonth = end.toLocaleDateString(undefined, { month: "short" });
+  const year = end.getFullYear();
+
+  return startMonth === endMonth
+    ? `${start.getDate()}–${end.getDate()} ${endMonth} ${year}`
+    : `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth} ${year}`;
 }
 
 function formatDuration(hours) {
@@ -212,7 +227,7 @@ async function loadDisputes(userId) {
         latestDisputeByWeek.set(d.timesheet_week_start, d);
       }
     });
-  } catch (err) {
+  } catch {
     latestDisputeByWeek = new Map();
   }
 }
@@ -222,7 +237,7 @@ function renderDisputeCell(sub) {
 
   const dispute = latestDisputeByWeek.get(sub.week_start);
   if (dispute && !dispute.resolved) {
-    return `<span class="status-pill disputed">dispute pending</span>`;
+    return `<span class="status-pill disputed">Disputed</span>`;
   }
 
   const label = dispute ? "Dispute again" : "Dispute";
@@ -240,29 +255,39 @@ async function loadSubmissions() {
     );
     rows = await res.json();
     if (!res.ok) throw new Error(rows.error || "Failed to load timesheets");
-  } catch (err) {
+  } catch {
     return;
   }
 
   await loadDisputes(user.id);
 
-  submissionsTableBody.innerHTML = "";
+  submissionsListEl.innerHTML = "";
   submissionsEmptyEl.hidden = rows.length > 0;
 
   rows.forEach((sub) => {
-    const tr = document.createElement("tr");
-    tr.dataset.weekStart = sub.week_start;
-    tr.innerHTML = `
-      <td>${toDisplayDate(sub.week_start)}</td>
-      <td>${sub.total_hours}</td>
-      <td>
-        <span class="status-pill ${sub.status}">${sub.status}</span>
-        ${sub.reviewer_note ? `<p class="hint">${sub.reviewer_note}</p>` : ""}
-      </td>
-      <td>${toDisplayDate(sub.submitted_at.slice(0, 10))}</td>
-      <td>${renderDisputeCell(sub)}</td>
+    const status = (sub.status || "pending").toLowerCase();
+    const dispute = latestDisputeByWeek.get(sub.week_start);
+    const disputed = dispute && !dispute.resolved;
+    const note = disputed
+      ? "Disputed — please review and resubmit."
+      : sub.reviewer_note || "";
+
+    const row = document.createElement("div");
+    row.className = "ts-row";
+    row.dataset.weekStart = sub.week_start;
+    row.innerHTML = `
+      <div>
+        <p class="ts-row__week">${formatWeekRange(sub.week_start)}</p>
+        ${note ? `<p class="ts-row__dispute">${note}</p>` : ""}
+      </div>
+      <span class="status-pill ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+      <div class="ts-row__right">
+        <p class="ts-row__hours">${Number(sub.total_hours)}h</p>
+        <p class="ts-row__date">${sub.submitted_at.slice(0, 10)}</p>
+      </div>
+      <div class="ts-row__action">${renderDisputeCell(sub)}</div>
     `;
-    submissionsTableBody.appendChild(tr);
+    submissionsListEl.appendChild(row);
   });
 }
 
@@ -306,7 +331,7 @@ submitTimesheetBtn.addEventListener("click", async () => {
     }
     showToast("Timesheet submitted for approval.");
     await loadSubmissions();
-  } catch (err) {
+  } catch {
     showToast("Network error — couldn't reach the server.", "danger");
   } finally {
     submitTimesheetBtn.disabled = false;
@@ -337,7 +362,7 @@ disputeModal.addEventListener("click", (e) => {
   if (e.target === disputeModal) closeDisputeModal();
 });
 
-submissionsTableBody.addEventListener("click", (e) => {
+submissionsListEl.addEventListener("click", (e) => {
   const btn = e.target.closest('[data-action="dispute"]');
   if (btn) openDisputeModal(btn.dataset.week);
 });
@@ -374,7 +399,7 @@ disputeForm.addEventListener("submit", async (e) => {
     closeDisputeModal();
     showToast("Dispute submitted.");
     await loadSubmissions();
-  } catch (err) {
+  } catch {
     disputeFormError.textContent = "Network error — couldn't reach the server.";
     disputeFormError.hidden = false;
   } finally {
@@ -385,6 +410,12 @@ disputeForm.addEventListener("submit", async (e) => {
 printBtn.addEventListener("click", () => window.print());
 rangeFromField.addEventListener("change", safeRenderClaim);
 rangeToField.addEventListener("change", safeRenderClaim);
+
+// The head's "New timesheet" button points at the submit tool below.
+document.getElementById("new-timesheet-btn").addEventListener("click", () => {
+  submitWeekStartField.focus({ preventScroll: true });
+  submitWeekStartField.scrollIntoView({ behavior: "smooth", block: "center" });
+});
 
 const { from, to } = defaultRange();
 rangeFromField.value = from;
@@ -404,7 +435,7 @@ safeRenderClaim();
   const highlightWeek = consumeQueryParam("highlightWeek");
   if (highlightWeek) {
     scrollAndHighlight(
-      submissionsTableBody.querySelector(
+      submissionsListEl.querySelector(
         `[data-week-start="${CSS.escape(highlightWeek)}"]`,
       ),
     );

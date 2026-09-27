@@ -75,6 +75,7 @@ if (forgotPasswordLink) {
       setMessage(
         message,
         "Please contact your course administrator to reset your password.",
+        "error",
       );
     }
   });

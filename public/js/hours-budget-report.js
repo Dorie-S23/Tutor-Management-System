@@ -5,6 +5,12 @@ const clearFilterBtn = document.getElementById("clearFilterBtn");
 const reportSectionsEl = document.getElementById("reportSections");
 const emptyCopyEl = document.getElementById("emptyCopy");
 const unlinkedWarningEl = document.getElementById("unlinkedWarning");
+const budgetBarsEl = document.getElementById("budgetBars");
+const budgetBarsEmptyEl = document.getElementById("budgetBarsEmpty");
+const statTotalHoursEl = document.getElementById("statTotalHours");
+const statTotalCostEl = document.getElementById("statTotalCost");
+const statBudgetUsedEl = document.getElementById("statBudgetUsed");
+const statOverBudgetEl = document.getElementById("statOverBudget");
 
 function formatMoney(value) {
   if (value == null) return "—";
@@ -13,6 +19,12 @@ function formatMoney(value) {
 
 function formatHours(value) {
   return `${Number(value).toFixed(1)} hrs`;
+}
+
+// Tile-friendly money: rounded, thousands-separated, no cents.
+function formatMoneyCompact(value) {
+  if (value == null) return "—";
+  return `R${Math.round(Number(value)).toLocaleString("en-ZA")}`;
 }
 
 async function loadReport() {
@@ -31,6 +43,8 @@ async function loadReport() {
     if (!res.ok) throw new Error(body.error || "Failed to load report");
   } catch (err) {
     reportSectionsEl.innerHTML = "";
+    renderSummary(null);
+    renderAllocationBars([]);
     showToast(err.message || "Couldn't load the report right now.");
     return;
   }
@@ -50,6 +64,8 @@ function renderReport(rows) {
 
   if (rows.length === 0) {
     emptyCopyEl.hidden = false;
+    renderSummary(null);
+    renderAllocationBars([]);
     return;
   }
   emptyCopyEl.hidden = true;
@@ -71,34 +87,65 @@ function renderReport(rows) {
     a.courseCode.localeCompare(b.courseCode),
   );
 
-  courses.forEach((course) => {
-    const totalHours = course.tutorRows.reduce((sum, r) => sum + r.hours, 0);
-    const totalCost = course.tutorRows.reduce(
+  // Page-level totals for the stat tiles + allocation panel.
+  let totalHours = 0;
+  let totalCost = 0;
+  let totalBudget = 0;
+  let hasBudget = false;
+  let overBudgetCount = 0;
+  const allocationRows = [];
+
+  courses.forEach((course, index) => {
+    const courseHours = course.tutorRows.reduce((sum, r) => sum + r.hours, 0);
+    const courseCost = course.tutorRows.reduce(
       (sum, r) => sum + (r.cost ?? 0),
       0,
     );
     const hasUnknownRate = course.tutorRows.some((r) => r.cost == null);
-    const remaining = course.budget != null ? course.budget - totalCost : null;
+    const remaining = course.budget != null ? course.budget - courseCost : null;
     const overBudget = remaining != null && remaining < 0;
 
-    const section = document.createElement("section");
-    section.className = "card";
+    totalHours += courseHours;
+    totalCost += courseCost;
+    if (course.budget != null) {
+      hasBudget = true;
+      totalBudget += course.budget;
+    }
+    if (overBudget) overBudgetCount += 1;
 
-    const header = document.createElement("header");
-    header.innerHTML = `
-      <h2>${course.courseCode} — ${course.courseName}</h2>
-      <p class="hint">
-        Budget: ${formatMoney(course.budget)}
-        &nbsp;·&nbsp; Spent: ${formatMoney(totalCost)}${hasUnknownRate ? " (partial — some tutors have no hourly rate set)" : ""}
-        &nbsp;·&nbsp; Remaining:
-        <strong class="${overBudget ? "stat-value--attention" : ""}"
-          >${remaining != null ? formatMoney(remaining) : "—"}${overBudget ? " (over budget)" : ""}</strong
-        >
-      </p>
+    allocationRows.push({
+      code: course.courseCode,
+      cost: courseCost,
+      budget: course.budget,
+      over: overBudget,
+    });
+
+    // Cost breakdown: one collapsible card per course, opened on the first.
+    const details = document.createElement("details");
+    details.className = "report-course";
+    if (index === 0) details.open = true;
+
+    const summary = document.createElement("summary");
+    summary.innerHTML = `
+      <span>${course.courseCode} — ${course.courseName}</span>
+      <span class="report-course__hint">${formatHours(courseHours)} · ${formatMoneyCompact(courseCost)}${
+        course.budget != null ? ` of ${formatMoneyCompact(course.budget)}` : ""
+      }</span>
     `;
-    section.appendChild(header);
+    details.appendChild(summary);
 
+    if (hasUnknownRate) {
+      const warn = document.createElement("p");
+      warn.className = "field-warning";
+      warn.textContent =
+        "Some tutors on this course have no hourly rate set, so their cost is excluded.";
+      details.appendChild(warn);
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
     const table = document.createElement("table");
+    table.className = "data-table";
     table.innerHTML = `
       <thead>
         <tr>
@@ -115,7 +162,7 @@ function renderReport(rows) {
       .forEach((row) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${row.tutorName || "Unknown tutor"}</td>
+          <td class="cell-strong">${row.tutorName || "Unknown tutor"}</td>
           <td>${formatHours(row.hours)}</td>
           <td>${row.hourlyRate != null ? formatMoney(row.hourlyRate) : "—"}</td>
           <td>${formatMoney(row.cost)}</td>
@@ -123,9 +170,63 @@ function renderReport(rows) {
         tbody.appendChild(tr);
       });
     table.appendChild(tbody);
-    section.appendChild(table);
+    wrap.appendChild(table);
+    details.appendChild(wrap);
 
-    reportSectionsEl.appendChild(section);
+    reportSectionsEl.appendChild(details);
+  });
+
+  renderSummary({
+    hours: totalHours,
+    cost: totalCost,
+    budget: hasBudget ? totalBudget : null,
+    over: overBudgetCount,
+  });
+  renderAllocationBars(allocationRows);
+}
+
+function renderSummary(totals) {
+  if (!statTotalHoursEl) return;
+  if (!totals) {
+    statTotalHoursEl.textContent = "0h";
+    statTotalCostEl.textContent = "R0";
+    statBudgetUsedEl.textContent = "—";
+    statOverBudgetEl.textContent = "0";
+    return;
+  }
+  statTotalHoursEl.textContent = `${totals.hours.toFixed(1)}h`;
+  statTotalCostEl.textContent = formatMoneyCompact(totals.cost);
+  statBudgetUsedEl.textContent = totals.budget
+    ? `${Math.round((totals.cost / totals.budget) * 100)}%`
+    : "—";
+  statOverBudgetEl.textContent = String(totals.over);
+}
+
+function renderAllocationBars(rows) {
+  if (!budgetBarsEl) return;
+  budgetBarsEl.innerHTML = "";
+  budgetBarsEmptyEl.hidden = rows.length > 0;
+  if (rows.length === 0) return;
+
+  // Courses with a budget fill proportionally to it; budget-less courses
+  // fall back to a shared scale of the largest cost so the bars still
+  // compare.
+  const maxCost = Math.max(...rows.map((r) => r.cost), 1);
+  rows.forEach((row) => {
+    const pct =
+      row.budget != null && row.budget > 0
+        ? Math.min(100, (row.cost / row.budget) * 100)
+        : Math.min(100, (row.cost / maxCost) * 100);
+    const el = document.createElement("div");
+    el.className = "budget-row";
+    el.innerHTML = `
+      <span class="budget-row__code">${row.code}</span>
+      <span class="budget-row__track">
+        <span class="budget-row__fill${row.over ? " budget-row__fill--over" : ""}" style="width: ${pct}%"></span>
+      </span>
+      <span class="budget-row__value${row.over ? " budget-row__value--over" : ""}">${formatMoneyCompact(row.cost)}${row.budget != null ? ` / ${formatMoneyCompact(row.budget)}` : ""}</span>
+    `;
+    budgetBarsEl.appendChild(el);
   });
 }
 

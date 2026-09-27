@@ -273,6 +273,8 @@ svg {
 
   font-size: 12.5px;
 
+  text-align: center;
+
   color: var(--ink-muted);
 }
 

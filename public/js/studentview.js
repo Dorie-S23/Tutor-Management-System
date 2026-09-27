@@ -1,16 +1,10 @@
 /* ============================================================
-   Volunteer pages
+   Volunteer dashboard (StudentView.html)
 
-   Drives both volunteer pages that share this script:
-   - StudentView.html (the dashboard): stat cards, "Available
-     volunteer sessions" (open modules you can claim) and your
-     upcoming sessions.
-   - module-application.html: the same open modules rendered as
-     application cards, plus the status of your applications.
-
-   Every renderer is conditional on its container existing, so one
-   script serves both pages without either one needing the other's
-   markup.
+   Stat cards, "Available volunteer sessions" (open modules you
+   can claim — each card carries your application's state) and
+   your upcoming sessions. Renderers guard on their containers
+   existing so a missing one degrades quietly.
    ============================================================ */
 
 import { getEntries, requireRole } from "./storage.js";
@@ -27,16 +21,12 @@ if (!currentUser) {
 highlightActiveTab();
 
 const courseListEl = document.getElementById("courseList");
-const pendingListEl = document.getElementById("pendingList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
 const availableHintEl = document.getElementById("available-hint");
-const applicationsHintEl = document.getElementById("applications-hint");
 
-// The dashboard is the page with the stat row; module-application.html has
-// the same course container, so the cards are rendered in whichever style
-// that container's own class asks for (session-grid vs module-grid).
+// The tour points at the stat row and lists below, so auto-starting it
+// stays behind this guard.
 const isDashboard = !!document.querySelector(".stat-grid");
-const moduleStyle = !!courseListEl?.classList.contains("module-grid");
 
 function setStat(id, value) {
   const el = document.getElementById(id);
@@ -47,15 +37,6 @@ function setStat(id, value) {
 
 const CALENDAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
 const CLOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-const MODULE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z"/><path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z"/><path d="M18.5 7v5"/></svg>`;
-
-const MODULE_ACCENTS = [
-  "accent--blue",
-  "accent--violet",
-  "accent--teal",
-  "accent--amber",
-];
-
 // ---------- upcoming sessions ----------
 
 // Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching
@@ -519,8 +500,8 @@ async function renderHoursMonth() {
 
 // ---------- open modules (claim / apply cards) ----------
 
-// Fetched once and shared: the course cards use it to show "already
-// claimed" states, and the applications list renders straight from it.
+// Fetched once and shared: the course cards use it to show their claim
+// state, and the "Pending claims" stat counts straight from it.
 let myApplicationsPromise = null;
 
 function loadMyApplications() {
@@ -538,7 +519,7 @@ function loadMyApplications() {
 
 function refreshApplications() {
   myApplicationsPromise = null;
-  return Promise.allSettled([renderCourses(), renderPendingApplications()]);
+  return Promise.allSettled([renderCourses(), renderApplicationStats()]);
 }
 
 function buildMarkForm() {
@@ -559,8 +540,8 @@ function buildMarkForm() {
 }
 
 // Wires a claim/apply button + its mark form: open the form, validate the
-// mark, POST the application, then refresh both the cards and the
-// applications list so every view agrees on what's been claimed.
+// mark, POST the application, then refresh the cards and the stat so every
+// view agrees on what's been claimed.
 function wireApplicationFlow(course, openBtn, markForm) {
   const markInput = markForm.querySelector(".mark-input");
   const submitMarkBtn = markForm.querySelector(".submit-mark-btn");
@@ -660,6 +641,27 @@ function buildSessionCard(course, myApp) {
 
   card.appendChild(body);
 
+  if (myApp) card.dataset.applicationId = myApp.id;
+
+  if (myApp?.status === "rejected") {
+    // The unique (user, course) constraint blocks a fresh application, so
+    // offer to clear the rejected one first — the recovery path the old
+    // applications list used to provide.
+    const note = document.createElement("p");
+    note.className = "session-note";
+    note.textContent = "Your last application for this module wasn't accepted.";
+    const reapplyBtn = document.createElement("button");
+    reapplyBtn.type = "button";
+    reapplyBtn.className = "btn-link";
+    reapplyBtn.textContent = "Remove & volunteer again";
+    reapplyBtn.style.marginTop = "8px";
+    reapplyBtn.addEventListener("click", () =>
+      removeVolunteerApplication(course.id),
+    );
+    body.append(note, reapplyBtn);
+    return card;
+  }
+
   if (myApp?.status === "pending" || myApp?.status === "approved") {
     const pill = document.createElement("span");
     pill.className = "claimed-pill";
@@ -679,55 +681,6 @@ function buildSessionCard(course, myApp) {
   const markForm = buildMarkForm();
   card.append(volunteerBtn, markForm);
   wireApplicationFlow(course, volunteerBtn, markForm);
-  return card;
-}
-
-// Module-application card: accent tile, weekly hours, minimum result.
-function buildModuleCard(course, index, myApp) {
-  const card = document.createElement("article");
-  card.className = `module-card ${MODULE_ACCENTS[index % MODULE_ACCENTS.length]}`;
-  card.dataset.courseId = course.id;
-  card.innerHTML = `
-    <span class="module-icon">${MODULE_ICON}</span>
-    <p class="module-code"></p>
-    <h3 class="module-name"></h3>
-    <div class="module-details"></div>
-  `;
-  card.querySelector(".module-code").textContent = course.course_code;
-  card.querySelector(".module-name").textContent = course.course_name;
-
-  const details = card.querySelector(".module-details");
-  if (course.hours_per_week != null) {
-    details.insertAdjacentHTML(
-      "beforeend",
-      `<span>${course.hours_per_week}h per week</span>`,
-    );
-  }
-  if (course.min_mark != null) {
-    details.insertAdjacentHTML(
-      "beforeend",
-      `<span>Minimum result: ${course.min_mark}%</span>`,
-    );
-  }
-  details.insertAdjacentHTML("beforeend", `<span>Open until filled</span>`);
-
-  const openBtn = document.createElement("button");
-  openBtn.type = "button";
-  openBtn.className = "btn-apply";
-  openBtn.textContent = "Apply for module";
-
-  if (myApp?.status === "pending" || myApp?.status === "approved") {
-    openBtn.classList.add("is-submitted");
-    openBtn.disabled = true;
-    openBtn.textContent =
-      myApp.status === "pending" ? "Application submitted" : "You're approved";
-    card.appendChild(openBtn);
-    return card;
-  }
-
-  const markForm = buildMarkForm();
-  card.append(openBtn, markForm);
-  wireApplicationFlow(course, openBtn, markForm);
   return card;
 }
 
@@ -771,112 +724,30 @@ async function renderCourses() {
     return;
   }
 
-  openCourses.forEach((course, index) => {
-    const myApp = myByCourseId.get(course.id);
+  openCourses.forEach((course) => {
     courseListEl.appendChild(
-      moduleStyle
-        ? buildModuleCard(course, index, myApp)
-        : buildSessionCard(course, myApp),
+      buildSessionCard(course, myByCourseId.get(course.id)),
     );
   });
 }
 
 // ---------- my applications ----------
 
-async function renderPendingApplications() {
+// Feeds the "Pending claims" stat — how many applications an organiser
+// hasn't reviewed yet. Each card above shows its own application state.
+async function renderApplicationStats() {
   let applications;
   try {
     applications = await loadMyApplications();
-  } catch (err) {
+  } catch {
     setStat("stat-pending-claims", "0");
-    if (pendingListEl) {
-      pendingListEl.innerHTML = `<p class="empty-state">Couldn't load your applications right now.</p>`;
-    }
     return;
   }
-
-  const statusOrder = { pending: 0, approved: 1, rejected: 2 };
-  const statusLabels = {
-    pending: "Pending",
-    approved: "Approved",
-    rejected: "Rejected",
-  };
-
-  const relevant = applications
-    .filter((app) => ["pending", "approved", "rejected"].includes(app.status))
-    .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
   setStat(
     "stat-pending-claims",
-    String(relevant.filter((app) => app.status === "pending").length),
+    String(applications.filter((app) => app.status === "pending").length),
   );
-  if (applicationsHintEl) {
-    applicationsHintEl.textContent = `${relevant.length} total`;
-  }
-
-  if (!pendingListEl) return;
-
-  pendingListEl.innerHTML = "";
-
-  if (relevant.length === 0) {
-    pendingListEl.innerHTML = `<p class="empty-state">No applications yet — apply for a module above and it will show up here.</p>`;
-    return;
-  }
-
-  relevant.forEach((app) => {
-    const status = (app.status || "pending").toLowerCase();
-
-    const article = document.createElement("article");
-    article.className = "session-card";
-    article.dataset.applicationId = app.id;
-
-    const body = document.createElement("div");
-    body.className = "session-card__body";
-    body.insertAdjacentHTML(
-      "beforeend",
-      `<p class="session-code"></p>
-       <h3 class="session-title"></h3>
-       <p class="session-meta"></p>`,
-    );
-    body.querySelector(".session-code").textContent =
-      app.courses?.course_code || "—";
-    body.querySelector(".session-title").textContent =
-      app.courses?.course_name || "Module";
-    body.querySelector(".session-meta").textContent =
-      `Mark submitted: ${app.mark}`;
-
-    if (status === "rejected" && app.rejection_reason) {
-      const note = document.createElement("p");
-      note.className = "session-note";
-      note.textContent = `Reason: ${app.rejection_reason}`;
-      body.appendChild(note);
-    }
-    if (status === "approved" && app.approval_reason) {
-      const note = document.createElement("p");
-      note.className = "session-note";
-      note.textContent = `Note: ${app.approval_reason}`;
-      body.appendChild(note);
-    }
-    if (status === "rejected") {
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "btn-link";
-      removeBtn.dataset.action = "remove-volunteer";
-      removeBtn.textContent = "Remove & volunteer again";
-      removeBtn.style.marginTop = "9px";
-      removeBtn.addEventListener("click", () =>
-        removeVolunteerApplication(app.course_id),
-      );
-      body.appendChild(removeBtn);
-    }
-
-    const pill = document.createElement("span");
-    pill.className = `status-pill ${status}`;
-    pill.textContent = statusLabels[status] || status;
-
-    article.append(body, pill);
-    pendingListEl.appendChild(article);
-  });
 }
 
 // Lets a rejected student volunteer dismiss it themselves so the unique
@@ -969,11 +840,11 @@ if (tourLink) {
 (async () => {
   // allSettled, not all: one widget's fetch failing (e.g. hours this month)
   // shouldn't stop the others from rendering — including the highlights
-  // below, which only depend on fetchUpcomingSessions having finished.
+  // below, which need the lists above to have rendered first.
   await Promise.allSettled([
     renderHoursMonth(),
     renderCourses(),
-    renderPendingApplications(),
+    renderApplicationStats(),
     fetchUpcomingSessions(),
   ]);
 
@@ -1010,18 +881,19 @@ if (tourLink) {
     );
   }
 
-  // Arriving from a "volunteer application status changed" notification.
+  // Arriving from a "volunteer application status changed" notification —
+  // flash the card for that module (it shows your application's state).
   const highlightApplicationId = consumeQueryParam("highlightApplication");
   if (highlightApplicationId) {
     scrollAndHighlight(
-      pendingListEl?.querySelector(
+      courseListEl?.querySelector(
         `[data-application-id="${CSS.escape(highlightApplicationId)}"]`,
       ),
     );
   }
 
-  // ?tour=1 is set by module-application.html's "Take a Tour" link, which
-  // bounces visitors here because the tour points at the dashboard itself.
+  // ?tour=1 is set by the "Take a Tour" links on the other volunteer pages,
+  // which bounce visitors here because the tour points at the dashboard.
   const wantsTour = consumeQueryParam("tour") === "1";
 
   if (isDashboard) {
