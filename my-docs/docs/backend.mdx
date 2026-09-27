@@ -82,7 +82,7 @@ models/
   - `401` — authentication failed (wrong password, no session)
   - `403` — authenticated, but not allowed to do this (e.g. a mark below a course's minimum)
   - `404` — the thing referenced doesn't exist
-  - `409` — conflicts with something that already exists (duplicate application, taken course code)
+  - `409` — the write conflicts with the current state: something already exists (duplicate application, taken course code), or the record changed since the caller last read it (see _Conflict resolution on application writes_)
   - `500` — the database/Supabase call itself failed
 - No API versioning and no OpenAPI/Swagger spec — routes are small and read top-to-bottom instead.
 - Validation (required fields, numeric ranges, business rules like "mark must be ≥ course minimum") happens in the route handler itself, before any database call — never trust the client to have already checked.
@@ -96,6 +96,16 @@ models/
 - `?preset=fairness` — spare capacity dominates, so work spreads across tutors instead of stacking on the strongest.
 
 An unknown preset gets a `400` listing the valid names. Each applicant's `ranking` object now carries, alongside the familiar facts, the blended `score` (0–100 under the active preset), the normalised `objectives`, `rank` and `meritRank` (position under this balance vs merit-first), `paretoDominated` (another applicant is at least as good on every objective and strictly better on one — true under any weighting), and a `tradeoff` note whenever the two orderings disagree.
+
+### Conflict resolution on application writes
+
+Two organisers can be looking at the same application at the same time. Rather than letting the last save silently overwrite the first, every write to an application declares the state it acted on, and the server refuses stale writes with a `409`:
+
+- `PATCH /api/tutor-applications/:id` requires `expectedStatus` — the status (`pending` / `approved` / `rejected`) the client last saw. If it no longer matches the row, the request is a `409` before anything is written, and the update itself is additionally guarded (`WHERE status = expectedStatus`), so a change landing _mid-request_ still fails instead of overwriting. If the course counter was already bumped before the status write lost its race, the bump is rolled back.
+- `PATCH /api/tutor-applications/:id/lock` needs no extra fields — the update is atomic (`WHERE locked = false AND status = 'approved'`), so two simultaneous locks can't both "succeed".
+- `POST /api/tutor-applications/bulk-approve` applies the same guards row by row: anything no longer `pending` at execution time (already rejected, or changed mid-request) comes back as `{ success: false, error: "Someone else already changed this application" }` with its counter bump rolled back, while the rest still go through. The board surfaces these as "something changed since you opened this".
+
+This is optimistic concurrency: no locks and no version columns — just conditional updates that only land on the state they were based on. Any `409` in this flow means "someone got there first": reload the list and try again against the fresh state. `server/testUtils/fakeSupabase.js` accepts an optional third `hooks` argument (`onBeforeResolve`) so tests can interleave a competing writer between a route's read and its write and prove these paths.
 
 ## Development Guide
 

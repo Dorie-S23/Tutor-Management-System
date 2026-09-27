@@ -1007,11 +1007,22 @@ async function setApplicationStatus(course, app, status, name, reasons = {}) {
     const res = await fetch(`/api/tutor-applications/${app.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejectionReason, approvalReason }),
+      // expectedStatus is the status this row was rendered with — the
+      // server refuses (409) if it moved on since, instead of overwriting
+      // whatever another organiser just did.
+      body: JSON.stringify({
+        status,
+        rejectionReason,
+        approvalReason,
+        expectedStatus: previousStatus,
+      }),
     });
     const body = await res.json();
     if (!res.ok) {
       showToast(body.error || "Couldn't update that application.");
+      // A conflict means this row is stale — pull the latest list so the
+      // organiser is looking at the current state before retrying.
+      if (res.status === 409) await fetchCourses();
       return;
     }
     const messages = {
@@ -1049,6 +1060,7 @@ async function setApplicationLock(course, app, name) {
     const body = await res.json();
     if (!res.ok) {
       showToast(body.error || "Couldn't lock that assignment.");
+      if (res.status === 409) await fetchCourses();
       return;
     }
     showToast(`${name}'s assignment to ${course.code} is now locked.`);
@@ -1100,6 +1112,9 @@ overrideForm.addEventListener("submit", async (e) => {
 
   const { course, app, name } = pendingOverride;
   const reason = overrideReasonInput.value.trim();
+  // The status this row was rendered with — guards against approving a row
+  // another organiser already moved on.
+  const expectedStatus = (app.status || "pending").toLowerCase();
 
   overrideSubmitBtn.disabled = true;
   overrideSubmitBtn.textContent = "Approving…";
@@ -1113,6 +1128,7 @@ overrideForm.addEventListener("submit", async (e) => {
         override: true,
         organiserId: getSessionUserId(),
         reason,
+        expectedStatus,
       }),
     });
     const body = await res.json();
@@ -1121,6 +1137,7 @@ overrideForm.addEventListener("submit", async (e) => {
       overrideFormError.textContent =
         body.error || "Couldn't override that rule.";
       overrideFormError.hidden = false;
+      if (res.status === 409) await fetchCourses();
       return;
     }
 

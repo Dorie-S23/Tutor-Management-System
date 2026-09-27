@@ -22,8 +22,25 @@
 //   const supabase = fakeSupabase(tables, {
 //     course_volunteers: [["user_id", "course_id"]],
 //   });
+//
+// A third argument — hooks — lets a test interleave a competing writer into
+// a route's sequence, to exercise optimistic-concurrency races:
+// onBeforeResolve(tableName, operation) runs just before every query
+// resolves ("operation" is "update", "delete" or "select"), so it can
+// mutate the seed rows the route is about to write, after the route has
+// already read them:
+//   const supabase = fakeSupabase(tables, {}, {
+//     onBeforeResolve: (table, operation) => {
+//       if (table === "courses" && operation === "update") {
+//         // e.g. another organiser's approval landed first:
+//         tables.courses[0].no_of_tutors_assigned = 7;
+//       }
+//     },
+//   });
+// The hook must only mutate the seed arrays — issuing queries from inside it
+// would recurse back into the hook.
 
-function fakeSupabase(tables, uniqueConstraints = {}) {
+function fakeSupabase(tables, uniqueConstraints = {}, hooks = {}) {
   return {
     from(tableName) {
       const rows = tables[tableName];
@@ -73,6 +90,10 @@ function fakeSupabase(tables, uniqueConstraints = {}) {
       };
 
       function resolve(wantsSingle, allowNullSingle) {
+        if (hooks.onBeforeResolve) {
+          hooks.onBeforeResolve(tableName, pendingWrite?.type ?? "select");
+        }
+
         if (insertConflict) {
           return { data: null, error: insertConflict };
         }
