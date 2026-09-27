@@ -199,27 +199,29 @@
     Object.assign(tooltip.style, {
       position: "fixed",
       zIndex: "1002",
-      maxWidth: "320px",
+      width: "min(420px, calc(100vw - 28px))",
       background: "#ffffff",
-      borderRadius: "12px",
-      boxShadow: "0 16px 40px rgba(15, 23, 42, 0.3)",
-      padding: "18px",
+      borderRadius: "18px",
+      boxShadow:
+        "0 24px 60px rgba(15, 23, 42, 0.28), 0 4px 14px rgba(15, 23, 42, 0.12)",
+      padding: "25px 28px",
       fontFamily: "inherit",
     });
 
     const stepCount = document.createElement("p");
     stepCount.textContent = `Step ${activeTour.index + 1} of ${activeTour.steps.length}`;
     stepCount.style.cssText =
-      "font-size:12px;color:#64748b;margin:0 0 8px;letter-spacing:0.02em;";
+      "font-size:12px;color:#64748b;margin:0 0 10px;letter-spacing:0.02em;";
 
     const title = document.createElement("h3");
     title.textContent = step.title;
-    title.style.cssText = "margin:0 0 6px;font-size:16px;line-height:1.3;";
+    title.style.cssText =
+      'margin:0 0 8px;font-family:"Fraunces",Georgia,"Times New Roman",serif;font-size:22px;font-weight:600;letter-spacing:-0.4px;line-height:1.25;color:#0f172a;';
 
     const body = document.createElement("p");
     body.textContent = step.body;
     body.style.cssText =
-      "margin:0 0 16px;font-size:14px;line-height:1.5;color:#334155;";
+      "margin:0 0 20px;font-size:14px;line-height:1.55;color:#475569;";
 
     const actions = document.createElement("div");
     actions.style.cssText =
@@ -229,7 +231,7 @@
     skipBtn.type = "button";
     skipBtn.textContent = "Skip tour";
     skipBtn.style.cssText =
-      "background:none;border:none;color:#64748b;font-size:13px;cursor:pointer;padding:4px;text-decoration:underline;";
+      "background:none;border:none;color:#64748b;font-size:13px;font-family:inherit;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;";
     skipBtn.addEventListener("click", finish);
 
     const navGroup = document.createElement("div");
@@ -240,7 +242,7 @@
       backBtn.type = "button";
       backBtn.textContent = "Back";
       backBtn.style.cssText =
-        "padding:6px 14px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:13px;";
+        "padding:9px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#64748b;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;";
       backBtn.addEventListener("click", back);
       navGroup.appendChild(backBtn);
     }
@@ -250,7 +252,7 @@
     nextBtn.textContent =
       activeTour.index === activeTour.steps.length - 1 ? "Done" : "Next";
     nextBtn.style.cssText =
-      "padding:6px 16px;border-radius:6px;border:none;background:#2563eb;color:#fff;cursor:pointer;font-size:13px;font-weight:600;";
+      "padding:9px 16px 10px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;";
     nextBtn.addEventListener("click", next);
     navGroup.appendChild(nextBtn);
 

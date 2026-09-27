@@ -7,7 +7,11 @@ export function getCurrentUser() {
   const raw = sessionStorage.getItem("user");
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const user = JSON.parse(raw);
+    // Accounts created before the Volunteer rename were stored with
+    // role "student" — normalise them so every page sees "volunteer".
+    if (user && user.role === "student") user.role = "volunteer";
+    return user;
   } catch {
     return null;
   }
@@ -15,8 +19,9 @@ export function getCurrentUser() {
 
 // Where each role lands after login (mirrors the switch in auth.js).
 const ROLE_HOME = {
-  student: "StudentView.html",
+  volunteer: "StudentView.html",
   tutor: "dashboard.html",
+  // Legacy accounts created before the Volunteer rename.
   educator: "educator.html",
   organiser: "board.html",
 };

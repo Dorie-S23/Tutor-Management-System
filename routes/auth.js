@@ -3,6 +3,19 @@ const express = require("express");
 const router = express.Router();
 
 /* =========================================================
+   ROLE ALIASES
+
+   Accounts created before the Volunteer rename stored
+   "student" in users.role — accept it as an alias so those
+   accounts keep working while new signups use "volunteer".
+   ========================================================= */
+
+const ROLE_ALIASES = { student: "volunteer" };
+
+const normaliseRole = (role) =>
+  ROLE_ALIASES[String(role).toLowerCase()] || String(role).toLowerCase();
+
+/* =========================================================
    GENERATE STAFF ID
 
    Organisers don't choose their own staff ID - we assign
@@ -72,9 +85,9 @@ router.post("/register", async (req, res) => {
            Validate role
            ===================================================== */
 
-    const validRoles = ["student", "tutor", "educator", "organiser"];
+    const validRoles = ["volunteer", "tutor", "organiser"];
 
-    const userRole = role.toLowerCase();
+    const userRole = normaliseRole(role);
 
     if (!validRoles.includes(userRole)) {
       return res.status(400).json({
@@ -88,9 +101,9 @@ router.post("/register", async (req, res) => {
            Students and tutors require a student number
            ===================================================== */
 
-    if ((userRole === "student" || userRole === "tutor") && !studentNumber) {
+    if ((userRole === "volunteer" || userRole === "tutor") && !studentNumber) {
       return res.status(400).json({
-        error: "Student number is required for students and tutors",
+        error: "Student number is required for volunteers and tutors",
       });
     }
 
@@ -168,7 +181,7 @@ router.post("/register", async (req, res) => {
            degree
            ===================================================== */
 
-    if (userRole === "student") {
+    if (userRole === "volunteer") {
       const { error: studentError } = await req.supabase
         .from("students")
         .insert({
@@ -372,9 +385,9 @@ router.post("/google/register", async (req, res) => {
            Validate role
            ===================================================== */
 
-    const validRoles = ["student", "tutor", "educator", "organiser"];
+    const validRoles = ["volunteer", "tutor", "organiser"];
 
-    const userRole = role.toLowerCase();
+    const userRole = normaliseRole(role);
 
     if (!validRoles.includes(userRole)) {
       return res.status(400).json({
@@ -388,9 +401,9 @@ router.post("/google/register", async (req, res) => {
            Students and tutors require one.
            ===================================================== */
 
-    if ((userRole === "student" || userRole === "tutor") && !studentNumber) {
+    if ((userRole === "volunteer" || userRole === "tutor") && !studentNumber) {
       return res.status(400).json({
-        error: "Student number is required for students and tutors",
+        error: "Student number is required for volunteers and tutors",
       });
     }
 
@@ -506,7 +519,7 @@ router.post("/google/register", async (req, res) => {
            STUDENT
            ===================================================== */
 
-    if (userRole === "student") {
+    if (userRole === "volunteer") {
       const { error: studentError } = await authenticatedSupabase
         .from("students")
         .insert({
@@ -745,7 +758,8 @@ router.post("/login", async (req, res) => {
 
         name: profile.name,
 
-        role: profile.role,
+        // Legacy "student" rows are reported as "volunteer".
+        role: normaliseRole(profile.role),
       },
 
       session: data.session,

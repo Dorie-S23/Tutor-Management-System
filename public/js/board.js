@@ -1397,13 +1397,13 @@ function buildDiagonalCard(course, group, labels) {
   title.textContent = group.label ? `Diagonal ${group.label}` : "Unassigned";
   const counts = document.createElement("p");
   counts.className = "diagonal-card-counts";
-  counts.textContent = `${pluralise(group.tutors.length, "tutor")} · ${pluralise(group.volunteers.length, "student")}`;
+  counts.textContent = `${pluralise(group.tutors.length, "tutor")} · ${pluralise(group.volunteers.length, "volunteer")}`;
   head.append(title, counts);
   card.appendChild(head);
 
   [
     ["tutor", "Tutors", group.tutors],
-    ["volunteer", "Students", group.volunteers],
+    ["volunteer", "Volunteers", group.volunteers],
   ].forEach(([kind, heading, members]) => {
     const sub = document.createElement("p");
     sub.className = "diagonal-card-sub";

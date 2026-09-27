@@ -132,6 +132,17 @@ describe("getCurrentUser", () => {
     window.sessionStorage.setItem("user", "{not valid json");
     expect(window.__storage.getCurrentUser()).toBeNull();
   });
+
+  // Accounts created before the Volunteer rename were stored with role
+  // "student" — every page should still see them as "volunteer".
+  test("reports a legacy student session as volunteer", () => {
+    const window = loadStorage();
+    setCurrentUser(window, { id: "u1", role: "student" });
+    expect(window.__storage.getCurrentUser()).toEqual({
+      id: "u1",
+      role: "volunteer",
+    });
+  });
 });
 
 describe("requireRole", () => {
@@ -154,7 +165,7 @@ describe("requireRole", () => {
   // calendar via a stale nav link and reaching the tutor dashboard from
   // there with no role check at all.
   test.each([
-    ["student", "StudentView.html"],
+    ["volunteer", "StudentView.html"],
     ["tutor", "dashboard.html"],
     ["educator", "educator.html"],
     ["organiser", "board.html"],

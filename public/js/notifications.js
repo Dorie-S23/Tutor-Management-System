@@ -56,7 +56,7 @@ function getCurrentUser() {
     session_change: {
       param: "highlightCourse",
       tutor: "dashboard.html",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     application_status: {
       param: "highlightApplication",
@@ -64,7 +64,7 @@ function getCurrentUser() {
     },
     volunteer_status: {
       param: "highlightApplication",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     timesheet_status: {
       param: "highlightWeek",
@@ -77,32 +77,32 @@ function getCurrentUser() {
     // A volunteer covering a tutor's excused session
     cover_assigned: {
       param: "highlightCover",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     cover_reminder: {
       param: "highlightCover",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     cover_cancelled: {
       param: "highlightCover",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     // Volunteers swapping a cover between themselves
     swap_request: {
       param: "highlightSwap",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     swap_accepted: {
       param: "highlightCover",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     swap_declined: {
       param: "highlightCover",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     swap_withdrawn: {
       param: "highlightCover",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     // The excused tutor, hearing who (if anyone) is covering for them
     cover_found: {

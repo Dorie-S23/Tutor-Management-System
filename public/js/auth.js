@@ -1,5 +1,18 @@
 const API_URL = "";
 
+/*
+ * Writes a status message into one of the #*-message elements and
+ * toggles the state class that colours it (see auth-global.css).
+ * kind: "error" | "success" | undefined for a neutral note.
+ */
+function setMessage(element, text, kind) {
+  element.textContent = text;
+
+  element.classList.toggle("is-error", kind === "error");
+
+  element.classList.toggle("is-success", kind === "success");
+}
+
 /* =========================
    STUDENT NUMBER FIELD
    ========================= */
@@ -24,7 +37,7 @@ if (googleRegisterButton) {
 
 if (roleSelect) {
   roleSelect.addEventListener("change", () => {
-    if (roleSelect.value === "student" || roleSelect.value === "tutor") {
+    if (roleSelect.value === "volunteer" || roleSelect.value === "tutor") {
       // Show student number field
       studentNumberGroup.style.display = "block";
 
@@ -39,6 +52,30 @@ if (roleSelect) {
 
       // No longer required
       studentNumberInput.required = false;
+    }
+  });
+}
+
+/* =========================
+   FORGOT PASSWORD
+   ========================= */
+
+// The prototype shows a "Forgot password?" link but the app has no
+// self-service reset — point users at their course administrator
+// instead (shown in the login card's message area).
+const forgotPasswordLink = document.getElementById("forgot-password-link");
+
+if (forgotPasswordLink) {
+  forgotPasswordLink.addEventListener("click", (event) => {
+    event.preventDefault();
+
+    const message = document.getElementById("login-message");
+
+    if (message) {
+      setMessage(
+        message,
+        "Please contact your course administrator to reset your password.",
+      );
     }
   });
 }
@@ -77,9 +114,7 @@ if (registerForm) {
       !email.toLowerCase().endsWith("@wits.ac.za") &&
       !email.toLowerCase().endsWith("@students.wits.ac.za")
     ) {
-      message.textContent = "Please use a Wits email address.";
-
-      message.style.color = "red";
+      setMessage(message, "Please use a Wits email address.", "error");
 
       return;
     }
@@ -89,9 +124,7 @@ if (registerForm) {
            ------------------------- */
 
     if (password !== confirmPassword) {
-      message.textContent = "Passwords do not match.";
-
-      message.style.color = "red";
+      setMessage(message, "Passwords do not match.", "error");
 
       return;
     }
@@ -100,17 +133,17 @@ if (registerForm) {
            Check student number
            ------------------------- */
 
-    if (role === "student" && !studentNumber) {
-      message.textContent = "Student number is required for students.";
-
-      message.style.color = "red";
+    if ((role === "volunteer" || role === "tutor") && !studentNumber) {
+      setMessage(
+        message,
+        "Student number is required for volunteers and tutors.",
+        "error",
+      );
 
       return;
     }
 
-    message.textContent = "Creating your account...";
-
-    message.style.color = "";
+    setMessage(message, "Creating your account...");
 
     try {
       const response = await fetch(`${API_URL}/api/auth/register`, {
@@ -136,9 +169,7 @@ if (registerForm) {
                ------------------------- */
 
       if (!response.ok) {
-        message.textContent = data.error || "Registration failed.";
-
-        message.style.color = "red";
+        setMessage(message, data.error || "Registration failed.", "error");
 
         return;
       }
@@ -147,9 +178,11 @@ if (registerForm) {
                Registration successful
                ------------------------- */
 
-      message.textContent = "Registration successful! Redirecting to login...";
-
-      message.style.color = "green";
+      setMessage(
+        message,
+        "Registration successful! Redirecting to login...",
+        "success",
+      );
 
       setTimeout(() => {
         window.location.href = "login.html";
@@ -157,9 +190,7 @@ if (registerForm) {
     } catch (error) {
       console.error("Registration error:", error);
 
-      message.textContent = "Unable to connect to the server.";
-
-      message.style.color = "red";
+      setMessage(message, "Unable to connect to the server.", "error");
     }
   });
 }
@@ -180,9 +211,7 @@ if (loginForm) {
 
     const message = document.getElementById("login-message");
 
-    message.textContent = "Logging in...";
-
-    message.style.color = "";
+    setMessage(message, "Logging in...");
 
     try {
       const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -205,9 +234,7 @@ if (loginForm) {
                ------------------------- */
 
       if (!response.ok) {
-        message.textContent = data.error || "Login failed.";
-
-        message.style.color = "red";
+        setMessage(message, data.error || "Login failed.", "error");
 
         return;
       }
@@ -216,9 +243,7 @@ if (loginForm) {
                Login successful
                ------------------------- */
 
-      message.textContent = "Login successful!";
-
-      message.style.color = "green";
+      setMessage(message, "Login successful!", "success");
 
       /*
        * Store the Supabase access token
@@ -240,7 +265,9 @@ if (loginForm) {
 
       setTimeout(() => {
         switch (data.user.role) {
+          // Legacy accounts created before the Volunteer rename.
           case "student":
+          case "volunteer":
             window.location.href = "StudentView.html";
             break;
 
@@ -264,9 +291,7 @@ if (loginForm) {
     } catch (error) {
       console.error("Login error:", error);
 
-      message.textContent = "Unable to connect to the server.";
-
-      message.style.color = "red";
+      setMessage(message, "Unable to connect to the server.", "error");
     }
   });
 }

@@ -41,7 +41,9 @@
 
       function redirectPathForRole(role) {
         switch (role) {
+          // Legacy accounts created before the Volunteer rename.
           case "student":
+          case "volunteer":
             return "/html/StudentView.html";
 
           case "tutor":
@@ -228,7 +230,8 @@
               id: user.id,
               email: user.email,
               name: profile.name,
-              role: profile.role,
+              // Legacy "student" profiles are reported as "volunteer".
+              role: profile.role === "student" ? "volunteer" : profile.role,
             }),
           );
 

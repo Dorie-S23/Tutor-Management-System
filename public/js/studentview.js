@@ -1,27 +1,60 @@
 /* ============================================================
-   Student Dashboard
-   Modules You Can Tutor (real courses from Supabase) + a mark-based
-   volunteer application + the resulting pending applications +
-   upcoming sessions for the courses you're approved to volunteer on.
+   Volunteer pages
+
+   Drives both volunteer pages that share this script:
+   - StudentView.html (the dashboard): stat cards, "Available
+     volunteer sessions" (open modules you can claim) and your
+     upcoming sessions.
+   - module-application.html: the same open modules rendered as
+     application cards, plus the status of your applications.
+
+   Every renderer is conditional on its container existing, so one
+   script serves both pages without either one needing the other's
+   markup.
    ============================================================ */
 
 import { getEntries, requireRole } from "./storage.js";
+import { highlightActiveTab } from "./nav.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 
-// This page (StudentView.html) is student-only — symmetric with the guard
-// on the tutor pages, so a tutor can't wander in here either.
-const currentUser = requireRole("student");
+// These pages are volunteer-only — symmetric with the guard on the tutor
+// pages, so a tutor can't wander in here either.
+const currentUser = requireRole("volunteer");
 if (!currentUser) {
   throw new Error("Not authorized");
 }
 
-const welcomeHeadingEl = document.getElementById("welcome-heading");
-const hoursVolunteeredEl = document.getElementById("stat-hours-volunteered");
+highlightActiveTab();
+
 const courseListEl = document.getElementById("courseList");
 const pendingListEl = document.getElementById("pendingList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
+const availableHintEl = document.getElementById("available-hint");
+const applicationsHintEl = document.getElementById("applications-hint");
 
-welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
+// The dashboard is the page with the stat row; module-application.html has
+// the same course container, so the cards are rendered in whichever style
+// that container's own class asks for (session-grid vs module-grid).
+const isDashboard = !!document.querySelector(".stat-grid");
+const moduleStyle = !!courseListEl?.classList.contains("module-grid");
+
+function setStat(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+// ---------- icons (inline SVG, matching the Figma cards) ----------
+
+const CALENDAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+const CLOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+const MODULE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z"/><path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z"/><path d="M18.5 7v5"/></svg>`;
+
+const MODULE_ACCENTS = [
+  "accent--blue",
+  "accent--violet",
+  "accent--teal",
+  "accent--amber",
+];
 
 // ---------- upcoming sessions ----------
 
@@ -103,6 +136,32 @@ function formatDate(dateStr) {
     day: "numeric",
     month: "short",
   });
+}
+
+// The soonest Tutorial/Lab a course still has ahead of it — used to show
+// "Mon 18 Aug · 11:00 · 2h" on the claimable-session cards.
+function nextSessionOccurrence(course) {
+  const candidates = courseSessions(course)
+    .map((session) => ({
+      ...session,
+      daysAway: daysUntil(session.day, session.end),
+    }))
+    .filter((session) => session.daysAway !== null)
+    .sort((a, b) => a.daysAway - b.daysAway);
+  if (candidates.length === 0) return null;
+
+  const next = candidates[0];
+  const date = new Date();
+  date.setDate(date.getDate() + next.daysAway);
+  return { ...next, date };
+}
+
+function formatDuration(start, end) {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const hours = (eh * 60 + em - (sh * 60 + sm)) / 60;
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+  return `${Number(hours.toFixed(1))}h`;
 }
 
 // The next occurrence of each Tutorial/Lab on the courses this student is
@@ -200,47 +259,57 @@ async function fetchUpcomingSessions() {
 }
 
 function renderUpcomingSessions(sessions) {
+  setStat("stat-upcoming-sessions", String(sessions.length));
+  if (!upcomingSessionsListEl) return;
+
   if (sessions.length === 0) {
-    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
+    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions yet — claim a session above to get started.</p>`;
     return;
   }
 
   upcomingSessionsListEl.innerHTML = "";
-  upcomingSessionsListEl.className = "session-list";
 
   sessions.forEach((s) => {
     const article = document.createElement("article");
+    article.className = "session-card";
     article.dataset.courseId = s.courseId;
-    article.innerHTML = `
-      <h3></h3>
-      <p class="session-when"></p>
-      <span class="status-pill"></span>
-    `;
-    article.querySelector("h3").textContent =
-      `${s.courseCode} — ${s.courseName}`;
-    article.querySelector(".session-when").textContent = s.label;
-    article.querySelector(".status-pill").textContent = describeDaysAway(
-      s.daysAway,
-    );
+
+    const body = document.createElement("div");
+    body.className = "session-card__body";
 
     if (s.kind === "cover") {
-      article.classList.add("session-cover");
       article.dataset.coverId = s.excusalId;
-      article.prepend(badge(`Covering for ${s.tutorName}`));
-      article.appendChild(
-        s.swapToName ? buildPendingSwap(s) : buildCantMakeIt(s),
-      );
+      body.appendChild(badge(`Covering for ${s.tutorName}`));
     } else if (s.kind === "swap_request") {
-      article.classList.add("session-cover", "session-swap-request");
       article.dataset.swapId = s.excusalId;
-      article.prepend(
+      body.appendChild(
         badge(
           `${s.coverName} asked you to take this over (covering for ${s.tutorName})`,
         ),
       );
-      article.appendChild(buildSwapAnswer(s));
     }
 
+    body.insertAdjacentHTML(
+      "beforeend",
+      `<p class="session-code"></p>
+       <h3 class="session-title"></h3>
+       <p class="session-meta"><span>${CALENDAR_ICON}<span class="session-when"></span></span></p>`,
+    );
+    body.querySelector(".session-code").textContent = s.courseCode;
+    body.querySelector(".session-title").textContent = s.courseName;
+    body.querySelector(".session-when").textContent = s.label;
+
+    if (s.kind === "cover") {
+      body.appendChild(s.swapToName ? buildPendingSwap(s) : buildCantMakeIt(s));
+    } else if (s.kind === "swap_request") {
+      body.appendChild(buildSwapAnswer(s));
+    }
+
+    const pill = document.createElement("span");
+    pill.className = "status-pill";
+    pill.textContent = describeDaysAway(s.daysAway);
+
+    article.append(body, pill);
     upcomingSessionsListEl.appendChild(article);
   });
 }
@@ -430,134 +499,299 @@ function buildSwapAnswer(request) {
   return wrap;
 }
 
-async function renderHoursVolunteered() {
-  const entries = await getEntries();
-  hoursVolunteeredEl.textContent = entries.reduce(
-    (sum, entry) => sum + Number(entry.hours),
-    0,
+// ---------- hours this month ----------
+
+async function renderHoursMonth() {
+  const el = document.getElementById("stat-hours-month");
+  if (!el) return;
+  try {
+    const entries = await getEntries();
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const hours = entries
+      .filter((entry) => (entry.date || "").startsWith(monthPrefix))
+      .reduce((sum, entry) => sum + Number(entry.hours), 0);
+    el.textContent = `${Number(hours.toFixed(1))}h`;
+  } catch {
+    el.textContent = "0h";
+  }
+}
+
+// ---------- open modules (claim / apply cards) ----------
+
+// Fetched once and shared: the course cards use it to show "already
+// claimed" states, and the applications list renders straight from it.
+let myApplicationsPromise = null;
+
+function loadMyApplications() {
+  if (!myApplicationsPromise) {
+    myApplicationsPromise = fetch(
+      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+    ).then(async (res) => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load applications");
+      return data;
+    });
+  }
+  return myApplicationsPromise;
+}
+
+function refreshApplications() {
+  myApplicationsPromise = null;
+  return Promise.allSettled([renderCourses(), renderPendingApplications()]);
+}
+
+function buildMarkForm() {
+  const form = document.createElement("div");
+  form.className = "mark-form";
+  form.hidden = true;
+  form.innerHTML = `
+    <div class="form-field">
+      <label>Your mark for this module</label>
+      <input type="number" class="mark-input" min="0" max="100" placeholder="0-100" />
+    </div>
+    <div class="form-actions">
+      <button type="button" class="submit-mark-btn btn-primary">Submit</button>
+      <button type="button" class="cancel-mark-btn btn-secondary">Cancel</button>
+    </div>
+  `;
+  return form;
+}
+
+// Wires a claim/apply button + its mark form: open the form, validate the
+// mark, POST the application, then refresh both the cards and the
+// applications list so every view agrees on what's been claimed.
+function wireApplicationFlow(course, openBtn, markForm) {
+  const markInput = markForm.querySelector(".mark-input");
+  const submitMarkBtn = markForm.querySelector(".submit-mark-btn");
+  const cancelMarkBtn = markForm.querySelector(".cancel-mark-btn");
+
+  openBtn.addEventListener("click", () => {
+    openBtn.hidden = true;
+    markForm.hidden = false;
+    markInput.value = "";
+    markInput.focus();
+  });
+
+  cancelMarkBtn.addEventListener("click", () => {
+    markForm.hidden = true;
+    openBtn.hidden = false;
+  });
+
+  markInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") submitMarkBtn.click();
+  });
+
+  submitMarkBtn.addEventListener("click", async () => {
+    const mark = Number(markInput.value);
+    if (!Number.isInteger(mark) || mark < 0 || mark > 100) {
+      showToast("Enter a valid mark between 0 and 100");
+      return;
+    }
+
+    submitMarkBtn.disabled = true;
+    try {
+      const res = await fetch("/api/course-volunteers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          courseId: course.id,
+          mark,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data.error || "Could not submit your application");
+        submitMarkBtn.disabled = false;
+        return;
+      }
+
+      showToast(
+        `Applied for ${course.course_code} — waiting for organiser approval`,
+      );
+      refreshApplications();
+    } catch (err) {
+      showToast("Something went wrong, try again");
+      submitMarkBtn.disabled = false;
+    }
+  });
+}
+
+// Dashboard card: the course's next session, styled like the prototype's
+// "Available volunteer sessions" rows.
+function buildSessionCard(course, myApp) {
+  const card = document.createElement("article");
+  card.className = "session-card";
+  card.dataset.courseId = course.id;
+
+  const body = document.createElement("div");
+  body.className = "session-card__body";
+  body.insertAdjacentHTML(
+    "beforeend",
+    `<p class="session-code"></p>
+     <h3 class="session-title"></h3>
+     <p class="session-meta"></p>`,
   );
+  body.querySelector(".session-code").textContent = course.course_code;
+  body.querySelector(".session-title").textContent = course.course_name;
+
+  const metaEl = body.querySelector(".session-meta");
+  const next = nextSessionOccurrence(course);
+  if (next) {
+    const duration = formatDuration(next.start, next.end);
+    metaEl.innerHTML = `<span>${CALENDAR_ICON}<span class="session-when"></span></span><span>${CLOCK_ICON}<span class="session-duration"></span></span>`;
+    metaEl.querySelector(".session-when").textContent = formatDate(
+      toLocalDateStr(next.date),
+    );
+    metaEl.querySelector(".session-duration").textContent =
+      `${next.start.slice(0, 5)}${duration ? ` · ${duration}` : ""}`;
+  } else {
+    metaEl.remove();
+  }
+
+  if (course.department) {
+    const note = document.createElement("p");
+    note.className = "session-note";
+    note.textContent = course.department;
+    body.appendChild(note);
+  }
+
+  card.appendChild(body);
+
+  if (myApp?.status === "pending" || myApp?.status === "approved") {
+    const pill = document.createElement("span");
+    pill.className = "claimed-pill";
+    pill.textContent =
+      myApp.status === "pending"
+        ? "Claimed by you — awaiting approval"
+        : "You're a volunteer on this module";
+    body.appendChild(pill);
+    return card;
+  }
+
+  const volunteerBtn = document.createElement("button");
+  volunteerBtn.type = "button";
+  volunteerBtn.className = "volunteer-btn";
+  volunteerBtn.textContent = "Volunteer";
+
+  const markForm = buildMarkForm();
+  card.append(volunteerBtn, markForm);
+  wireApplicationFlow(course, volunteerBtn, markForm);
+  return card;
+}
+
+// Module-application card: accent tile, weekly hours, minimum result.
+function buildModuleCard(course, index, myApp) {
+  const card = document.createElement("article");
+  card.className = `module-card ${MODULE_ACCENTS[index % MODULE_ACCENTS.length]}`;
+  card.dataset.courseId = course.id;
+  card.innerHTML = `
+    <span class="module-icon">${MODULE_ICON}</span>
+    <p class="module-code"></p>
+    <h3 class="module-name"></h3>
+    <div class="module-details"></div>
+  `;
+  card.querySelector(".module-code").textContent = course.course_code;
+  card.querySelector(".module-name").textContent = course.course_name;
+
+  const details = card.querySelector(".module-details");
+  if (course.hours_per_week != null) {
+    details.insertAdjacentHTML(
+      "beforeend",
+      `<span>${course.hours_per_week}h per week</span>`,
+    );
+  }
+  if (course.min_mark != null) {
+    details.insertAdjacentHTML(
+      "beforeend",
+      `<span>Minimum result: ${course.min_mark}%</span>`,
+    );
+  }
+  details.insertAdjacentHTML("beforeend", `<span>Open until filled</span>`);
+
+  const openBtn = document.createElement("button");
+  openBtn.type = "button";
+  openBtn.className = "btn-apply";
+  openBtn.textContent = "Apply for module";
+
+  if (myApp?.status === "pending" || myApp?.status === "approved") {
+    openBtn.classList.add("is-submitted");
+    openBtn.disabled = true;
+    openBtn.textContent =
+      myApp.status === "pending" ? "Application submitted" : "You're approved";
+    card.appendChild(openBtn);
+    return card;
+  }
+
+  const markForm = buildMarkForm();
+  card.append(openBtn, markForm);
+  wireApplicationFlow(course, openBtn, markForm);
+  return card;
 }
 
 async function renderCourses() {
-  courseListEl.innerHTML = "";
+  if (!courseListEl) return;
 
   let courses;
+  let applications = [];
   try {
-    const res = await fetch("/api/courses");
-    if (!res.ok) throw new Error("Failed to load courses");
-    courses = await res.json();
+    const [coursesRes, apps] = await Promise.all([
+      fetch("/api/courses"),
+      loadMyApplications().catch(() => {
+        myApplicationsPromise = null;
+        return [];
+      }),
+    ]);
+    if (!coursesRes.ok) throw new Error("Failed to load courses");
+    courses = await coursesRes.json();
+    applications = apps;
   } catch (err) {
     courseListEl.innerHTML = `<p class="empty-state">Couldn't load courses right now.</p>`;
     return;
   }
+
+  const myByCourseId = new Map(applications.map((app) => [app.course_id, app]));
 
   // Only show courses that still need tutors - hide ones already fully staffed.
   const openCourses = courses.filter(
     (course) => (course.no_of_tutors_assigned || 0) < course.tutors_needed,
   );
 
+  setStat("stat-open-sessions", String(openCourses.length));
+  if (availableHintEl) {
+    availableHintEl.textContent = `${openCourses.length} currently open`;
+  }
+
+  courseListEl.innerHTML = "";
+
   if (openCourses.length === 0) {
     courseListEl.innerHTML = `<p class="empty-state">No courses need tutors right now — check back soon.</p>`;
     return;
   }
 
-  openCourses.forEach((course) => {
-    const article = document.createElement("article");
-    article.innerHTML = `
-      <h3>${course.course_code}</h3>
-      <p class="session-meta">${course.course_name}</p>
-      <p class="session-note">${course.department}</p>
-      <button type="button" class="volunteer-btn">Volunteer</button>
-      <div class="mark-form" hidden>
-        <div class="form-field">
-          <label>Your mark for this module</label>
-          <input type="number" class="mark-input" min="0" max="100" placeholder="0-100" />
-        </div>
-        <div class="form-actions">
-          <button type="button" class="submit-mark-btn btn-primary">Submit</button>
-          <button type="button" class="cancel-mark-btn btn-secondary">Cancel</button>
-        </div>
-      </div>
-    `;
-
-    const volunteerBtn = article.querySelector(".volunteer-btn");
-    const markForm = article.querySelector(".mark-form");
-    const markInput = article.querySelector(".mark-input");
-    const submitMarkBtn = article.querySelector(".submit-mark-btn");
-    const cancelMarkBtn = article.querySelector(".cancel-mark-btn");
-
-    volunteerBtn.addEventListener("click", () => {
-      volunteerBtn.hidden = true;
-      markForm.hidden = false;
-      markInput.value = "";
-      markInput.focus();
-    });
-
-    cancelMarkBtn.addEventListener("click", () => {
-      markForm.hidden = true;
-      volunteerBtn.hidden = false;
-    });
-
-    markInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") submitMarkBtn.click();
-    });
-
-    submitMarkBtn.addEventListener("click", async () => {
-      const mark = Number(markInput.value);
-      if (!Number.isInteger(mark) || mark < 0 || mark > 100) {
-        showToast("Enter a valid mark between 0 and 100");
-        return;
-      }
-
-      submitMarkBtn.disabled = true;
-      try {
-        const res = await fetch("/api/course-volunteers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: currentUser.id,
-            courseId: course.id,
-            mark,
-          }),
-        });
-        const data = await res.json();
-
-        if (!res.ok) {
-          showToast(data.error || "Could not submit your application");
-          submitMarkBtn.disabled = false;
-          return;
-        }
-
-        markForm.hidden = true;
-        volunteerBtn.hidden = false;
-        volunteerBtn.textContent = "Pending approval";
-        volunteerBtn.disabled = true;
-        showToast(
-          `Applied for ${course.course_code} — waiting for organiser approval`,
-        );
-        renderPendingApplications();
-      } catch (err) {
-        showToast("Something went wrong, try again");
-        submitMarkBtn.disabled = false;
-      }
-    });
-
-    courseListEl.appendChild(article);
+  openCourses.forEach((course, index) => {
+    const myApp = myByCourseId.get(course.id);
+    courseListEl.appendChild(
+      moduleStyle
+        ? buildModuleCard(course, index, myApp)
+        : buildSessionCard(course, myApp),
+    );
   });
 }
 
-async function renderPendingApplications() {
-  pendingListEl.innerHTML = "";
+// ---------- my applications ----------
 
+async function renderPendingApplications() {
   let applications;
   try {
-    const res = await fetch(
-      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
-    );
-    if (!res.ok) throw new Error("Failed to load applications");
-    applications = await res.json();
+    applications = await loadMyApplications();
   } catch (err) {
-    pendingListEl.innerHTML = `<p class="empty-state">Couldn't load your applications right now.</p>`;
+    setStat("stat-pending-claims", "0");
+    if (pendingListEl) {
+      pendingListEl.innerHTML = `<p class="empty-state">Couldn't load your applications right now.</p>`;
+    }
     return;
   }
 
@@ -572,38 +806,75 @@ async function renderPendingApplications() {
     .filter((app) => ["pending", "approved", "rejected"].includes(app.status))
     .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
+  setStat(
+    "stat-pending-claims",
+    String(relevant.filter((app) => app.status === "pending").length),
+  );
+  if (applicationsHintEl) {
+    applicationsHintEl.textContent = `${relevant.length} total`;
+  }
+
+  if (!pendingListEl) return;
+
+  pendingListEl.innerHTML = "";
+
   if (relevant.length === 0) {
-    pendingListEl.innerHTML = `<p class="empty-state">No modules waiting on approval.</p>`;
+    pendingListEl.innerHTML = `<p class="empty-state">No applications yet — apply for a module above and it will show up here.</p>`;
     return;
   }
 
   relevant.forEach((app) => {
     const status = (app.status || "pending").toLowerCase();
+
     const article = document.createElement("article");
+    article.className = "session-card";
     article.dataset.applicationId = app.id;
-    article.innerHTML = `
-      <h3>${app.courses.course_code}</h3>
-      <p>${app.courses.course_name} &bull; Mark submitted: ${app.mark}</p>
-      <span class="status-pill ${status}">${statusLabels[status] || status}</span>
-      ${
-        status === "rejected" && app.rejection_reason
-          ? `<p class="card-hint">Reason: ${app.rejection_reason}</p>`
-          : ""
-      }
-      ${
-        status === "approved" && app.approval_reason
-          ? `<p class="card-hint">Note: ${app.approval_reason}</p>`
-          : ""
-      }
-      ${status === "rejected" ? `<button type="button" class="btn-link" data-action="remove-volunteer">Remove &amp; volunteer again</button>` : ""}
-    `;
-    if (status === "rejected") {
-      article
-        .querySelector('[data-action="remove-volunteer"]')
-        .addEventListener("click", () =>
-          removeVolunteerApplication(app.course_id),
-        );
+
+    const body = document.createElement("div");
+    body.className = "session-card__body";
+    body.insertAdjacentHTML(
+      "beforeend",
+      `<p class="session-code"></p>
+       <h3 class="session-title"></h3>
+       <p class="session-meta"></p>`,
+    );
+    body.querySelector(".session-code").textContent =
+      app.courses?.course_code || "—";
+    body.querySelector(".session-title").textContent =
+      app.courses?.course_name || "Module";
+    body.querySelector(".session-meta").textContent =
+      `Mark submitted: ${app.mark}`;
+
+    if (status === "rejected" && app.rejection_reason) {
+      const note = document.createElement("p");
+      note.className = "session-note";
+      note.textContent = `Reason: ${app.rejection_reason}`;
+      body.appendChild(note);
     }
+    if (status === "approved" && app.approval_reason) {
+      const note = document.createElement("p");
+      note.className = "session-note";
+      note.textContent = `Note: ${app.approval_reason}`;
+      body.appendChild(note);
+    }
+    if (status === "rejected") {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-link";
+      removeBtn.dataset.action = "remove-volunteer";
+      removeBtn.textContent = "Remove & volunteer again";
+      removeBtn.style.marginTop = "9px";
+      removeBtn.addEventListener("click", () =>
+        removeVolunteerApplication(app.course_id),
+      );
+      body.appendChild(removeBtn);
+    }
+
+    const pill = document.createElement("span");
+    pill.className = `status-pill ${status}`;
+    pill.textContent = statusLabels[status] || status;
+
+    article.append(body, pill);
     pendingListEl.appendChild(article);
   });
 }
@@ -629,7 +900,7 @@ async function removeVolunteerApplication(courseId) {
       return;
     }
     showToast("Application removed.");
-    renderPendingApplications();
+    refreshApplications();
   } catch {
     showToast("Network error — couldn't reach the server.");
   }
@@ -650,45 +921,27 @@ function showToast(message) {
 
 const VOLUNTEER_TOUR_STEPS = [
   {
-    selector: "section[aria-labelledby='stats-heading']",
-    title: "Your hours",
-    body: "Total hours you've volunteered tutoring so far, pulled from your logged sessions.",
+    selector: ".stat-grid",
+    title: "Your dashboard",
+    body: "See open opportunities, pending claims, completed hours, and upcoming sessions at a glance.",
     placement: "bottom",
   },
   {
     selector: "#courseList",
-    title: "Modules you can tutor",
-    body: 'Courses currently looking for volunteers show up here. Click "Volunteer" on one, enter the mark you got in that module, and submit — an organiser will review it.',
+    title: "Available sessions",
+    body: "Sessions you can volunteer for. Claim one, enter the mark you got in that module, and an organiser will review it.",
     placement: "top",
   },
   {
-    selector: "section[aria-labelledby='pending-heading']",
-    title: "Awaiting approval",
-    body: "Modules you've applied for sit here until an organiser approves or rejects them.",
+    selector: "#upcomingSessionsList",
+    title: "Your upcoming sessions",
+    body: "Sessions you're approved for or covering — including swap requests from other volunteers.",
     placement: "top",
   },
   {
-    selector: "section[aria-labelledby='sessions-heading']",
-    title: "Upcoming sessions",
-    body: "Once you're approved for a module, your scheduled tutoring sessions will appear here.",
-    placement: "top",
-  },
-  {
-    selector: "a[href='my-sessions.html']",
-    title: "My Sessions",
-    body: "A full view of your tutoring sessions, past and upcoming.",
-    placement: "bottom",
-  },
-  {
-    selector: "a[href='log-hours.html']",
-    title: "Log Hours",
-    body: "After a session, log the hours you spent tutoring here.",
-    placement: "bottom",
-  },
-  {
-    selector: "a[href='student_calender.html']",
-    title: "Calendar",
-    body: "See your sessions laid out by date.",
+    selector: "a[href='volunteer-log-hours.html']",
+    title: "Log your hours",
+    body: "After a session, submit your attendance here so it shows up on your timesheets.",
     placement: "bottom",
   },
 ];
@@ -697,33 +950,40 @@ const tourLink = document.getElementById("tour-link");
 if (tourLink) {
   tourLink.addEventListener("click", (e) => {
     e.preventDefault();
-    window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
-      tourId: "volunteer-dashboard",
-      userId: currentUser.id,
-      force: true,
-    });
+    if (isDashboard) {
+      window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
+        tourId: "volunteer-dashboard",
+        userId: currentUser.id,
+        force: true,
+      });
+    } else {
+      // The tour points at the dashboard's pieces — send people there (the
+      // dashboard sees ?tour=1 and shows the tour itself).
+      window.location.href = "StudentView.html?tour=1";
+    }
   });
 }
 
 // ---------- init ----------
 
 (async () => {
-  // allSettled, not all: one widget's fetch failing (e.g. hours volunteered)
-  // shouldn't stop the others from rendering — including the highlight
-  // below, which only depends on fetchUpcomingSessions having finished.
+  // allSettled, not all: one widget's fetch failing (e.g. hours this month)
+  // shouldn't stop the others from rendering — including the highlights
+  // below, which only depend on fetchUpcomingSessions having finished.
   await Promise.allSettled([
-    renderHoursVolunteered(),
+    renderHoursMonth(),
     renderCourses(),
     renderPendingApplications(),
     fetchUpcomingSessions(),
   ]);
 
   // Arriving from a "session changed" notification — scroll to and flash
-  // the course it was about, now that the list containing it has rendered.
+  // the session card it was about, now that the list containing it has
+  // rendered.
   const highlightCourseId = consumeQueryParam("highlightCourse");
   if (highlightCourseId) {
     scrollAndHighlight(
-      upcomingSessionsListEl.querySelector(
+      upcomingSessionsListEl?.querySelector(
         `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
       ),
     );
@@ -734,7 +994,7 @@ if (tourLink) {
   const highlightCoverId = consumeQueryParam("highlightCover");
   if (highlightCoverId) {
     scrollAndHighlight(
-      upcomingSessionsListEl.querySelector(
+      upcomingSessionsListEl?.querySelector(
         `[data-cover-id="${CSS.escape(highlightCoverId)}"]`,
       ),
     );
@@ -744,7 +1004,7 @@ if (tourLink) {
   const highlightSwapId = consumeQueryParam("highlightSwap");
   if (highlightSwapId) {
     scrollAndHighlight(
-      upcomingSessionsListEl.querySelector(
+      upcomingSessionsListEl?.querySelector(
         `[data-swap-id="${CSS.escape(highlightSwapId)}"]`,
       ),
     );
@@ -754,14 +1014,21 @@ if (tourLink) {
   const highlightApplicationId = consumeQueryParam("highlightApplication");
   if (highlightApplicationId) {
     scrollAndHighlight(
-      pendingListEl.querySelector(
+      pendingListEl?.querySelector(
         `[data-application-id="${CSS.escape(highlightApplicationId)}"]`,
       ),
     );
   }
 
-  window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
-    tourId: "volunteer-dashboard",
-    userId: currentUser.id,
-  });
+  // ?tour=1 is set by module-application.html's "Take a Tour" link, which
+  // bounces visitors here because the tour points at the dashboard itself.
+  const wantsTour = consumeQueryParam("tour") === "1";
+
+  if (isDashboard) {
+    window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
+      tourId: "volunteer-dashboard",
+      userId: currentUser.id,
+      force: wantsTour,
+    });
+  }
 })();

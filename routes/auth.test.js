@@ -53,6 +53,23 @@ describe("POST /api/auth/login", () => {
     expect(res.body.user).toMatchObject({ id: "u1", role: "tutor" });
   });
 
+  test("a legacy student role is reported as volunteer", async () => {
+    tables.users = [
+      { id: "u1", email: "a@wits.ac.za", name: "Alice", role: "student" },
+    ];
+    mockSupabase.auth.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "u1", email: "a@wits.ac.za" } },
+      error: null,
+    });
+
+    const res = await request(buildApp())
+      .post("/api/auth/login")
+      .send({ email: "a@wits.ac.za", password: "correct-password" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.role).toBe("volunteer");
+  });
+
   test("a wrong password for a normal account gets Supabase's generic error", async () => {
     tables.users = [
       {

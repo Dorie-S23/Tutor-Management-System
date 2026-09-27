@@ -1,443 +1,496 @@
 /* ============================================================
 
-   TutorX authentication pages (login / register).
+   Split-screen auth layout for login.html + register.html.
 
-   auth-global.css supplies the design tokens, base typography
-   and the .btn component — this sheet layers the split-screen
-   auth layout on top, so it must load AFTER auth-global.css.
-
-   The markup keeps every id auth.js binds to (login-form,
-   register-form, inputs, messages, #google-register-button and
-   the #student-number-group toggle), so the login / register
-   logic is untouched — this file is presentation only.
+   Loads AFTER auth-global.css and mirrors the Figma Make
+   prototype artboards (1280x820): dark brand panel on the left,
+   soft gradient form panel with a white card on the right.
 
    ============================================================ */
 
-:root {
-  --auth-gold: #e9c169;
-  --auth-gold-deep: #cf9c33;
-  --auth-field: #fbfcfa;
-  --auth-focus-ring: rgba(38, 66, 75, 0.14);
+body {
+  min-height: 100vh;
 }
-
-/* ---------- shell ---------- */
 
 .auth-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: 1fr;
-  background: var(--paper);
-}
 
-/* ---------- form panel ---------- */
-
-.auth-panel {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 40px 20px;
-  background: radial-gradient(120% 80% at 50% 0%, #ffffff 0%, var(--paper) 55%);
+
+  align-items: stretch;
+
+  background-color: rgb(248, 250, 252);
+
+  background-image: radial-gradient(
+    circle at 100% 0,
+    rgba(219, 234, 254, 0.65),
+    rgba(0, 0, 0, 0) 34%
+  );
 }
 
-/* ---------- brand panel (desktop only) ---------- */
+/* ------------------------------------------------------------
+   Brand panel
+   ------------------------------------------------------------ */
 
 .auth-brand {
-  display: none;
   position: relative;
+
+  width: 563px;
+
+  flex-shrink: 0;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: space-between;
+
+  padding: 44px 50px;
+
   overflow: hidden;
-  color: #fff;
-  background:
+
+  color: #ffffff;
+
+  background-image:
     radial-gradient(
-      120% 90% at 85% -10%,
-      rgba(255, 255, 255, 0.08),
-      transparent 55%
+      100% 75% at 90% 0,
+      rgba(96, 165, 250, 0.18),
+      rgba(0, 0, 0, 0) 55%
     ),
-    linear-gradient(165deg, #2b4a53 0%, var(--navy) 48%, #1c3239 100%);
+    linear-gradient(
+      160deg,
+      rgb(23, 37, 84) 0%,
+      rgb(30, 58, 138) 48%,
+      rgb(49, 46, 129) 100%
+    );
 }
 
-/* Fine dot grid fading out toward the bottom of the panel. */
+/* Dot grid overlay */
 
 .auth-brand::before {
   content: "";
+
   position: absolute;
+
   inset: 0;
+
   background-image: radial-gradient(
-    rgba(255, 255, 255, 0.16) 1px,
+    rgba(255, 255, 255, 0.18) 1px,
     transparent 1.5px
   );
-  background-size: 24px 24px;
-  opacity: 0.35;
-  -webkit-mask-image: linear-gradient(
-    200deg,
-    rgba(0, 0, 0, 0.9),
-    transparent 65%
-  );
-  mask-image: linear-gradient(200deg, rgba(0, 0, 0, 0.9), transparent 65%);
+
+  background-size: 22px 22px;
+
+  opacity: 0.28;
+
   pointer-events: none;
 }
 
-/* Oversized ghost monogram anchoring the panel's bottom corner. */
+/* Oversized ghost "X" watermark, clipped by the panel edge */
 
 .auth-brand::after {
   content: "X";
+
   position: absolute;
-  right: -56px;
+
+  right: -48px;
+
   bottom: -150px;
-  font-family: "Fraunces", Georgia, serif;
-  font-style: italic;
+
+  font-family: var(--font-display);
+
   font-weight: 600;
-  font-size: clamp(280px, 30vw, 460px);
-  line-height: 0.8;
-  color: rgba(255, 255, 255, 0.05);
-  user-select: none;
+
+  font-size: 400px;
+
+  line-height: 1;
+
+  color: rgba(147, 197, 253, 0.07);
+
   pointer-events: none;
+
+  user-select: none;
 }
 
-.auth-brand-inner {
+.auth-brand > * {
   position: relative;
+
   z-index: 1;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 44px;
-  padding: clamp(32px, 4vw, 52px);
 }
 
-/* ---------- brand mark ---------- */
+/* Logo lockup */
 
 .brand-mark {
   display: flex;
+
   align-items: center;
-  gap: 12px;
+
+  gap: 10px;
 }
 
 .brand-mark-badge {
-  display: inline-flex;
+  width: 38px;
+
+  height: 38px;
+
+  display: flex;
+
   align-items: center;
+
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(160deg, var(--auth-gold), var(--auth-gold-deep));
-  color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 600;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  box-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.45);
+
+  border-radius: 11px;
+
+  background: linear-gradient(145deg, rgb(96, 165, 250), rgb(129, 140, 248));
+
+  box-shadow: rgba(15, 23, 42, 0.3) 0 10px 24px;
+
+  color: #ffffff;
+}
+
+.brand-mark-badge svg {
+  width: 22px;
+
+  height: 22px;
 }
 
 .brand-mark-name {
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 600;
-  font-size: 17px;
-  letter-spacing: 0.01em;
-  color: #fff;
+  font-size: 20px;
+
+  font-weight: 700;
+
+  letter-spacing: -0.4px;
 }
 
-/* ---------- brand hero ---------- */
-
-.auth-brand-kicker {
-  margin: 0 0 14px;
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--auth-gold);
-}
+/* Hero copy */
 
 .auth-brand-hero h2 {
-  margin: 0 0 14px;
-  font-family: "Fraunces", Georgia, serif;
-  font-weight: 600;
-  font-size: clamp(30px, 2.6vw, 38px);
-  line-height: 1.15;
-  letter-spacing: -0.01em;
-  color: #fff;
-  text-wrap: balance;
+  max-width: 390px;
+
+  font-size: 39px;
+
+  line-height: 1.16;
+
+  letter-spacing: -0.02em;
+
+  color: #ffffff;
 }
 
 .auth-brand-hero h2 em {
   font-style: italic;
-  color: var(--auth-gold);
+
+  color: rgb(147, 197, 253);
 }
 
-.auth-brand-hero > p:last-child {
-  margin: 0;
-  max-width: 44ch;
-  font-size: 14.5px;
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.72);
-}
+.auth-brand-kicker {
+  margin-bottom: 14px;
 
-/* ---------- brand points ---------- */
+  font-size: 11px;
+
+  font-weight: 700;
+
+  letter-spacing: 1.43px;
+
+  text-transform: uppercase;
+
+  color: rgb(147, 197, 253);
+}
 
 .auth-brand-points {
   list-style: none;
-  margin: 0;
+
+  margin: 34px 0 0;
+
   padding: 0;
+
   display: flex;
+
   flex-direction: column;
+
   gap: 13px;
 }
 
 .auth-brand-points li {
   display: flex;
+
   align-items: center;
-  gap: 12px;
-  font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.82);
+
+  gap: 11px;
+
+  font-size: 13px;
+
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .auth-brand-points svg {
+  width: 17px;
+
+  height: 17px;
+
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  color: var(--auth-gold);
+
+  color: rgb(147, 197, 253);
 }
 
-/* ---------- brand footer ---------- */
+/* Wits footer */
 
 .auth-brand-foot {
   display: flex;
+
   align-items: center;
-  gap: 14px;
+
+  gap: 12px;
 }
 
-.auth-brand-logo {
-  display: block;
-  height: 44px;
-  width: auto;
-  padding: 5px 9px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
+.brand-foot-tile {
+  width: 36px;
+
+  height: 36px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.1);
+
+  color: rgb(147, 197, 253);
+}
+
+.brand-foot-tile svg {
+  width: 19px;
+
+  height: 19px;
 }
 
 .auth-brand-caption {
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 10.5px;
+  font-size: 10px;
+
   font-weight: 600;
-  letter-spacing: 0.1em;
+
+  letter-spacing: 0.8px;
+
   text-transform: uppercase;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.55);
+
+  color: rgba(255, 255, 255, 0.5);
 }
 
-/* ---------- card ---------- */
+/* ------------------------------------------------------------
+   Form panel + card
+   ------------------------------------------------------------ */
+
+.auth-panel {
+  flex: 1;
+
+  min-width: 0;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding: 28px 32px;
+
+  background-image: radial-gradient(
+    110% 75% at 50% 0,
+    rgb(255, 255, 255) 0%,
+    rgba(239, 246, 255, 0.78) 56%,
+    rgb(244, 247, 251) 100%
+  );
+}
 
 .auth-card {
-  width: 100%;
-  max-width: 460px;
-  background: var(--panel);
-  border: 1px solid var(--line-soft);
-  border-radius: 18px;
-  padding: 40px;
-  box-shadow:
-    0 1px 2px rgba(30, 42, 46, 0.04),
-    0 12px 32px -12px rgba(30, 42, 46, 0.12),
-    0 32px 64px -24px rgba(30, 42, 46, 0.1);
-  animation: auth-card-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  width: 460px;
+
+  max-width: 100%;
+
+  padding: 34px 36px;
+
+  background: #ffffff;
+
+  border: 1px solid var(--line);
+
+  border-radius: var(--radius-lg);
+
+  box-shadow: var(--shadow-card);
 }
 
-@keyframes auth-card-rise {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+/* The register card is taller (extra fields) — same sheet, tighter
+   padding, as in the prototype. */
+.auth-card--register {
+  padding: 24px 32px;
 }
 
-/* ---------- card header ---------- */
+.auth-card-head {
+  margin-bottom: 26px;
 
-.auth-header {
   text-align: center;
-  margin-bottom: 28px;
 }
 
-/* Compact brand above the card heading — the dark name variant
-   because the card sits on white, unlike the navy brand panel. */
-
-.auth-card-brand {
-  display: flex;
-  align-items: center;
+.auth-card-head .brand-mark {
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 24px;
+
+  margin-bottom: 22px;
 }
 
-.auth-card-brand .brand-mark-name {
+.auth-card-head .brand-mark-badge {
+  width: 30px;
+
+  height: 30px;
+
+  border-radius: 9px;
+
+  background: linear-gradient(145deg, rgb(37, 99, 235), rgb(79, 70, 229));
+
+  box-shadow: none;
+}
+
+.auth-card-head .brand-mark-badge svg {
+  width: 17px;
+
+  height: 17px;
+}
+
+.auth-card-head .brand-mark-name {
+  font-size: 15px;
+
   color: var(--ink);
 }
 
-.auth-header h1 {
-  font-size: 30px;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
-  margin-bottom: 8px;
-  text-wrap: balance;
-}
+.auth-card-head h1 {
+  margin-bottom: 6px;
 
-.auth-header p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--ink-soft);
-}
+  font-size: 28px;
 
-/* ---------- form ---------- */
-
-#login-form,
-#register-form {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-/* Labels space themselves via margin rather than a parent gap:
-   auth.js toggles #student-number-group between display:none and
-   display:block inline, and block layout drops a flex gap. */
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.field-hint {
-  margin: 8px 0 0;
-  font-size: 12px;
   line-height: 1.5;
-  color: var(--ink-faint);
+
+  letter-spacing: -0.84px;
 }
 
-/* ---------- inputs ---------- */
+.auth-card-head > p {
+  font-size: 13px;
+
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------------------------------
+   Fields
+   ------------------------------------------------------------ */
+
+.auth-form {
+  display: flex;
+
+  flex-direction: column;
+}
+
+.auth-form .btn-primary {
+  margin-top: 4px;
+}
+
+.label-row {
+  display: flex;
+
+  align-items: baseline;
+
+  justify-content: space-between;
+
+  gap: 12px;
+}
+
+.forgot-link {
+  font-size: 12px;
+
+  font-weight: 500;
+
+  color: var(--primary);
+}
 
 .input-wrap {
   position: relative;
-  display: flex;
-  align-items: center;
 }
 
-.input-icon,
-.select-chevron {
-  position: absolute;
-  width: 17px;
-  height: 17px;
-  color: var(--ink-faint);
-  pointer-events: none;
-  transition: color 0.15s ease;
+.input-wrap input,
+.input-wrap select {
+  padding-left: 42px;
+}
+
+.input-wrap--toggle input {
+  padding-right: 44px;
 }
 
 .input-icon {
+  position: absolute;
+
   left: 14px;
-}
 
-.select-chevron {
-  right: 14px;
-  width: 16px;
-  height: 16px;
-}
+  top: 50%;
 
-.form-group input,
-.form-group select {
-  width: 100%;
-  height: 46px;
-  padding: 0 14px 0 42px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--auth-field);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 14px;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease;
-}
+  transform: translateY(-50%);
 
-.form-group input::placeholder {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  width: 18px;
+
+  height: 18px;
+
   color: var(--ink-faint);
+
+  pointer-events: none;
 }
 
-.form-group select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 40px;
-  cursor: pointer;
+.input-icon svg {
+  width: 18px;
+
+  height: 18px;
 }
-
-/* Fields with a password-toggle button need room for it. */
-
-#password,
-#confirm-password {
-  padding-right: 48px;
-}
-
-.form-group input:hover,
-.form-group select:hover {
-  border-color: var(--ink-faint);
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--navy);
-  background: #fff;
-  box-shadow: 0 0 0 4px var(--auth-focus-ring);
-}
-
-.form-group:focus-within .input-icon,
-.form-group:focus-within .select-chevron {
-  color: var(--navy);
-}
-
-/* ---------- password toggle ---------- */
 
 .password-toggle {
   position: absolute;
-  right: 7px;
-  display: inline-flex;
+
+  right: 10px;
+
+  top: 50%;
+
+  transform: translateY(-50%);
+
+  width: 25px;
+
+  height: 25px;
+
+  display: flex;
+
   align-items: center;
+
   justify-content: center;
-  width: 34px;
-  height: 34px;
+
   padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
+
+  border: 0;
+
+  border-radius: 6px;
+
+  background: none;
+
   color: var(--ink-faint);
+
   cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease;
 }
 
 .password-toggle:hover {
-  color: var(--ink);
-  background: var(--line-soft);
+  color: var(--ink-muted);
 }
 
 .password-toggle svg {
   width: 17px;
+
   height: 17px;
 }
 
@@ -453,254 +506,131 @@
   display: block;
 }
 
-/* auth.js reveals #student-number-group by flipping its inline
-   display between none and block — restarting this animation
-   each time, which is exactly the reveal we want. */
-
-#student-number-group {
-  animation: auth-field-reveal 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes auth-field-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* ---------- submit button ---------- */
-
-.auth-button {
-  width: 100%;
-  min-height: 48px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 6px;
-  text-align: center;
-  text-decoration: none;
-  font-size: 14px;
-  letter-spacing: 0.01em;
-  border-radius: 10px;
-}
-
-.btn-primary.auth-button {
-  background: linear-gradient(
-    180deg,
-    #31535d 0%,
-    var(--navy) 55%,
-    #223b43 100%
-  );
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.1) inset,
-    0 10px 20px -10px rgba(38, 66, 75, 0.55);
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.15s ease,
-    filter 0.15s ease;
-}
-
-.btn-primary.auth-button:hover {
-  opacity: 1;
-  filter: brightness(1.09);
-  transform: translateY(-1px);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 14px 26px -10px rgba(38, 66, 75, 0.6);
-}
-
-.btn-primary.auth-button:active {
-  opacity: 1;
-  transform: translateY(0);
-  filter: brightness(0.96);
-}
-
-/* ---------- divider ---------- */
+/* ------------------------------------------------------------
+   Divider + social + switch links
+   ------------------------------------------------------------ */
 
 .auth-divider {
   display: flex;
+
   align-items: center;
-  gap: 14px;
-  margin: 24px 0 16px;
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  text-align: center;
+
+  gap: 12px;
+
+  margin: 20px 0;
 }
 
 .auth-divider::before,
 .auth-divider::after {
   content: "";
+
   flex: 1;
+
   height: 1px;
-  background: var(--line-soft);
+
+  background: var(--line);
 }
 
-/* ---------- social login ---------- */
+.auth-divider span {
+  font-size: 10px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.9px;
+
+  text-transform: uppercase;
+
+  color: var(--ink-faint);
+
+  white-space: nowrap;
+}
 
 .auth-social {
   width: 100%;
-  min-height: 46px;
-  display: inline-flex;
+
+  height: 44px;
+
+  display: flex;
+
   align-items: center;
+
   justify-content: center;
+
   gap: 10px;
-  border: 1px solid var(--line);
+
+  border: 1px solid var(--line-strong);
+
   border-radius: 10px;
-  background: var(--panel);
-  color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 13.5px;
+
+  background: #ffffff;
+
+  font-family: var(--font-body);
+
+  font-size: 13px;
+
   font-weight: 600;
+
+  color: var(--ink-soft);
+
   cursor: pointer;
+
   transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
     background 0.15s ease,
-    transform 0.12s ease;
+    border-color 0.15s ease;
 }
 
 .auth-social:hover {
-  border-color: var(--ink-faint);
-  background: var(--auth-field);
-  box-shadow: 0 6px 14px -8px rgba(30, 42, 46, 0.25);
-  transform: translateY(-1px);
-}
+  background: rgb(248, 250, 252);
 
-.auth-social:active {
-  transform: translateY(0);
+  border-color: var(--ink-faint);
 }
 
 .auth-social svg {
-  flex-shrink: 0;
   width: 18px;
+
   height: 18px;
 }
 
-/* ---------- account switch link ---------- */
-
 .auth-switch {
-  margin: 22px 0 0;
+  margin-top: 20px;
+
   text-align: center;
+
   font-size: 13px;
-  color: var(--ink-soft);
+
+  color: var(--ink-muted);
 }
 
 .auth-switch a {
-  color: var(--navy);
   font-weight: 600;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease;
+
+  color: var(--primary);
 }
 
-.auth-switch a:hover {
-  border-bottom-color: var(--navy);
-}
+/* ------------------------------------------------------------
+   Responsive fallbacks
+   ------------------------------------------------------------ */
 
-/* ---------- status messages ----------
-   auth.js paints the message by setting its inline color (red /
-   green), so the tint derives from currentColor and follows
-   whatever the script chooses — no JS changes needed. */
-
-.form-message {
-  min-height: 0;
-  margin: 14px 0 0;
-  text-align: center;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-
-.form-message:not(:empty) {
-  padding: 11px 14px;
-  border-radius: 10px;
-  background: var(--paper);
-  border: 1px solid var(--line-soft);
-}
-
-@supports (background: color-mix(in srgb, red 10%, transparent)) {
-  .form-message:not(:empty) {
-    background: color-mix(in srgb, currentColor 8%, transparent);
-    border-color: color-mix(in srgb, currentColor 22%, transparent);
-  }
-}
-
-/* ---------- legal footnote ---------- */
-
-.auth-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.auth-legal {
-  margin: 0;
-  font-size: 11.5px;
-  letter-spacing: 0.02em;
-  color: var(--ink-faint);
-  text-align: center;
-}
-
-.auth-credit {
-  opacity: 0.75;
-}
-
-/* ---------- desktop split layout ---------- */
-
-@media (min-width: 960px) {
-  .auth-shell {
-    grid-template-columns: minmax(420px, 44%) 1fr;
-  }
-
+@media (max-width: 1023px) {
   .auth-brand {
-    display: block;
+    display: none;
+  }
+
+  .auth-shell {
+    justify-content: center;
   }
 
   .auth-panel {
-    padding: 64px 48px;
+    padding: 24px 16px;
   }
 }
 
-/* ---------- small screens ---------- */
-
-@media (max-width: 520px) {
-  .auth-panel {
-    padding: 28px 16px;
-  }
-
+@media (max-width: 519px) {
   .auth-card {
-    padding: 30px 22px;
-    border-radius: 14px;
+    padding: 28px 22px;
   }
 
-  .auth-header h1 {
-    font-size: 26px;
-  }
-
-  /* 16px keeps iOS Safari from zooming the page on focus. */
-
-  .form-group input,
-  .form-group select {
-    font-size: 16px;
-  }
-}
-
-/* ---------- reduced motion ---------- */
-
-@media (prefers-reduced-motion: reduce) {
-  .auth-card,
-  #student-number-group {
-    animation: none !important;
+  .auth-card--register {
+    padding: 24px 20px;
   }
 }

@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -60,13 +60,11 @@
             <select id="role" name="role" required>
               <option value="" disabled selected>Select your role</option>
 
-              <option value="student">Student</option>
+              <option value="volunteer">Volunteer</option>
 
               <option value="tutor">Tutor</option>
 
               <option value="organiser">Organiser</option>
-
-              <option value="educator">Educator</option>
             </select>
           </div>
 
@@ -157,7 +155,7 @@
         studentNumberGroup.style.display = "none";
         studentNumberInput.required = false;
 
-        if (roleSelect.value === "student" || roleSelect.value === "tutor") {
+        if (roleSelect.value === "volunteer" || roleSelect.value === "tutor") {
           studentNumberGroup.style.display = "block";
           studentNumberInput.required = true;
         }
@@ -224,7 +222,9 @@
           sessionStorage.removeItem("googleAccessToken");
 
           switch (result.user.role) {
+            // Legacy accounts created before the Volunteer rename.
             case "student":
+            case "volunteer":
               window.location.href = "/html/StudentView.html";
               break;
 

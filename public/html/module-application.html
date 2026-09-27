@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Module Application | TutorX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/app.css" />
+  </head>
+
+  <body>
+    <header class="app-navbar">
+      <a class="brand-mark" href="StudentView.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
+
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="StudentView.html">Dashboard</a>
+        <a href="volunteer-log-hours.html">Log Hours</a>
+        <a href="student_calender.html">Calendar</a>
+        <a href="volunteer-timesheets.html">Timesheets</a>
+        <a href="module-application.html" aria-current="page">
+          Module Application
+        </a>
+        <a href="StudentView.html?tour=1" id="tour-link">Take a Tour</a>
+      </nav>
+
+      <div class="navbar-right">
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
+        </div>
+
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Volunteer</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <h1>Module applications</h1>
+          <p class="page-sub">
+            Apply to volunteer in modules that match your results and
+            availability.
+          </p>
+        </div>
+      </div>
+
+      <div class="module-grid" id="courseList">
+        <!-- rendered by studentview.js -->
+      </div>
+
+      <section aria-labelledby="applications-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="applications-heading">
+            Your applications
+          </h2>
+          <span class="section-hint" id="applications-hint"></span>
+        </div>
+
+        <div class="session-grid" id="pendingList">
+          <!-- rendered by studentview.js -->
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="../js/user-badge.js"></script>
+    <script type="module" src="../js/studentview.js"></script>
+    <script src="../js/notifications.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
+</html>

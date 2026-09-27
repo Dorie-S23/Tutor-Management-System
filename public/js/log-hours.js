@@ -27,7 +27,7 @@ const calendarNavLink = document.getElementById("calendar-nav-link");
 const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
 const timesheetsNavLink = document.getElementById("timesheets-nav-link");
 const modulesNavLink = document.getElementById("modules-nav-link");
-if (currentUser.role === "student") {
+if (currentUser.role === "volunteer") {
   if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
   // calendar.html is the tutor calendar (timetable import, recurring
   // classes) — a student volunteer needs their own version instead, or
