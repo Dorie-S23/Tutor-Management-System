@@ -1,5 +1,5 @@
 // Verifies fetchCourseSessions()'s role dispatch: calendar.js is shared by
-// calendar.html (tutor) and student_calender.html (student volunteer), each
+// calendar.html (tutor) and student-calendar.html (student volunteer), each
 // setting data-page-role so the same script pulls recurring Tutorial/Lab
 // sessions from a different table depending on who's signed in. Loaded the
 // same way calendar.render-race.test.js does — real HTML + JS in jsdom,
@@ -18,6 +18,7 @@ const rawCalendarJs = fs.readFileSync(
 function stubsFor(user) {
   return `
 function highlightActiveTab() {}
+function renderWelcomeHeading() {}
 function requireRole() { return ${JSON.stringify(user)}; }
 function getScheduleForDate() { return []; }
 function getEntriesForDate() { return Promise.resolve([]); }
@@ -122,7 +123,7 @@ describe("calendar.js fetchCourseSessions() role dispatch", () => {
 
   test("student path: reads an approved whole-course volunteer application via /api/course-volunteers", async () => {
     const { window, calls } = loadPage({
-      htmlFile: "student_calender.html",
+      htmlFile: "student-calendar.html",
       user: { id: "student-1", role: "student" },
       fetchImpl: async (url) => {
         if (url.includes("/api/course-volunteers")) {
@@ -164,7 +165,7 @@ describe("calendar.js fetchCourseSessions() role dispatch", () => {
 
   test("student path: a claimed one-off session (has session_date) is not treated as recurring", async () => {
     const { window } = loadPage({
-      htmlFile: "student_calender.html",
+      htmlFile: "student-calendar.html",
       user: { id: "student-1", role: "student" },
       fetchImpl: async (url) => {
         if (url.includes("/api/course-volunteers")) {
@@ -196,7 +197,7 @@ describe("calendar.js fetchCourseSessions() role dispatch", () => {
 
   test("student path: a pending (not yet approved) application produces no session", async () => {
     const { window } = loadPage({
-      htmlFile: "student_calender.html",
+      htmlFile: "student-calendar.html",
       user: { id: "student-1", role: "student" },
       fetchImpl: async (url) => {
         if (url.includes("/api/course-volunteers")) {
@@ -227,7 +228,7 @@ describe("calendar.js fetchCourseSessions() role dispatch", () => {
 
   test("a fetch failure leaves courseSessions empty instead of throwing", async () => {
     const { window } = loadPage({
-      htmlFile: "student_calender.html",
+      htmlFile: "student-calendar.html",
       user: { id: "student-1", role: "student" },
       fetchImpl: async () => {
         throw new Error("network down");

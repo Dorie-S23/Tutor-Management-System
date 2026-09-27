@@ -8,10 +8,28 @@
   </head>
 
   <body class="student-app">
-    <header>
-      <nav aria-label="Main navigation">
-        <a href="StudentView.html">Dashboard</a>
-        <a href="my-sessions.html" aria-current="page">My Sessions</a>
+    <header class="board-header board-header--brand">
+      <hgroup class="header-left">
+        <p class="eyebrow">
+          <img src="../images/images.png" alt="" class="eyebrow-logo" />
+          School of Computer Science &amp; Applied Mathematics
+        </p>
+        <h1 id="welcome-heading">Welcome!</h1>
+      </hgroup>
+
+      <img
+        src="../images/Wits-890x664.png"
+        alt="University of the Witwatersrand"
+        class="header-wits-logo"
+      />
+
+      <div class="header-actions">
+        <a class="btn btn-ghost" href="my-sessions.html" aria-current="page"
+          >My Sessions</a
+        >
+        <a class="btn btn-ghost" href="student-log-hours.html">Log Hours</a>
+        <a class="btn btn-ghost" href="student-calendar.html">Calendar</a>
+        <a class="btn btn-ghost" href="StudentView.html">Take the tour</a>
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -54,8 +72,10 @@
             </p>
           </div>
         </div>
-        <a href="#" id="logout-button">Logout</a>
-      </nav>
+      </div>
+      <button class="btn btn-danger" id="logout-button" type="button">
+        Logout
+      </button>
     </header>
 
     <main>

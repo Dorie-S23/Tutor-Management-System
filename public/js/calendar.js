@@ -1,4 +1,4 @@
-import { highlightActiveTab } from "./nav.js";
+import { highlightActiveTab, renderWelcomeHeading } from "./nav.js";
 import {
   requireRole,
   getEntriesForDate,
@@ -15,7 +15,7 @@ import {
 } from "./storage.js";
 
 // This script is shared by two pages: calendar.html (tutor) and
-// student_calender.html (student volunteer) — each declares which role it's
+// student-calendar.html (student volunteer) — each declares which role it's
 // for via data-page-role, so a user of the *other* role gets sent back to
 // their own dashboard instead of landing on a page built for someone else.
 const pageRole = document.body.dataset.pageRole || "tutor";
@@ -25,6 +25,7 @@ if (!currentUser) {
 }
 
 highlightActiveTab();
+renderWelcomeHeading(currentUser.name);
 
 // Tutorial/lab session pills come from this user's own approved course
 // assignments — a tutor's via tutor_subject_preference, a student

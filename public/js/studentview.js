@@ -651,13 +651,13 @@ const VOLUNTEER_TOUR_STEPS = [
     placement: "bottom",
   },
   {
-    selector: "a[href='log-hours.html']",
+    selector: "a[href='student-log-hours.html']",
     title: "Log Hours",
     body: "After a session, log the hours you spent tutoring here.",
     placement: "bottom",
   },
   {
-    selector: "a[href='student_calender.html']",
+    selector: "a[href='student-calendar.html']",
     title: "Calendar",
     body: "See your sessions laid out by date.",
     placement: "bottom",

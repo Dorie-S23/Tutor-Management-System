@@ -35,6 +35,14 @@ function requireStudent() {
 
 const currentUser = requireStudent();
 
+// Same "Welcome, {name}!" heading as every other student page, for a
+// consistent header no matter which page you're actually on.
+if (currentUser) {
+  const welcomeHeadingEl = document.getElementById("welcome-heading");
+  if (welcomeHeadingEl)
+    welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
+}
+
 const upcomingListEl = document.getElementById("upcomingList");
 const pastListEl = document.getElementById("pastList");
 

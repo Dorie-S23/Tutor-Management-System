@@ -1,4 +1,4 @@
-import { highlightActiveTab } from "./nav.js";
+import { highlightActiveTab, renderWelcomeHeading } from "./nav.js";
 import {
   getCurrentUser,
   addEntry,
@@ -18,6 +18,7 @@ if (!currentUser) {
 }
 
 highlightActiveTab();
+renderWelcomeHeading(currentUser.name);
 
 // This page is shared across roles (tutor, student volunteer, organiser,
 // educator), so the "Dashboard" and "Calendar" links have to point at
@@ -32,7 +33,7 @@ if (currentUser.role === "student") {
   // calendar.html is the tutor calendar (timetable import, recurring
   // classes) — a student volunteer needs their own version instead, or
   // they'd land on a tutor-only page with no way back except this link.
-  if (calendarNavLink) calendarNavLink.href = "student_calender.html";
+  if (calendarNavLink) calendarNavLink.href = "student-calendar.html";
   // Timesheets is a tutor-only payroll claim, and applying to tutor a
   // module is a tutor-only concept — neither is useful to a student
   // volunteer.
