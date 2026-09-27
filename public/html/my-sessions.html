@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StudyConnect | My Sessions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="../css/global.css" />
   </head>
 
@@ -78,24 +84,17 @@
       </button>
     </header>
 
-    <main>
-      <section aria-labelledby="page-heading">
-        <h2 id="page-heading">My Sessions</h2>
-        <p>Everything you've volunteered for, upcoming and past.</p>
+    <main class="dashboard-layout">
+      <section class="card" aria-labelledby="upcoming-heading">
+        <h2 id="upcoming-heading">Upcoming</h2>
+        <p class="hint">Everything you've volunteered for, still to come.</p>
+        <div id="upcomingList" class="course-list"></div>
       </section>
 
-      <section aria-labelledby="upcoming-heading" class="card">
-        <header>
-          <h2 id="upcoming-heading">Upcoming</h2>
-        </header>
-        <div id="upcomingList" class="session-list"></div>
-      </section>
-
-      <section aria-labelledby="past-heading" class="card">
-        <header>
-          <h2 id="past-heading">Past Sessions</h2>
-        </header>
-        <div id="pastList" class="session-list"></div>
+      <section class="card" aria-labelledby="past-heading">
+        <h2 id="past-heading">Past Sessions</h2>
+        <p class="hint">Everything you've already tutored.</p>
+        <div id="pastList" class="course-list"></div>
       </section>
     </main>
 
