@@ -709,8 +709,12 @@ if (tourLink) {
     );
   }
 
+  // "Take the tour" on the other student pages links here with ?tour=1 —
+  // arriving with it means that click explicitly asked for the walkthrough,
+  // so replay it even if the once-per-user auto-show was already consumed.
   window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
     tourId: "volunteer-dashboard",
     userId: currentUser.id,
+    force: Boolean(consumeQueryParam("tour")),
   });
 })();
