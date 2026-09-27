@@ -634,6 +634,36 @@ router.get("/obvious-fill", async (req, res) => {
   res.json(groups);
 });
 
+// Optimistic-concurrency wording for the write routes below. A write whose
+// client-declared (or just-read) state no longer matches the row when the
+// write lands is refused with a 409 instead of silently overwriting
+// whatever another organiser did first.
+const STALE_APPLICATION_ERROR =
+  "Someone else already changed this application — reload to see the latest state.";
+const STALE_APPLICATION_SHORT = "Someone else already changed this application";
+const STALE_COURSE_ERROR =
+  "Someone else just changed this course's assignments — reload to see the latest state.";
+
+// Best-effort undo for a course counter bump whose paired status write then
+// lost its race: only writes while the counter still holds the value this
+// request set, so it can never clobber a newer change by someone else.
+async function rollbackCourseCount(courseId, restoreTo, onlyIfStill) {
+  const { error } = await supabase
+    .from("courses")
+    .update({ no_of_tutors_assigned: restoreTo })
+    .eq("id", courseId)
+    .eq("no_of_tutors_assigned", onlyIfStill)
+    .select()
+    .single();
+
+  if (error) {
+    console.warn(
+      "Failed to roll back no_of_tutors_assigned after a lost race:",
+      error.message,
+    );
+  }
+}
+
 // POST /api/tutor-applications/bulk-approve — approve several applications in
 // one action. Runs the same eligibility/capacity checks a single PATCH would,
 // one row at a time (not in parallel) so two applications for the same course
@@ -665,6 +695,18 @@ router.post("/bulk-approve", async (req, res) => {
       continue;
     }
 
+    // The list these came from only shows pending applications, so a row
+    // that is anything else (e.g. rejected in another tab meanwhile) is a
+    // changed-under-you conflict, not something to quietly re-approve.
+    if (application.status !== "pending") {
+      results.push({
+        id,
+        success: false,
+        error: STALE_APPLICATION_SHORT,
+      });
+      continue;
+    }
+
     const { data: course, error: courseError } = await supabase
       .from("courses")
       .select("no_of_tutors_assigned, tutors_needed, course_code, course_name")
@@ -686,22 +728,61 @@ router.post("/bulk-approve", async (req, res) => {
       continue;
     }
 
-    const { error: bumpError } = await supabase
+    // Guarded counter bump: the WHERE only matches while the course's count
+    // still holds the value this iteration read, so a concurrent approval
+    // for the same course fails this item instead of being overwritten.
+    let bumpQuery = supabase
       .from("courses")
       .update({ no_of_tutors_assigned: next })
       .eq("id", application.course_id);
 
+    if (course.no_of_tutors_assigned != null) {
+      bumpQuery = bumpQuery.eq(
+        "no_of_tutors_assigned",
+        course.no_of_tutors_assigned,
+      );
+    }
+
+    const { error: bumpError } = await bumpQuery.select().single();
+
     if (bumpError) {
-      results.push({ id, success: false, error: bumpError.message });
+      results.push({
+        id,
+        success: false,
+        error:
+          bumpError.code === "PGRST116"
+            ? STALE_APPLICATION_SHORT
+            : bumpError.message,
+      });
       continue;
     }
 
     const { error: updateError } = await supabase
       .from("tutor_subject_preference")
       .update({ status: "approved" })
-      .eq("id", id);
+      .eq("id", id)
+      // Atomic backstop, mirroring the single-application PATCH: the write
+      // only lands if the status is still the one this iteration read.
+      .eq("status", application.status)
+      .select()
+      .single();
 
     if (updateError) {
+      if (updateError.code === "PGRST116") {
+        // Put the counter back — the approval this bump was for never
+        // actually landed.
+        await rollbackCourseCount(
+          application.course_id,
+          Math.max(course.no_of_tutors_assigned ?? 0, 0),
+          next,
+        );
+        results.push({
+          id,
+          success: false,
+          error: STALE_APPLICATION_SHORT,
+        });
+        continue;
+      }
       results.push({ id, success: false, error: updateError.message });
       continue;
     }
@@ -746,6 +827,7 @@ router.patch("/:id", async (req, res) => {
     reason,
     rejectionReason,
     approvalReason,
+    expectedStatus,
   } = req.body ?? {};
 
   if (!VALID_STATUSES.includes(status)) {
@@ -781,6 +863,15 @@ router.patch("/:id", async (req, res) => {
     }
   }
 
+  // The caller declares the status it acted on. Validated last of the input
+  // checks so bad-input errors above keep their more specific messages.
+  if (!VALID_STATUSES.includes(expectedStatus)) {
+    return res.status(400).json({
+      error:
+        "expectedStatus is required and must be pending, approved or rejected",
+    });
+  }
+
   const bypassedRules = [];
 
   const { data: application, error: applicationError } = await supabase
@@ -801,9 +892,22 @@ router.patch("/:id", async (req, res) => {
     });
   }
 
+  // Optimistic-concurrency check: the request declares the status it acted
+  // on, and a mismatch means another organiser already moved it — refuse
+  // rather than overwrite their change.
+  if (application.status !== expectedStatus) {
+    return res.status(409).json({
+      error: STALE_APPLICATION_ERROR,
+    });
+  }
+
   const wasApproved = application.status === "approved";
 
   const willBeApproved = status === "approved";
+
+  // Filled in once the course counter has been written, so a status write
+  // that loses its race moments later can put it back.
+  let bumpRollback = null;
 
   if (wasApproved !== willBeApproved) {
     const { data: course, error: courseError } = await supabase
@@ -884,18 +988,44 @@ router.patch("/:id", async (req, res) => {
       }
     }
 
-    const { error: bumpError } = await supabase
+    const guardedCount = Math.max(next, 0);
+
+    // Optimistic-concurrency guard on the counter: the WHERE only matches
+    // while the count is still the one this request read, so a course
+    // another organiser just changed fails the bump instead of being
+    // clobbered. (A null column can't be compared with eq, so it's
+    // skipped — a null count is treated like a fresh 0.)
+    let bumpQuery = supabase
       .from("courses")
       .update({
-        no_of_tutors_assigned: Math.max(next, 0),
+        no_of_tutors_assigned: guardedCount,
       })
       .eq("id", application.course_id);
 
+    if (course.no_of_tutors_assigned != null) {
+      bumpQuery = bumpQuery.eq(
+        "no_of_tutors_assigned",
+        course.no_of_tutors_assigned,
+      );
+    }
+
+    const { error: bumpError } = await bumpQuery.select().single();
+
     if (bumpError) {
+      if (bumpError.code === "PGRST116") {
+        return res.status(409).json({
+          error: STALE_COURSE_ERROR,
+        });
+      }
       return res.status(500).json({
         error: bumpError.message,
       });
     }
+
+    bumpRollback = {
+      restoreTo: Math.max(course.no_of_tutors_assigned ?? 0, 0),
+      onlyIfStill: guardedCount,
+    };
   }
 
   const { data, error } = await supabase
@@ -906,6 +1036,9 @@ router.patch("/:id", async (req, res) => {
       approval_reason: status === "approved" ? approvalReason.trim() : null,
     })
     .eq("id", req.params.id)
+    // Atomic backstop for the check above: the write itself only lands if
+    // the row still holds the status this request read (PGRST116 → 409).
+    .eq("status", expectedStatus)
     .select(
       `
         *,
@@ -923,6 +1056,20 @@ router.patch("/:id", async (req, res) => {
     .single();
 
   if (error) {
+    if (error.code === "PGRST116") {
+      // Someone changed the row between the read and this write. Undo the
+      // counter bump if there was one, so the course doesn't drift.
+      if (bumpRollback) {
+        await rollbackCourseCount(
+          application.course_id,
+          bumpRollback.restoreTo,
+          bumpRollback.onlyIfStill,
+        );
+      }
+      return res.status(409).json({
+        error: STALE_APPLICATION_ERROR,
+      });
+    }
     return res.status(500).json({
       error: error.message,
     });
@@ -1022,6 +1169,10 @@ router.patch("/:id/lock", async (req, res) => {
     .from("tutor_subject_preference")
     .update({ locked: true })
     .eq("id", req.params.id)
+    // Atomic guards mirroring the checks above: only an approved,
+    // still-unlocked row is locked — 0 matches is a 409, not a silent no-op.
+    .eq("locked", false)
+    .eq("status", "approved")
     .select(
       `
         *,
@@ -1039,6 +1190,12 @@ router.patch("/:id/lock", async (req, res) => {
     .single();
 
   if (error) {
+    if (error.code === "PGRST116") {
+      return res.status(409).json({
+        error:
+          "This assignment was just changed by someone else — reload to see the latest state.",
+      });
+    }
     return res.status(500).json({ error: error.message });
   }
 

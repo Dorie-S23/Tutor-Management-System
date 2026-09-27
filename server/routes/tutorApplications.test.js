@@ -371,6 +371,98 @@ describe("POST /api/tutor-applications/bulk-approve", () => {
     });
     expect(tables.notifications[0].message).toContain("COMS2000");
   });
+
+  test("reports a conflict for an application that's no longer pending instead of resurrecting it", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 2, no_of_tutors_assigned: 0 }];
+    tables.tutor_subject_preference = [
+      // The obvious-fill list showed this as pending; someone rejected it
+      // in another tab since.
+      { id: "app-1", status: "rejected", course_id: 10, Tutor_name: "Alice" },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/tutor-applications/bulk-approve")
+      .send({ applicationIds: ["app-1"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results).toEqual([
+      {
+        id: "app-1",
+        success: false,
+        error: "Someone else already changed this application",
+      },
+    ]);
+    // The rejection stands; the course and the audit trail are untouched.
+    expect(tables.tutor_subject_preference[0].status).toBe("rejected");
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+    expect(tables.audit_log).toHaveLength(0);
+  });
+
+  test("fails just the items that changed mid-request and rolls their counter bumps back", async () => {
+    tables.courses = [
+      { id: 10, tutors_needed: 2, no_of_tutors_assigned: 0 },
+      { id: 11, tutors_needed: 1, no_of_tutors_assigned: 0 },
+    ];
+    tables.tutor_subject_preference = [
+      {
+        id: "app-1",
+        status: "pending",
+        course_id: 10,
+        tutor_id: "t1",
+        Tutor_name: "Alice",
+      },
+      {
+        id: "app-2",
+        status: "pending",
+        course_id: 11,
+        tutor_id: "t2",
+        Tutor_name: "Bob",
+      },
+    ];
+
+    // Someone else rejects the first application right before its guarded
+    // status write lands; the second must still go through.
+    mockSupabase = fakeSupabase(
+      tables,
+      {},
+      {
+        onBeforeResolve: (table, operation) => {
+          if (table === "tutor_subject_preference" && operation === "update") {
+            const alice = tables.tutor_subject_preference[0];
+            if (alice.status === "pending") {
+              alice.status = "rejected";
+            }
+          }
+        },
+      },
+    );
+
+    const res = await request(buildApp())
+      .post("/api/tutor-applications/bulk-approve")
+      .send({ applicationIds: ["app-1", "app-2"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results).toEqual([
+      {
+        id: "app-1",
+        success: false,
+        error: "Someone else already changed this application",
+      },
+      { id: "app-2", success: true, name: "Bob" },
+    ]);
+    expect(tables.tutor_subject_preference[0].status).toBe("rejected");
+    expect(tables.tutor_subject_preference[1].status).toBe("approved");
+    // Only app-2's bump stuck; app-1's was rolled back when its write
+    // lost the race.
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+    expect(tables.courses[1].no_of_tutors_assigned).toBe(1);
+    expect(tables.audit_log).toHaveLength(1);
+    expect(tables.audit_log[0].entity_id).toBe("app-2");
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tables.notifications).toHaveLength(1);
+    expect(tables.notifications[0].user_id).toBe("t2");
+  });
 });
 
 describe("PATCH /api/tutor-applications/:id", () => {
@@ -385,10 +477,72 @@ describe("PATCH /api/tutor-applications/:id", () => {
   test("returns 404 for an application that doesn't exist", async () => {
     const res = await request(buildApp())
       .patch("/api/tutor-applications/missing")
-      .send({ status: "approved", approvalReason: "Great fit" });
+      .send({
+        status: "approved",
+        approvalReason: "Great fit",
+        expectedStatus: "pending",
+      });
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("Application not found");
+  });
+
+  test("requires expectedStatus — the status the client last saw", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 2, no_of_tutors_assigned: 0 }];
+    tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+    tables.tutor_subject_preference = [
+      { id: "app-1", status: "pending", course_id: 10, tutor_id: "t1" },
+    ];
+
+    const missing = await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({ status: "approved", approvalReason: "Great fit" });
+    expect(missing.status).toBe(400);
+    expect(missing.body.error).toBe(
+      "expectedStatus is required and must be pending, approved or rejected",
+    );
+
+    const invalid = await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({
+        status: "approved",
+        approvalReason: "Great fit",
+        expectedStatus: "unknown",
+      });
+    expect(invalid.status).toBe(400);
+
+    // Neither rejected request may have written anything.
+    expect(tables.tutor_subject_preference[0].status).toBe("pending");
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+    expect(tables.audit_log).toHaveLength(0);
+  });
+
+  test("returns 409 without touching anything when the application already moved on", async () => {
+    tables.courses = [{ id: 10, tutors_needed: 2, no_of_tutors_assigned: 1 }];
+    tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+    tables.tutor_subject_preference = [
+      // Approved by another organiser since the client last saw it pending.
+      { id: "app-1", status: "approved", course_id: 10, tutor_id: "t1" },
+    ];
+
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1")
+      .send({
+        status: "rejected",
+        rejectionReason: "Changed my mind",
+        expectedStatus: "pending",
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "Someone else already changed this application — reload to see the latest state.",
+    );
+    // The other organiser's approval stands; nothing was overwritten or
+    // even written — no counter change, no audit entry, no notification.
+    expect(tables.tutor_subject_preference[0].status).toBe("approved");
+    expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
+    expect(tables.audit_log).toHaveLength(0);
+    expect(tables.notifications).toHaveLength(0);
   });
 
   test("approving a pending application bumps the course's assigned-tutor count", async () => {
@@ -402,7 +556,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved", approvalReason: "Great fit" });
+      .send({
+        status: "approved",
+        approvalReason: "Great fit",
+        expectedStatus: "pending",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
@@ -420,7 +578,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "rejected", rejectionReason: "No longer needed" });
+      .send({
+        status: "rejected",
+        rejectionReason: "No longer needed",
+        expectedStatus: "approved",
+      });
 
     expect(res.status).toBe(200);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
@@ -435,7 +597,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "rejected", rejectionReason: "No longer needed" });
+      .send({
+        status: "rejected",
+        rejectionReason: "No longer needed",
+        expectedStatus: "pending",
+      });
 
     expect(res.status).toBe(200);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
@@ -456,7 +622,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const withReason = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "rejected", rejectionReason: "Mark below cutoff" });
+      .send({
+        status: "rejected",
+        rejectionReason: "Mark below cutoff",
+        expectedStatus: "pending",
+      });
     expect(withReason.status).toBe(200);
     expect(tables.tutor_subject_preference[0].rejection_reason).toBe(
       "Mark below cutoff",
@@ -491,7 +661,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved", approvalReason: "Great fit" });
+      .send({
+        status: "approved",
+        approvalReason: "Great fit",
+        expectedStatus: "pending",
+      });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toBe(
@@ -524,7 +698,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved", approvalReason: "Great fit" });
+      .send({
+        status: "approved",
+        approvalReason: "Great fit",
+        expectedStatus: "pending",
+      });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toBe(
@@ -551,7 +729,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "approved", approvalReason: "Great fit" });
+      .send({
+        status: "approved",
+        approvalReason: "Great fit",
+        expectedStatus: "pending",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
@@ -618,6 +800,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
         override: true,
         organiserId: "org-1",
         reason: "Short-staffed this week",
+        expectedStatus: "pending",
       });
 
     expect(res.status).toBe(200);
@@ -653,6 +836,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
         override: true,
         organiserId: "org-1",
         reason: "Special case",
+        expectedStatus: "pending",
       });
 
     expect(res.status).toBe(200);
@@ -672,7 +856,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "pending" });
+      .send({ status: "pending", expectedStatus: "approved" });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("pending");
@@ -694,10 +878,110 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1")
-      .send({ status: "pending" });
+      .send({ status: "pending", expectedStatus: "approved" });
 
     expect(res.status).toBe(409);
     expect(tables.tutor_subject_preference[0].status).toBe("approved");
+  });
+
+  describe("when another organiser writes between the read and the write", () => {
+    test("refuses to overwrite a status that changed mid-request, and rolls the counter back", async () => {
+      tables.courses = [
+        {
+          id: 10,
+          tutors_needed: 2,
+          no_of_tutors_assigned: 1,
+          hours_per_week: 3,
+        },
+      ];
+      tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+      tables.tutor_subject_preference = [
+        { id: "app-1", status: "pending", course_id: 10, tutor_id: "t1" },
+      ];
+
+      // Stand-in for a second organiser: just before the guarded status
+      // write lands, someone else rejects the same application.
+      mockSupabase = fakeSupabase(
+        tables,
+        {},
+        {
+          onBeforeResolve: (table, operation) => {
+            if (
+              table === "tutor_subject_preference" &&
+              operation === "update"
+            ) {
+              tables.tutor_subject_preference[0].status = "rejected";
+            }
+          },
+        },
+      );
+
+      const res = await request(buildApp())
+        .patch("/api/tutor-applications/app-1")
+        .send({
+          status: "approved",
+          approvalReason: "Strong mark",
+          expectedStatus: "pending",
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe(
+        "Someone else already changed this application — reload to see the latest state.",
+      );
+      // The other organiser's rejection stands, the counter bump this
+      // request made on the way was rolled back, and nothing was recorded.
+      expect(tables.tutor_subject_preference[0].status).toBe("rejected");
+      expect(tables.courses[0].no_of_tutors_assigned).toBe(1);
+      expect(tables.audit_log).toHaveLength(0);
+      expect(tables.notifications).toHaveLength(0);
+    });
+
+    test("refuses the counter bump when the course count changed mid-request", async () => {
+      tables.courses = [
+        {
+          id: 10,
+          tutors_needed: 2,
+          no_of_tutors_assigned: 0,
+          hours_per_week: 3,
+        },
+      ];
+      tables.tutors = [{ id: "t1", weekly_hour_cap: null }];
+      tables.tutor_subject_preference = [
+        { id: "app-1", status: "pending", course_id: 10, tutor_id: "t1" },
+      ];
+
+      // Another approval for the same course slips in between this route's
+      // course read and its guarded counter bump.
+      mockSupabase = fakeSupabase(
+        tables,
+        {},
+        {
+          onBeforeResolve: (table, operation) => {
+            if (table === "courses" && operation === "update") {
+              tables.courses[0].no_of_tutors_assigned = 7;
+            }
+          },
+        },
+      );
+
+      const res = await request(buildApp())
+        .patch("/api/tutor-applications/app-1")
+        .send({
+          status: "approved",
+          approvalReason: "Strong mark",
+          expectedStatus: "pending",
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe(
+        "Someone else just changed this course's assignments — reload to see the latest state.",
+      );
+      // This request wrote nothing at all.
+      expect(tables.tutor_subject_preference[0].status).toBe("pending");
+      expect(tables.courses[0].no_of_tutors_assigned).toBe(7);
+      expect(tables.audit_log).toHaveLength(0);
+      expect(tables.notifications).toHaveLength(0);
+    });
   });
 
   // The notification fan-out is fire-and-forget (not awaited before the
@@ -734,7 +1018,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
       const res = await request(buildApp())
         .patch("/api/tutor-applications/app-1")
-        .send({ status: "approved", approvalReason: "Great fit" });
+        .send({
+          status: "approved",
+          approvalReason: "Great fit",
+          expectedStatus: "pending",
+        });
       expect(res.status).toBe(200);
       await flush();
 
@@ -764,7 +1052,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
       const res = await request(buildApp())
         .patch("/api/tutor-applications/app-1")
-        .send({ status: "rejected", rejectionReason: "Mark too low" });
+        .send({
+          status: "rejected",
+          rejectionReason: "Mark too low",
+          expectedStatus: "pending",
+        });
       expect(res.status).toBe(200);
       await flush();
 
@@ -783,7 +1075,11 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
       const res = await request(buildApp())
         .patch("/api/tutor-applications/app-1")
-        .send({ status: "rejected", rejectionReason: "Course cancelled" });
+        .send({
+          status: "rejected",
+          rejectionReason: "Course cancelled",
+          expectedStatus: "approved",
+        });
       expect(res.status).toBe(200);
       await flush();
 
@@ -799,7 +1095,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
 
       const res = await request(buildApp())
         .patch("/api/tutor-applications/app-1")
-        .send({ status: "pending" });
+        .send({ status: "pending", expectedStatus: "approved" });
       expect(res.status).toBe(200);
       await flush();
 
@@ -867,6 +1163,33 @@ describe("PATCH /api/tutor-applications/:id/lock", () => {
       .send({ locked: true });
 
     expect(res.status).toBe(404);
+  });
+
+  test("returns 409 if someone else locks it between the read and the write", async () => {
+    // The other organiser's lock lands right before this route's guarded
+    // update resolves.
+    mockSupabase = fakeSupabase(
+      tables,
+      {},
+      {
+        onBeforeResolve: (table, operation) => {
+          if (table === "tutor_subject_preference" && operation === "update") {
+            tables.tutor_subject_preference[0].locked = true;
+          }
+        },
+      },
+    );
+
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "This assignment was just changed by someone else — reload to see the latest state.",
+    );
+    // The other organiser's lock stands.
+    expect(tables.tutor_subject_preference[0].locked).toBe(true);
   });
 });
 
@@ -941,6 +1264,7 @@ describe("PATCH /api/tutor-applications/:id — audit log", () => {
       status: "approved",
       approvalReason: "Strong mark",
       organiserId: "organiser-1",
+      expectedStatus: "pending",
     });
 
     expect(tables.audit_log).toHaveLength(1);
