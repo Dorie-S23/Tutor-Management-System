@@ -1,17 +1,24 @@
 /* ============================================================
    My Sessions
-   Two kinds of commitments live in course_volunteers, and this page
-   shows both under Upcoming — same merge as the dashboard's "Upcoming
-   Sessions" card, whose "View all" link lands here, so the two views
-   can't disagree on what counts as a session:
-   - Claimed overflow sessions (rows with a session_date) that have
-     been approved — one-off dates, split into Upcoming and Past.
+   Everything a volunteer is involved in, in one place — the same
+   merge the dashboard's "Upcoming Sessions" card renders, whose
+   "View all" link lands here, so the two views can't disagree on
+   what counts as a session:
+   - Claimed overflow sessions (course_volunteers rows with a
+     session_date) that have been approved — one-off dates, split
+     into Upcoming and Past.
    - Approved whole-course applications (a mark, no session_date) —
      standing weekly commitments whose slot lives on the course row
      (Day_of_tut/Day_of_lab). Each contributes its next occurrence to
      Upcoming, tagged "(repeats weekly)". Past occurrences of a
      recurring slot aren't recorded anywhere (there's no per-week
-     attendance history), so Past stays claimed one-offs only.
+     attendance history), so Past stays dated sessions only.
+   - Covers picked up from a tutor's excusal (session_excusals rows
+     with this volunteer as cover_user_id) — the sessions the Log
+     Hours page lets them log into Completed sessions. Covers land in
+     Upcoming or Past by date like everything else, so "no past
+     sessions" can't sit next to a Completed sessions list that holds
+     the very sessions.
    A plain classic script, not a module — reads the signed-in user
    straight out of sessionStorage, same as board.js does, rather than
    importing storage.js's requireRole().
@@ -146,11 +153,34 @@ function recurringSessionEntries(applications) {
   return entries;
 }
 
+// A session picked up from a tutor's excusal (a session_excusals row with
+// this volunteer as cover_user_id) — the same rows the dashboard's cover
+// cards and the Log Hours picker read. Reshaped like the claimed-session
+// rows above, plus `coveredFor`, so sessionCard() renders it the same way.
+function coverEntryFromExcusal(excusal) {
+  const course = excusal.courses;
+  if (!course) return null;
+  const isLab = excusal.session_type === "lab";
+  return {
+    courses: course,
+    session_date: excusal.session_date,
+    start_time: isLab ? course.lab_start_time : course.tutor_start_time,
+    end_time: isLab ? course.lab_end_time : course.tutor_end_time,
+    venue: (isLab ? course.lab_venues : course.venues) || "",
+    type: isLab ? "Lab" : "Tutorial",
+    coveredFor: excusal.tutors?.name || "a tutor",
+  };
+}
+
 // The same session-card structure the dashboards render (see
 // studentview.js's renderUpcomingSessions) so a session looks identical
-// wherever a volunteer meets it.
-function sessionCard(app) {
-  const time = `${formatSessionTime(app.start_time)}–${formatSessionTime(app.end_time)}`;
+// wherever a volunteer meets it. A cover additionally carries the badge
+// the dashboard's cover cards use, naming the tutor it's taken over from.
+function sessionCard(app, { past = false } = {}) {
+  const time =
+    app.start_time && app.end_time
+      ? `, ${formatSessionTime(app.start_time)}–${formatSessionTime(app.end_time)}`
+      : "";
   const venue = app.venue ? ` • ${app.venue}` : "";
   const typePrefix = app.type ? `${app.type}: ` : "";
   const recurringNote = app.recurring ? " (repeats weekly)" : "";
@@ -159,6 +189,14 @@ function sessionCard(app) {
 
   const body = document.createElement("div");
   body.className = "session-card__body";
+
+  if (app.coveredFor) {
+    const badgeEl = document.createElement("p");
+    badgeEl.className = "session-cover-badge";
+    badgeEl.textContent = `${past ? "Covered for" : "Covering for"} ${app.coveredFor}`;
+    body.appendChild(badgeEl);
+  }
+
   body.insertAdjacentHTML(
     "beforeend",
     `<h3 class="session-code"></h3><p class="session-title"></p><p class="session-note"></p>`,
@@ -166,39 +204,63 @@ function sessionCard(app) {
   body.querySelector("h3").textContent = app.courses.course_code;
   body.querySelector(".session-title").textContent = app.courses.course_name;
   body.querySelector(".session-note").textContent =
-    `${typePrefix}${formatSessionDate(app.session_date)}, ${time}${venue}${recurringNote}`;
+    `${typePrefix}${formatSessionDate(app.session_date)}${time}${venue}${recurringNote}`;
 
   article.appendChild(body);
   return article;
 }
 
+// One JSON fetch, so the two data sources below settle independently.
+async function fetchJson(url, errorMessage) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(errorMessage);
+  return res.json();
+}
+
 async function renderSessions() {
   if (!currentUser) return;
 
-  let applications;
-  try {
-    const res = await fetch(
+  // Two endpoints feed this page — course_volunteers (claims and weekly
+  // approvals) and the covers from tutors' excusals — and they settle
+  // independently so a covers hiccup can't blank the claimed sessions
+  // (the same tolerance the dashboard's cover merge shows).
+  const [applicationsResult, coversResult] = await Promise.allSettled([
+    fetchJson(
       `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
-    );
-    if (!res.ok) throw new Error("Failed to load sessions");
-    applications = await res.json();
-  } catch (err) {
+      "Failed to load sessions",
+    ),
+    fetchJson(
+      `/api/session-excusals?coverUserId=${encodeURIComponent(currentUser.id)}`,
+      "Failed to load covers",
+    ),
+  ]);
+
+  // Like the dashboard's upcoming card: without the claims there's nothing
+  // trustworthy to show, so the page says so rather than half-rendering.
+  if (applicationsResult.status === "rejected") {
     upcomingListEl.innerHTML = `<p class="empty-state">Couldn't load your sessions right now.</p>`;
     pastListEl.innerHTML = "";
     return;
   }
 
+  const applications = applicationsResult.value;
+  const covers =
+    coversResult.status === "fulfilled"
+      ? coversResult.value.map(coverEntryFromExcusal).filter(Boolean)
+      : [];
+
   const today = new Date().toISOString().slice(0, 10);
   const claimedSessions = applications.filter(
     (app) => app.status === "approved" && app.session_date,
   );
+  const datedSessions = [...claimedSessions, ...covers];
 
-  const past = claimedSessions
-    .filter((app) => app.session_date < today)
+  const past = datedSessions
+    .filter((entry) => entry.session_date < today)
     .sort((a, b) => b.session_date.localeCompare(a.session_date));
 
   const upcoming = [
-    ...claimedSessions.filter((app) => app.session_date >= today),
+    ...datedSessions.filter((entry) => entry.session_date >= today),
     ...recurringSessionEntries(applications),
   ].sort(
     (a, b) =>
@@ -217,7 +279,9 @@ async function renderSessions() {
   if (past.length === 0) {
     pastListEl.innerHTML = `<p class="empty-state">No past sessions</p>`;
   } else {
-    past.forEach((app) => pastListEl.appendChild(sessionCard(app)));
+    past.forEach((app) =>
+      pastListEl.appendChild(sessionCard(app, { past: true })),
+    );
   }
 }
 

@@ -17,6 +17,9 @@ const scriptSrc = fs.readFileSync(
 function loadPage({
   user = { id: "student-1", role: "volunteer" },
   applications = [],
+  applicationsFail = false,
+  covers = [],
+  coversFail = false,
 } = {}) {
   const pageHtml = html
     .replace(
@@ -37,6 +40,11 @@ function loadPage({
       }
       window.fetch = async (url) => {
         calls.push(String(url));
+        if (String(url).startsWith("/api/session-excusals")) {
+          if (coversFail) throw new Error("network down");
+          return { ok: true, json: async () => covers };
+        }
+        if (applicationsFail) return { ok: false, json: async () => ({}) };
         return { ok: true, json: async () => applications };
       };
     },
@@ -76,7 +84,10 @@ describe("my-sessions.js", () => {
     });
     await wait();
 
-    expect(calls).toHaveLength(1);
+    // Both sources are read: the applications/claims and the covers.
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain("/api/course-volunteers?userId=student-1");
+    expect(calls[1]).toContain("/api/session-excusals?coverUserId=student-1");
     expect(
       window.document.getElementById("upcomingList").textContent,
     ).toContain("No upcoming sessions");
@@ -180,7 +191,8 @@ describe("my-sessions.js", () => {
     expect(upcomingText).not.toContain("PENDING2000");
 
     // No per-week attendance history exists for recurring slots, so Past
-    // stays one-off claimed sessions only.
+    // holds dated sessions (claimed one-offs and covers) only — and here
+    // neither exists.
     expect(window.document.getElementById("pastList").textContent).toContain(
       "No past sessions",
     );
@@ -196,5 +208,112 @@ describe("my-sessions.js", () => {
     expect(window.document.getElementById("pastList").textContent).toContain(
       "No past sessions",
     );
+  });
+
+  test("shows a cover whose session has already happened under Past", async () => {
+    const { window } = loadPage({
+      covers: [
+        {
+          id: "e1",
+          course_id: "c1",
+          session_date: "2020-05-06",
+          session_type: "lab",
+          courses: {
+            course_code: "COVERED1000",
+            course_name: "Covered course",
+            lab_start_time: "10:00:00",
+            lab_end_time: "12:00:00",
+            lab_venues: "MSL001",
+          },
+          tutors: { name: "Ada" },
+        },
+      ],
+    });
+    await wait();
+
+    const pastText = window.document.getElementById("pastList").textContent;
+    expect(pastText).toContain("COVERED1000");
+    expect(pastText).toContain("Covered for Ada");
+    expect(pastText).toContain("MSL001");
+    expect(pastText).not.toContain("No past sessions");
+  });
+
+  test("shows a cover still to come under Upcoming, not Past", async () => {
+    const { window } = loadPage({
+      covers: [
+        {
+          id: "e2",
+          course_id: "c2",
+          session_date: "2099-03-04",
+          session_type: "tutorial",
+          courses: {
+            course_code: "COVER1000",
+            course_name: "Covering course",
+            tutor_start_time: "14:00:00",
+            tutor_end_time: "15:30:00",
+            venues: "FNB1",
+          },
+          tutors: { name: "Grace" },
+        },
+      ],
+    });
+    await wait();
+
+    const upcomingText =
+      window.document.getElementById("upcomingList").textContent;
+    expect(upcomingText).toContain("COVER1000");
+    expect(upcomingText).toContain("Covering for Grace");
+    expect(upcomingText).toContain("Tutorial:");
+    expect(window.document.getElementById("pastList").textContent).toContain(
+      "No past sessions",
+    );
+  });
+
+  test("keeps the claimed sessions when the covers fetch fails", async () => {
+    const { window } = loadPage({
+      coversFail: true,
+      applications: [
+        {
+          id: "s1",
+          status: "approved",
+          session_date: "2099-01-01",
+          start_time: "14:00:00",
+          end_time: "16:00:00",
+          courses: { course_code: "SOON1000", course_name: "Soon" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingList").textContent,
+    ).toContain("SOON1000");
+  });
+
+  test("shows the load error when the sessions fetch fails", async () => {
+    const { window } = loadPage({
+      applicationsFail: true,
+      covers: [
+        {
+          id: "e3",
+          course_id: "c3",
+          session_date: "2099-03-04",
+          session_type: "tutorial",
+          courses: {
+            course_code: "COVER1000",
+            course_name: "Covering course",
+            tutor_start_time: "14:00:00",
+            tutor_end_time: "15:30:00",
+          },
+          tutors: { name: "Grace" },
+        },
+      ],
+    });
+    await wait();
+
+    const upcomingText =
+      window.document.getElementById("upcomingList").textContent;
+    expect(upcomingText).toContain("Couldn't load your sessions right now.");
+    expect(window.document.getElementById("pastList").textContent).toBe("");
   });
 });
