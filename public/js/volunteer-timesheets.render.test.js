@@ -6,11 +6,20 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const rawStorageJs = fs.readFileSync(
   path.join(__dirname, "storage.js"),
   "utf8",
 );
+const storageJsUrl = pathToFileURL(path.join(__dirname, "storage.js")).href;
+const volunteerJsUrl = pathToFileURL(
+  path.join(__dirname, "volunteer-timesheets.js"),
+).href;
+// The identical newline-free shadow line storage.test.js prepends to its
+// eval'd copy of storage.js — Jest's v8 coverage only merges the two
+// suites' copies cleanly when their text layouts match.
+const shadowWindow = `var __fakeLocation = { href: "" }; const window = { location: __fakeLocation }; `;
 const rawVolunteerJs = fs
   .readFileSync(path.join(__dirname, "volunteer-timesheets.js"), "utf8")
   // `export` isn't valid inside dom.window.eval (classic script semantics).
@@ -82,11 +91,12 @@ function renderPage(entries) {
     "$1",
   );
   // highlightActiveTab is the one thing not worth loading nav.js for.
-  dom.window.eval(`
-    function highlightActiveTab() {}
-    ${storageJs}
-    ${rawVolunteerJs}
-  `);
+  dom.window.highlightActiveTab = function () {};
+  // One sourceURL per eval so each file's coverage lands on its own lines
+  // (both evaluate in the window's global scope, so they still share
+  // bindings across the two calls).
+  dom.window.eval(`${shadowWindow}${storageJs}\n//# sourceURL=${storageJsUrl}`);
+  dom.window.eval(`${rawVolunteerJs}\n//# sourceURL=${volunteerJsUrl}`);
 
   return dom.window;
 }

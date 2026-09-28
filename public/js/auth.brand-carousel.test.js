@@ -11,14 +11,21 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const NL = String.fromCharCode(10);
 const TICK_MS = 50;
 
 const authJs = fs.readFileSync(path.join(__dirname, "auth.js"), "utf8");
 const authUiJs = fs.readFileSync(path.join(__dirname, "auth-ui.js"), "utf8");
+const authJsUrl = pathToFileURL(path.join(__dirname, "auth.js")).href;
+const authUiJsUrl = pathToFileURL(path.join(__dirname, "auth-ui.js")).href;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The carousel keeps a rotation interval alive per page load — closing each
+// window after its test stops those timers so the Jest worker can exit.
+const openDoms = [];
 
 function loadAuthPage({ register = false, reduceMotion = false } = {}) {
   const file = register ? "register.html" : "login.html";
@@ -34,13 +41,17 @@ function loadAuthPage({ register = false, reduceMotion = false } = {}) {
         TICK_MS +
         '">',
     )
+    // Each injected script must be byte-identical to the copy run by the
+    // sibling suite for that file (auth.register-email.test.js and
+    // page-helpers.test.js) so Jest's v8 coverage merges them cleanly:
+    // source first, sourceURL last, no extra leading or trailing newline.
     .replace(
       '<script src="../js/auth.js"></script>',
-      "<script>" + NL + authJs + NL + "</script>",
+      "<script>" + authJs + NL + "//# sourceURL=" + authJsUrl + "</script>",
     )
     .replace(
       '<script src="../js/auth-ui.js"></script>',
-      "<script>" + NL + authUiJs + NL + "</script>",
+      "<script>" + authUiJs + NL + "//# sourceURL=" + authUiJsUrl + "</script>",
     );
 
   const dom = new JSDOM(page, {
@@ -63,8 +74,13 @@ function loadAuthPage({ register = false, reduceMotion = false } = {}) {
     },
   });
 
+  openDoms.push(dom);
   return dom.window;
 }
+
+afterEach(() => {
+  openDoms.splice(0).forEach((dom) => dom.window.close());
+});
 
 function activeSlide(doc) {
   const slides = [...doc.querySelectorAll(".auth-brand-slide")];

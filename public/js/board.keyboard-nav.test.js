@@ -23,10 +23,11 @@ const allocationObjectivesJs = fs.readFileSync(
   "utf8",
 );
 
-// Appended to board.js's own script text so it shares board.js's top-level
-// scope (COURSES, activeCourseId, renderCourseList) without board.js having
-// to export anything for tests — it never runs in a CommonJS context in
-// production, so it must not gain a module.exports.
+// Injected as a separate <script> tag right after board.js's — classic
+// scripts share the page's global scope, so it still reaches board.js's
+// top-level bindings (COURSES, activeCourseId, renderCourseList) without
+// board.js having to export anything for tests — it never runs in a
+// CommonJS context in production, so it must not gain a module.exports.
 const testHooks = `
 window.__test = {
   pushCourse: (c) => COURSES.push(c),
@@ -41,14 +42,19 @@ window.__test = {
 const openDoms = [];
 
 function loadBoard() {
+  // Each injected script must be byte-identical to the copy run by the
+  // sibling suite for that file (allocation-objectives.test.js and
+  // board.transcript.test.js) — Jest's v8 coverage merges scripts by URL
+  // and only overlaps cleanly when their text layouts match.
   const html = boardHtml
     .replace(
       '<script src="../js/allocation-objectives.js"></script>',
-      `<script>\n${allocationObjectivesJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "allocation-objectives.js")).href}\n</script>`,
+      `<script>${allocationObjectivesJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "allocation-objectives.js")).href}</script>`,
     )
     .replace(
       '<script src="../js/board.js"></script>',
-      `<script>\n${boardJs}\n${testHooks}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "board.js")).href}\n</script>`,
+      `<script>${boardJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "board.js")).href}\n</script>` +
+        `<script>${testHooks}</script>`,
     )
     .replace('<script src="../js/logout.js"></script>', "")
     .replace('<script src="../js/onboarding.js"></script>', "");

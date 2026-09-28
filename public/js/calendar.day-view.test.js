@@ -9,6 +9,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const calendarHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "calendar.html"),
@@ -70,19 +71,38 @@ function todayStr() {
 }
 `;
 
-function loadCalendar() {
-  // Every import (nav.js, storage.js) lives above the first line of real
-  // module code, so slicing from there replaces them with the stand-ins
-  // above. The auto-invocations of render() at module load are left in
-  // place, exactly like the real page — the test just waits for them.
-  const calendarJs = rawCalendarJs.slice(
-    rawCalendarJs.indexOf("const pageRole"),
-  );
+// The real file's first module statement — the imports all live above it,
+// which is what the stand-ins above replace.
+const calendarSliceStart = rawCalendarJs.indexOf("const pageRole");
+const calendarJs = rawCalendarJs.slice(calendarSliceStart);
+const calendarJsUrl = pathToFileURL(path.join(__dirname, "calendar.js")).href;
+// Pad the injected copy with one newline per sliced-off line so its line
+// numbers match the real file's and coverage lands on the right lines.
+const calendarJsPad = NL.repeat(
+  rawCalendarJs.slice(0, calendarSliceStart).split(NL).length - 1,
+);
 
+function loadCalendar() {
+  // The stand-ins run in their own tag (unattributed); the real source runs
+  // in a second one whose padding + sourceURL keep coverage lines exact.
+  // The auto-invocations of render() at module load are left in place,
+  // exactly like the real page — the test just waits for them.
   const html = calendarHtml
     .replace(
       '<script type="module" src="../js/calendar.js"></script>',
-      "<script>" + NL + stubs + NL + calendarJs + NL + "</script>",
+      "<script>" +
+        NL +
+        stubs +
+        NL +
+        "</script>" +
+        "<script>" +
+        calendarJsPad +
+        calendarJs +
+        NL +
+        "//# sourceURL=" +
+        calendarJsUrl +
+        NL +
+        "</script>",
     )
     .replace(
       '<script type="module" src="../js/timetable-import.js"></script>',

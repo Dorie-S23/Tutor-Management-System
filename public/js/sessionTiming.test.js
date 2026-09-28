@@ -6,11 +6,15 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const rawTimingJs = fs.readFileSync(
   path.join(__dirname, "sessionTiming.js"),
   "utf8",
 );
+const sessionTimingJsUrl = pathToFileURL(
+  path.join(__dirname, "sessionTiming.js"),
+).href;
 
 const EXPORTED_NAMES = [
   "GRACE_MINUTES",
@@ -28,7 +32,11 @@ function loadTiming() {
     runScripts: "dangerously",
   });
 
-  dom.window.eval(`${timingJs}\n${testHooks}`);
+  // sourceURL lets Jest's v8 coverage attribute this eval'd copy of the
+  // script to the real file's lines.
+  dom.window.eval(
+    `${timingJs}\n${testHooks}\n//# sourceURL=${sessionTimingJsUrl}`,
+  );
   return dom.window.__timing;
 }
 

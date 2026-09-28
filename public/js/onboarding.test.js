@@ -7,11 +7,15 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const onboardingJs = fs.readFileSync(
   path.join(__dirname, "onboarding.js"),
   "utf8",
 );
+const onboardingJsUrl = pathToFileURL(
+  path.join(__dirname, "onboarding.js"),
+).href;
 
 const PAGE_HTML = `<!doctype html><html><body>
   <header class="app-navbar"><a href="login.html" id="navLink">Manage Tutors</a></header>
@@ -43,7 +47,9 @@ function loadPage() {
     },
   });
 
-  dom.window.eval(onboardingJs);
+  // sourceURL lets Jest's v8 coverage attribute this eval'd copy of the
+  // script to the real file's lines.
+  dom.window.eval(onboardingJs + "\n//# sourceURL=" + onboardingJsUrl);
   openDoms.push(dom);
   return dom.window;
 }

@@ -5,12 +5,14 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const boardHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "board.html"),
   "utf8",
 );
 const boardJs = fs.readFileSync(path.join(__dirname, "board.js"), "utf8");
+const boardJsUrl = pathToFileURL(path.join(__dirname, "board.js")).href;
 
 // Appended to board.js's own script text so it shares board.js's top-level
 // scope without board.js having to export anything for tests.
@@ -50,9 +52,13 @@ function json(body, ok = true) {
 
 function loadBoard(transcriptResponse) {
   const html = boardHtml
+    // board.js starts right after <script> and ends with its sourceURL so
+    // coverage attributes to the real file; testHooks follow in their own
+    // tag, still sharing the classic scripts' top-level scope.
     .replace(
       '<script src="../js/board.js"></script>',
-      `<script>\n${boardJs}\n${testHooks}\n</script>`,
+      `<script>${boardJs}\n//# sourceURL=${boardJsUrl}\n</script>` +
+        `<script>${testHooks}</script>`,
     )
     .replace('<script src="../js/logout.js"></script>', "")
     .replace('<script src="../js/onboarding.js"></script>', "");

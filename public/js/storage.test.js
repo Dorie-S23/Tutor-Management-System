@@ -69,11 +69,12 @@ function loadStorage(existingEntries = []) {
   // `localStorage`, never via `window.` for those — and publish the fake
   // location and the exported functions onto `globalThis` (the *real*
   // jsdom window, unaffected by the local `window` shadow) so the test can
-  // read them back afterwards.
-  const shadowWindow = `
-    var __fakeLocation = { href: "" };
-    const window = { location: __fakeLocation };
-  `;
+  // read them back afterwards. The stand-in sits on a single newline-free
+  // line so the eval'd text's line numbers stay identical to storage.js's
+  // own — volunteer-timesheets.render.test.js prepends this exact line, and
+  // Jest's v8 coverage only merges the two suites' copies of storage.js
+  // cleanly when their text layouts match.
+  const shadowWindow = `var __fakeLocation = { href: "" }; const window = { location: __fakeLocation }; `;
   const testHooks = `
     globalThis.__storage = { ${EXPORTED_NAMES.join(", ")} };
     globalThis.__location = __fakeLocation;
@@ -109,7 +110,7 @@ function loadStorage(existingEntries = []) {
   // with the real file's path so Jest's v8 coverage can attribute the lines
   // executed in this eval back to storage.js instead of dropping them.
   dom.window.eval(
-    `${shadowWindow}\n${storageJs}\n${testHooks}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "storage.js")).href}`,
+    `${shadowWindow}${storageJs}\n${testHooks}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "storage.js")).href}`,
   );
   return dom.window;
 }

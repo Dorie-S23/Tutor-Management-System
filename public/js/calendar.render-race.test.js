@@ -13,7 +13,6 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
-const { pathToFileURL } = require("url");
 
 const calendarHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "calendar.html"),
@@ -81,7 +80,10 @@ function loadCalendar() {
   const html = calendarHtml
     .replace(
       '<script type="module" src="../js/calendar.js"></script>',
-      `<script>\n${stubs}\n${calendarJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "calendar.js")).href}\n</script>`,
+      // Deliberately unattributed: this suite runs a line-modified copy of
+      // calendar.js (auto-invocations stripped), so tagging it with the real
+      // file's sourceURL would skew the coverage Jest merges for it.
+      `<script>\n${stubs}\n${calendarJs}\n</script>`,
     )
     .replace(
       '<script type="module" src="../js/timetable-import.js"></script>',

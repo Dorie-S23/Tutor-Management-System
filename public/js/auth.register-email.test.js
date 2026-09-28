@@ -25,7 +25,7 @@ const authJs = fs.readFileSync(path.join(__dirname, "auth.js"), "utf8");
 function loadRegisterPage() {
   const html = registerHtml.replace(
     '<script src="../js/auth.js"></script>',
-    `<script>\n${authJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "auth.js")).href}\n</script>`,
+    `<script>${authJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "auth.js")).href}</script>`,
   );
 
   const fetchMock = jest.fn(

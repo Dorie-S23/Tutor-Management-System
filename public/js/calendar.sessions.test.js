@@ -11,6 +11,8 @@ const path = require("path");
 const { JSDOM } = require("jsdom");
 const { pathToFileURL } = require("url");
 
+const NL = String.fromCharCode(10);
+
 const rawCalendarJs = fs.readFileSync(
   path.join(__dirname, "calendar.js"),
   "utf8",
@@ -45,15 +47,22 @@ function loadPage({ htmlFile, user, fetchImpl }) {
     "utf8",
   );
 
-  const calendarJs = rawCalendarJs.replace(
-    /import\s*{[^}]*}\s*from\s*["'][^"']+["'];?/g,
-    "",
+  // The injected copy of calendar.js must be byte-identical to the one
+  // calendar.day-view.test.js runs — Jest's v8 coverage merges scripts by
+  // URL and only overlaps cleanly when their text layouts match, so the
+  // imports are sliced off and replaced by one padding newline each to keep
+  // the remaining source's line numbers aligned with the real file.
+  const calendarSliceStart = rawCalendarJs.indexOf("const pageRole");
+  const calendarJs = rawCalendarJs.slice(calendarSliceStart);
+  const calendarJsPad = NL.repeat(
+    rawCalendarJs.slice(0, calendarSliceStart).split(NL).length - 1,
   );
 
   const pageHtml = html
     .replace(
       '<script type="module" src="../js/calendar.js"></script>',
-      `<script>\n${stubsFor(user)}\n${calendarJs}\n${testHook}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "calendar.js")).href}\n</script>`,
+      `<script>${stubsFor(user)}\n${testHook}</script>` +
+        `<script>${calendarJsPad}${calendarJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "calendar.js")).href}\n</script>`,
     )
     .replace(
       '<script type="module" src="../js/timetable-import.js"></script>',

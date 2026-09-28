@@ -5,11 +5,15 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const rawTranscriptJs = fs
   .readFileSync(path.join(__dirname, "transcript-upload.js"), "utf8")
   // `export` isn't valid inside dom.window.eval (classic script semantics).
   .replace(/^export /gm, "");
+const transcriptJsUrl = pathToFileURL(
+  path.join(__dirname, "transcript-upload.js"),
+).href;
 
 const PANEL_MARKUP = `
   <section class="panel" id="transcript-panel">
@@ -31,9 +35,10 @@ function renderPanel(withPanel = true) {
     `<!doctype html><html><body>${withPanel ? PANEL_MARKUP : ""}</body></html>`,
     { url: "http://localhost/modules.html", runScripts: "dangerously" },
   );
-  // Expose the function the way a page script's import would.
+  // Expose the function the way a page script's import would. The sourceURL
+  // lets Jest's v8 coverage attribute the eval'd copy to the real file.
   dom.window.eval(
-    `${rawTranscriptJs}\nwindow.transcriptUpload = initTranscriptUpload;`,
+    `${rawTranscriptJs}\nwindow.transcriptUpload = initTranscriptUpload;\n//# sourceURL=${transcriptJsUrl}`,
   );
   return dom.window;
 }
