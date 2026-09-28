@@ -129,6 +129,17 @@ describe("theme.js", () => {
     expect(win.document.querySelector(".tab-nav .theme-toggle")).toBeNull();
   });
 
+  test("mounts into the auth shell on the login and register pages", async () => {
+    const win = loadTheme({
+      body: '<main class="auth-shell"><form></form></main>',
+    });
+    await ready();
+
+    const toggle = win.document.querySelector(".theme-toggle");
+    expect(toggle).toBeTruthy();
+    expect(toggle.parentElement.className).toBe("auth-shell");
+  });
+
   test("does not mount a toggle on a page without a host element", async () => {
     const win = loadTheme({ body: "<p>bare page</p>" });
     await ready();

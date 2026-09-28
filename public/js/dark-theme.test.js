@@ -71,5 +71,8 @@ describe("dark theme coverage", () => {
     const navbarRight = themeJs.indexOf('".navbar-right"');
     expect(navbarRight).toBeGreaterThan(-1);
     expect(navbarRight).toBeLessThan(themeJs.indexOf('".header-actions"'));
+
+    // The password-auth pages only have an .auth-shell to host the toggle.
+    expect(themeJs).toContain('".auth-shell"');
   });
 });

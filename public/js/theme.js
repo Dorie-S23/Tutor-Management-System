@@ -43,13 +43,15 @@
 
   function mountToggle() {
     // Prefer the redesigned pages' dedicated slot; the legacy selectors
-    // keep the older pages mounting where they always have.
+    // keep the older pages mounting where they always have. .auth-shell
+    // covers the split-screen auth pages (CSS pins the toggle top-right).
     const target = [
       ".navbar-right",
       ".header-actions",
       ".tab-nav",
       ".header-right",
       ".auth-header",
+      ".auth-shell",
     ]
       .map((selector) => document.querySelector(selector))
       .find(Boolean);
