@@ -15,7 +15,7 @@ const scriptSrc = fs.readFileSync(
 );
 
 function loadPage({
-  user = { id: "student-1", role: "student" },
+  user = { id: "student-1", role: "volunteer" },
   applications = [],
 } = {}) {
   const pageHtml = html
@@ -61,13 +61,25 @@ describe("my-sessions.js", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("doesn't fetch anything for a non-student role", async () => {
+  test("doesn't fetch anything for a non-volunteer role", async () => {
     const { calls } = loadPage({
       user: { id: "tutor-1", role: "tutor" },
     });
     await wait();
 
     expect(calls).toHaveLength(0);
+  });
+
+  test("still treats a legacy student-role account as a volunteer", async () => {
+    const { window, calls } = loadPage({
+      user: { id: "student-1", role: "student" },
+    });
+    await wait();
+
+    expect(calls).toHaveLength(1);
+    expect(
+      window.document.getElementById("upcomingList").textContent,
+    ).toContain("No upcoming sessions");
   });
 
   test("splits approved claimed sessions into Upcoming and Past by date", async () => {

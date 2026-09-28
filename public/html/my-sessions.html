@@ -3,44 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StudyConnect | My Sessions</title>
+    <title>My Sessions | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
     <script src="../js/theme.js"></script>
   </head>
 
   <body>
-    <header class="board-header board-header--brand">
-      <hgroup class="header-left">
-        <p class="eyebrow">
-          <img src="../images/images.png" alt="" class="eyebrow-logo" />
-          School of Computer Science &amp; Applied Mathematics
-        </p>
-        <h1 id="welcome-heading">Welcome!</h1>
-      </hgroup>
+    <header class="app-navbar">
+      <a class="brand-mark" href="StudentView.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
 
-      <img
-        src="../images/Wits-890x664.png"
-        alt="University of the Witwatersrand"
-        class="header-wits-logo"
-      />
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="StudentView.html">Dashboard</a>
+        <a href="my-sessions.html" aria-current="page">My sessions</a>
+        <a href="volunteer-log-hours.html">Log Hours</a>
+        <a href="student-calendar.html">Calendar</a>
+        <a href="volunteer-timesheets.html">Completed sessions</a>
+        <a href="student-profile.html">Profile</a>
+        <a href="StudentView.html?tour=1">Take a Tour</a>
+      </nav>
 
-      <div class="header-actions">
-        <a class="btn btn-ghost" href="StudentView.html">Dashboard</a>
-        <a class="btn btn-ghost" href="my-sessions.html" aria-current="page"
-          >My Sessions</a
-        >
-        <a class="btn btn-ghost" href="student-log-hours.html">Log Hours</a>
-        <a class="btn btn-ghost" href="student-calendar.html">Calendar</a>
-        <a class="btn btn-ghost" href="student-profile.html">Profile</a>
-        <a class="btn btn-ghost" href="StudentView.html?tour=1"
-          >Take the tour</a
-        >
+      <div class="navbar-right">
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -83,29 +89,64 @@
             </p>
           </div>
         </div>
+
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Volunteer</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
       </div>
-      <button class="btn btn-danger" id="logout-button" type="button">
-        Logout
-      </button>
     </header>
 
-    <main class="dashboard-layout">
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <h1 id="welcome-heading">My sessions</h1>
+          <p class="page-sub">
+            Everything you've volunteered for — still to come, and already
+            tutored.
+          </p>
+        </div>
+      </div>
+
       <section class="card" aria-labelledby="upcoming-heading">
         <h2 id="upcoming-heading">Upcoming</h2>
         <p class="hint">Everything you've volunteered for, still to come.</p>
-        <div id="upcomingList" class="course-list"></div>
+        <div id="upcomingList" class="session-grid"></div>
       </section>
 
       <section class="card" aria-labelledby="past-heading">
         <h2 id="past-heading">Past Sessions</h2>
         <p class="hint">Everything you've already tutored.</p>
-        <div id="pastList" class="course-list"></div>
+        <div id="pastList" class="session-grid"></div>
       </section>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <script src="../js/user-badge.js"></script>
     <script src="../js/my-sessions.js"></script>
+    <script type="module">
+      import { highlightActiveTab } from "../js/nav.js";
+
+      // my-sessions.js stays a plain classic script so the jsdom tests can
+      // run it as-is; the active-tab highlight is a module-only helper, so
+      // it is wired up here instead (same pattern as StudentView.html).
+      highlightActiveTab();
+    </script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
   </body>

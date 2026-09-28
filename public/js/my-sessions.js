@@ -17,11 +17,16 @@
    importing storage.js's requireRole().
    ============================================================ */
 
+// Where each role lands (mirrors ROLE_HOME in storage.js and the switch in
+// auth.js). Volunteers used to be stored with role "student" — the
+// normalisation in requireStudent() below keeps those older accounts
+// working after the Volunteer rename.
 const ROLE_HOME = {
-  student: "StudentView.html",
+  volunteer: "StudentView.html",
   tutor: "dashboard.html",
   educator: "educator.html",
   organiser: "board.html",
+  super_organiser: "board.html",
 };
 
 function requireStudent() {
@@ -36,7 +41,9 @@ function requireStudent() {
     window.location.href = "login.html";
     return null;
   }
-  if (user.role !== "student") {
+  // Same legacy normalisation storage.js's getCurrentUser() applies.
+  if (user.role === "student") user.role = "volunteer";
+  if (user.role !== "volunteer") {
     window.location.href = ROLE_HOME[user.role] || "login.html";
     return null;
   }
@@ -139,17 +146,29 @@ function recurringSessionEntries(applications) {
   return entries;
 }
 
+// The same session-card structure the dashboards render (see
+// studentview.js's renderUpcomingSessions) so a session looks identical
+// wherever a volunteer meets it.
 function sessionCard(app) {
   const time = `${formatSessionTime(app.start_time)}–${formatSessionTime(app.end_time)}`;
-  const venue = app.venue ? ` &bull; ${app.venue}` : "";
+  const venue = app.venue ? ` • ${app.venue}` : "";
   const typePrefix = app.type ? `${app.type}: ` : "";
   const recurringNote = app.recurring ? " (repeats weekly)" : "";
   const article = document.createElement("article");
-  article.innerHTML = `
-    <h3>${app.courses.course_code}</h3>
-    <p class="session-meta">${app.courses.course_name}</p>
-    <p class="session-note">${typePrefix}${formatSessionDate(app.session_date)}, ${time}${venue}${recurringNote}</p>
-  `;
+  article.className = "session-card";
+
+  const body = document.createElement("div");
+  body.className = "session-card__body";
+  body.insertAdjacentHTML(
+    "beforeend",
+    `<h3 class="session-code"></h3><p class="session-title"></p><p class="session-note"></p>`,
+  );
+  body.querySelector("h3").textContent = app.courses.course_code;
+  body.querySelector(".session-title").textContent = app.courses.course_name;
+  body.querySelector(".session-note").textContent =
+    `${typePrefix}${formatSessionDate(app.session_date)}, ${time}${venue}${recurringNote}`;
+
+  article.appendChild(body);
   return article;
 }
 

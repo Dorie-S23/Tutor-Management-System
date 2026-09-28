@@ -103,6 +103,10 @@ function submitForm(window) {
 }
 
 describe("profile.js — student volunteer page", () => {
+  test("declares the volunteer role so requireRole() lets volunteers through", () => {
+    expect(studentHtml).toContain('data-page-role="volunteer"');
+  });
+
   test("prefills the form from the saved profile with the email read-only", async () => {
     const { window } = loadPage();
     await wait();
