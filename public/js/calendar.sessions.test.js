@@ -9,6 +9,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const rawCalendarJs = fs.readFileSync(
   path.join(__dirname, "calendar.js"),
@@ -52,7 +53,7 @@ function loadPage({ htmlFile, user, fetchImpl }) {
   const pageHtml = html
     .replace(
       '<script type="module" src="../js/calendar.js"></script>',
-      `<script>\n${stubsFor(user)}\n${calendarJs}\n${testHook}\n</script>`,
+      `<script>\n${stubsFor(user)}\n${calendarJs}\n${testHook}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "calendar.js")).href}\n</script>`,
     )
     .replace(
       '<script type="module" src="../js/timetable-import.js"></script>',

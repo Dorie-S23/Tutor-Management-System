@@ -10,6 +10,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const html = fs.readFileSync(
   path.join(__dirname, "..", "html", "StudentView.html"),
@@ -32,7 +33,7 @@ function scrollAndHighlight() {}
 `;
 
 function loadPage({ courses = [], applications = [], openSessions = [] } = {}) {
-  const script = `<script>${stubs}\n${studentviewSrc}\n</script>`;
+  const script = `<script>${stubs}\n${studentviewSrc}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "studentview.js")).href}</script>`;
   const pageHtml = html
     .replace(
       '<script type="module" src="../js/studentview.js"></script>',

@@ -7,6 +7,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const tutorHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "profile.html"),
@@ -48,7 +49,7 @@ function loadPage({
     role: user.role,
   };
 
-  const script = `<script>${makeStubs(user)}\n${profileSrc}\n</script>`;
+  const script = `<script>${makeStubs(user)}\n${profileSrc}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "profile.js")).href}</script>`;
   const pageHtml = html
     .replace('<script type="module" src="../js/profile.js"></script>', script)
     .replace('<script src="../js/notifications.js"></script>', "")

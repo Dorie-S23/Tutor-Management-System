@@ -8,6 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const boardHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "board.html"),
@@ -43,11 +44,11 @@ function loadBoard() {
   const html = boardHtml
     .replace(
       '<script src="../js/allocation-objectives.js"></script>',
-      `<script>\n${allocationObjectivesJs}\n</script>`,
+      `<script>\n${allocationObjectivesJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "allocation-objectives.js")).href}\n</script>`,
     )
     .replace(
       '<script src="../js/board.js"></script>',
-      `<script>\n${boardJs}\n${testHooks}\n</script>`,
+      `<script>\n${boardJs}\n${testHooks}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "board.js")).href}\n</script>`,
     )
     .replace('<script src="../js/logout.js"></script>', "")
     .replace('<script src="../js/onboarding.js"></script>', "");

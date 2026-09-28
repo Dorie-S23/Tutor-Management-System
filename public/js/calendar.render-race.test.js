@@ -13,6 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const calendarHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "calendar.html"),
@@ -80,7 +81,7 @@ function loadCalendar() {
   const html = calendarHtml
     .replace(
       '<script type="module" src="../js/calendar.js"></script>',
-      `<script>\n${stubs}\n${calendarJs}\n</script>`,
+      `<script>\n${stubs}\n${calendarJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "calendar.js")).href}\n</script>`,
     )
     .replace(
       '<script type="module" src="../js/timetable-import.js"></script>',

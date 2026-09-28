@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const html = fs.readFileSync(
   path.join(__dirname, "..", "html", "allocation-history.html"),
@@ -24,7 +25,7 @@ function loadPage({
   const pageHtml = html
     .replace(
       '<script src="../js/allocation-history.js"></script>',
-      `<script>${scriptSrc}</script>`,
+      `<script>${scriptSrc}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "allocation-history.js")).href}</script>`,
     )
     .replace('<script src="../js/logout.js"></script>', "");
 

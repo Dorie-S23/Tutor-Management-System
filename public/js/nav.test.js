@@ -6,6 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const navSrc = fs
   .readFileSync(path.join(__dirname, "nav.js"), "utf8")
@@ -13,7 +14,7 @@ const navSrc = fs
 
 function withDom(bodyHtml, fn) {
   const dom = new JSDOM(
-    `<body>${bodyHtml}<script>${navSrc}\nwindow.__nav = { highlightActiveTab, renderWelcomeHeading };</script></body>`,
+    `<body>${bodyHtml}<script>${navSrc}\nwindow.__nav = { highlightActiveTab, renderWelcomeHeading };\n//# sourceURL=${pathToFileURL(path.join(__dirname, "nav.js")).href}</script></body>`,
     { url: "http://localhost/html/calendar.html", runScripts: "dangerously" },
   );
   fn(dom.window);

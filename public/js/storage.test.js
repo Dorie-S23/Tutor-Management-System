@@ -7,6 +7,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const rawStorageJs = fs.readFileSync(
   path.join(__dirname, "storage.js"),
@@ -104,7 +105,12 @@ function loadStorage(existingEntries = []) {
     },
   });
 
-  dom.window.eval(`${shadowWindow}\n${storageJs}\n${testHooks}`);
+  // The sourceURL comment (last line of the eval'd string) tags the script
+  // with the real file's path so Jest's v8 coverage can attribute the lines
+  // executed in this eval back to storage.js instead of dropping them.
+  dom.window.eval(
+    `${shadowWindow}\n${storageJs}\n${testHooks}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "storage.js")).href}`,
+  );
   return dom.window;
 }
 
