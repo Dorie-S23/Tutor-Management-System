@@ -550,6 +550,16 @@ body > footer p {
   color: #a6690f;
 }
 
+.status-pill.approved {
+  background: #e8f7ed;
+  color: #22863a;
+}
+
+.status-pill.rejected {
+  background: #fdecea;
+  color: #d33;
+}
+
 /* Forms (Profile / Log Hours) */
 
 .form-grid {

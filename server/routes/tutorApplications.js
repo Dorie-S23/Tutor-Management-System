@@ -3,6 +3,12 @@ const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
 const { notify } = require("./notificationHelpers");
 const { hasTranscript, storageFailure } = require("./transcriptStorage");
+const { recordAudit } = require("../utils/auditLog");
+
+// Multi-objective balancing: the shared objective definitions, presets and
+// scoring used to rank applicants — the same module the organiser board
+// loads as a plain <script> for its preset picker and objective bars.
+const AllocationObjectives = require("../../public/js/allocation-objectives");
 
 const router = express.Router();
 
@@ -58,8 +64,12 @@ function courseSessions(course) {
 // ============================================================
 // GET /api/tutor-applications
 //
-// ?tutorId=...  -> a tutor's own applications
-// ?courseId=... -> all applicants for a course, ranked
+// ?tutorId=...          -> a tutor's own applications
+// ?courseId=...         -> all applicants for a course, ranked
+// ?preset=merit|balanced|fairness
+//                       -> which balance of the competing ranking
+//                          objectives to order applicants by
+//                          (default: merit, the historical ranking)
 // ============================================================
 router.get("/", async (req, res) => {
   const { tutorId, courseId } = req.query;
@@ -67,6 +77,25 @@ router.get("/", async (req, res) => {
   if (!tutorId && !courseId) {
     return res.status(400).json({
       error: "tutorId or courseId is required",
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Which balance of the competing objectives should order these
+  // applicants? Merit-first is the default and matches the historical
+  // ranking exactly; the others re-weight it (see allocation-objectives.js).
+  // Only the ranked courseId path uses a preset — a tutor's self-view
+  // never orders anyone — and it's validated before the database is
+  // touched, like every other input check in this repo.
+  // ------------------------------------------------------------
+
+  const preset =
+    req.query.preset === undefined ? "merit" : String(req.query.preset);
+
+  if (!tutorId && !AllocationObjectives.PRESET_NAMES.includes(preset)) {
+    const valid = AllocationObjectives.PRESET_NAMES.join(", ");
+    return res.status(400).json({
+      error: `Unknown preset "${preset}". Valid presets: ${valid}.`,
     });
   }
 
@@ -300,49 +329,11 @@ router.get("/", async (req, res) => {
       }
 
       // --------------------------------------------------------
-      // Calculate a ranking score
+      // The blended score itself is calculated after every applicant's
+      // facts are known — see the balance() call below — because the
+      // objectives compete with each other and need the full pool to
+      // rank, flag Pareto-dominated applicants and explain trade-offs.
       // --------------------------------------------------------
-      //
-      // The score is intentionally weighted so that academic
-      // performance is the strongest factor.
-      //
-      // Mark:             0 - 100 points
-      // Availability:     0 - 20 points
-      // No timetable clash: 0 - 20 points
-      // Academic level:   0 - 10 points
-      // Hours remaining:  0 - 10 points
-      //
-      // Maximum = 160
-      // --------------------------------------------------------
-
-      let score = 0;
-
-      // 1. Mark
-      score += mark;
-
-      // 2. Availability
-      if (available) {
-        score += 20;
-      }
-
-      // 3. Timetable clash
-      if (!timetableClash) {
-        score += 20;
-      }
-
-      // 4. Academic level
-      score += academicRank * 2;
-
-      // 5. Hours remaining
-      //
-      // If there is no cap, give the maximum workload points.
-      if (weeklyHourCap == null) {
-        score += 10;
-      } else if (weeklyHourCap > 0) {
-        const workloadRatio = hoursRemaining / Number(weeklyHourCap);
-
-        score += Math.min(Math.max(workloadRatio, 0), 1) * 10;
-      }
 
       // --------------------------------------------------------
       // Override info — was this approval pushed through past a
@@ -371,7 +362,6 @@ router.get("/", async (req, res) => {
         overrideInfo,
 
         ranking: {
-          score: Number(score.toFixed(2)),
           mark,
           available,
           timetableClash,
@@ -388,39 +378,30 @@ router.get("/", async (req, res) => {
   );
 
   // ------------------------------------------------------------
-  // Sort applicants from highest score to lowest score
+  // Blend the competing objectives (mark, availability, timetable
+  // fit, seniority, spare hours) into a single 0-100 score under
+  // the chosen preset, and order the applicants by it. The merit
+  // preset's weights are the historical point scale, so the default
+  // ordering is unchanged; the others re-weight the same facts.
   // ------------------------------------------------------------
 
-  rankedApplicants.sort((a, b) => {
-    // Primary: ranking score
-    if (b.ranking.score !== a.ranking.score) {
-      return b.ranking.score - a.ranking.score;
-    }
+  const balanced = AllocationObjectives.balance(
+    rankedApplicants.map((app) => app.ranking),
+    preset,
+  );
 
-    // Tie-breaker 1: higher mark
-    if (b.ranking.mark !== a.ranking.mark) {
-      return b.ranking.mark - a.ranking.mark;
-    }
-
-    // Tie-breaker 2: available applicant first
-    if (a.ranking.available !== b.ranking.available) {
-      return a.ranking.available ? -1 : 1;
-    }
-
-    // Tie-breaker 3: no timetable clash first
-    if (a.ranking.timetableClash !== b.ranking.timetableClash) {
-      return a.ranking.timetableClash ? 1 : -1;
-    }
-
-    // Tie-breaker 4: higher academic level
-    if (b.ranking.academicRank !== a.ranking.academicRank) {
-      return b.ranking.academicRank - a.ranking.academicRank;
-    }
-
-    return 0;
+  balanced.forEach((result) => {
+    const app = rankedApplicants[result.index];
+    app.ranking.preset = preset;
+    app.ranking.score = result.score;
+    app.ranking.objectives = result.objectives;
+    app.ranking.rank = result.rank;
+    app.ranking.meritRank = result.meritRank;
+    app.ranking.paretoDominated = result.dominated;
+    app.ranking.tradeoff = result.note;
   });
 
-  res.json(rankedApplicants);
+  res.json(balanced.map((result) => rankedApplicants[result.index]));
 });
 
 // ============================================================
@@ -666,6 +647,36 @@ router.get("/obvious-fill", async (req, res) => {
   res.json(groups);
 });
 
+// Optimistic-concurrency wording for the write routes below. A write whose
+// client-declared (or just-read) state no longer matches the row when the
+// write lands is refused with a 409 instead of silently overwriting
+// whatever another organiser did first.
+const STALE_APPLICATION_ERROR =
+  "Someone else already changed this application — reload to see the latest state.";
+const STALE_APPLICATION_SHORT = "Someone else already changed this application";
+const STALE_COURSE_ERROR =
+  "Someone else just changed this course's assignments — reload to see the latest state.";
+
+// Best-effort undo for a course counter bump whose paired status write then
+// lost its race: only writes while the counter still holds the value this
+// request set, so it can never clobber a newer change by someone else.
+async function rollbackCourseCount(courseId, restoreTo, onlyIfStill) {
+  const { error } = await supabase
+    .from("courses")
+    .update({ no_of_tutors_assigned: restoreTo })
+    .eq("id", courseId)
+    .eq("no_of_tutors_assigned", onlyIfStill)
+    .select()
+    .single();
+
+  if (error) {
+    console.warn(
+      "Failed to roll back no_of_tutors_assigned after a lost race:",
+      error.message,
+    );
+  }
+}
+
 // POST /api/tutor-applications/bulk-approve — approve several applications in
 // one action. Runs the same eligibility/capacity checks a single PATCH would,
 // one row at a time (not in parallel) so two applications for the same course
@@ -697,6 +708,18 @@ router.post("/bulk-approve", async (req, res) => {
       continue;
     }
 
+    // The list these came from only shows pending applications, so a row
+    // that is anything else (e.g. rejected in another tab meanwhile) is a
+    // changed-under-you conflict, not something to quietly re-approve.
+    if (application.status !== "pending") {
+      results.push({
+        id,
+        success: false,
+        error: STALE_APPLICATION_SHORT,
+      });
+      continue;
+    }
+
     const { data: course, error: courseError } = await supabase
       .from("courses")
       .select("no_of_tutors_assigned, tutors_needed, course_code, course_name")
@@ -718,22 +741,61 @@ router.post("/bulk-approve", async (req, res) => {
       continue;
     }
 
-    const { error: bumpError } = await supabase
+    // Guarded counter bump: the WHERE only matches while the course's count
+    // still holds the value this iteration read, so a concurrent approval
+    // for the same course fails this item instead of being overwritten.
+    let bumpQuery = supabase
       .from("courses")
       .update({ no_of_tutors_assigned: next })
       .eq("id", application.course_id);
 
+    if (course.no_of_tutors_assigned != null) {
+      bumpQuery = bumpQuery.eq(
+        "no_of_tutors_assigned",
+        course.no_of_tutors_assigned,
+      );
+    }
+
+    const { error: bumpError } = await bumpQuery.select().single();
+
     if (bumpError) {
-      results.push({ id, success: false, error: bumpError.message });
+      results.push({
+        id,
+        success: false,
+        error:
+          bumpError.code === "PGRST116"
+            ? STALE_APPLICATION_SHORT
+            : bumpError.message,
+      });
       continue;
     }
 
     const { error: updateError } = await supabase
       .from("tutor_subject_preference")
       .update({ status: "approved" })
-      .eq("id", id);
+      .eq("id", id)
+      // Atomic backstop, mirroring the single-application PATCH: the write
+      // only lands if the status is still the one this iteration read.
+      .eq("status", application.status)
+      .select()
+      .single();
 
     if (updateError) {
+      if (updateError.code === "PGRST116") {
+        // Put the counter back — the approval this bump was for never
+        // actually landed.
+        await rollbackCourseCount(
+          application.course_id,
+          Math.max(course.no_of_tutors_assigned ?? 0, 0),
+          next,
+        );
+        results.push({
+          id,
+          success: false,
+          error: STALE_APPLICATION_SHORT,
+        });
+        continue;
+      }
       results.push({ id, success: false, error: updateError.message });
       continue;
     }
@@ -746,6 +808,15 @@ router.post("/bulk-approve", async (req, res) => {
     }).catch((err) =>
       console.warn("Failed to notify about application status:", err),
     );
+
+    await recordAudit({
+      entityType: "tutor_subject_preference",
+      entityId: id,
+      action: "approved",
+      actorId: req.body?.organiserId ?? null,
+      before: { status: application.status },
+      after: { status: "approved", via: "bulk-approve" },
+    });
 
     results.push({ id, success: true, name: application.Tutor_name });
   }
@@ -769,6 +840,7 @@ router.patch("/:id", async (req, res) => {
     reason,
     rejectionReason,
     approvalReason,
+    expectedStatus,
   } = req.body ?? {};
 
   if (!VALID_STATUSES.includes(status)) {
@@ -804,6 +876,15 @@ router.patch("/:id", async (req, res) => {
     }
   }
 
+  // The caller declares the status it acted on. Validated last of the input
+  // checks so bad-input errors above keep their more specific messages.
+  if (!VALID_STATUSES.includes(expectedStatus)) {
+    return res.status(400).json({
+      error:
+        "expectedStatus is required and must be pending, approved or rejected",
+    });
+  }
+
   const bypassedRules = [];
 
   const { data: application, error: applicationError } = await supabase
@@ -824,9 +905,22 @@ router.patch("/:id", async (req, res) => {
     });
   }
 
+  // Optimistic-concurrency check: the request declares the status it acted
+  // on, and a mismatch means another organiser already moved it — refuse
+  // rather than overwrite their change.
+  if (application.status !== expectedStatus) {
+    return res.status(409).json({
+      error: STALE_APPLICATION_ERROR,
+    });
+  }
+
   const wasApproved = application.status === "approved";
 
   const willBeApproved = status === "approved";
+
+  // Filled in once the course counter has been written, so a status write
+  // that loses its race moments later can put it back.
+  let bumpRollback = null;
 
   if (wasApproved !== willBeApproved) {
     const { data: course, error: courseError } = await supabase
@@ -907,18 +1001,44 @@ router.patch("/:id", async (req, res) => {
       }
     }
 
-    const { error: bumpError } = await supabase
+    const guardedCount = Math.max(next, 0);
+
+    // Optimistic-concurrency guard on the counter: the WHERE only matches
+    // while the count is still the one this request read, so a course
+    // another organiser just changed fails the bump instead of being
+    // clobbered. (A null column can't be compared with eq, so it's
+    // skipped — a null count is treated like a fresh 0.)
+    let bumpQuery = supabase
       .from("courses")
       .update({
-        no_of_tutors_assigned: Math.max(next, 0),
+        no_of_tutors_assigned: guardedCount,
       })
       .eq("id", application.course_id);
 
+    if (course.no_of_tutors_assigned != null) {
+      bumpQuery = bumpQuery.eq(
+        "no_of_tutors_assigned",
+        course.no_of_tutors_assigned,
+      );
+    }
+
+    const { error: bumpError } = await bumpQuery.select().single();
+
     if (bumpError) {
+      if (bumpError.code === "PGRST116") {
+        return res.status(409).json({
+          error: STALE_COURSE_ERROR,
+        });
+      }
       return res.status(500).json({
         error: bumpError.message,
       });
     }
+
+    bumpRollback = {
+      restoreTo: Math.max(course.no_of_tutors_assigned ?? 0, 0),
+      onlyIfStill: guardedCount,
+    };
   }
 
   const { data, error } = await supabase
@@ -929,6 +1049,9 @@ router.patch("/:id", async (req, res) => {
       approval_reason: status === "approved" ? approvalReason.trim() : null,
     })
     .eq("id", req.params.id)
+    // Atomic backstop for the check above: the write itself only lands if
+    // the row still holds the status this request read (PGRST116 → 409).
+    .eq("status", expectedStatus)
     .select(
       `
         *,
@@ -946,6 +1069,20 @@ router.patch("/:id", async (req, res) => {
     .single();
 
   if (error) {
+    if (error.code === "PGRST116") {
+      // Someone changed the row between the read and this write. Undo the
+      // counter bump if there was one, so the course doesn't drift.
+      if (bumpRollback) {
+        await rollbackCourseCount(
+          application.course_id,
+          bumpRollback.restoreTo,
+          bumpRollback.onlyIfStill,
+        );
+      }
+      return res.status(409).json({
+        error: STALE_APPLICATION_ERROR,
+      });
+    }
     return res.status(500).json({
       error: error.message,
     });
@@ -990,6 +1127,21 @@ router.patch("/:id", async (req, res) => {
     );
   }
 
+  // Awaited (not fire-and-forget) so the write actually happens before the
+  // response ends — this runs on Cloudflare Workers in production, where
+  // execution can be torn down right after the response is sent.
+  await recordAudit({
+    entityType: "tutor_subject_preference",
+    entityId: application.id,
+    action: status,
+    actorId: organiserId ?? null,
+    before: { status: application.status },
+    after: {
+      status,
+      overridden: bypassedRules.map((r) => r.rule_overridden),
+    },
+  });
+
   res.json(data);
 });
 
@@ -1030,6 +1182,10 @@ router.patch("/:id/lock", async (req, res) => {
     .from("tutor_subject_preference")
     .update({ locked: true })
     .eq("id", req.params.id)
+    // Atomic guards mirroring the checks above: only an approved,
+    // still-unlocked row is locked — 0 matches is a 409, not a silent no-op.
+    .eq("locked", false)
+    .eq("status", "approved")
     .select(
       `
         *,
@@ -1047,6 +1203,12 @@ router.patch("/:id/lock", async (req, res) => {
     .single();
 
   if (error) {
+    if (error.code === "PGRST116") {
+      return res.status(409).json({
+        error:
+          "This assignment was just changed by someone else — reload to see the latest state.",
+      });
+    }
     return res.status(500).json({ error: error.message });
   }
 
@@ -1096,6 +1258,16 @@ router.delete("/:id", async (req, res) => {
     .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });
+
+  await recordAudit({
+    entityType: "tutor_subject_preference",
+    entityId: application.id,
+    action: "withdrawn",
+    actorId: application.tutor_id,
+    before: { status: application.status },
+    after: null,
+  });
+
   res.status(204).end();
 });
 

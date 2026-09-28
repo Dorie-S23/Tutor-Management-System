@@ -12,6 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
   </head>
 
   <body data-page-role="volunteer">
@@ -37,9 +38,12 @@
 
       <nav class="tab-nav" aria-label="Main navigation">
         <a href="StudentView.html">Dashboard</a>
+        <a href="my-sessions.html">My sessions</a>
         <a href="volunteer-log-hours.html">Log Hours</a>
-        <a href="student_calender.html" aria-current="page">Calendar</a>
+        <a href="student-calendar.html" aria-current="page">Calendar</a>
         <a href="volunteer-timesheets.html">Completed sessions</a>
+        <a href="student-profile.html">Profile</a>
+        <a href="StudentView.html?tour=1">Take a Tour</a>
       </nav>
 
       <div class="navbar-right">
@@ -110,7 +114,7 @@
     <main class="app-main">
       <div class="page-head">
         <div>
-          <h1>My calendar</h1>
+          <h1 id="welcome-heading">My calendar</h1>
           <p class="page-sub">
             Your weekly classes plus the volunteer sessions you're covering.
           </p>

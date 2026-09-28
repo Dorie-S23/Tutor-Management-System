@@ -1,48 +1,72 @@
 /* ============================================================
-   Volunteer dashboard (StudentView.html)
-
-   Stat cards, "Available volunteer sessions" (open modules you
-   can claim — each card carries your application's state) and
-   your upcoming sessions. Renderers guard on their containers
-   existing so a missing one degrades quietly.
+   Student Dashboard
+   Two ways to volunteer, both living in the course_volunteers table:
+   - Modules You Can Tutor: a mark-based application for a whole course
+     (has a mark, no session_date). Being approved for one means taking on
+     that course's own recurring weekly Tutorial/Lab slot (Day_of_tut etc.
+     sit directly on the course row — there's no separate "sessions" table
+     for this, same as how a regularly-assigned tutor's schedule works).
+   - Open Sessions You Can Cover: an organiser-posted, dated overflow gap
+     a student claims (has a session_date, no mark) — a one-off date, not
+     a recurring commitment. A claim starts 'open', moves to 'pending' on
+     claim, then approved/rejected exactly like a course application.
+   My Applications shows both kinds together. Upcoming Sessions surfaces
+   both: approved future-dated claims, and the next occurrence of every
+   approved whole-course application's recurring slot — plus the covers a
+   volunteer picks up from another tutor's excusal, with the usual "can't
+   make it" swap controls.
    ============================================================ */
 
 import { getEntries, requireRole } from "./storage.js";
-import { highlightActiveTab } from "./nav.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
-import { initTranscriptUpload } from "./transcript-upload.js";
 
-// These pages are volunteer-only — symmetric with the guard on the tutor
-// pages, so a tutor can't wander in here either.
+// This page (StudentView.html) is student-only — symmetric with the guard
+// on the tutor pages, so a tutor can't wander in here either. (storage.js
+// normalises the legacy "student" role to "volunteer".)
 const currentUser = requireRole("volunteer");
 if (!currentUser) {
   throw new Error("Not authorized");
 }
 
-highlightActiveTab();
-
+const welcomeHeadingEl = document.getElementById("welcome-heading");
+const hoursVolunteeredEl = document.getElementById("stat-hours-volunteered");
 const courseListEl = document.getElementById("courseList");
+const openSessionsListEl = document.getElementById("openSessionsList");
+const pendingListEl = document.getElementById("pendingList");
 const upcomingSessionsListEl = document.getElementById("upcomingSessionsList");
-const availableHintEl = document.getElementById("available-hint");
 
-// The tour points at the stat row and lists below, so auto-starting it
-// stays behind this guard.
-const isDashboard = !!document.querySelector(".stat-grid");
+welcomeHeadingEl.textContent = `Welcome, ${currentUser.name}!`;
 
+// Guarded write for the stat cards — a missing card is skipped rather than
+// breaking the renderer that would have updated it.
 function setStat(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
 }
 
+function formatSessionDate(dateStr) {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function formatSessionTime(t) {
+  return t ? t.slice(0, 5) : "";
+}
+
+function sessionDetailLine(app) {
+  const date = formatSessionDate(app.session_date);
+  const time = `${formatSessionTime(app.start_time)}–${formatSessionTime(app.end_time)}`;
+  const venue = app.venue ? ` • ${app.venue}` : "";
+  return `${date}, ${time}${venue}`;
+}
+
 // ---------- icons (inline SVG, matching the Figma cards) ----------
 
 const CALENDAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
-const CLOCK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-// ---------- upcoming sessions ----------
 
-// Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching
-// JS Date.getDay(), so a course's weekly session day can be projected onto
-// the next real calendar date.
+// Mirrors DAY_NAMES in server/dayNames.js and dashboard.js's own copy —
+// index 0 = Sunday, matching Date#getDay() — so a course's weekly
+// Day_of_tut/Day_of_lab can be projected onto the next real calendar date.
 const DAY_NAMES = [
   "Sunday",
   "Monday",
@@ -53,51 +77,326 @@ const DAY_NAMES = [
   "Saturday",
 ];
 
-// A course can run a Tutorial, a Lab, or both — each is its own weekly
-// session. Returns whichever of the two are fully scheduled.
-function courseSessions(course) {
-  return [
-    {
+function nextOccurrenceIso(dayName) {
+  const targetIdx = DAY_NAMES.indexOf(dayName);
+  if (targetIdx === -1) return null;
+  const d = new Date();
+  d.setDate(d.getDate() + ((targetIdx - d.getDay() + 7) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+// A course's own recurring Tutorial/Lab slot — shown on the course card
+// before volunteering (so a student knows the time commitment up front)
+// and used to build a recurring entry in Upcoming Sessions once approved.
+// The key ("tutorial"/"lab") lines it up with an excusal's session_type.
+function courseSchedule(course) {
+  const sessions = [];
+  if (course.Day_of_tut && course.tutor_start_time && course.tutor_end_time) {
+    sessions.push({
       key: "tutorial",
       type: "Tutorial",
       day: course.Day_of_tut,
       start: course.tutor_start_time,
       end: course.tutor_end_time,
       venue: course.venues,
-    },
-    {
+    });
+  }
+  if (course.Day_of_lab && course.lab_start_time && course.lab_end_time) {
+    sessions.push({
       key: "lab",
       type: "Lab",
       day: course.Day_of_lab,
       start: course.lab_start_time,
       end: course.lab_end_time,
       venue: course.lab_venues,
-    },
-  ].filter((s) => s.day && s.start && s.end);
+    });
+  }
+  return sessions;
 }
 
-function formatTimes(session) {
-  return `${session.start.slice(0, 5)}–${session.end.slice(0, 5)}`;
+function courseScheduleSummary(course) {
+  return courseSchedule(course)
+    .map((s) => {
+      const venueNote = s.venue ? ` (${s.venue})` : "";
+      return `${s.type} ${s.day} ${formatSessionTime(s.start)}–${formatSessionTime(s.end)}${venueNote}`;
+    })
+    .join(" • ");
 }
 
-function toLocalDateStr(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+async function renderHoursVolunteered() {
+  const entries = await getEntries();
+  hoursVolunteeredEl.textContent = entries.reduce(
+    (sum, entry) => sum + Number(entry.hours),
+    0,
+  );
 }
 
-// Days from today until the next occurrence of a weekly session
-// (0 = today ... 6). A session that has already ended today counts as
-// next week's.
-function daysUntil(dayName, endTime) {
-  const targetIdx = DAY_NAMES.indexOf(dayName);
-  if (targetIdx === -1) return null;
-  const now = new Date();
-  const days = (targetIdx - now.getDay() + 7) % 7;
-  const nowHHMM = now.toTimeString().slice(0, 5);
-  return days === 0 && endTime.slice(0, 5) <= nowHHMM ? 7 : days;
+// ---------- hours this month ----------
+
+async function renderHoursMonth() {
+  const el = document.getElementById("stat-hours-month");
+  if (!el) return;
+  try {
+    const entries = await getEntries();
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const hours = entries
+      .filter((entry) => (entry.date || "").startsWith(monthPrefix))
+      .reduce((sum, entry) => sum + Number(entry.hours), 0);
+    el.textContent = `${Number(hours.toFixed(1))}h`;
+  } catch {
+    el.textContent = "0h";
+  }
 }
+
+async function renderCourses(applications) {
+  courseListEl.innerHTML = "";
+
+  let courses;
+  try {
+    const res = await fetch("/api/courses");
+    if (!res.ok) throw new Error("Failed to load courses");
+    courses = await res.json();
+  } catch (err) {
+    courseListEl.innerHTML = `<p class="empty-state">Couldn't load courses right now.</p>`;
+    return;
+  }
+
+  // Only show courses that still need tutors - hide ones already fully staffed.
+  const openCourses = courses.filter(
+    (course) => (course.no_of_tutors_assigned || 0) < course.tutors_needed,
+  );
+
+  setStat("stat-open-sessions", String(openCourses.length));
+
+  if (openCourses.length === 0) {
+    courseListEl.innerHTML = `<p class="empty-state">No courses need tutors right now — check back soon.</p>`;
+    return;
+  }
+
+  // A course the student already has an application or claimed session
+  // against (any status) shows that status instead of a Volunteer button —
+  // otherwise it looks like they can apply again, and clicking Volunteer
+  // just fails with "you've already volunteered for this course".
+  const applicationByCourseId = new Map(
+    (applications || []).map((app) => [app.course_id, app]),
+  );
+
+  openCourses.forEach((course) => {
+    const article = document.createElement("article");
+    article.className = "session-card";
+    article.dataset.courseId = String(course.id);
+
+    const scheduleSummary = courseScheduleSummary(course);
+    const scheduleHtml = scheduleSummary
+      ? `<p class="session-note">${scheduleSummary}</p>`
+      : "";
+
+    const existingApp = applicationByCourseId.get(course.id);
+    if (existingApp) {
+      const status = existingApp.status || "pending";
+      const reasonHtml =
+        status === "rejected" && existingApp.rejection_reason
+          ? `<p class="session-note">Reason: ${existingApp.rejection_reason}</p>`
+          : "";
+      article.innerHTML = `
+        <div class="session-card__body">
+          <h3>${course.course_code}</h3>
+          <p class="session-meta">${course.course_name}</p>
+          <p class="session-note">${course.department}</p>
+          ${scheduleHtml}
+          <span class="status-pill ${status}">${status[0].toUpperCase()}${status.slice(1)}</span>
+          ${reasonHtml}
+        </div>
+      `;
+
+      // A rejected row also gets a recovery path here — the unique
+      // (user, course) constraint blocks a fresh application while the old
+      // one still exists.
+      if (status === "rejected") {
+        const reapplyBtn = document.createElement("button");
+        reapplyBtn.type = "button";
+        reapplyBtn.className = "btn-link";
+        reapplyBtn.textContent = "Remove & volunteer again";
+        reapplyBtn.addEventListener("click", () =>
+          removeVolunteerApplication(course.id),
+        );
+        article.appendChild(reapplyBtn);
+      }
+
+      courseListEl.appendChild(article);
+      return;
+    }
+
+    const minMarkNote = Number.isInteger(course.min_mark)
+      ? ` • Min mark ${course.min_mark}`
+      : "";
+    article.innerHTML = `
+      <div class="session-card__body">
+        <h3>${course.course_code}</h3>
+        <p class="session-meta">${course.course_name}</p>
+        <p class="session-note">${course.department}${minMarkNote}</p>
+        ${scheduleHtml}
+      </div>
+      <button type="button" class="volunteer-btn btn btn-primary">Volunteer</button>
+      <div class="mark-form" hidden>
+        <div class="form-field">
+          <label>Your mark for this module</label>
+          <input type="number" class="mark-input" min="0" max="100" placeholder="0-100" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="submit-mark-btn btn btn-primary">Submit</button>
+          <button type="button" class="cancel-mark-btn btn-secondary">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    const volunteerBtn = article.querySelector(".volunteer-btn");
+    const markForm = article.querySelector(".mark-form");
+    const markInput = article.querySelector(".mark-input");
+    const submitMarkBtn = article.querySelector(".submit-mark-btn");
+    const cancelMarkBtn = article.querySelector(".cancel-mark-btn");
+
+    volunteerBtn.addEventListener("click", () => {
+      volunteerBtn.hidden = true;
+      markForm.hidden = false;
+      markInput.value = "";
+      markInput.focus();
+    });
+
+    cancelMarkBtn.addEventListener("click", () => {
+      markForm.hidden = true;
+      volunteerBtn.hidden = false;
+    });
+
+    markInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") submitMarkBtn.click();
+    });
+
+    submitMarkBtn.addEventListener("click", async () => {
+      const mark = Number(markInput.value);
+      if (!Number.isInteger(mark) || mark < 0 || mark > 100) {
+        showToast("Enter a valid mark between 0 and 100");
+        return;
+      }
+      if (Number.isInteger(course.min_mark) && mark < course.min_mark) {
+        showToast(
+          `You need at least ${course.min_mark} for ${course.course_code} to volunteer`,
+        );
+        return;
+      }
+
+      submitMarkBtn.disabled = true;
+      try {
+        const res = await fetch("/api/course-volunteers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            courseId: course.id,
+            mark,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast(data.error || "Could not submit your application");
+          submitMarkBtn.disabled = false;
+          return;
+        }
+
+        showToast(
+          `Applied for ${course.course_code} — waiting for organiser approval`,
+        );
+        await refreshVolunteerState();
+      } catch (err) {
+        showToast("Something went wrong, try again");
+        submitMarkBtn.disabled = false;
+      }
+    });
+
+    courseListEl.appendChild(article);
+  });
+
+  enableCardKeyboardNav(courseListEl);
+}
+
+async function renderOpenSessions() {
+  openSessionsListEl.innerHTML = "";
+
+  let sessions;
+  try {
+    const res = await fetch("/api/course-volunteers?status=open");
+    if (!res.ok) throw new Error("Failed to load open sessions");
+    sessions = await res.json();
+  } catch (err) {
+    openSessionsListEl.innerHTML = `<p class="empty-state">Couldn't load open sessions right now.</p>`;
+    return;
+  }
+
+  if (sessions.length === 0) {
+    openSessionsListEl.innerHTML = `<p class="empty-state">No open sessions right now — check back soon.</p>`;
+    return;
+  }
+
+  sessions.forEach((session) => {
+    const article = document.createElement("article");
+    article.className = "session-card";
+    const reasonHtml = session.reason
+      ? `<p class="session-note">${session.reason}</p>`
+      : "";
+    article.innerHTML = `
+      <div class="session-card__body">
+        <h3>${session.courses.course_code}</h3>
+        <p class="session-meta">${session.courses.course_name}</p>
+        <p class="session-note">${sessionDetailLine(session)}</p>
+        ${reasonHtml}
+      </div>
+    `;
+
+    const claimBtn = document.createElement("button");
+    claimBtn.type = "button";
+    claimBtn.className = "btn btn-primary";
+    claimBtn.textContent = "Claim";
+    claimBtn.addEventListener("click", () => claimSession(session, claimBtn));
+    article.appendChild(claimBtn);
+
+    openSessionsListEl.appendChild(article);
+  });
+
+  enableCardKeyboardNav(openSessionsListEl);
+}
+
+async function claimSession(session, button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/course-volunteers/${session.id}/claim`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: currentUser.id }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      showToast(body.error || "Couldn't claim that session.");
+      // Someone else may have just taken it — refresh so the list matches reality.
+      renderOpenSessions();
+      button.disabled = false;
+      return;
+    }
+
+    showToast(
+      `Claimed the ${session.courses.course_code} session on ${formatSessionDate(session.session_date)} — waiting for organiser approval`,
+    );
+    renderOpenSessions();
+    await refreshVolunteerState();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    button.disabled = false;
+  }
+}
+
+// ---------- session covers (excusal swaps) ----------
 
 function daysBetweenTodayAnd(dateStr) {
   const today = new Date();
@@ -112,66 +411,12 @@ function describeDaysAway(daysAway) {
   return `in ${daysAway} days`;
 }
 
-function formatDate(dateStr) {
+function formatCoverDate(dateStr) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, {
     weekday: "short",
     day: "numeric",
     month: "short",
   });
-}
-
-// The soonest Tutorial/Lab a course still has ahead of it — used to show
-// "Mon 18 Aug · 11:00 · 2h" on the claimable-session cards.
-function nextSessionOccurrence(course) {
-  const candidates = courseSessions(course)
-    .map((session) => ({
-      ...session,
-      daysAway: daysUntil(session.day, session.end),
-    }))
-    .filter((session) => session.daysAway !== null)
-    .sort((a, b) => a.daysAway - b.daysAway);
-  if (candidates.length === 0) return null;
-
-  const next = candidates[0];
-  const date = new Date();
-  date.setDate(date.getDate() + next.daysAway);
-  return { ...next, date };
-}
-
-function formatDuration(start, end) {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  const hours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (!Number.isFinite(hours) || hours <= 0) return null;
-  return `${Number(hours.toFixed(1))}h`;
-}
-
-// The next occurrence of each Tutorial/Lab on the courses this student is
-// approved to volunteer on.
-async function fetchRegularSessions() {
-  const res = await fetch(
-    `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
-  );
-  const rows = await res.json();
-  if (!res.ok) throw new Error(rows.error || "Failed to load sessions");
-
-  return rows
-    .filter((app) => (app.status || "").toLowerCase() === "approved")
-    .flatMap((app) => {
-      const course = app.courses;
-      if (!course) return [];
-      return courseSessions(course)
-        .map((s) => ({
-          kind: "regular",
-          courseId: app.course_id,
-          courseCode: course.course_code,
-          courseName: course.course_name,
-          label: `${s.type} · ${s.day} · ${formatTimes(s)}`,
-          startTime: s.start,
-          daysAway: daysUntil(s.day, s.end),
-        }))
-        .filter((s) => s.daysAway !== null);
-    });
 }
 
 // Sessions this student has been assigned to cover for an excused tutor.
@@ -181,7 +426,7 @@ async function fetchRegularSessions() {
 function toCoverEntry(excusal, kind) {
   const course = excusal.courses;
   const session = course
-    ? courseSessions(course).find((s) => s.key === excusal.session_type)
+    ? courseSchedule(course).find((s) => s.key === excusal.session_type)
     : null;
   const daysAway = daysBetweenTodayAnd(excusal.session_date);
   if (!course || daysAway < 0) return null;
@@ -203,16 +448,19 @@ function toCoverEntry(excusal, kind) {
     swapToName: excusal.swap_to_user_id
       ? excusal.swap_to?.name || "another volunteer"
       : null,
+    date: excusal.session_date,
+    startTime: session?.start || "00:00",
+    daysAway,
     label: [
       session?.type,
-      formatDate(excusal.session_date),
-      session ? formatTimes(session) : null,
+      formatCoverDate(excusal.session_date),
+      session
+        ? `${formatSessionTime(session.start)}–${formatSessionTime(session.end)}`
+        : null,
       session?.venue,
     ]
       .filter(Boolean)
-      .join(" · "),
-    startTime: session?.start || "00:00",
-    daysAway,
+      .join(" • "),
   };
 }
 
@@ -225,75 +473,12 @@ async function fetchExcusalsWhere(param, kind) {
   return rows.map((excusal) => toCoverEntry(excusal, kind)).filter(Boolean);
 }
 
-async function fetchUpcomingSessions() {
+async function fetchCoverEntries() {
   const results = await Promise.allSettled([
     fetchExcusalsWhere("swapToUserId", "swap_request"),
     fetchExcusalsWhere("coverUserId", "cover"),
-    fetchRegularSessions(),
   ]);
-  const sessions = results
-    .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
-    .sort(
-      (a, b) =>
-        a.daysAway - b.daysAway || a.startTime.localeCompare(b.startTime),
-    );
-  renderUpcomingSessions(sessions);
-}
-
-function renderUpcomingSessions(sessions) {
-  setStat("stat-upcoming-sessions", String(sessions.length));
-  if (!upcomingSessionsListEl) return;
-
-  if (sessions.length === 0) {
-    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions yet — claim a session above to get started.</p>`;
-    return;
-  }
-
-  upcomingSessionsListEl.innerHTML = "";
-
-  sessions.forEach((s) => {
-    const article = document.createElement("article");
-    article.className = "session-card";
-    article.dataset.courseId = s.courseId;
-
-    const body = document.createElement("div");
-    body.className = "session-card__body";
-
-    if (s.kind === "cover") {
-      article.dataset.coverId = s.excusalId;
-      body.appendChild(badge(`Covering for ${s.tutorName}`));
-    } else if (s.kind === "swap_request") {
-      article.dataset.swapId = s.excusalId;
-      body.appendChild(
-        badge(
-          `${s.coverName} asked you to take this over (covering for ${s.tutorName})`,
-        ),
-      );
-    }
-
-    body.insertAdjacentHTML(
-      "beforeend",
-      `<p class="session-code"></p>
-       <h3 class="session-title"></h3>
-       <p class="session-meta"><span>${CALENDAR_ICON}<span class="session-when"></span></span></p>`,
-    );
-    body.querySelector(".session-code").textContent = s.courseCode;
-    body.querySelector(".session-title").textContent = s.courseName;
-    body.querySelector(".session-when").textContent = s.label;
-
-    if (s.kind === "cover") {
-      body.appendChild(s.swapToName ? buildPendingSwap(s) : buildCantMakeIt(s));
-    } else if (s.kind === "swap_request") {
-      body.appendChild(buildSwapAnswer(s));
-    }
-
-    const pill = document.createElement("span");
-    pill.className = "status-pill";
-    pill.textContent = describeDaysAway(s.daysAway);
-
-    article.append(body, pill);
-    upcomingSessionsListEl.appendChild(article);
-  });
+  return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
 function badge(text) {
@@ -313,7 +498,7 @@ function actionButton(label, className, onClick) {
 }
 
 // POSTs to one of an excusal's cover/swap actions, toasting the outcome and
-// refreshing the list on success. Returns whether it worked.
+// refreshing the lists on success. Returns whether it worked.
 async function coverAction(excusalId, action, body, successMessage) {
   try {
     const res = await fetch(
@@ -330,7 +515,7 @@ async function coverAction(excusalId, action, body, successMessage) {
       return false;
     }
     showToast(successMessage);
-    fetchUpcomingSessions();
+    refreshVolunteerState();
     return true;
   } catch {
     showToast("Network error — couldn't reach the server.");
@@ -481,279 +666,289 @@ function buildSwapAnswer(request) {
   return wrap;
 }
 
-// ---------- hours this month ----------
+// ---------- applications + upcoming (shared by every refresh) ----------
 
-async function renderHoursMonth() {
-  const el = document.getElementById("stat-hours-month");
-  if (!el) return;
-  try {
-    const entries = await getEntries();
-    const now = new Date();
-    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const hours = entries
-      .filter((entry) => (entry.date || "").startsWith(monthPrefix))
-      .reduce((sum, entry) => sum + Number(entry.hours), 0);
-    el.textContent = `${Number(hours.toFixed(1))}h`;
-  } catch {
-    el.textContent = "0h";
-  }
-}
-
-// ---------- open modules (claim / apply cards) ----------
-
-// Fetched once and shared: the course cards use it to show their claim
-// state, and the "Pending claims" stat counts straight from it.
-let myApplicationsPromise = null;
-
-function loadMyApplications() {
-  if (!myApplicationsPromise) {
-    myApplicationsPromise = fetch(
-      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
-    ).then(async (res) => {
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load applications");
-      return data;
-    });
-  }
-  return myApplicationsPromise;
-}
-
-function refreshApplications() {
-  myApplicationsPromise = null;
-  return Promise.allSettled([renderCourses(), renderApplicationStats()]);
-}
-
-function buildMarkForm() {
-  const form = document.createElement("div");
-  form.className = "mark-form";
-  form.hidden = true;
-  form.innerHTML = `
-    <div class="form-field">
-      <label>Your mark for this module</label>
-      <input type="number" class="mark-input" min="0" max="100" placeholder="0-100" />
-    </div>
-    <div class="form-actions">
-      <button type="button" class="submit-mark-btn btn-primary">Submit</button>
-      <button type="button" class="cancel-mark-btn btn-secondary">Cancel</button>
-    </div>
-  `;
-  return form;
-}
-
-// Wires a claim/apply button + its mark form: open the form, validate the
-// mark, POST the application, then refresh the cards and the stat so every
-// view agrees on what's been claimed.
-function wireApplicationFlow(course, openBtn, markForm) {
-  const markInput = markForm.querySelector(".mark-input");
-  const submitMarkBtn = markForm.querySelector(".submit-mark-btn");
-  const cancelMarkBtn = markForm.querySelector(".cancel-mark-btn");
-
-  openBtn.addEventListener("click", () => {
-    openBtn.hidden = true;
-    markForm.hidden = false;
-    markInput.value = "";
-    markInput.focus();
-  });
-
-  cancelMarkBtn.addEventListener("click", () => {
-    markForm.hidden = true;
-    openBtn.hidden = false;
-  });
-
-  markInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") submitMarkBtn.click();
-  });
-
-  submitMarkBtn.addEventListener("click", async () => {
-    const mark = Number(markInput.value);
-    if (!Number.isInteger(mark) || mark < 0 || mark > 100) {
-      showToast("Enter a valid mark between 0 and 100");
-      return;
-    }
-
-    submitMarkBtn.disabled = true;
-    try {
-      const res = await fetch("/api/course-volunteers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          courseId: course.id,
-          mark,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        showToast(data.error || "Could not submit your application");
-        submitMarkBtn.disabled = false;
-        return;
-      }
-
-      showToast(
-        `Applied for ${course.course_code} — waiting for organiser approval`,
-      );
-      refreshApplications();
-    } catch (err) {
-      showToast("Something went wrong, try again");
-      submitMarkBtn.disabled = false;
-    }
-  });
-}
-
-// Dashboard card: the course's next session, styled like the prototype's
-// "Available volunteer sessions" rows.
-function buildSessionCard(course, myApp) {
-  const card = document.createElement("article");
-  card.className = "session-card";
-  card.dataset.courseId = course.id;
-
-  const body = document.createElement("div");
-  body.className = "session-card__body";
-  body.insertAdjacentHTML(
-    "beforeend",
-    `<p class="session-code"></p>
-     <h3 class="session-title"></h3>
-     <p class="session-meta"></p>`,
+async function fetchApplications() {
+  const res = await fetch(
+    `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
   );
-  body.querySelector(".session-code").textContent = course.course_code;
-  body.querySelector(".session-title").textContent = course.course_name;
-
-  const metaEl = body.querySelector(".session-meta");
-  const next = nextSessionOccurrence(course);
-  if (next) {
-    const duration = formatDuration(next.start, next.end);
-    metaEl.innerHTML = `<span>${CALENDAR_ICON}<span class="session-when"></span></span><span>${CLOCK_ICON}<span class="session-duration"></span></span>`;
-    metaEl.querySelector(".session-when").textContent = formatDate(
-      toLocalDateStr(next.date),
-    );
-    metaEl.querySelector(".session-duration").textContent =
-      `${next.start.slice(0, 5)}${duration ? ` · ${duration}` : ""}`;
-  } else {
-    metaEl.remove();
-  }
-
-  if (course.department) {
-    const note = document.createElement("p");
-    note.className = "session-note";
-    note.textContent = course.department;
-    body.appendChild(note);
-  }
-
-  card.appendChild(body);
-
-  if (myApp) card.dataset.applicationId = myApp.id;
-
-  if (myApp?.status === "rejected") {
-    // The unique (user, course) constraint blocks a fresh application, so
-    // offer to clear the rejected one first — the recovery path the old
-    // applications list used to provide.
-    const note = document.createElement("p");
-    note.className = "session-note";
-    note.textContent = "Your last application for this module wasn't accepted.";
-    const reapplyBtn = document.createElement("button");
-    reapplyBtn.type = "button";
-    reapplyBtn.className = "btn-link";
-    reapplyBtn.textContent = "Remove & volunteer again";
-    reapplyBtn.style.marginTop = "8px";
-    reapplyBtn.addEventListener("click", () =>
-      removeVolunteerApplication(course.id),
-    );
-    body.append(note, reapplyBtn);
-    return card;
-  }
-
-  if (myApp?.status === "pending" || myApp?.status === "approved") {
-    const pill = document.createElement("span");
-    pill.className = "claimed-pill";
-    pill.textContent =
-      myApp.status === "pending"
-        ? "Claimed by you — awaiting approval"
-        : "You're a volunteer on this module";
-    body.appendChild(pill);
-    return card;
-  }
-
-  const volunteerBtn = document.createElement("button");
-  volunteerBtn.type = "button";
-  volunteerBtn.className = "volunteer-btn";
-  volunteerBtn.textContent = "Volunteer";
-
-  const markForm = buildMarkForm();
-  card.append(volunteerBtn, markForm);
-  wireApplicationFlow(course, volunteerBtn, markForm);
-  return card;
+  if (!res.ok) throw new Error("Failed to load applications");
+  return res.json();
 }
 
-async function renderCourses() {
-  if (!courseListEl) return;
-
-  let courses;
-  let applications = [];
+// Shared by every action that changes what the student has applied/claimed
+// (submitting a mark, claiming a session, withdrawing, cover/swap actions) —
+// the stat cards, courseList, pendingList and upcomingSessionsList all key
+// off the same applications fetch, so they're always kept in sync with each
+// other rather than one being patched ad hoc while the others go stale.
+async function refreshVolunteerState() {
+  let applications = null;
   try {
-    const [coursesRes, apps] = await Promise.all([
-      fetch("/api/courses"),
-      loadMyApplications().catch(() => {
-        myApplicationsPromise = null;
-        return [];
-      }),
-    ]);
-    if (!coursesRes.ok) throw new Error("Failed to load courses");
-    courses = await coursesRes.json();
-    applications = apps;
+    applications = await fetchApplications();
   } catch (err) {
-    courseListEl.innerHTML = `<p class="empty-state">Couldn't load courses right now.</p>`;
-    return;
-  }
-
-  const myByCourseId = new Map(applications.map((app) => [app.course_id, app]));
-
-  // Only show courses that still need tutors - hide ones already fully staffed.
-  const openCourses = courses.filter(
-    (course) => (course.no_of_tutors_assigned || 0) < course.tutors_needed,
-  );
-
-  setStat("stat-open-sessions", String(openCourses.length));
-  if (availableHintEl) {
-    availableHintEl.textContent = `${openCourses.length} currently open`;
-  }
-
-  courseListEl.innerHTML = "";
-
-  if (openCourses.length === 0) {
-    courseListEl.innerHTML = `<p class="empty-state">No courses need tutors right now — check back soon.</p>`;
-    return;
-  }
-
-  openCourses.forEach((course) => {
-    courseListEl.appendChild(
-      buildSessionCard(course, myByCourseId.get(course.id)),
-    );
-  });
-}
-
-// ---------- my applications ----------
-
-// Feeds the "Pending claims" stat — how many applications an organiser
-// hasn't reviewed yet. Each card above shows its own application state.
-async function renderApplicationStats() {
-  let applications;
-  try {
-    applications = await loadMyApplications();
-  } catch {
-    setStat("stat-pending-claims", "0");
-    return;
+    // Individual render functions show their own error copy when passed null.
   }
 
   setStat(
     "stat-pending-claims",
-    String(applications.filter((app) => app.status === "pending").length),
+    String(
+      (applications || []).filter((app) => app.status === "pending").length,
+    ),
   );
+
+  // Covers picked up from another tutor's excusal aren't rows in
+  // course_volunteers, so they're fetched separately and merged into
+  // Upcoming Sessions alongside the claimed ones.
+  const coverEntries = await fetchCoverEntries();
+
+  await Promise.all([
+    renderCourses(applications),
+    renderApplications(applications),
+    renderUpcomingSessions(applications, coverEntries),
+  ]);
 }
 
-// Lets a rejected student volunteer dismiss it themselves so the unique
+function renderApplications(applications) {
+  pendingListEl.innerHTML = "";
+
+  if (!applications) {
+    pendingListEl.innerHTML = `<p class="empty-state">Couldn't load your applications right now.</p>`;
+    return;
+  }
+
+  if (applications.length === 0) {
+    pendingListEl.innerHTML = `<p class="empty-state">You haven't volunteered for anything yet.</p>`;
+    return;
+  }
+
+  applications.forEach((app) => {
+    const status = app.status || "pending";
+    const article = document.createElement("article");
+    article.className = "session-card";
+    article.dataset.applicationId = app.id;
+
+    const reasonHtml =
+      status === "rejected" && app.rejection_reason
+        ? `<p class="session-note">Reason: ${app.rejection_reason}</p>`
+        : status === "approved" && app.approval_reason
+          ? `<p class="session-note">Note: ${app.approval_reason}</p>`
+          : "";
+
+    // A row is either a whole-course application (has a mark) or a claimed
+    // overflow session (has a session_date instead) — never both.
+    const detailLine = app.session_date
+      ? sessionDetailLine(app)
+      : `Mark submitted: ${app.mark}`;
+
+    article.innerHTML = `
+      <div class="session-card__body">
+        <h3>${app.courses.course_code}</h3>
+        <p class="session-meta">${app.courses.course_name} • ${detailLine}</p>
+        ${reasonHtml}
+        <span class="status-pill ${status}">${status[0].toUpperCase()}${status.slice(1)}</span>
+      </div>
+    `;
+
+    // A pending or rejected row also gets a button — otherwise it's a dead
+    // end: the student can never clear it to try again, since the same
+    // (student, course) pair can't have a second row while this one exists.
+    if (status === "pending" || status === "rejected") {
+      const withdrawBtn = document.createElement("button");
+      withdrawBtn.type = "button";
+      withdrawBtn.className = "btn btn-secondary";
+      withdrawBtn.textContent = status === "rejected" ? "Remove" : "Withdraw";
+      withdrawBtn.addEventListener("click", () =>
+        withdrawApplication(app, withdrawBtn),
+      );
+      article.appendChild(withdrawBtn);
+    }
+
+    pendingListEl.appendChild(article);
+  });
+
+  enableCardKeyboardNav(pendingListEl);
+}
+
+// Only an approved, claimed session (session_date set) belongs in "Upcoming
+// Sessions" — a plain course application has no date to show yet, and a
+// rejected or still-pending claim isn't a real commitment. Past-dated ones
+// are excluded too — those live on My Sessions. A whole-course approval has
+// no session_date of its own — it's a standing recurring commitment, not a
+// one-off — so its "next occurrence" is derived from the course's own
+// Day_of_tut/Day_of_lab here rather than read off the row. One entry per
+// weekly Tutorial/Lab slot, showing the soonest date it'll next happen.
+function recurringSessionEntries(applications) {
+  const entries = [];
+  applications
+    .filter(
+      (app) => app.status === "approved" && !app.session_date && app.courses,
+    )
+    .forEach((app) => {
+      courseSchedule(app.courses).forEach((s) => {
+        const nextDate = nextOccurrenceIso(s.day);
+        if (!nextDate) return;
+        const venueNote = s.venue ? ` • ${s.venue}` : "";
+        entries.push({
+          courseId: app.course_id,
+          courseCode: app.courses.course_code,
+          date: nextDate,
+          startTime: s.start,
+          label: `${s.type}: ${formatSessionDate(nextDate)}, ${formatSessionTime(s.start)}–${formatSessionTime(s.end)}${venueNote} (repeats weekly)`,
+        });
+      });
+    });
+  return entries;
+}
+
+// A cover picked up from another tutor's excusal (or a swap request sent to
+// this student) — richer than a plain claimed session: it carries who it's
+// for, the "can't make it" swap controls and a "how soon" status pill.
+function renderCoverCard(article, entry) {
+  if (entry.kind === "cover") {
+    article.dataset.coverId = entry.excusalId;
+  } else {
+    article.dataset.swapId = entry.excusalId;
+  }
+
+  const body = document.createElement("div");
+  body.className = "session-card__body";
+
+  body.appendChild(
+    badge(
+      entry.kind === "cover"
+        ? `Covering for ${entry.tutorName}`
+        : `${entry.coverName} asked you to take this over (covering for ${entry.tutorName})`,
+    ),
+  );
+
+  body.insertAdjacentHTML(
+    "beforeend",
+    `<p class="session-code"></p>
+     <h3 class="session-title"></h3>
+     <p class="session-meta"><span>${CALENDAR_ICON}<span class="session-when"></span></span></p>`,
+  );
+  body.querySelector(".session-code").textContent = entry.courseCode;
+  body.querySelector(".session-title").textContent = entry.courseName;
+  body.querySelector(".session-when").textContent = entry.label;
+
+  if (entry.kind === "cover") {
+    body.appendChild(
+      entry.swapToName ? buildPendingSwap(entry) : buildCantMakeIt(entry),
+    );
+  } else {
+    body.appendChild(buildSwapAnswer(entry));
+  }
+
+  const pill = document.createElement("span");
+  pill.className = "status-pill";
+  pill.textContent = describeDaysAway(entry.daysAway);
+
+  article.append(body, pill);
+  return article;
+}
+
+function renderUpcomingSessions(applications, coverEntries = []) {
+  if (!applications) {
+    upcomingSessionsListEl.innerHTML = `<p class="empty-state">Couldn't load your sessions right now.</p>`;
+    return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const claimedSessions = applications
+    .filter(
+      (app) =>
+        app.status === "approved" &&
+        app.session_date &&
+        app.session_date >= today,
+    )
+    .map((app) => ({
+      courseId: app.course_id,
+      courseCode: app.courses.course_code,
+      date: app.session_date,
+      startTime: app.start_time,
+      label: sessionDetailLine(app),
+    }));
+
+  const upcoming = [
+    ...claimedSessions,
+    ...recurringSessionEntries(applications),
+    ...coverEntries,
+  ].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.startTime || "").localeCompare(b.startTime || ""),
+  );
+
+  setStat("stat-upcoming-sessions", String(upcoming.length));
+
+  if (upcoming.length === 0) {
+    upcomingSessionsListEl.innerHTML = `<p class="empty-state">No upcoming sessions</p>`;
+    return;
+  }
+
+  upcomingSessionsListEl.innerHTML = "";
+  upcoming.forEach((entry) => {
+    const article = document.createElement("article");
+    article.className = "session-card";
+    article.dataset.courseId = String(entry.courseId);
+
+    if (entry.kind) {
+      renderCoverCard(article, entry);
+    } else {
+      const body = document.createElement("div");
+      body.className = "session-card__body";
+      body.insertAdjacentHTML(
+        "beforeend",
+        `<h3></h3><p class="session-note"></p>`,
+      );
+      body.querySelector("h3").textContent = entry.courseCode;
+      body.querySelector(".session-note").textContent = entry.label;
+      article.appendChild(body);
+    }
+
+    upcomingSessionsListEl.appendChild(article);
+  });
+
+  enableCardKeyboardNav(upcomingSessionsListEl);
+}
+
+async function withdrawApplication(app, button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}&courseId=${encodeURIComponent(app.course_id)}`,
+      { method: "DELETE" },
+    );
+    if (!res.ok && res.status !== 204) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Couldn't withdraw that application.");
+      button.disabled = false;
+      return;
+    }
+
+    // A claimed session's row survives the DELETE (the server reopens it
+    // for someone else instead) — a plain course application's doesn't.
+    showToast(
+      app.session_date
+        ? `Released the ${app.courses.course_code} session on ${formatSessionDate(app.session_date)} back to the pool`
+        : app.status === "rejected"
+          ? `Removed your application for ${app.courses.course_code} — you can apply again`
+          : `Withdrew your application for ${app.courses.course_code}`,
+    );
+
+    // A full re-render (not a one-off DOM patch) so the course card, the
+    // applications list and upcoming sessions all agree on the new state.
+    await refreshVolunteerState();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    button.disabled = false;
+  }
+}
+
+// Lets a rejected student dismiss the application themselves so the unique
 // (user, course) constraint stops blocking them from volunteering again,
-// rather than waiting on an organiser to reset it.
+// rather than waiting on an organiser to reset it. Used by the "Remove &
+// volunteer again" link on a rejected course card.
 async function removeVolunteerApplication(courseId) {
   if (
     !confirm(
@@ -772,10 +967,74 @@ async function removeVolunteerApplication(courseId) {
       return;
     }
     showToast("Application removed.");
-    refreshApplications();
+    await refreshVolunteerState();
   } catch {
     showToast("Network error — couldn't reach the server.");
   }
+}
+
+// ---------- keyboard navigation ----------
+// Same roving-tabindex pattern as board.js's course list, generalised to
+// this page's four independent card lists: Up/Down/Home/End move focus
+// between the <article> cards in whichever list already has focus, instead
+// of scrolling the page. Each list is scoped to its own container (rather
+// than one page-wide listener like board.js) since there's no single
+// "active" list here for a key press to default to before the student has
+// tabbed into one.
+function isTypingInField() {
+  const active = document.activeElement;
+  return !!(
+    active &&
+    (active.tagName === "INPUT" ||
+      active.tagName === "TEXTAREA" ||
+      active.isContentEditable)
+  );
+}
+
+function enableCardKeyboardNav(container) {
+  const cards = () =>
+    Array.from(container.children).filter((el) => el.tagName === "ARTICLE");
+
+  cards().forEach((el, i) => {
+    el.tabIndex = i === 0 ? 0 : -1;
+  });
+
+  // The container itself persists across re-renders (only its <article>
+  // children get thrown away and rebuilt), so this only needs binding once.
+  if (container.dataset.keyboardNavBound) return;
+  container.dataset.keyboardNavBound = "true";
+
+  container.addEventListener("keydown", (event) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    if (isTypingInField()) return;
+
+    const els = cards();
+    if (els.length === 0) return;
+
+    const currentIndex = els.indexOf(document.activeElement);
+    let targetIndex;
+    switch (event.key) {
+      case "ArrowDown":
+        targetIndex =
+          currentIndex < 0 ? 0 : Math.min(currentIndex + 1, els.length - 1);
+        break;
+      case "ArrowUp":
+        targetIndex = currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0);
+        break;
+      case "Home":
+        targetIndex = 0;
+        break;
+      case "End":
+        targetIndex = els.length - 1;
+        break;
+    }
+
+    event.preventDefault();
+    els.forEach((el, i) => {
+      el.tabIndex = i === targetIndex ? 0 : -1;
+    });
+    els[targetIndex].focus();
+  });
 }
 
 // ---------- toast ----------
@@ -800,20 +1059,44 @@ const VOLUNTEER_TOUR_STEPS = [
   },
   {
     selector: "#courseList",
-    title: "Available sessions",
-    body: "Sessions you can volunteer for. Claim one, enter the mark you got in that module, and an organiser will review it.",
+    title: "Modules you can tutor",
+    body: 'Courses currently looking for volunteers show up here. Click "Volunteer" on one, enter the mark you got in that module, and submit — an organiser will review it.',
     placement: "top",
   },
   {
-    selector: "#upcomingSessionsList",
-    title: "Your upcoming sessions",
-    body: "Sessions you're approved for or covering — including swap requests from other volunteers.",
+    selector: "section[aria-labelledby='open-sessions-heading']",
+    title: "Open sessions you can cover",
+    body: "Specific, dated gaps an organiser has flagged — a one-off session with nobody to run it. Claim one and an organiser will confirm it.",
     placement: "top",
+  },
+  {
+    selector: "section[aria-labelledby='pending-heading']",
+    title: "My applications",
+    body: "Every module and claimed session you've volunteered for, with its outcome — including a reason if one was rejected. You can withdraw a pending one any time.",
+    placement: "top",
+  },
+  {
+    selector: "section[aria-labelledby='sessions-heading']",
+    title: "Upcoming sessions",
+    body: "Approved claims, your recurring weekly slots and any cover you've picked up show up here — closest first.",
+    placement: "top",
+  },
+  {
+    selector: "a[href='my-sessions.html']",
+    title: "My Sessions",
+    body: "A full view of your tutoring sessions, past and upcoming.",
+    placement: "bottom",
   },
   {
     selector: "a[href='volunteer-log-hours.html']",
-    title: "Log your hours",
-    body: "After a session, submit your attendance here so it shows up under Completed sessions.",
+    title: "Log Hours",
+    body: "After a session, log the hours you spent tutoring here.",
+    placement: "bottom",
+  },
+  {
+    selector: "a[href='student-calendar.html']",
+    title: "Calendar",
+    body: "See your sessions laid out by date.",
     placement: "bottom",
   },
 ];
@@ -822,34 +1105,25 @@ const tourLink = document.getElementById("tour-link");
 if (tourLink) {
   tourLink.addEventListener("click", (e) => {
     e.preventDefault();
-    if (isDashboard) {
-      window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
-        tourId: "volunteer-dashboard",
-        userId: currentUser.id,
-        force: true,
-      });
-    } else {
-      // The tour points at the dashboard's pieces — send people there (the
-      // dashboard sees ?tour=1 and shows the tour itself).
-      window.location.href = "StudentView.html?tour=1";
-    }
+    window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
+      tourId: "volunteer-dashboard",
+      userId: currentUser.id,
+      force: true,
+    });
   });
 }
 
 // ---------- init ----------
 
 (async () => {
-  // allSettled, not all: one widget's fetch failing (e.g. hours this month)
+  // allSettled, not all: one widget's fetch failing (e.g. hours volunteered)
   // shouldn't stop the others from rendering — including the highlights
   // below, which need the lists above to have rendered first.
   await Promise.allSettled([
+    renderHoursVolunteered(),
     renderHoursMonth(),
-    renderCourses(),
-    renderApplicationStats(),
-    fetchUpcomingSessions(),
-    // The transcript panel is below the course boards on this page; a
-    // volunteer application isn't accepted until one is on file.
-    initTranscriptUpload(currentUser.id),
+    renderOpenSessions(),
+    refreshVolunteerState(),
   ]);
 
   // Arriving from a "session changed" notification — scroll to and flash
@@ -858,7 +1132,7 @@ if (tourLink) {
   const highlightCourseId = consumeQueryParam("highlightCourse");
   if (highlightCourseId) {
     scrollAndHighlight(
-      upcomingSessionsListEl?.querySelector(
+      upcomingSessionsListEl.querySelector(
         `[data-course-id="${CSS.escape(highlightCourseId)}"]`,
       ),
     );
@@ -869,7 +1143,7 @@ if (tourLink) {
   const highlightCoverId = consumeQueryParam("highlightCover");
   if (highlightCoverId) {
     scrollAndHighlight(
-      upcomingSessionsListEl?.querySelector(
+      upcomingSessionsListEl.querySelector(
         `[data-cover-id="${CSS.escape(highlightCoverId)}"]`,
       ),
     );
@@ -879,32 +1153,28 @@ if (tourLink) {
   const highlightSwapId = consumeQueryParam("highlightSwap");
   if (highlightSwapId) {
     scrollAndHighlight(
-      upcomingSessionsListEl?.querySelector(
+      upcomingSessionsListEl.querySelector(
         `[data-swap-id="${CSS.escape(highlightSwapId)}"]`,
       ),
     );
   }
 
-  // Arriving from a "volunteer application status changed" notification —
-  // flash the card for that module (it shows your application's state).
+  // Arriving from a "volunteer application status changed" notification.
   const highlightApplicationId = consumeQueryParam("highlightApplication");
   if (highlightApplicationId) {
     scrollAndHighlight(
-      courseListEl?.querySelector(
+      pendingListEl.querySelector(
         `[data-application-id="${CSS.escape(highlightApplicationId)}"]`,
       ),
     );
   }
 
-  // ?tour=1 is set by the "Take a Tour" links on the other volunteer pages,
-  // which bounce visitors here because the tour points at the dashboard.
-  const wantsTour = consumeQueryParam("tour") === "1";
-
-  if (isDashboard) {
-    window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
-      tourId: "volunteer-dashboard",
-      userId: currentUser.id,
-      force: wantsTour,
-    });
-  }
+  // "Take the tour" on the other student pages links here with ?tour=1 —
+  // arriving with it means that click explicitly asked for the walkthrough,
+  // so replay it even if the once-per-user auto-show was already consumed.
+  window.Onboarding?.start(VOLUNTEER_TOUR_STEPS, {
+    tourId: "volunteer-dashboard",
+    userId: currentUser.id,
+    force: Boolean(consumeQueryParam("tour")),
+  });
 })();

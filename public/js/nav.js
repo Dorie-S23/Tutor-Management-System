@@ -14,3 +14,11 @@ export function highlightActiveTab() {
     link.classList.toggle("active", linkPage === currentPage);
   });
 }
+
+// Same "Welcome, {name}!" heading on every student page's header, so it
+// doesn't flip back to a generic title just because you clicked to a
+// different page.
+export function renderWelcomeHeading(name) {
+  const el = document.getElementById("welcome-heading");
+  if (el && name) el.textContent = `Welcome, ${name}!`;
+}

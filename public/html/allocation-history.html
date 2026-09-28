@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Allocation History | Tutor Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/global.css" />
+    <script src="../js/theme.js"></script>
+  </head>
+  <body>
+    <header class="board-header board-header--brand">
+      <hgroup class="header-left">
+        <p class="eyebrow">
+          <img src="../images/images.png" alt="" class="eyebrow-logo" />
+          School of Computer Science &amp; Applied Mathematics
+        </p>
+        <h1>Allocation History</h1>
+      </hgroup>
+
+      <img
+        src="../images/Wits-890x664.png"
+        alt="University of the Witwatersrand"
+        class="header-wits-logo"
+      />
+
+      <div class="header-actions">
+        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+      </div>
+      <button class="btn btn-danger" id="logout-button" type="button">
+        Logout
+      </button>
+    </header>
+
+    <main class="dashboard-layout">
+      <section class="card" aria-labelledby="draftsHeading">
+        <div class="assign-panel-head">
+          <h2 id="draftsHeading">Past Allocation Runs</h2>
+        </div>
+        <p class="hint">
+          Every whole-school auto allocation that's been run, published or not.
+          Compare an unpublished run against the current allocation to see what
+          would still land today before publishing it. Restoring a published run
+          reverts every application it approved back to what it was before, and
+          frees up the course slots again.
+        </p>
+
+        <div class="course-list" id="draftsList">
+          <!-- rendered by allocation-history.js -->
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="changeHistoryHeading">
+        <div class="assign-panel-head">
+          <h2 id="changeHistoryHeading">Full Change History</h2>
+        </div>
+        <p class="hint">
+          Every recorded approve, reject, claim and withdraw across tutor
+          applications and volunteer sessions, newest first.
+        </p>
+
+        <div class="course-list" id="historyList">
+          <!-- rendered by allocation-history.js -->
+        </div>
+      </section>
+    </main>
+
+    <dialog
+      class="modal modal-wide"
+      id="compareModal"
+      aria-labelledby="compareHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="compareHeading">Compare run with now</h2>
+          <button
+            class="modal-close"
+            id="compareCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="compareHint"></p>
+
+        <ul class="tutor-list" id="compareList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="compareEmpty" hidden>
+          This run proposed nothing.
+        </p>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="compareCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="comparePublishBtn"
+              type="button"
+            >
+              Publish selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="../js/allocation-history.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
+</html>

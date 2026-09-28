@@ -21,7 +21,8 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - **Fields**:
 - `id` (uuid, PK) — the Supabase Auth user UUID
 - `email` (text, required)
-- `name` (text)
+- `name` (text) — the account holder's full name; registration and the profile page both use a single full-name field
+- `cell_phone` (text) — not collected at registration, so this starts as `null`; filled in from the profile page (`/api/profile`), which checks it's a valid South African cell number
 - `role` (text) — `volunteer`, `tutor`, `organiser` or `super_organiser`. The educator role was dropped (see [Dev Plan → Roles](./dev-plan.mdx#roles)); legacy `educator` rows may still exist. Accounts created before the Volunteer rename store `student` here; the API accepts it as an alias for `volunteer`. The `super_organiser` value marks the one admin account (promoted by hand — see [Getting Started](./getting-started.mdx#4-set-up-organiser-access-one-off))
 - `auth_provider` (text) — `password` or `google`, set at registration
 

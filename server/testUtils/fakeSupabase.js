@@ -1,8 +1,11 @@
 // A minimal stand-in for the @supabase/supabase-js query builder, backed by
 // plain in-memory arrays instead of Postgres. Only supports what this repo's
 // routes actually call (select/insert/update/delete, eq, neq, in, order,
-// single, maybeSingle) — enough to unit-test route logic without a real
-// database. Note: it does NOT perform real relational joins — a `select`
+// limit, single, maybeSingle) — enough to unit-test route logic without a
+// real database. order() really sorts (ascending unless {ascending: false}
+// is passed) and limit() really truncates, so a route's ordering/capping
+// logic is genuinely exercised, not just assumed from fixture order. Note:
+// it does NOT perform real relational joins — a `select`
 // with an embedded table (e.g. "*, courses(hours_per_week)") just returns
 // whatever plain fields the row itself has, so tests that need a joined
 // shape back should seed the nested object directly on the row (e.g.
@@ -19,7 +22,6 @@
 //   const supabase = fakeSupabase(tables, {
 //     course_volunteers: [["user_id", "course_id"]],
 //   });
-//
 // A third argument adds a minimal Supabase Storage stand-in, backed by the
 // same plain-arrays idea: each bucket maps to an array of stored files
 // (path strings, or objects for richer seeds). The arrays are mutated in
@@ -31,8 +33,30 @@
 // friendly "not set up yet" error:
 //   const storageFiles = { transcripts: ["tutor-1/transcript.pdf"] };
 //   const supabase = fakeSupabase(tables, {}, storageFiles);
+//
+// A fourth argument — hooks — lets a test interleave a competing writer into
+// a route's sequence, to exercise optimistic-concurrency races:
+// onBeforeResolve(tableName, operation) runs just before every query
+// resolves ("operation" is "update", "delete" or "select"), so it can
+// mutate the seed rows the route is about to write, after the route has
+// already read them:
+//   const supabase = fakeSupabase(tables, {}, {}, {
+//     onBeforeResolve: (table, operation) => {
+//       if (table === "courses" && operation === "update") {
+//         // e.g. another organiser's approval landed first:
+//         tables.courses[0].no_of_tutors_assigned = 7;
+//       }
+//     },
+//   });
+// The hook must only mutate the seed arrays — issuing queries from inside it
+// would recurse back into the hook.
 
-function fakeSupabase(tables, uniqueConstraints = {}, storageFiles = {}) {
+function fakeSupabase(
+  tables,
+  uniqueConstraints = {},
+  storageFiles = {},
+  hooks = {},
+) {
   return {
     storage: {
       from(bucketName) {
@@ -142,7 +166,36 @@ function fakeSupabase(tables, uniqueConstraints = {}, storageFiles = {}) {
           return row[col] === val;
         });
 
+      // Matches Postgres's default unique-index behaviour: a row where any
+      // constrained column is null never conflicts with anything, including
+      // another null (NULL <> NULL) — e.g. several organiser-posted overflow
+      // sessions for the same course, all still unclaimed (user_id null),
+      // aren't duplicates of each other under a (user_id, course_id)
+      // constraint. `excludeRow` lets an update check against every row
+      // except the one being updated, so setting a row to its own existing
+      // values doesn't spuriously conflict with itself.
+      function hasConflict(candidate, excludeRow) {
+        return constraints.some(
+          (cols) =>
+            cols.every((c) => candidate[c] != null) &&
+            rows.some(
+              (existing) =>
+                existing !== excludeRow &&
+                cols.every((c) => existing[c] === candidate[c]),
+            ),
+        );
+      }
+
+      const CONFLICT_ERROR = {
+        code: "23505",
+        message: "duplicate key value violates unique constraint",
+      };
+
       function resolve(wantsSingle, allowNullSingle) {
+        if (hooks.onBeforeResolve) {
+          hooks.onBeforeResolve(tableName, pendingWrite?.type ?? "select");
+        }
+
         if (insertConflict) {
           return { data: null, error: insertConflict };
         }
@@ -150,12 +203,38 @@ function fakeSupabase(tables, uniqueConstraints = {}, storageFiles = {}) {
         let matched = rows.filter(matches);
 
         if (pendingWrite?.type === "update") {
+          for (const row of matched) {
+            const candidate = { ...row, ...pendingWrite.fields };
+            if (hasConflict(candidate, row)) {
+              return { data: null, error: CONFLICT_ERROR };
+            }
+          }
           matched.forEach((row) => Object.assign(row, pendingWrite.fields));
         } else if (pendingWrite?.type === "delete") {
           matched.slice().forEach((row) => {
             const index = rows.indexOf(row);
             if (index !== -1) rows.splice(index, 1);
           });
+        }
+
+        if (pendingOrder) {
+          const { column, ascending } = pendingOrder;
+          matched = matched.slice().sort((a, b) => {
+            if (a[column] === b[column]) return 0;
+            if (a[column] == null) return ascending ? -1 : 1;
+            if (b[column] == null) return ascending ? 1 : -1;
+            return ascending
+              ? a[column] > b[column]
+                ? 1
+                : -1
+              : a[column] > b[column]
+                ? -1
+                : 1;
+          });
+        }
+
+        if (pendingLimit != null) {
+          matched = matched.slice(0, pendingLimit);
         }
 
         if (wantsSingle) {
@@ -173,18 +252,6 @@ function fakeSupabase(tables, uniqueConstraints = {}, storageFiles = {}) {
           return { data: { ...matched[0] }, error: null };
         }
 
-        if (pendingOrder) {
-          const { column, ascending } = pendingOrder;
-          matched = matched.slice().sort((a, b) => {
-            if (a[column] < b[column]) return ascending ? -1 : 1;
-            if (a[column] > b[column]) return ascending ? 1 : -1;
-            return 0;
-          });
-        }
-        if (pendingLimit != null) {
-          matched = matched.slice(0, pendingLimit);
-        }
-
         return {
           data: matched.map((row) => ({ ...row })),
           error: null,
@@ -199,18 +266,8 @@ function fakeSupabase(tables, uniqueConstraints = {}, storageFiles = {}) {
         insert: (rowOrRows) => {
           const incoming = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
 
-          const conflicts = incoming.some((row) =>
-            constraints.some((cols) =>
-              rows.some((existing) =>
-                cols.every((c) => existing[c] === row[c]),
-              ),
-            ),
-          );
-          if (conflicts) {
-            insertConflict = {
-              code: "23505",
-              message: "duplicate key value violates unique constraint",
-            };
+          if (incoming.some((row) => hasConflict(row, null))) {
+            insertConflict = CONFLICT_ERROR;
             filters.length = 0;
             pendingWrite = null;
             return builder;

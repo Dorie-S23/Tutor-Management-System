@@ -1,4 +1,4 @@
-import { highlightActiveTab } from "./nav.js";
+import { highlightActiveTab, renderWelcomeHeading } from "./nav.js";
 import {
   requireRole,
   getEntriesForDate,
@@ -15,7 +15,7 @@ import {
 } from "./storage.js";
 
 // This script is shared by two pages: calendar.html (tutor) and
-// student_calender.html (student volunteer) — each declares which role it's
+// student-calendar.html (student volunteer) — each declares which role it's
 // for via data-page-role, so a user of the *other* role gets sent back to
 // their own dashboard instead of landing on a page built for someone else.
 const pageRole = document.body.dataset.pageRole || "tutor";
@@ -25,11 +25,15 @@ if (!currentUser) {
 }
 
 highlightActiveTab();
+renderWelcomeHeading(currentUser.name);
 
-// Tutorial/lab session pills come from this tutor's own approved course
-// assignments — meaningless for a student volunteer, who has none — so that
-// piece stays tied to the real role. Adding/editing/cancelling a class on
-// the calendar, though, is a plain scheduling tool either role can use.
+// Tutorial/lab session pills come from this user's own approved course
+// assignments — a tutor's via tutor_subject_preference, a student
+// volunteer's via a whole-course course_volunteers approval (a claimed
+// one-off overflow session isn't included here — it's a single date, not
+// a recurring slot, and already has its own place on the student
+// dashboard's Upcoming Sessions). Adding/editing/cancelling a class on the
+// calendar is a plain scheduling tool either role can use.
 const isTutor = currentUser.role === "tutor";
 const canManageSchedule = true;
 
@@ -64,11 +68,14 @@ function courseColor(courseId) {
   return COURSE_COLORS[Number(courseId) % COURSE_COLORS.length];
 }
 
-// Weekly-recurring Tutorial/Lab sessions for every module this tutor is
-// approved to tutor — flattened from courses (day/start/end/venue set
-// straight on the course row, no separate "sessions" table). Courses carry
-// no semester start/end date, so these repeat on every matching weekday
-// shown on the calendar, same as the organiser's timetable grid does.
+// Weekly-recurring Tutorial/Lab sessions for every module this user is
+// approved for — flattened from courses (day/start/end/venue set straight
+// on the course row, no separate "sessions" table). Courses carry no
+// semester start/end date, so these repeat on every matching weekday shown
+// on the calendar, same as the organiser's timetable grid does. Shared by
+// both the tutor path (tutor_subject_preference) and the student volunteer
+// path (a whole-course course_volunteers approval) below — same shape
+// either way, just a different source table.
 let courseSessions = [];
 
 // The tutor's own session excusals, keyed so render() can look up whether a
@@ -142,62 +149,84 @@ async function fetchCovers() {
   }
 }
 
+function sessionsFromCourse(course, courseId) {
+  const sessions = [];
+  if (!course) return sessions;
+
+  if (
+    course.Day_of_tut &&
+    course.tutor_start_time &&
+    course.tutor_end_time &&
+    DAY_NAME_TO_INDEX[course.Day_of_tut] !== undefined
+  ) {
+    sessions.push({
+      courseId,
+      courseCode: course.course_code,
+      type: "Tutorial",
+      dayIndex: DAY_NAME_TO_INDEX[course.Day_of_tut],
+      start: course.tutor_start_time.slice(0, 5),
+      end: course.tutor_end_time.slice(0, 5),
+      venue: course.venues || "",
+    });
+  }
+
+  if (
+    course.Day_of_lab &&
+    course.lab_start_time &&
+    course.lab_end_time &&
+    DAY_NAME_TO_INDEX[course.Day_of_lab] !== undefined
+  ) {
+    sessions.push({
+      courseId,
+      courseCode: course.course_code,
+      type: "Lab",
+      dayIndex: DAY_NAME_TO_INDEX[course.Day_of_lab],
+      start: course.lab_start_time.slice(0, 5),
+      end: course.lab_end_time.slice(0, 5),
+      venue: course.lab_venues || "",
+    });
+  }
+
+  return sessions;
+}
+
+async function fetchTutorCourseSessions() {
+  const res = await fetch(
+    `/api/tutor-applications?tutorId=${encodeURIComponent(currentUser.id)}`,
+  );
+  const rows = await res.json();
+  if (!res.ok) throw new Error(rows.error || "Failed to load course sessions");
+
+  return rows
+    .filter((app) => (app.status || "").toLowerCase() === "approved")
+    .flatMap((app) => sessionsFromCourse(app.courses, app.course_id));
+}
+
+// A claimed overflow session (has its own session_date) is deliberately
+// excluded here — it's a single date, not a recurring slot, and already
+// shown on the student dashboard's own Upcoming Sessions.
+async function fetchVolunteerCourseSessions() {
+  const res = await fetch(
+    `/api/course-volunteers?userId=${encodeURIComponent(currentUser.id)}`,
+  );
+  const rows = await res.json();
+  if (!res.ok) throw new Error(rows.error || "Failed to load course sessions");
+
+  return rows
+    .filter((app) => app.status === "approved" && !app.session_date)
+    .flatMap((app) => sessionsFromCourse(app.courses, app.course_id));
+}
+
 async function fetchCourseSessions() {
   if (!isTutor) {
     await fetchCovers();
-    return;
+  } else {
+    await fetchExcusals();
   }
-  await fetchExcusals();
   try {
-    const res = await fetch(
-      `/api/tutor-applications?tutorId=${encodeURIComponent(currentUser.id)}`,
-    );
-    const rows = await res.json();
-    if (!res.ok)
-      throw new Error(rows.error || "Failed to load course sessions");
-
-    const sessions = [];
-    rows
-      .filter((app) => (app.status || "").toLowerCase() === "approved")
-      .forEach((app) => {
-        const course = app.courses;
-        if (!course) return;
-
-        if (
-          course.Day_of_tut &&
-          course.tutor_start_time &&
-          course.tutor_end_time &&
-          DAY_NAME_TO_INDEX[course.Day_of_tut] !== undefined
-        ) {
-          sessions.push({
-            courseId: app.course_id,
-            courseCode: course.course_code,
-            type: "Tutorial",
-            dayIndex: DAY_NAME_TO_INDEX[course.Day_of_tut],
-            start: course.tutor_start_time.slice(0, 5),
-            end: course.tutor_end_time.slice(0, 5),
-            venue: course.venues || "",
-          });
-        }
-
-        if (
-          course.Day_of_lab &&
-          course.lab_start_time &&
-          course.lab_end_time &&
-          DAY_NAME_TO_INDEX[course.Day_of_lab] !== undefined
-        ) {
-          sessions.push({
-            courseId: app.course_id,
-            courseCode: course.course_code,
-            type: "Lab",
-            dayIndex: DAY_NAME_TO_INDEX[course.Day_of_lab],
-            start: course.lab_start_time.slice(0, 5),
-            end: course.lab_end_time.slice(0, 5),
-            venue: course.lab_venues || "",
-          });
-        }
-      });
-    courseSessions = sessions;
+    courseSessions = isTutor
+      ? await fetchTutorCourseSessions()
+      : await fetchVolunteerCourseSessions();
   } catch {
     courseSessions = [];
   }

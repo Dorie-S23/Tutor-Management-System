@@ -12,6 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
   </head>
 
   <body data-theme="organiser">
@@ -41,6 +42,7 @@
         <a href="timetable.html">Timetable</a>
         <a href="timesheet-review.html">Timesheets</a>
         <a href="hours-budget-report.html">Budget Report</a>
+        <a href="allocation-history.html">History</a>
         <!-- Revealed by user-badge.js for the super-organiser only. -->
         <a href="organiser-requests.html" data-super-only hidden>
           Organiser Requests
@@ -133,6 +135,9 @@
         <p class="hint" id="syncStatus" aria-live="polite"></p>
         <button class="btn-secondary" id="obviousFillBtn" type="button">
           Fill obvious assignments
+        </button>
+        <button class="btn-secondary" id="autoAllocateBtn" type="button">
+          Auto-allocate whole school
         </button>
       </div>
 
@@ -323,9 +328,43 @@
                     >0</span
                   >
                 </header>
+                <div
+                  class="preset-picker"
+                  id="presetPicker"
+                  role="group"
+                  aria-label="Ranking balance"
+                >
+                  <button
+                    type="button"
+                    class="preset-btn"
+                    data-preset="merit"
+                    aria-pressed="true"
+                  >
+                    Merit
+                  </button>
+                  <button
+                    type="button"
+                    class="preset-btn"
+                    data-preset="balanced"
+                    aria-pressed="false"
+                  >
+                    Balanced
+                  </button>
+                  <button
+                    type="button"
+                    class="preset-btn"
+                    data-preset="fairness"
+                    aria-pressed="false"
+                  >
+                    Fair hours
+                  </button>
+                </div>
                 <p class="hint">
                   Approve fills an open spot; reject frees it up for someone
                   else.
+                </p>
+                <p class="hint" id="presetHint">
+                  <!-- injected: what the active balance means, and who leads -->
                 </p>
                 <ul class="tutor-list" id="applicantList">
                   <!-- injected -->
@@ -368,10 +407,18 @@
                     Student volunteers
                   </h3>
                   <span class="activity-col__count" id="dVolunteered">0</span>
+                  <button
+                    class="btn-small"
+                    id="postOverflowSessionBtn"
+                    type="button"
+                  >
+                    + Post overflow session
+                  </button>
                 </header>
                 <p class="hint">
-                  Approve or reject students who've volunteered to be tutored in
-                  this module.
+                  Approve or reject students who've volunteered to help tutor
+                  this module, or post a specific gap below for someone to
+                  claim.
                 </p>
                 <ul class="tutor-list" id="volunteerList">
                   <!-- injected -->
@@ -735,6 +782,86 @@
     </dialog>
 
     <dialog
+      class="modal"
+      id="postOverflowSessionModal"
+      aria-labelledby="postOverflowSessionModalHeading"
+    >
+      <form method="dialog" class="modal-form" id="postOverflowSessionForm">
+        <header class="modal-head">
+          <h2 id="postOverflowSessionModalHeading">Post overflow session</h2>
+          <button
+            class="modal-close"
+            id="postOverflowSessionModalCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="field-error" id="postOverflowSessionFormError" hidden></p>
+
+        <p class="hint" id="postOverflowSessionModalContext"></p>
+
+        <label class="field">
+          <span class="field-label">Date</span>
+          <input type="date" id="overflowSessionDateInput" required />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Start time</span>
+          <input type="time" id="overflowSessionStartInput" required />
+        </label>
+
+        <label class="field">
+          <span class="field-label">End time</span>
+          <input type="time" id="overflowSessionEndInput" required />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Venue (optional)</span>
+          <input
+            type="text"
+            id="overflowSessionVenueInput"
+            placeholder="e.g. FNB1"
+          />
+        </label>
+
+        <label class="field">
+          <span class="field-label"
+            >Why this session needs covering (optional)</span
+          >
+          <textarea
+            id="overflowSessionReasonInput"
+            rows="2"
+            placeholder="e.g. Regular tutor is away that week"
+          ></textarea>
+        </label>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="postOverflowSessionCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="postOverflowSessionSubmitBtn"
+              type="submit"
+            >
+              Post session
+            </button>
+          </li>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog
       class="modal modal-wide"
       id="obviousFillModal"
       aria-labelledby="obviousFillHeading"
@@ -780,6 +907,57 @@
               type="button"
             >
               Approve selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <dialog
+      class="modal modal-wide"
+      id="autoAllocateModal"
+      aria-labelledby="autoAllocateHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="autoAllocateHeading">Auto-allocate whole school</h2>
+          <button
+            class="modal-close"
+            id="autoAllocateCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="autoAllocateHint"></p>
+
+        <ul class="tutor-list" id="autoAllocateList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="autoAllocateEmpty" hidden>
+          No course currently has both an open slot and an eligible pending
+          applicant.
+        </p>
+
+        <menu class="modal-actions">
+          <li>
+            <button
+              class="btn btn-ghost"
+              id="autoAllocateCancelBtn"
+              type="button"
+            >
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="autoAllocatePublishBtn"
+              type="button"
+            >
+              Publish selected
             </button>
           </li>
         </menu>
@@ -881,6 +1059,7 @@
     <script src="../js/user-badge.js"></script>
     <script src="../js/onboarding.js"></script>
     <script src="../js/universal-search.js"></script>
+    <script src="../js/allocation-objectives.js"></script>
     <script src="../js/board.js"></script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>

@@ -29,6 +29,7 @@ const rawCalendarJs = fs.readFileSync(
 // below), the rest just need to exist and not throw.
 const stubs = `
 function highlightActiveTab() {}
+function renderWelcomeHeading() {}
 function requireRole() {
   return { id: "tutor-1", role: "tutor" };
 }

@@ -17,6 +17,9 @@ const timesheetDisputesRoutes = require("./server/routes/timesheetDisputes");
 const organiserRequestsRoutes = require("./server/routes/organiserRequests");
 const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
 const notificationsRoutes = require("./server/routes/notifications");
+const auditLogRoutes = require("./server/routes/auditLog");
+const allocationDraftsRoutes = require("./server/routes/allocationDrafts");
+const profileRoutes = require("./server/routes/profile");
 const timetableRoutes = require("./server/routes/timetable");
 const transcriptRoutes = require("./server/routes/transcripts");
 
@@ -105,5 +108,14 @@ app.use("/api/timetable", timetableRoutes);
 
 // Applicant transcript upload + signed-URL viewing (Supabase Storage)
 app.use("/api/transcripts", transcriptRoutes);
+
+// Full change history across allocation decisions
+app.use("/api/audit-log", auditLogRoutes);
+
+// Whole-school auto allocation drafts + publish/restore
+app.use("/api/allocation-drafts", allocationDraftsRoutes);
+
+// Self-service profile for tutors and student volunteers
+app.use("/api/profile", profileRoutes);
 
 module.exports = app;

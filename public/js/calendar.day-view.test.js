@@ -26,6 +26,7 @@ const NL = String.fromCharCode(10);
 // for every date, which is all the day view needs to have something to draw.
 const stubs = `
 function highlightActiveTab() {}
+function renderWelcomeHeading() {}
 function requireRole() {
   return { id: "tutor-1", role: "tutor" };
 }

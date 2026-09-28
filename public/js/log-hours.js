@@ -7,6 +7,7 @@
 // tutor theme) while keeping every legacy hook — the #entry-form and the
 // per-month table — intact.
 
+import { highlightActiveTab, renderWelcomeHeading } from "./nav.js";
 import {
   requireRole,
   addEntry,
@@ -61,6 +62,43 @@ const attendanceCardEl = document.getElementById("attendanceCard");
 const scheduledBoxEl = document.getElementById("scheduledBox");
 const scheduledWhenEl = document.getElementById("scheduledWhen");
 const scheduledVenueEl = document.getElementById("scheduledVenue");
+
+highlightActiveTab();
+renderWelcomeHeading(currentUser.name);
+
+// This page is shared across roles (tutor, student volunteer, organiser,
+// educator), so the "Dashboard" and "Calendar" links have to point at
+// whichever version actually matches the signed-in user's role.
+const dashboardNavLink = document.getElementById("dashboard-nav-link");
+const calendarNavLink = document.getElementById("calendar-nav-link");
+const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
+const timesheetsNavLink = document.getElementById("timesheets-nav-link");
+const modulesNavLink = document.getElementById("modules-nav-link");
+const profileNavLink = document.getElementById("profile-nav-link");
+if (currentUser.role === "student") {
+  if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
+  // calendar.html is the tutor calendar (timetable import, recurring
+  // classes) — a student volunteer needs their own version instead, or
+  // they'd land on a tutor-only page with no way back except this link.
+  if (calendarNavLink) calendarNavLink.href = "student-calendar.html";
+  // Timesheets is a tutor-only payroll claim, and applying to tutor a
+  // module is a tutor-only concept — neither is useful to a student
+  // volunteer.
+  if (timesheetsNavLink) timesheetsNavLink.hidden = true;
+  if (modulesNavLink) modulesNavLink.hidden = true;
+  if (profileNavLink) profileNavLink.href = "student-profile.html";
+} else {
+  // "My Sessions" is a student-volunteer concept (sessions they've
+  // volunteered for) — hide it for anyone else (tutors, organisers,
+  // educators) so they can't wander onto a student-only page and get stuck
+  // (its Dashboard link only knows how to get back to StudentView.html).
+  if (mySessionsNavLink) mySessionsNavLink.hidden = true;
+  // Only tutors and student volunteers have a profile page — organisers
+  // and educators have no details to edit.
+  if (profileNavLink && currentUser.role !== "tutor") {
+    profileNavLink.hidden = true;
+  }
+}
 
 const form = document.getElementById("entry-form");
 const entryIdField = document.getElementById("entry-id");

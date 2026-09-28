@@ -3,15 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StudyConnect | Profile</title>
+    <title>Profile | Tutor Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="../css/global.css" />
+    <script src="../js/theme.js"></script>
   </head>
-
-  <body class="student-app">
-    <header>
-      <nav aria-label="Main navigation">
-        <a href="StudentView.html">Dashboard</a>
-        <a href="my-sessions.html">My Sessions</a>
+  <body class="tutor-app" data-page-role="tutor">
+    <header class="app-header">
+      <h1>Profile</h1>
+      <nav class="tab-nav">
+        <a href="dashboard.html">Dashboard</a>
+        <a href="log-hours.html">Log Hours</a>
+        <a href="calendar.html">Calendar</a>
+        <a href="timesheets.html">Timesheets</a>
+        <a href="modules.html">Module Application</a>
         <a href="profile.html" aria-current="page">Profile</a>
         <div class="notif-bell" id="notifBell">
           <button
@@ -60,72 +70,61 @@
     </header>
 
     <main>
-      <section aria-labelledby="page-heading">
-        <h2 id="page-heading">Profile</h2>
-        <p>Your info and the subjects you can help with.</p>
-      </section>
+      <div class="card">
+        <h2>Your details</h2>
+        <p class="card-hint">
+          Keep these up to date — they're used on your timesheet claims and by
+          the tutoring team to reach you. Your email is tied to your login and
+          can't be changed here; ask an organiser if it needs updating.
+        </p>
 
-      <section aria-labelledby="profile-heading" class="card">
-        <header>
-          <h2 id="profile-heading">Your details</h2>
-        </header>
-
-        <form id="profileForm" class="form-grid">
-          <div class="form-field">
-            <label for="fullName">Full name</label>
-            <input type="text" id="fullName" required />
-          </div>
-
-          <div class="form-field">
-            <label for="yearOfStudy">Year of study</label>
-            <input type="text" id="yearOfStudy" placeholder="e.g. 2nd year" />
-          </div>
-
-          <div class="form-field full-width">
-            <label>Subjects you can help with</label>
-            <div class="checkbox-row">
-              <label
-                ><input type="checkbox" name="subject" value="Mathematics" />
-                Mathematics</label
+        <form id="profile-form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="profile-name">Full name</label>
+              <input
+                type="text"
+                id="profile-name"
+                autocomplete="name"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="profile-email">Email address</label>
+              <input type="email" id="profile-email" readonly />
+            </div>
+            <div class="form-field">
+              <label for="profile-student-number">Student number</label>
+              <input type="text" id="profile-student-number" required />
+            </div>
+            <div class="form-field">
+              <label for="profile-cell-phone">Cell phone number</label>
+              <input
+                type="tel"
+                id="profile-cell-phone"
+                autocomplete="tel"
+                placeholder="e.g. 082 123 4567 or +27 82 123 4567"
+              />
+            </div>
+            <div class="form-actions">
+              <button
+                type="submit"
+                class="btn-primary"
+                id="profile-save-btn"
+                disabled
               >
-              <label
-                ><input type="checkbox" name="subject" value="Science" />
-                Science</label
-              >
-              <label
-                ><input type="checkbox" name="subject" value="English" />
-                English</label
-              >
-              <label
-                ><input
-                  type="checkbox"
-                  name="subject"
-                  value="Computer Science"
-                />
-                Computer Science</label
-              >
+                Save profile
+              </button>
             </div>
           </div>
-
-          <div class="form-field full-width">
-            <label for="bio">About you</label>
-            <textarea
-              id="bio"
-              rows="3"
-              placeholder="A short note students will see"
-            ></textarea>
-          </div>
-
-          <div class="form-actions full-width">
-            <button type="submit">Save profile</button>
-          </div>
+          <p class="field-error" id="profile-error" hidden></p>
         </form>
-      </section>
+      </div>
     </main>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
-    <script src="../js/profile.js"></script>
+    <script type="module" src="../js/profile.js"></script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
   </body>

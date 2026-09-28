@@ -37,6 +37,74 @@ let weeklyBudget = { planned: 0 }; // projected weekly spend across all assigned
 let workloadRows = []; // latest /api/tutors/workload rows for the side panel
 let lastApplicantRows = { courseId: null, rows: null }; // most recent applicants for the active course
 
+// ---------- allocation balance ----------
+//
+// Which preset of objective weights orders the applicant list (see
+// js/allocation-objectives.js, shared with the ranking API). Persisted so a
+// refresh keeps the organiser's chosen balance.
+
+const PRESET_STORAGE_KEY = "board.balancePreset";
+
+function validPreset(name) {
+  return (
+    !!window.AllocationObjectives &&
+    window.AllocationObjectives.PRESET_NAMES.includes(name)
+  );
+}
+
+function loadBalancePreset() {
+  try {
+    const stored = localStorage.getItem(PRESET_STORAGE_KEY);
+    if (validPreset(stored)) return stored;
+  } catch (err) {
+    // Storage unavailable (private mode, blocked cookies) — just default.
+  }
+  return "merit";
+}
+
+let balancePreset = loadBalancePreset();
+
+function saveBalancePreset(name) {
+  try {
+    localStorage.setItem(PRESET_STORAGE_KEY, name);
+  } catch (err) {
+    // Persisting is best-effort; the in-page switch still applies.
+  }
+}
+
+const presetPickerEl = document.getElementById("presetPicker");
+const presetHintEl = document.getElementById("presetHint");
+
+function renderPresetPicker() {
+  if (!presetPickerEl) return;
+  presetPickerEl.querySelectorAll(".preset-btn").forEach((btn) => {
+    const active = btn.dataset.preset === balancePreset;
+    btn.setAttribute("aria-pressed", String(active));
+    btn.classList.toggle("active", active);
+  });
+}
+
+function setBalancePreset(name) {
+  if (!validPreset(name) || name === balancePreset) return;
+  balancePreset = name;
+  saveBalancePreset(name);
+  renderPresetPicker();
+  // A different blend re-ranks the same applicants — drop the snapshot
+  // guard so renderApplicants() actually rebuilds the list.
+  lastApplicantsSnapshot = null;
+  if (activeCourseId) {
+    const course = COURSES.find((c) => c.id === activeCourseId);
+    if (course) renderApplicants(course);
+  }
+}
+
+presetPickerEl?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".preset-btn");
+  if (btn) setBalancePreset(btn.dataset.preset);
+});
+
+renderPresetPicker();
+
 // ---------- data loading ----------
 
 function mapCourseRow(row) {
@@ -837,14 +905,115 @@ function buildWorkloadStamp(check) {
   return `<span class="stamp ${over ? "blocked" : "ok"}">${projectedHours}/${weeklyHourCap} hrs/wk${over ? " · over cap" : ""}</span>`;
 }
 
-let lastApplicantsSnapshot = null; // most recent `${courseId}:${rowsJson}` rendered
+// ---------- balance rendering ----------
+
+function applicantDisplayName(app) {
+  return app.Tutor_name || app.tutors?.name || "Unknown";
+}
+
+// Explains the active balance under the Applications heading: what it
+// optimises for, and — when it disagrees with merit-first — who leads
+// instead. Plain text (textContent), so names need no escaping.
+function renderPresetHint(rows) {
+  if (!presetHintEl) return;
+
+  const parts = [];
+
+  const preset = window.AllocationObjectives?.PRESETS?.[balancePreset];
+  if (preset) parts.push(preset.description);
+
+  if (rows.length > 1) {
+    const leader = rows[0];
+    const meritLeader = rows.find((r) => r.ranking?.meritRank === 1);
+    if (
+      leader.ranking?.meritRank &&
+      leader.ranking.meritRank !== 1 &&
+      meritLeader
+    ) {
+      parts.push(
+        `${applicantDisplayName(leader)} leads this balance; merit-first would lead with ${applicantDisplayName(meritLeader)}.`,
+      );
+    }
+  }
+
+  presetHintEl.textContent = parts.join(" ");
+}
+
+function buildScoreStamp(app) {
+  const score = app.ranking?.score;
+  if (!Number.isFinite(score)) return "";
+  return `<span class="stamp score" title="Blended score across all five objectives under the ${balancePreset} balance">Score ${Math.round(score)}</span>`;
+}
+
+// Pareto domination is weight-independent: with several applicants, someone
+// who is at least as good on every objective and better on one beats this
+// applicant under ANY balance, which is worth flagging either way.
+function buildParetoStamp(app, applicantCount) {
+  const dominated = app.ranking?.paretoDominated;
+  if (dominated === undefined || applicantCount < 2) return "";
+  if (dominated) {
+    return `<span class="stamp warn" title="Another applicant is at least as good on every objective and strictly better on at least one, under any weighting.">Better all-round option exists</span>`;
+  }
+  return `<span class="stamp ok" title="No other applicant is better than them on every objective, whatever the weighting.">No better all-round option</span>`;
+}
+
+// The second line on an applicant row: one mini gauge per objective (filled
+// to the normalised 0-1 score) plus, when the active balance pulls against
+// merit-first, the trade-off note explaining how far they moved.
+function buildBalanceMeta(app) {
+  const objectives = app.ranking?.objectives;
+  if (!objectives) return null;
+
+  const meta = document.createElement("div");
+  meta.className = "balance-meta";
+
+  const bars = document.createElement("div");
+  bars.className = "objective-bars";
+
+  Object.entries(objectives).forEach(([name, value]) => {
+    if (!Number.isFinite(value)) return;
+
+    const objective = window.AllocationObjectives?.OBJECTIVES?.[name];
+    const label = objective ? objective.label : name;
+    const hint = objective ? ` (${objective.hint})` : "";
+    const percent = Math.round(value * 100);
+
+    const item = document.createElement("span");
+    item.className = "objective-bar";
+    item.title = `${label}${hint}: ${percent}%`;
+    item.setAttribute("aria-label", `${label}: ${percent}%`);
+
+    const fill = document.createElement("span");
+    fill.className = "objective-bar-fill";
+    fill.style.setProperty("--value", `${percent}%`);
+
+    item.appendChild(fill);
+    item.appendChild(document.createTextNode(label));
+    bars.appendChild(item);
+  });
+
+  meta.appendChild(bars);
+
+  if (app.ranking.tradeoff) {
+    const note = document.createElement("p");
+    note.className = "balance-note";
+    note.textContent = app.ranking.tradeoff;
+    meta.appendChild(note);
+  }
+
+  return meta;
+}
+
+let lastApplicantsSnapshot = null; // most recent `${courseId}:${preset}:${rowsJson}` rendered
 
 async function renderApplicants(course) {
   const requestId = ++applicantsRequestId;
 
   let rows = [];
   try {
-    const res = await fetch(`/api/tutor-applications?courseId=${course.id}`);
+    const res = await fetch(
+      `/api/tutor-applications?courseId=${course.id}&preset=${encodeURIComponent(balancePreset)}`,
+    );
     rows = await res.json();
     if (!res.ok) throw new Error(rows.error || "Failed to load applications");
   } catch (err) {
@@ -859,7 +1028,8 @@ async function renderApplicants(course) {
   // Nothing about this course's applicants changed since we last actually
   // rendered them — skip the rebuild (and the assignment-check fetches
   // below) entirely, rather than flashing an identical list on every poll.
-  const snapshot = `${course.id}:${JSON.stringify(rows)}`;
+  // The preset is part of the key: switching balance re-ranks the same rows.
+  const snapshot = `${course.id}:${balancePreset}:${JSON.stringify(rows)}`;
   if (snapshot === lastApplicantsSnapshot) return;
   lastApplicantsSnapshot = snapshot;
 
@@ -874,6 +1044,7 @@ async function renderApplicants(course) {
 
   if (rows.length === 0) {
     applicantsEmptyEl.hidden = false;
+    renderPresetHint(rows);
     return;
   }
 
@@ -883,10 +1054,12 @@ async function renderApplicants(course) {
 
   if (requestId !== applicantsRequestId) return;
 
+  renderPresetHint(rows);
+
   rows.forEach((app, i) => {
     const check = checks[i];
     const tutor = app.tutors;
-    const name = app.Tutor_name || tutor?.name || "Unknown";
+    const name = applicantDisplayName(app);
     const status = (app.status || "pending").toLowerCase();
     const levelLabel = LEVEL_LABELS[tutor?.academic_level] || "Year not set";
     const markStamp =
@@ -911,10 +1084,12 @@ async function renderApplicants(course) {
         <span class="role">${levelLabel}</span>
       </span>
       <span class="stamp-row">
+        ${buildScoreStamp(app)}
         ${markStamp}
         ${availabilityStamp}
         ${buildClashStamp(check)}
         ${buildWorkloadStamp(check)}
+        ${buildParetoStamp(app, rows.length)}
         ${overrideStamp}
       </span>
       <span class="status-pill ${status}">${status}</span>
@@ -1016,6 +1191,10 @@ async function renderApplicants(course) {
     );
 
     li.appendChild(row);
+
+    const balanceMeta = buildBalanceMeta(app);
+    if (balanceMeta) li.appendChild(balanceMeta);
+
     applicantListEl.appendChild(li);
   });
 }
@@ -1117,11 +1296,22 @@ async function setApplicationStatus(course, app, status, name, reasons = {}) {
     const res = await fetch(`/api/tutor-applications/${app.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejectionReason, approvalReason }),
+      // expectedStatus is the status this row was rendered with — the
+      // server refuses (409) if it moved on since, instead of overwriting
+      // whatever another organiser just did.
+      body: JSON.stringify({
+        status,
+        rejectionReason,
+        approvalReason,
+        expectedStatus: previousStatus,
+      }),
     });
     const body = await res.json();
     if (!res.ok) {
       showToast(body.error || "Couldn't update that application.");
+      // A conflict means this row is stale — pull the latest list so the
+      // organiser is looking at the current state before retrying.
+      if (res.status === 409) await fetchCourses();
       return;
     }
     const messages = {
@@ -1159,6 +1349,7 @@ async function setApplicationLock(course, app, name) {
     const body = await res.json();
     if (!res.ok) {
       showToast(body.error || "Couldn't lock that assignment.");
+      if (res.status === 409) await fetchCourses();
       return;
     }
     showToast(`${name}'s assignment to ${course.code} is now locked.`);
@@ -1210,6 +1401,9 @@ overrideForm.addEventListener("submit", async (e) => {
 
   const { course, app, name } = pendingOverride;
   const reason = overrideReasonInput.value.trim();
+  // The status this row was rendered with — guards against approving a row
+  // another organiser already moved on.
+  const expectedStatus = (app.status || "pending").toLowerCase();
 
   overrideSubmitBtn.disabled = true;
   overrideSubmitBtn.textContent = "Approving…";
@@ -1223,6 +1417,7 @@ overrideForm.addEventListener("submit", async (e) => {
         override: true,
         organiserId: getSessionUserId(),
         reason,
+        expectedStatus,
       }),
     });
     const body = await res.json();
@@ -1231,6 +1426,7 @@ overrideForm.addEventListener("submit", async (e) => {
       overrideFormError.textContent =
         body.error || "Couldn't override that rule.";
       overrideFormError.hidden = false;
+      if (res.status === 409) await fetchCourses();
       return;
     }
 
@@ -1451,12 +1647,21 @@ async function renderVolunteers(course) {
 
   rows.forEach((vol) => {
     const student = vol.users;
-    const name = student?.name || "Unknown";
     const status = (vol.status || "pending").toLowerCase();
-    const markStamp =
-      typeof vol.mark === "number"
-        ? `<span class="stamp ok">Mark ${vol.mark}</span>`
-        : "";
+    const isOpenSession = status === "open";
+    const name = isOpenSession
+      ? "Open — unclaimed"
+      : student?.name || "Unknown";
+
+    let detailStamp = "";
+    if (typeof vol.mark === "number") {
+      detailStamp = `<span class="stamp ok">Mark ${vol.mark}</span>`;
+    } else if (vol.session_date) {
+      const [y, m, d] = vol.session_date.split("-");
+      const time = `${vol.start_time?.slice(0, 5)}–${vol.end_time?.slice(0, 5)}`;
+      const venue = vol.venue ? ` · ${vol.venue}` : "";
+      detailStamp = `<span class="stamp">${d}/${m}/${y} · ${time}${venue}</span>`;
+    }
 
     const li = document.createElement("li");
     const row = document.createElement("div");
@@ -1469,7 +1674,7 @@ async function renderVolunteers(course) {
         <span class="role">${student?.email || ""}</span>
       </span>
       <span class="stamp-row">
-        ${markStamp}
+        ${detailStamp}
       </span>
       <span class="status-pill ${status}">${status}</span>
       <span class="applicant-actions"></span>
@@ -1528,7 +1733,7 @@ async function renderVolunteers(course) {
           }),
         );
       }
-    } else {
+    } else if (!isOpenSession) {
       actionsEl.appendChild(
         makeApplicantActionBtn("Reconsider", "", () =>
           setVolunteerStatus(course, vol, "pending", name),
@@ -1556,7 +1761,12 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
     const res = await fetch(`/api/course-volunteers/${vol.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejectionReason, approvalReason }),
+      body: JSON.stringify({
+        status,
+        rejectionReason,
+        approvalReason,
+        organiserId: getSessionUserId(),
+      }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -1583,7 +1793,11 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
     renderVolunteers(course);
     renderDiagonals(course);
     fetchVolunteerCounts();
-    renderCourseList();
+    // Approving/un-approving a volunteer now changes the course's
+    // assigned-tutor count too (see courseVolunteers.js), so the shortfall/
+    // staffed pill needs a real re-fetch, not just a re-render of the stale
+    // in-memory COURSES array.
+    await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
   }
@@ -1609,6 +1823,126 @@ async function setVolunteerLock(course, vol, name) {
 }
 
 let lastAssignmentCardSnapshot = null;
+
+// ---------- post overflow session modal ----------
+
+let pendingOverflowCourse = null;
+
+const postOverflowSessionBtn = document.getElementById(
+  "postOverflowSessionBtn",
+);
+const postOverflowSessionModal = document.getElementById(
+  "postOverflowSessionModal",
+);
+const postOverflowSessionForm = document.getElementById(
+  "postOverflowSessionForm",
+);
+const postOverflowSessionFormError = document.getElementById(
+  "postOverflowSessionFormError",
+);
+const postOverflowSessionModalContext = document.getElementById(
+  "postOverflowSessionModalContext",
+);
+const overflowSessionDateInput = document.getElementById(
+  "overflowSessionDateInput",
+);
+const overflowSessionStartInput = document.getElementById(
+  "overflowSessionStartInput",
+);
+const overflowSessionEndInput = document.getElementById(
+  "overflowSessionEndInput",
+);
+const overflowSessionVenueInput = document.getElementById(
+  "overflowSessionVenueInput",
+);
+const overflowSessionReasonInput = document.getElementById(
+  "overflowSessionReasonInput",
+);
+const postOverflowSessionSubmitBtn = document.getElementById(
+  "postOverflowSessionSubmitBtn",
+);
+
+function openPostOverflowSessionModal() {
+  const course = COURSES.find((c) => c.id === activeCourseId);
+  if (!course) return;
+  pendingOverflowCourse = course;
+  postOverflowSessionForm.reset();
+  postOverflowSessionFormError.hidden = true;
+  postOverflowSessionModalContext.textContent = `Post a specific gap in ${course.code} for a volunteer to claim — a regular slot with nobody to cover it, not a standing weekly commitment.`;
+  postOverflowSessionModal.showModal();
+  overflowSessionDateInput.focus();
+}
+
+function closePostOverflowSessionModal() {
+  postOverflowSessionModal.close();
+  pendingOverflowCourse = null;
+}
+
+postOverflowSessionBtn.addEventListener("click", openPostOverflowSessionModal);
+document
+  .getElementById("postOverflowSessionModalCloseBtn")
+  .addEventListener("click", closePostOverflowSessionModal);
+document
+  .getElementById("postOverflowSessionCancelBtn")
+  .addEventListener("click", closePostOverflowSessionModal);
+postOverflowSessionModal.addEventListener("click", (e) => {
+  if (e.target === postOverflowSessionModal) closePostOverflowSessionModal();
+});
+
+postOverflowSessionForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  postOverflowSessionFormError.hidden = true;
+  if (!pendingOverflowCourse) return;
+
+  const course = pendingOverflowCourse;
+  const sessionDate = overflowSessionDateInput.value;
+  const startTime = overflowSessionStartInput.value;
+  const endTime = overflowSessionEndInput.value;
+
+  if (endTime <= startTime) {
+    postOverflowSessionFormError.textContent =
+      "End time must be after start time.";
+    postOverflowSessionFormError.hidden = false;
+    return;
+  }
+
+  postOverflowSessionSubmitBtn.disabled = true;
+  postOverflowSessionSubmitBtn.textContent = "Posting…";
+  try {
+    const res = await fetch("/api/course-volunteers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        courseId: course.id,
+        sessionDate,
+        startTime,
+        endTime,
+        venue: overflowSessionVenueInput.value.trim(),
+        reason: overflowSessionReasonInput.value.trim(),
+        organiserId: getSessionUserId(),
+      }),
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      postOverflowSessionFormError.textContent =
+        body.error || "Couldn't post that session.";
+      postOverflowSessionFormError.hidden = false;
+      return;
+    }
+
+    closePostOverflowSessionModal();
+    showToast(`Posted a ${course.code} session for volunteers to claim`);
+    renderVolunteers(course);
+  } catch (err) {
+    postOverflowSessionFormError.textContent =
+      "Network error — couldn't reach the server.";
+    postOverflowSessionFormError.hidden = false;
+  } finally {
+    postOverflowSessionSubmitBtn.disabled = false;
+    postOverflowSessionSubmitBtn.textContent = "Post session";
+  }
+});
 
 function renderAssignmentCard(course, applicantRows = null) {
   const isFull =
@@ -1958,6 +2292,198 @@ obviousFillConfirmBtn.addEventListener("click", async () => {
   } finally {
     obviousFillConfirmBtn.disabled = false;
     obviousFillConfirmBtn.textContent = "Approve selected";
+  }
+});
+
+// ---------- auto-allocate whole school ----------
+//
+// Same reviewable-list shape as Obvious Fill, but backed by a real draft:
+// opening the modal calls auto-allocate to propose assignments for every
+// course in one pass (unambiguous slots picked outright, ambiguous ones
+// ranked by mark), and Publish applies only the still-checked rows. The
+// draft itself already exists in allocation_drafts the moment the modal
+// opens — cancelling just leaves it unpublished, nothing to clean up.
+
+const autoAllocateBtn = document.getElementById("autoAllocateBtn");
+const autoAllocateModal = document.getElementById("autoAllocateModal");
+const autoAllocateList = document.getElementById("autoAllocateList");
+const autoAllocateEmpty = document.getElementById("autoAllocateEmpty");
+const autoAllocateHint = document.getElementById("autoAllocateHint");
+const autoAllocatePublishBtn = document.getElementById(
+  "autoAllocatePublishBtn",
+);
+
+let activeAutoAllocateDraftId = null;
+
+function closeAutoAllocateModal() {
+  autoAllocateModal.close();
+}
+
+async function openAutoAllocateModal() {
+  activeAutoAllocateDraftId = null;
+  autoAllocateList.innerHTML = "";
+  autoAllocateEmpty.hidden = true;
+  autoAllocateHint.textContent = "Proposing assignments…";
+  autoAllocatePublishBtn.hidden = false;
+  autoAllocatePublishBtn.disabled = true;
+  autoAllocateModal.showModal();
+
+  let draft, assignments, skipped;
+  try {
+    const res = await fetch("/api/allocation-drafts/auto-allocate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organiserId: getSessionUserId() }),
+    });
+    const body = await res.json();
+    if (!res.ok)
+      throw new Error(body.error || "Failed to propose an allocation");
+    ({ draft, assignments, skipped } = body);
+  } catch (err) {
+    autoAllocateHint.textContent =
+      "Couldn't propose an allocation — try again.";
+    autoAllocatePublishBtn.hidden = true;
+    return;
+  }
+
+  if (!draft || assignments.length === 0) {
+    autoAllocateHint.textContent = "";
+    autoAllocateEmpty.hidden = false;
+    autoAllocatePublishBtn.hidden = true;
+    renderSkippedCandidates(skipped);
+    return;
+  }
+
+  activeAutoAllocateDraftId = draft.id;
+  autoAllocateHint.textContent = `${assignments.length} assignment${assignments.length === 1 ? "" : "s"} proposed across every course with an open slot — uncheck anything you'd rather decide yourself.`;
+
+  const byCourse = new Map();
+  assignments.forEach((a) => {
+    const key = a.course?.course_code || String(a.course_id);
+    if (!byCourse.has(key)) byCourse.set(key, []);
+    byCourse.get(key).push(a);
+  });
+
+  byCourse.forEach((group, courseKey) => {
+    const heading = document.createElement("li");
+    heading.className = "obvious-fill-course-head";
+    heading.textContent = `${courseKey} — ${group[0].course?.course_name || ""}`;
+    autoAllocateList.appendChild(heading);
+
+    group.forEach((assignment) => {
+      const li = document.createElement("li");
+      const row = document.createElement("label");
+      row.className = "tutor-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <input type="checkbox" class="auto-allocate-check" data-id="${assignment.id}" checked>
+        <span class="name-block">
+          <span class="name">${assignment.tutor?.name || "Unknown"}</span>
+          <span class="role">${assignment.explanation}</span>
+        </span>
+      `;
+      li.appendChild(row);
+      autoAllocateList.appendChild(li);
+    });
+  });
+
+  renderSkippedCandidates(skipped);
+
+  autoAllocatePublishBtn.disabled = false;
+}
+
+// Every eligible-but-not-proposed applicant (locked, over the tutor's hour
+// cap, or simply outranked for a slot) is still shown here — not as
+// something to publish, just so the organiser can see why they didn't make
+// the cut instead of the run looking like it silently ignored them.
+function renderSkippedCandidates(skipped) {
+  if (!skipped || skipped.length === 0) return;
+
+  const heading = document.createElement("li");
+  heading.className = "obvious-fill-course-head";
+  heading.textContent = "Not proposed";
+  autoAllocateList.appendChild(heading);
+
+  skipped.forEach((skip) => {
+    const course = COURSES.find((c) => c.id === skip.courseId);
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    row.className = "tutor-row";
+    row.style.cursor = "default";
+    row.innerHTML = `
+      <span class="name-block">
+        <span class="name">${skip.tutorName || "Unknown"} &mdash; ${course?.code || `course ${skip.courseId}`}</span>
+        <span class="role">${skip.reason}</span>
+      </span>
+    `;
+    li.appendChild(row);
+    autoAllocateList.appendChild(li);
+  });
+}
+
+autoAllocateBtn.addEventListener("click", openAutoAllocateModal);
+document
+  .getElementById("autoAllocateCloseBtn")
+  .addEventListener("click", closeAutoAllocateModal);
+document
+  .getElementById("autoAllocateCancelBtn")
+  .addEventListener("click", closeAutoAllocateModal);
+autoAllocateModal.addEventListener("click", (e) => {
+  if (e.target === autoAllocateModal) closeAutoAllocateModal();
+});
+
+autoAllocatePublishBtn.addEventListener("click", async () => {
+  if (!activeAutoAllocateDraftId) {
+    closeAutoAllocateModal();
+    return;
+  }
+
+  const allChecks = Array.from(
+    autoAllocateList.querySelectorAll(".auto-allocate-check"),
+  );
+  const excludeAssignmentIds = allChecks
+    .filter((cb) => !cb.checked)
+    .map((cb) => cb.dataset.id);
+
+  if (excludeAssignmentIds.length === allChecks.length) {
+    closeAutoAllocateModal();
+    return;
+  }
+
+  autoAllocatePublishBtn.disabled = true;
+  autoAllocatePublishBtn.textContent = "Publishing…";
+
+  try {
+    const res = await fetch(
+      `/api/allocation-drafts/${activeAutoAllocateDraftId}/publish`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organiserId: getSessionUserId(),
+          excludeAssignmentIds,
+        }),
+      },
+    );
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't publish that allocation.");
+      return;
+    }
+    const failed = body.results.filter((r) => !r.success);
+    const succeeded = body.results.length - failed.length;
+    showToast(
+      failed.length === 0
+        ? `${succeeded} assignment${succeeded === 1 ? "" : "s"} published.`
+        : `${succeeded} published, ${failed.length} couldn't be — something changed since you opened this. See History for details.`,
+    );
+    closeAutoAllocateModal();
+    await fetchCourses();
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    autoAllocatePublishBtn.disabled = false;
+    autoAllocatePublishBtn.textContent = "Publish selected";
   }
 });
 

@@ -12,6 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
   </head>
 
   <body>
@@ -37,9 +38,11 @@
 
       <nav class="tab-nav" aria-label="Main navigation">
         <a href="StudentView.html" aria-current="page">Dashboard</a>
+        <a href="my-sessions.html">My sessions</a>
         <a href="volunteer-log-hours.html">Log Hours</a>
-        <a href="student_calender.html">Calendar</a>
+        <a href="student-calendar.html">Calendar</a>
         <a href="volunteer-timesheets.html">Completed sessions</a>
+        <a href="student-profile.html">Profile</a>
         <a href="#" id="tour-link">Take a Tour</a>
       </nav>
 
@@ -86,7 +89,6 @@
             </p>
           </div>
         </div>
-
         <div class="user-pill">
           <svg
             viewBox="0 0 24 24"
@@ -111,7 +113,7 @@
     <main class="app-main">
       <div class="page-head">
         <div>
-          <h1>Volunteer dashboard</h1>
+          <h1 id="welcome-heading">Volunteer dashboard</h1>
           <p class="page-sub">
             Find support sessions, track your hours, and stay on top of your
             commitments.
@@ -196,17 +198,53 @@
           <p class="stat-value" id="stat-upcoming-sessions">0</p>
           <p class="stat-label">Upcoming sessions</p>
         </article>
+
+        <article class="stat-card">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="8" r="6" />
+            <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+          </svg>
+          <p class="stat-value" id="stat-hours-volunteered">0</p>
+          <p class="stat-label">Hours volunteered</p>
+        </article>
       </section>
 
-      <section aria-labelledby="available-heading">
-        <div class="section-head">
-          <h2 class="section-title" id="available-heading">
-            Available volunteer sessions
-          </h2>
-          <span class="section-hint" id="available-hint"></span>
-        </div>
+      <section class="card" aria-labelledby="courses-heading">
+        <h2 id="courses-heading">Modules You Can Tutor</h2>
+        <p class="hint">Courses currently looking for student volunteers.</p>
 
         <div class="session-grid" id="courseList">
+          <!-- rendered by studentview.js -->
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="open-sessions-heading">
+        <h2 id="open-sessions-heading">Open Sessions You Can Cover</h2>
+        <p class="hint">
+          Specific gaps an organiser has flagged — a one-off session with nobody
+          to run it, not a standing weekly commitment.
+        </p>
+
+        <div class="session-grid" id="openSessionsList">
+          <!-- rendered by studentview.js -->
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="pending-heading">
+        <h2 id="pending-heading">My Applications</h2>
+        <p class="hint">
+          Every module you've volunteered for — pending, approved, or rejected.
+        </p>
+
+        <div class="session-grid" id="pendingList">
           <!-- rendered by studentview.js -->
         </div>
       </section>
@@ -262,6 +300,7 @@
           <h2 class="section-title" id="sessions-heading">
             My upcoming sessions
           </h2>
+          <a class="section-hint" href="my-sessions.html">View all</a>
         </div>
 
         <div class="session-grid" id="upcomingSessionsList">
@@ -275,6 +314,20 @@
     <script src="../js/user-badge.js"></script>
     <script src="../js/onboarding.js"></script>
     <script type="module" src="../js/studentview.js"></script>
+    <script type="module">
+      import { getCurrentUser } from "../js/storage.js";
+      import { highlightActiveTab } from "../js/nav.js";
+      import { initTranscriptUpload } from "../js/transcript-upload.js";
+
+      // studentview.js stays import-light so the dashboard tests can run it as
+      // a classic script; the nav highlight and the transcript panel are
+      // module-only helpers, so they are wired up here instead.
+      const user = getCurrentUser();
+      if (user) {
+        highlightActiveTab();
+        initTranscriptUpload(user.id);
+      }
+    </script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
   </body>

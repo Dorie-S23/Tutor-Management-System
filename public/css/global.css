@@ -30,6 +30,20 @@
   --radius-sm: 6px;
   --shadow-card:
     0 1px 2px rgba(30, 42, 46, 0.06), 0 1px 0 rgba(30, 42, 46, 0.04);
+
+  /* Tokens for the form + calendar components shared between the
+     tutor-app pages and the student volunteer / report pages (the
+     un-scoped "shared" rules in the tutor-app section below). Custom
+     properties are inert on pages that never reference them. */
+  --ta-bg: #f5f6f8;
+  --ta-surface: #ffffff;
+  --ta-border: #dde1e6;
+  --ta-text: #1f2430;
+  --ta-text-muted: #6b7280;
+  --ta-primary: #3457d5;
+  --ta-primary-hover: #2a46b0;
+  --ta-danger: #d33;
+  --ta-danger-hover: #b02a2a;
 }
 
 * {
@@ -493,6 +507,65 @@ input[type="search"]:focus-visible {
   border-color: var(--red-line);
 }
 
+/* ---------- student volunteer dashboard ----------
+   Single-column stack of .card sections under the shared board-header. Each
+   list (courses / open sessions / applications / upcoming sessions) reuses
+   .course-list as its container; studentview.js renders each row as a bare
+   <article>, styled here the same way .course-card looks elsewhere. */
+
+.dashboard-layout {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px clamp(20px, 4vw, 48px) 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.course-list > article {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.course-list > article h3 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+}
+
+.session-meta {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+  margin: 3px 0 6px;
+}
+
+.session-note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+}
+
+.course-list > article .status-pill {
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.mark-form {
+  margin-top: 10px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ---------- detail pane ---------- */
 
 .detail-pane {
@@ -654,6 +727,10 @@ input[type="search"]:focus-visible {
 .assign-panel-head h3 {
   font-size: 17px;
 }
+
+.assign-panel-head h2 {
+  margin-bottom: 0;
+}
 .assign-panel-head input[type="search"] {
   max-width: 180px;
 }
@@ -766,6 +843,115 @@ input[type="search"]:focus-visible {
 .stamp.blocked {
   color: var(--red);
   background: var(--red-bg);
+}
+.stamp.score {
+  color: var(--navy);
+  background: var(--navy-bg);
+}
+
+/* ---------- allocation balance ----------
+   The preset picker (Merit / Balanced / Fair hours) re-weights the five
+   competing ranking objectives; the balance-meta line shows where each
+   applicant lands on them. */
+
+.preset-picker {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.preset-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.preset-btn:hover {
+  color: var(--ink);
+}
+
+.preset-btn.active {
+  background: var(--navy);
+  color: #fff;
+}
+
+.preset-btn:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 1px;
+}
+
+/* Sits under a .tutor-row inside the same <li> to read as the card's
+   second line: one mini gauge per objective plus the trade-off note. */
+.balance-meta {
+  margin: -1px 0 0;
+  padding: 2px 14px 10px;
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--panel);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.objective-bars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.objective-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+.objective-bar-fill {
+  display: block;
+  width: 56px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+  position: relative;
+}
+
+.objective-bar-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--value, 0%);
+  border-radius: 999px;
+  background: var(--navy);
+}
+
+.balance-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-faint);
 }
 
 /* ---------- diagonals ---------- */
@@ -1177,7 +1363,7 @@ input[type="search"]:focus-visible {
 }
 
 /* ---------- notification bell ----------
-   Unscoped (not .tutor-app/.student-app) since header markup/classes aren't
+   Unscoped (not .tutor-app) since header markup/classes aren't
    consistent across every page this ships on — plain, page-agnostic tokens
    so it looks right regardless of which header it's dropped into. */
 
@@ -1616,7 +1802,8 @@ input[type="search"]:focus-visible {
 }
 
 .form-field input,
-.form-field select {
+.form-field select,
+.form-field textarea {
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: var(--radius-sm);
@@ -1630,6 +1817,13 @@ input[type="search"]:focus-visible {
 .form-field select:focus-visible {
   outline: 2px solid var(--navy);
   outline-offset: 1px;
+}
+
+/* Display-only fields (e.g. the profile page's login email) — shaded like
+   the editable inputs beside them but visibly not editable. */
+.form-field input[readonly] {
+  background: var(--paper);
+  color: var(--ink-soft);
 }
 
 .form-actions {
@@ -2309,19 +2503,15 @@ body.student-app {
 
 /* ============================================================
    TUTOR TIMESHEET APP (Dashboard / Calendar / Log Hours / Timesheets)
-   Scoped under body.tutor-app so it can't affect other pages.
+   Scoped under body.tutor-app so it can't affect other pages — except
+   the shared component rules flagged "shared" below: their markup is
+   duplicated verbatim on the student volunteer pages
+   (student-calendar.html, student-log-hours.html) and the report
+   pages, so they're un-scoped to style every page that uses them.
+   Their --ta-* tokens live on :root, up top.
    ============================================================ */
 
 .tutor-app {
-  --ta-bg: #f5f6f8;
-  --ta-surface: #ffffff;
-  --ta-border: #dde1e6;
-  --ta-text: #1f2430;
-  --ta-text-muted: #6b7280;
-  --ta-primary: #3457d5;
-  --ta-primary-hover: #2a46b0;
-  --ta-danger: #d33;
-  --ta-danger-hover: #b02a2a;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -2434,7 +2624,9 @@ body.tutor-app {
   margin: 0;
 }
 
-.tutor-app .form-grid {
+/* shared — student-log-hours.html / student-calendar.html and the
+   report pages use this same markup outside .tutor-app. */
+.form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
@@ -2446,7 +2638,7 @@ body.tutor-app {
   gap: 0.25rem;
 }
 
-.tutor-app .form-field.full-width {
+.form-field.full-width {
   grid-column: 1 / -1;
 }
 
@@ -2468,7 +2660,7 @@ body.tutor-app {
 
 /* Sized and bordered like the inputs beside it, but shaded to read as
    display-only rather than another editable field. */
-.tutor-app .hours-readout {
+.hours-readout {
   margin: 0;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--ta-border);
@@ -2479,14 +2671,14 @@ body.tutor-app {
   font-weight: 600;
 }
 
-.tutor-app .form-actions {
+.form-actions {
   grid-column: 1 / -1;
   display: flex;
   gap: 0.6rem;
   margin-top: 0.25rem;
 }
 
-.tutor-app .form-actions[hidden] {
+.form-actions[hidden] {
   display: none;
 }
 
@@ -2516,6 +2708,25 @@ body.tutor-app {
 }
 
 .tutor-app .btn-secondary:hover {
+  background: var(--ta-bg);
+}
+
+/* shared — the same button outside .tutor-app (student volunteer and
+   report pages), carrying its own base sizing since the .tutor-app
+   button rule above doesn't reach it. */
+.btn-secondary {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--ta-border);
+  padding: 0.55rem 1rem;
+  background: var(--ta-surface);
+  color: var(--ta-text);
+}
+
+.btn-secondary:hover {
   background: var(--ta-bg);
 }
 
@@ -2789,14 +3000,17 @@ body.tutor-app {
   padding: 3rem 1rem;
 }
 
-.tutor-app .calendar-nav {
+/* Calendar markup is shared verbatim between calendar.html (tutor) and
+   student-calendar.html (student volunteer), so the whole calendar
+   block below is un-scoped to style both. */
+.calendar-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1rem;
 }
 
-.tutor-app .calendar-nav h2 {
+.calendar-nav h2 {
   margin: 0;
   font-size: 1.1rem;
 }
@@ -2804,7 +3018,7 @@ body.tutor-app {
 /* Explains what each .calendar-course-pill colour means — one chip per
    course actually showing on the calendar, using the exact same palette
    lookup (courseColor()) so a chip's colour always matches its pills. */
-.tutor-app .course-color-key {
+.course-color-key {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
@@ -2812,7 +3026,7 @@ body.tutor-app {
   margin-bottom: 1rem;
 }
 
-.tutor-app .course-color-chip {
+.course-color-chip {
   border: 1px solid transparent;
   font-weight: 600;
   font-size: 0.75rem;
@@ -2820,14 +3034,14 @@ body.tutor-app {
   border-radius: 100px;
 }
 
-.tutor-app .calendar-weekdays {
+.calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 0.4rem;
   margin-bottom: 0.4rem;
 }
 
-.tutor-app .calendar-weekdays span {
+.calendar-weekdays span {
   text-align: center;
   font-size: 0.75rem;
   font-weight: 600;
@@ -2836,13 +3050,13 @@ body.tutor-app {
   letter-spacing: 0.03em;
 }
 
-.tutor-app .calendar-grid {
+.calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 0.4rem;
 }
 
-.tutor-app .calendar-day {
+.calendar-day {
   min-height: 80px;
   border: 1px solid var(--ta-border);
   border-radius: 6px;
@@ -2852,31 +3066,31 @@ body.tutor-app {
   gap: 0.25rem;
 }
 
-.tutor-app .calendar-day.other-month {
+.calendar-day.other-month {
   background: var(--ta-bg);
   color: var(--ta-text-muted);
 }
 
-.tutor-app .calendar-day.today {
+.calendar-day.today {
   border-color: var(--ta-primary);
   border-width: 2px;
 }
 
-.tutor-app .calendar-day-clickable {
+.calendar-day-clickable {
   cursor: pointer;
 }
 
-.tutor-app .calendar-day-clickable:hover {
+.calendar-day-clickable:hover {
   border-color: var(--ta-primary);
   background: var(--ta-bg);
 }
 
-.tutor-app .calendar-day-number {
+.calendar-day-number {
   font-size: 0.85rem;
   font-weight: 600;
 }
 
-.tutor-app .calendar-session-pill {
+.calendar-session-pill {
   background: var(--ta-primary);
   color: #fff;
   font-size: 0.75rem;
@@ -2887,7 +3101,7 @@ body.tutor-app {
   white-space: nowrap;
 }
 
-.tutor-app .calendar-class-pill {
+.calendar-class-pill {
   background: #fff;
   border: 1px solid var(--ta-primary);
   color: var(--ta-primary);
@@ -2902,7 +3116,7 @@ body.tutor-app {
 /* Tutorial/Lab sessions sourced from the modules this tutor tutors — solid
    per-course colour (set inline) to stand apart from the outlined personal-
    schedule pills above and the solid-blue logged-hours pills below. */
-.tutor-app .calendar-course-pill {
+.calendar-course-pill {
   border: 1px solid transparent;
   font-weight: 600;
   font-size: 0.7rem;
@@ -2977,7 +3191,8 @@ body.tutor-app {
   font-family: inherit;
 }
 
-.tutor-app .card-hint {
+/* shared — student-calendar.html uses the same hint markup. */
+.card-hint {
   color: var(--ta-text-muted);
   font-size: 0.85rem;
   margin: 0.75rem 0 0;
@@ -2985,7 +3200,7 @@ body.tutor-app {
 
 /* Pull a hint tight against a heading it directly follows — doesn't apply
    when a hint follows a form/table instead, where it needs breathing room. */
-.tutor-app .card h2 + .card-hint {
+.card h2 + .card-hint {
   margin-top: -0.5rem;
   margin-bottom: 1rem;
 }
@@ -3086,4 +3301,105 @@ body.tutor-app {
 
 .submission-detail table {
   width: 100%;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #121815;
+  --panel: #1c2621;
+  --ink: #edf4ee;
+  --ink-soft: #bdc9c0;
+  --ink-faint: #91a198;
+  --line: #3b4a42;
+  --line-soft: #2b3630;
+  --navy: #9ac7d3;
+  --navy-bg: #20363a;
+  --green: #98d5ad;
+  --green-bg: #1f3a2a;
+  --green-line: #477b58;
+  --amber: #f0c579;
+  --amber-bg: #44351f;
+  --amber-line: #8b6b35;
+  --red: #f1a79a;
+  --red-bg: #432822;
+  --red-line: #8a4c40;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.14);
+  --ta-bg: #141a20;
+  --ta-surface: #1d2630;
+  --ta-border: #3c4957;
+  --ta-text: #eff3f8;
+  --ta-text-muted: #b8c2ce;
+  --ta-primary: #9cb3ff;
+  --ta-primary-hover: #bac9ff;
+  --ta-danger: #f29a9a;
+  --ta-danger-hover: #ffc0c0;
+}
+
+.theme-toggle {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--navy);
+  background: var(--navy-bg);
+  color: var(--ink);
+}
+
+.tutor-app .theme-toggle {
+  padding: 0.55rem 0.75rem;
+  border-color: var(--ta-border);
+  border-radius: 6px;
+  background: var(--ta-surface);
+  color: var(--ta-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.tutor-app .theme-toggle:hover {
+  border-color: var(--ta-primary);
+  background: var(--ta-bg);
+}
+
+html[data-theme="dark"] .tutor-app #logout-button,
+html[data-theme="dark"] .tutor-app .btn-danger,
+html[data-theme="dark"] .calendar-class-pill {
+  background: var(--ta-surface);
+}
+
+html[data-theme="dark"] .tutor-app .stat-tile--accent {
+  background: #202e45;
+  border-color: #465c82;
+}
+
+html[data-theme="dark"] .tutor-app .claim-form {
+  color: var(--ta-text);
+}
+
+html[data-theme="dark"] .tutor-app .claim-form th,
+html[data-theme="dark"] .tutor-app .claim-form td {
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .tutor-app .claim-info-table th,
+html[data-theme="dark"] .tutor-app .claim-tasks-table th,
+html[data-theme="dark"] .tutor-app .claim-footer-table th,
+html[data-theme="dark"] .tutor-app .claim-hos-table th {
+  background: var(--ta-bg);
+}
+
+@media (max-width: 600px) {
+  .theme-toggle {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
 }
