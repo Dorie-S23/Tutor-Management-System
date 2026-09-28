@@ -390,6 +390,201 @@ router.get("/:id", async (req, res) => {
   res.json({ draft, assignments: await enrichAssignments(assignments) });
 });
 
+// GET /api/allocation-drafts/:id/compare — a dry run of publish. Runs the
+// exact same per-assignment checks POST /:id/publish runs (same order, same
+// reason strings) but writes nothing, so an organiser holding an old draft
+// can see which proposals would still land today — and which the world has
+// moved on from since the draft was proposed — before committing.
+//
+// Because publish applies assignments one at a time, a draft's own rows
+// interact: two proposals for the same course compete for the same last
+// slot, and two proposals for the same tutor stack towards their hour cap.
+// The simulation below mirrors that sequencing, so what compare says here is
+// what publish would actually do if run in the same moment.
+router.get("/:id/compare", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid draft id" });
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("allocation_drafts")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (draftError || !draft) {
+    return res.status(404).json({ error: "Draft not found" });
+  }
+
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("allocation_draft_assignments")
+    .select("*")
+    .eq("draft_id", id);
+  if (assignmentsError)
+    return res.status(500).json({ error: assignmentsError.message });
+
+  const tutorIds = [...new Set(assignments.map((a) => a.tutor_id))];
+  const courseIds = [...new Set(assignments.map((a) => a.course_id))];
+
+  const [
+    { data: courses, error: coursesError },
+    { data: tutors, error: tutorsError },
+    { data: applications, error: applicationsError },
+  ] = await Promise.all([
+    courseIds.length
+      ? supabase
+          .from("courses")
+          .select(
+            "id, course_code, course_name, tutors_needed, no_of_tutors_assigned, hours_per_week",
+          )
+          .in("id", courseIds)
+      : Promise.resolve({ data: [] }),
+    tutorIds.length
+      ? supabase
+          .from("tutors")
+          .select("id, name, email, weekly_hour_cap")
+          .in("id", tutorIds)
+      : Promise.resolve({ data: [] }),
+    tutorIds.length
+      ? supabase
+          .from("tutor_subject_preference")
+          .select("id, tutor_id, course_id, status, courses(hours_per_week)")
+          .in("tutor_id", tutorIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  if (coursesError)
+    return res.status(500).json({ error: coursesError.message });
+  if (tutorsError) return res.status(500).json({ error: tutorsError.message });
+  if (applicationsError)
+    return res.status(500).json({ error: applicationsError.message });
+
+  const courseById = new Map((courses || []).map((c) => [c.id, c]));
+  const tutorById = new Map((tutors || []).map((t) => [t.id, t]));
+  const applicationByTutorCourse = new Map(
+    (applications || []).map((app) => [
+      `${app.tutor_id}|${app.course_id}`,
+      app,
+    ]),
+  );
+
+  // Approved hours kept as per-course rows (not pre-summed) so each check can
+  // exclude the one course publish's own query excludes (.neq course_id).
+  const approvedRowsByTutor = new Map();
+  (applications || [])
+    .filter((app) => app.status === "approved")
+    .forEach((app) => {
+      if (!approvedRowsByTutor.has(app.tutor_id))
+        approvedRowsByTutor.set(app.tutor_id, []);
+      approvedRowsByTutor.get(app.tutor_id).push(app);
+    });
+
+  // Running state of the simulated publish: the course counts it would bump
+  // and the hours it would add to each tutor.
+  const assignedByCourse = new Map(
+    (courses || []).map((c) => [c.id, c.no_of_tutors_assigned ?? 0]),
+  );
+  const draftHoursByTutor = new Map();
+
+  const rows = assignments.map((assignment) => {
+    const application = applicationByTutorCourse.get(
+      `${assignment.tutor_id}|${assignment.course_id}`,
+    );
+
+    if (!application || application.status !== "pending") {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "no longer a pending application",
+        currentStatus: application?.status ?? null,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const course = courseById.get(assignment.course_id);
+    if (!course) {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "course not found",
+        currentStatus: application.status,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const next = (assignedByCourse.get(course.id) ?? 0) + 1;
+    if (next > (course.tutors_needed ?? 0)) {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "course is now full",
+        currentStatus: application.status,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const tutor = tutorById.get(assignment.tutor_id);
+    if (!tutor) {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "tutor not found",
+        currentStatus: application.status,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const courseHours = course.hours_per_week || 0;
+    let projectedHours = null;
+    if (tutor.weekly_hour_cap != null) {
+      const currentAssignedHours = (approvedRowsByTutor.get(tutor.id) || [])
+        .filter((app) => app.course_id !== assignment.course_id)
+        .reduce((sum, app) => sum + (app.courses?.hours_per_week || 0), 0);
+      projectedHours =
+        currentAssignedHours +
+        (draftHoursByTutor.get(tutor.id) || 0) +
+        courseHours;
+      if (projectedHours > tutor.weekly_hour_cap) {
+        return {
+          ...assignment,
+          willApply: false,
+          reason: `would put the tutor at ${projectedHours}/${tutor.weekly_hour_cap} hrs/week, over their cap`,
+          currentStatus: application.status,
+          projectedHours,
+          cap: tutor.weekly_hour_cap,
+        };
+      }
+    }
+
+    // This one would land — advance the simulation the way publish would.
+    assignedByCourse.set(course.id, next);
+    draftHoursByTutor.set(
+      tutor.id,
+      (draftHoursByTutor.get(tutor.id) || 0) + courseHours,
+    );
+
+    return {
+      ...assignment,
+      willApply: true,
+      reason: null,
+      currentStatus: application.status,
+      projectedHours,
+      cap: tutor.weekly_hour_cap ?? null,
+    };
+  });
+
+  const willApply = rows.filter((r) => r.willApply).length;
+
+  res.json({
+    draft,
+    summary: { willApply, cannotApply: rows.length - willApply },
+    assignments: await enrichAssignments(rows),
+  });
+});
+
 // POST /api/allocation-drafts/:id/publish
 //
 // Applies a draft's assignments for real: each one approves the matching
