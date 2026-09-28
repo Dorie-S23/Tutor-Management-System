@@ -698,6 +698,343 @@ describe("POST /api/allocation-drafts/:id/publish", () => {
   });
 });
 
+describe("GET /api/allocation-drafts/:id/compare", () => {
+  function seedDraftAssignments(assignments, overrides = {}) {
+    tables.allocation_drafts = [
+      { id: 1, name: "Draft", created_by: "organiser-1", status: "draft" },
+    ];
+    tables.courses = overrides.courses ?? [
+      {
+        id: 10,
+        course_code: "COMS1000",
+        course_name: "Intro",
+        tutors_needed: 2,
+        no_of_tutors_assigned: 0,
+        hours_per_week: 3,
+      },
+    ];
+    tables.tutors = overrides.tutors ?? [
+      { id: "t1", name: "Alice", weekly_hour_cap: null },
+    ];
+    tables.tutor_subject_preference = overrides.applications ?? [
+      { id: "app-1", tutor_id: "t1", course_id: 10, status: "pending" },
+    ];
+    tables.allocation_draft_assignments = assignments;
+  }
+
+  test("400s for an invalid draft id", async () => {
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/nope/compare",
+    );
+    expect(res.status).toBe(400);
+  });
+
+  test("404s for a draft that doesn't exist", async () => {
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/999/compare",
+    );
+    expect(res.status).toBe(404);
+  });
+
+  test("reports an assignment as still applicable when nothing has changed", async () => {
+    seedDraftAssignments([
+      {
+        id: 100,
+        draft_id: 1,
+        tutor_id: "t1",
+        course_id: 10,
+        explanation: "x",
+        locked: false,
+      },
+    ]);
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toEqual({ willApply: 1, cannotApply: 0 });
+    expect(res.body.assignments[0]).toMatchObject({
+      id: 100,
+      willApply: true,
+      reason: null,
+      currentStatus: "pending",
+      projectedHours: null,
+      cap: null,
+    });
+    expect(res.body.assignments[0].tutor.name).toBe("Alice");
+    expect(res.body.assignments[0].course.course_code).toBe("COMS1000");
+  });
+
+  test("projects the tutor's hours against their cap when they have one", async () => {
+    seedDraftAssignments(
+      [
+        {
+          id: 100,
+          draft_id: 1,
+          tutor_id: "t1",
+          course_id: 10,
+          explanation: "x",
+          locked: false,
+        },
+      ],
+      { tutors: [{ id: "t1", weekly_hour_cap: 10 }] },
+    );
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignments[0]).toMatchObject({
+      willApply: true,
+      projectedHours: 3,
+      cap: 10,
+    });
+  });
+
+  test("marks an assignment whose application isn't pending any more, with its current status", async () => {
+    seedDraftAssignments(
+      [
+        {
+          id: 100,
+          draft_id: 1,
+          tutor_id: "t1",
+          course_id: 10,
+          explanation: "x",
+          locked: false,
+        },
+      ],
+      {
+        applications: [
+          { id: "app-1", tutor_id: "t1", course_id: 10, status: "rejected" },
+        ],
+      },
+    );
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignments[0]).toMatchObject({
+      willApply: false,
+      reason: "no longer a pending application",
+      currentStatus: "rejected",
+    });
+    expect(res.body.summary).toEqual({ willApply: 0, cannotApply: 1 });
+  });
+
+  test("marks an assignment whose course has since filled up", async () => {
+    seedDraftAssignments(
+      [
+        {
+          id: 100,
+          draft_id: 1,
+          tutor_id: "t1",
+          course_id: 10,
+          explanation: "x",
+          locked: false,
+        },
+      ],
+      {
+        courses: [
+          {
+            id: 10,
+            course_code: "COMS1000",
+            course_name: "Intro",
+            tutors_needed: 2,
+            no_of_tutors_assigned: 2,
+            hours_per_week: 3,
+          },
+        ],
+      },
+    );
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignments[0]).toMatchObject({
+      willApply: false,
+      reason: "course is now full",
+    });
+  });
+
+  test("marks an assignment that would now put the tutor over their hour cap, with the projected total", async () => {
+    seedDraftAssignments(
+      [
+        {
+          id: 100,
+          draft_id: 1,
+          tutor_id: "t1",
+          course_id: 10,
+          explanation: "x",
+          locked: false,
+        },
+      ],
+      {
+        tutors: [{ id: "t1", weekly_hour_cap: 10 }],
+        applications: [
+          { id: "app-1", tutor_id: "t1", course_id: 10, status: "pending" },
+          {
+            id: "app-other",
+            tutor_id: "t1",
+            course_id: 99,
+            status: "approved",
+            courses: { hours_per_week: 8 },
+          },
+        ],
+      },
+    );
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignments[0]).toMatchObject({
+      willApply: false,
+      reason: "would put the tutor at 11/10 hrs/week, over their cap",
+      projectedHours: 11,
+      cap: 10,
+    });
+  });
+
+  test("stacks the draft's own hours per tutor, as publishing would", async () => {
+    // Two proposals for the same tutor, 6 hrs each, cap 10 — the first
+    // lands (6/10), the second would take them to 12/10.
+    seedDraftAssignments(
+      [
+        {
+          id: 100,
+          draft_id: 1,
+          tutor_id: "t1",
+          course_id: 10,
+          explanation: "x",
+          locked: false,
+        },
+        {
+          id: 101,
+          draft_id: 1,
+          tutor_id: "t1",
+          course_id: 11,
+          explanation: "y",
+          locked: false,
+        },
+      ],
+      {
+        courses: [
+          {
+            id: 10,
+            course_code: "C1",
+            course_name: "One",
+            tutors_needed: 1,
+            no_of_tutors_assigned: 0,
+            hours_per_week: 6,
+          },
+          {
+            id: 11,
+            course_code: "C2",
+            course_name: "Two",
+            tutors_needed: 1,
+            no_of_tutors_assigned: 0,
+            hours_per_week: 6,
+          },
+        ],
+        tutors: [{ id: "t1", weekly_hour_cap: 10 }],
+        applications: [
+          { id: "app-1", tutor_id: "t1", course_id: 10, status: "pending" },
+          { id: "app-2", tutor_id: "t1", course_id: 11, status: "pending" },
+        ],
+      },
+    );
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignments[0]).toMatchObject({
+      willApply: true,
+      projectedHours: 6,
+    });
+    expect(res.body.assignments[1]).toMatchObject({
+      willApply: false,
+      reason: "would put the tutor at 12/10 hrs/week, over their cap",
+    });
+  });
+
+  test("two proposals for the same course compete for its last slot, as publishing would", async () => {
+    // One open slot, two proposed tutors — the first lands, the second
+    // finds the course full.
+    seedDraftAssignments(
+      [
+        {
+          id: 100,
+          draft_id: 1,
+          tutor_id: "t1",
+          course_id: 10,
+          explanation: "x",
+          locked: false,
+        },
+        {
+          id: 101,
+          draft_id: 1,
+          tutor_id: "t2",
+          course_id: 10,
+          explanation: "y",
+          locked: false,
+        },
+      ],
+      {
+        courses: [
+          {
+            id: 10,
+            course_code: "COMS1000",
+            course_name: "Intro",
+            tutors_needed: 1,
+            no_of_tutors_assigned: 0,
+            hours_per_week: 3,
+          },
+        ],
+        tutors: [
+          { id: "t1", weekly_hour_cap: null },
+          { id: "t2", weekly_hour_cap: null },
+        ],
+        applications: [
+          { id: "app-1", tutor_id: "t1", course_id: 10, status: "pending" },
+          { id: "app-2", tutor_id: "t2", course_id: 10, status: "pending" },
+        ],
+      },
+    );
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignments[0]).toMatchObject({ willApply: true });
+    expect(res.body.assignments[1]).toMatchObject({
+      willApply: false,
+      reason: "course is now full",
+    });
+  });
+
+  test("returns an empty comparison for a draft with no assignments", async () => {
+    seedDraftAssignments([]);
+
+    const res = await request(buildApp()).get(
+      "/api/allocation-drafts/1/compare",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toEqual({ willApply: 0, cannotApply: 0 });
+    expect(res.body.assignments).toEqual([]);
+  });
+});
+
 describe("POST /api/allocation-drafts/:id/restore", () => {
   async function publishOneAssignment(app) {
     tables.allocation_drafts = [

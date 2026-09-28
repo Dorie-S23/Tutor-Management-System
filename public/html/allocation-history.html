@@ -44,8 +44,10 @@
         </div>
         <p class="hint">
           Every whole-school auto allocation that's been run, published or not.
-          Restoring a published run reverts every application it approved back
-          to what it was before, and frees up the course slots again.
+          Compare an unpublished run against the current allocation to see what
+          would still land today before publishing it. Restoring a published run
+          reverts every application it approved back to what it was before, and
+          frees up the course slots again.
         </p>
 
         <div class="course-list" id="draftsList">
@@ -67,6 +69,52 @@
         </div>
       </section>
     </main>
+
+    <dialog
+      class="modal modal-wide"
+      id="compareModal"
+      aria-labelledby="compareHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="compareHeading">Compare run with now</h2>
+          <button
+            class="modal-close"
+            id="compareCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="compareHint"></p>
+
+        <ul class="tutor-list" id="compareList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="compareEmpty" hidden>
+          This run proposed nothing.
+        </p>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="compareCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button
+              class="btn btn-primary"
+              id="comparePublishBtn"
+              type="button"
+            >
+              Publish selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
