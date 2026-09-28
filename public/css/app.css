@@ -173,6 +173,37 @@ button:focus-visible {
   margin-left: auto;
 }
 
+/* Light/dark toggle (mounted by js/theme.js, preferring .navbar-right).
+   Sized to match the 32px bell button beside it; the role accent blocks
+   further down tint it like the bell on tutor/organiser pages. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.09);
+  color: var(--blue);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+/* On a bare page whose only host is a tab bar, don't stretch with the links. */
+.tab-nav > .theme-toggle {
+  align-self: center;
+  margin: 0 8px;
+}
+
 .user-pill {
   display: inline-flex;
   align-items: center;
@@ -826,7 +857,9 @@ input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="number"],
+input[type="tel"],
 input[type="date"],
+input[type="month"],
 input[type="time"],
 select,
 textarea {
@@ -2653,6 +2686,15 @@ body[data-theme="tutor"] .notif-bell-btn {
   color: rgb(15, 118, 110);
 }
 
+body[data-theme="tutor"] .theme-toggle {
+  background: rgba(15, 118, 110, 0.09);
+  color: rgb(15, 118, 110);
+}
+
+body[data-theme="tutor"] .theme-toggle:hover {
+  background: rgba(15, 118, 110, 0.16);
+}
+
 body[data-theme="tutor"] .notif-bell-btn:hover {
   background: rgba(15, 118, 110, 0.16);
 }
@@ -2725,6 +2767,273 @@ body[data-theme="tutor"] textarea:focus {
   width: 200px;
 }
 
+/* ---------- Dark theme (light/dark toggle, see js/theme.js) ----------
+   Tokens are redeclared on body (not :root) so they outrank the role
+   accent blocks above, which are also body-scoped: html[data-theme]
+   adds a type selector, giving these rules one extra point of
+   specificity for every role (tutor teal, organiser violet, …). */
+
+html[data-theme="dark"] body {
+  --ink: #e2e8f0;
+  --ink-2: #cbd5e1;
+  --ink-3: #aeb9cc;
+  --body-text: #9aa8bd;
+  --muted: #8494ab;
+  --faint: #64748b;
+  --line: #2b3850;
+  --line-soft: rgba(148, 163, 184, 0.24);
+  --page: #0a0f1c;
+  --blue-tint: rgba(96, 165, 250, 0.16);
+  --blue-tint-2: rgba(96, 165, 250, 0.09);
+  --blue-line: rgba(96, 165, 250, 0.4);
+  --shadow-nav: rgba(2, 6, 23, 0.5) 0 1px 0 0, rgba(2, 6, 23, 0.5) 0 8px 28px 0;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px rgba(0, 0, 0, 0.3);
+  --surface: #111a2c;
+  --surface-2: #18223a;
+
+  background-color: #0a0f1c;
+  background-image: linear-gradient(
+    180deg,
+    #0e1628 0%,
+    #0a0f1c 300px,
+    #0a0f1c 640px
+  );
+}
+
+html[data-theme="dark"] .app-navbar {
+  background: rgba(10, 15, 28, 0.88);
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+/* White surfaces become dark slate. White *text* on accent backgrounds
+   (primary buttons, selected chips, pills, cover pills) stays as-is —
+   those accents read fine on the dark page. */
+html[data-theme="dark"]
+  :is(
+    .panel,
+    .card,
+    .org-stat,
+    .org-rail,
+    .rail-search,
+    .course-card,
+    .detail-card,
+    .assignment-card,
+    .module-card,
+    .session-card,
+    .side-card,
+    .dash-panel__item,
+    .dash-course,
+    .application-row,
+    .upcoming-empty,
+    .empty-state,
+    .review-row,
+    .timetable-shell,
+    .report-course,
+    .tutor-row,
+    .activity-col .tutor-row,
+    .tutor-chip,
+    .course-chip,
+    .session-chip,
+    .week-pill,
+    .assign-panel,
+    .diagonal-card,
+    .diagonal-member-select,
+    .side-panel,
+    .universal-search-input,
+    .universal-search-results,
+    .verify-card__icon,
+    .filter-chip,
+    .btn-secondary,
+    .btn-cancel,
+    .btn-small,
+    .applicant-actions .btn-small.btn-small-neutral,
+    .user-pill,
+    .btn-logout,
+    .notif-dropdown,
+    .calendar-grid,
+    .calendar-class-pill,
+    .day-view,
+    .day-view-close,
+    .day-view-event--class,
+    .legend-swatch--class,
+    .modal
+  ) {
+  background-color: var(--surface);
+}
+
+html[data-theme="dark"] .course-card.active {
+  background: color-mix(
+    in srgb,
+    var(--accent, var(--blue)) 14%,
+    var(--surface)
+  );
+}
+
+/* Light-gray chrome becomes a raised dark gray. */
+html[data-theme="dark"]
+  :is(
+    .status-pill,
+    .status-pill.draft,
+    .badge--applied,
+    .btn-small:hover,
+    .btn-small-neutral,
+    .applicant-actions .btn-small.btn-small-neutral:hover,
+    .stamp,
+    .budget-bar,
+    .load-item__track,
+    .load-cell__track,
+    .workload-bar-track,
+    .budget-row__track
+  ) {
+  background-color: var(--surface-2);
+}
+
+html[data-theme="dark"] :is(.btn-small:hover) {
+  border-color: var(--line);
+}
+
+/* Hairline dividers and borders. */
+html[data-theme="dark"]
+  :is(
+    .notif-dropdown-head,
+    .notif-item,
+    td,
+    .timesheet-row + .timesheet-row,
+    .ts-row + .ts-row,
+    .calendar-day,
+    .scheduled-box,
+    .empty-state,
+    .upcoming-empty,
+    .activity-col .tutor-row
+  ) {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .day-view-hour--half {
+  border-top-color: var(--line);
+}
+
+/* Hover and muted calendar states. */
+html[data-theme="dark"] .calendar-day-clickable:hover {
+  background: var(--blue-tint-2);
+}
+
+html[data-theme="dark"] .calendar-day.today.calendar-day-clickable:hover {
+  background: var(--blue-tint);
+}
+
+html[data-theme="dark"] .calendar-day.other-month {
+  background: #0d1526;
+}
+
+/* Inputs and read-only (session-locked) fields. */
+html[data-theme="dark"]
+  :is(
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    input[type="month"],
+    input[type="tel"],
+    input[type="search"],
+    select,
+    textarea
+  ) {
+  background-color: var(--surface);
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .form-field input[readonly] {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+/* Translucent-white overlays become translucent-dark (or faint light
+   tracks where the fill color still needs contrast). */
+html[data-theme="dark"] :is(.capacity-bar, .activity-col__count) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="dark"] .preset-picker {
+  background: rgba(17, 26, 44, 0.92);
+}
+
+/* Semantic tints: same hue, dark-background friendly. */
+html[data-theme="dark"] :is(.status-pill.rejected, .status-pill.disputed) {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+html[data-theme="dark"] .status-pill.approved {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+html[data-theme="dark"] :is(.status-pill.pending, .badge--mismatch) {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] :is(.form-error, .field-error) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #f87171;
+}
+
+html[data-theme="dark"] .swap-pending {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+html[data-theme="dark"]
+  :is(.calendar-class-pill--cancelled, .day-view-event--cancelled) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+/* The printable claim form stays readable on screen in dark mode; the
+   @media print rules below restore real paper colors for printing. */
+html[data-theme="dark"] .claim-form {
+  color: #d7e0ec;
+}
+
+html[data-theme="dark"] :is(.claim-form th, .claim-form td) {
+  border-color: #3f4c63;
+  color: #d7e0ec;
+}
+
+html[data-theme="dark"] .claim-form th {
+  background: #16203a;
+}
+
+html[data-theme="dark"] .claim-title-table td {
+  border-color: #3f4c63;
+}
+
+/* The toggle button the theme script injects — global.css styles the
+   legacy pages' copy; the redesigned pages only load this sheet. */
+.theme-toggle {
+  margin-left: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--ink-3);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--blue);
+  background: var(--blue-tint-2);
+  color: var(--ink);
+}
+
 @media print {
   .no-print {
     display: none !important;
@@ -2733,6 +3042,30 @@ body[data-theme="tutor"] textarea:focus {
   body {
     background: #fff;
     background-image: none;
+  }
+
+  /* Dark mode must not bleed onto paper. */
+  html[data-theme="dark"] body {
+    background: #fff;
+    background-image: none;
+  }
+
+  html[data-theme="dark"] .claim-preview {
+    background: #fff;
+  }
+
+  html[data-theme="dark"] .claim-form {
+    color: #000;
+  }
+
+  html[data-theme="dark"] .claim-form th,
+  html[data-theme="dark"] .claim-form td {
+    border-color: #333;
+    color: #000;
+  }
+
+  html[data-theme="dark"] .claim-form th {
+    background: #f5f6f8;
   }
 
   .app-main {
@@ -2745,6 +3078,13 @@ body[data-theme="tutor"] textarea:focus {
     margin: 0;
     border: none;
     box-shadow: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .theme-toggle {
+    padding: 7px 10px;
+    font-size: 12px;
   }
 }
 
@@ -2812,6 +3152,15 @@ body[data-theme="organiser"] .role-badge {
 body[data-theme="organiser"] .notif-bell-btn {
   background: rgba(124, 58, 237, 0.08);
   color: rgb(109, 40, 217);
+}
+
+body[data-theme="organiser"] .theme-toggle {
+  background: rgba(124, 58, 237, 0.08);
+  color: rgb(109, 40, 217);
+}
+
+body[data-theme="organiser"] .theme-toggle:hover {
+  background: rgba(124, 58, 237, 0.15);
 }
 
 body[data-theme="organiser"] .notif-bell-btn:hover {

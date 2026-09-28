@@ -117,12 +117,58 @@ describe("theme.js", () => {
     expect(win.document.documentElement.dataset.theme).toBe("dark");
   });
 
+  test("prefers the redesigned navbar's slot over the legacy tab nav", async () => {
+    const win = loadTheme({
+      body: '<nav class="tab-nav"><a href="#">Home</a></nav><div class="navbar-right"></div>',
+    });
+    await ready();
+
+    const toggle = win.document.querySelector(".theme-toggle");
+    expect(toggle).toBeTruthy();
+    expect(toggle.parentElement.className).toBe("navbar-right");
+    expect(win.document.querySelector(".tab-nav .theme-toggle")).toBeNull();
+  });
+
   test("does not mount a toggle on a page without a host element", async () => {
     const win = loadTheme({ body: "<p>bare page</p>" });
     await ready();
 
     expect(win.document.querySelector(".theme-toggle")).toBeNull();
     expect(win.document.documentElement.dataset.theme).toBeTruthy();
+  });
+
+  test("prefers the navbar action cluster over the tab bar", async () => {
+    const win = loadTheme({
+      body: '<nav class="tab-nav"><a href="dashboard.html">Dashboard</a></nav><div class="navbar-right"><button type="button">Log out</button></div>',
+    });
+    await ready();
+
+    const button = win.document.querySelector(".theme-toggle");
+    expect(button).toBeTruthy();
+    expect(button.parentElement.classList.contains("navbar-right")).toBe(true);
+    expect(win.document.querySelectorAll(".theme-toggle").length).toBe(1);
+  });
+
+  test("mounts on the split-screen auth pages through .auth-shell", async () => {
+    const win = loadTheme({
+      body: '<div class="auth-shell"><aside class="auth-brand"></aside><div class="auth-panel"></div></div>',
+    });
+    await ready();
+
+    const button = win.document.querySelector(".theme-toggle");
+    expect(button).toBeTruthy();
+    expect(button.parentElement.classList.contains("auth-shell")).toBe(true);
+  });
+
+  test("still falls back to a bare tab bar", async () => {
+    const win = loadTheme({
+      body: '<nav class="tab-nav"><a href="dashboard.html">Dashboard</a></nav>',
+    });
+    await ready();
+
+    const button = win.document.querySelector(".theme-toggle");
+    expect(button).toBeTruthy();
+    expect(button.parentElement.classList.contains("tab-nav")).toBe(true);
   });
 });
 

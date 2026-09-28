@@ -915,3 +915,64 @@ body > footer p {
     gap: 15px;
   }
 }
+
+/* ---------- Dark theme (toggled by /js/theme.js) ---------- */
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] body {
+  background: #0b1120;
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] body > header {
+  background: #111827;
+  border-bottom-color: #263145;
+}
+
+html[data-theme="dark"] nav a {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] nav a:hover,
+html[data-theme="dark"] nav a[aria-current="page"] {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+}
+
+html[data-theme="dark"] .notif-dropdown {
+  background: #131c2e;
+  border-color: #2b3850;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme="dark"] .notif-dropdown-head {
+  border-bottom-color: #2b3850;
+}
+
+html[data-theme="dark"] .notif-item {
+  border-bottom-color: #22304a;
+}
+
+html[data-theme="dark"] .notif-item:hover {
+  background: #18223a;
+}
+
+html[data-theme="dark"] .notif-item--unread {
+  background: rgba(37, 99, 235, 0.15);
+}
+
+html[data-theme="dark"] .notif-message {
+  color: #cbd5e1;
+}
+
+html[data-theme="dark"] .notif-bell-btn {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .notif-bell-btn:hover {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+}

@@ -42,9 +42,17 @@
   }
 
   function mountToggle() {
-    const target = document.querySelector(
-      ".header-actions, .tab-nav, .header-right, .auth-header",
-    );
+    // Prefer the redesigned pages' dedicated slot; the legacy selectors
+    // keep the older pages mounting where they always have.
+    const target = [
+      ".navbar-right",
+      ".header-actions",
+      ".tab-nav",
+      ".header-right",
+      ".auth-header",
+    ]
+      .map((selector) => document.querySelector(selector))
+      .find(Boolean);
 
     if (!target) return;
 
