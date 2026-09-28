@@ -21,11 +21,11 @@ This project used AI coding assistants (Qoder, Claude Code) under the COMS3011A 
 
 ```bash
 npm install
-# create a .env file with SUPABASE_URL and SUPABASE_KEY
+cp .env.example .env   # then fill in your Supabase URL + anon key
 npm start
 ```
 
-The server runs at `http://localhost:3000` by default (override with `PORT` in `.env`).
+The server runs at `http://localhost:3000` by default (override with `PORT` in `.env`). Run the test suite with `npm test`.
 
 ### Documentation Site
 

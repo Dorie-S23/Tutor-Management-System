@@ -2,6 +2,7 @@ const express = require("express");
 const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
 const { notify } = require("./notificationHelpers");
+const { hasTranscript, storageFailure } = require("./transcriptStorage");
 
 const router = express.Router();
 
@@ -531,6 +532,18 @@ router.post("/", async (req, res) => {
   if (existing) {
     return res.status(409).json({
       error: `You've already applied to tutor ${course.course_code}.`,
+    });
+  }
+
+  // An application needs a transcript on file for the organiser to review —
+  // the upload section below this page's course boards provides it.
+  const transcript = await hasTranscript(tutorId);
+  if (transcript.error) {
+    return storageFailure(res, transcript.error);
+  }
+  if (!transcript.has) {
+    return res.status(403).json({
+      error: "Please upload your transcript before applying.",
     });
   }
 

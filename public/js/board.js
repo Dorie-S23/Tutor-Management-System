@@ -10,6 +10,21 @@ const COURSE_LEVEL_LABELS = {
   6: "phd",
 };
 
+// Accent hues cycled across the course boards at the top of the organiser
+// Courses page, so neighbouring boards are easy to tell apart at a glance.
+const BOARD_ACCENTS = [
+  "rgb(37, 99, 235)", // blue
+  "rgb(124, 58, 237)", // violet
+  "rgb(13, 148, 136)", // teal
+  "rgb(217, 119, 6)", // amber
+  "rgb(225, 29, 72)", // rose
+  "rgb(5, 150, 105)", // emerald
+  "rgb(79, 70, 229)", // indigo
+  "rgb(219, 39, 119)", // pink
+  "rgb(2, 132, 199)", // sky
+  "rgb(234, 88, 12)", // orange
+];
+
 // ---------- state ----------
 
 let activeCourseId = null;
@@ -162,6 +177,23 @@ function findVenueClashes(session, excludeCourseId = null, excludeType = null) {
   );
 }
 
+// An organiser approved for a course sees only that course — the ids ride
+// along on the session user from login (see routes/auth.js and
+// google-callback.html). Legacy organisers have no courseIds and keep full
+// access, as does the super-organiser.
+function sessionCourseScope() {
+  try {
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    return user && Array.isArray(user.courseIds)
+      ? new Set(user.courseIds.map(Number))
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const courseScope = sessionCourseScope();
+
 async function fetchCourses() {
   try {
     const res = await fetch("/api/courses");
@@ -169,7 +201,14 @@ async function fetchCourses() {
     if (!res.ok) throw new Error(rows.error || "Failed to load courses");
 
     COURSES.length = 0;
-    rows.forEach((row) => COURSES.push(mapCourseRow(row)));
+    rows.forEach((row) => {
+      const course = mapCourseRow(row);
+      // Out-of-scope courses are dropped rather than hidden, so the rail,
+      // stats and every course picker built from COURSES shrink with them.
+      if (!courseScope || courseScope.has(Number(course.id))) {
+        COURSES.push(course);
+      }
+    });
   } catch (err) {
     showToast("Couldn't load courses from the database.");
   }
@@ -423,6 +462,10 @@ function initials(name) {
 // ---------- rendering: course rail ----------
 
 const courseListEl = document.getElementById("courseList");
+const courseListEmptyEl = document.getElementById("courseListEmpty");
+const railScrollEl = document.querySelector(".rail-scroll");
+const railCountEl = document.getElementById("railCount");
+const railHintEl = document.getElementById("railHint");
 const courseSearchEl = document.getElementById("courseSearch");
 const shortfallToggleEl = document.getElementById("shortfallToggle");
 const statFilledEl = document.getElementById("statFilled");
@@ -497,6 +540,7 @@ function renderCourseList() {
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
     const pending = pendingCount(course);
+    const isShort = shortfall(course) > 0;
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -509,22 +553,29 @@ function renderCourseList() {
     // every single one to get anywhere else on the page.
     btn.tabIndex = course.id === activeCourseId ? 0 : -1;
     btn.dataset.courseId = String(course.id);
-    const needed = course.tutorsNeeded ?? 0;
-    const pct =
-      needed > 0 ? Math.min(100, (course.tutorsAssigned / needed) * 100) : 0;
-    const barClass = isFull ? "" : " course-card__bar--short";
+    // Accent colour comes from the course's position in the full list, so
+    // searching or filtering never reshuffles the boards' hues.
+    btn.style.setProperty(
+      "--accent",
+      BOARD_ACCENTS[COURSES.indexOf(course) % BOARD_ACCENTS.length],
+    );
+    const statusClass = isFull
+      ? "course-card__status--full"
+      : isShort
+        ? "course-card__status--short"
+        : "course-card__status--open";
+    const statusLabel = isFull ? "Staffed" : isShort ? "Needs tutors" : "Open";
     btn.innerHTML = `
         <span class="course-card__top">
           <span class="course-card__code">${course.code}</span>
-          <span class="course-card__fill">${course.tutorsAssigned} / ${course.tutorsNeeded ?? "\u2014"}</span>
+          <span class="course-card__status ${statusClass}">${statusLabel}</span>
         </span>
         <span class="course-card__name">${course.name}</span>
-        <span class="course-card__track"><span class="course-card__bar${barClass}" style="width: ${pct}%"></span></span>
         <span class="course-card__foot">
           <span class="course-card__meta">${volunteerCounts[course.id] ?? 0} volunteered</span>
           <span class="course-card__pills">
-            <span class="status-pill ${isFull ? "approved" : shortfall(course) > 0 ? "rejected" : "pending"}">${isFull ? "Staffed" : shortfall(course) > 0 ? `Short ${shortfall(course)}` : "Open"}</span>
             ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
+            <span class="course-card__fill">${course.tutorsAssigned} / ${course.tutorsNeeded ?? "\u2014"}</span>
           </span>
         </span>
       `;
@@ -544,6 +595,24 @@ function renderCourseList() {
   if (cards.length && !cards.some((c) => c.tabIndex === 0)) {
     cards[0].tabIndex = 0;
   }
+
+  railCountEl.textContent = String(COURSES.length);
+  courseListEmptyEl.hidden = visible.length > 0;
+  lastVisibleCourseCount = visible.length;
+  updateRailHint();
+}
+
+// The "scroll horizontally" nudge only makes sense while the boards actually
+// overflow the strip, so it's re-checked after every render and on window
+// resizes — either the card count or the available width can change it.
+let lastVisibleCourseCount = 0;
+
+function updateRailHint() {
+  const overflow =
+    lastVisibleCourseCount > 0 &&
+    railScrollEl.scrollWidth > railScrollEl.clientWidth;
+  railHintEl.textContent = `Scroll horizontally to view all ${lastVisibleCourseCount} courses`;
+  railHintEl.hidden = !overflow;
 }
 
 function focusCourseCard(courseId) {
@@ -938,6 +1007,14 @@ async function renderApplicants(course) {
       );
     }
 
+    // Review whatever the applicant uploaded — transcripts are added on the
+    // application pages (see transcript-upload.js).
+    actionsEl.appendChild(
+      makeApplicantActionBtn("Transcript", "", () =>
+        viewTranscript(app.tutor_id, name),
+      ),
+    );
+
     li.appendChild(row);
     applicantListEl.appendChild(li);
   });
@@ -955,6 +1032,30 @@ function makeApplicantActionBtn(label, variant, onClick, disabledTitle) {
     btn.addEventListener("click", onClick);
   }
   return btn;
+}
+
+// Opens an applicant's uploaded transcript. Files live in a private Supabase
+// Storage bucket, so the page asks for a short-lived signed URL instead of
+// linking the object directly; "nothing uploaded yet" is a normal state,
+// answered with a toast rather than an error.
+async function viewTranscript(userId, name) {
+  try {
+    const res = await fetch(
+      `/api/transcripts/${encodeURIComponent(userId)}/signed-url`,
+    );
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 404) {
+      showToast(`${name} hasn't uploaded a transcript yet.`);
+      return;
+    }
+    if (!res.ok) {
+      showToast(body.error || "Couldn't open that transcript.");
+      return;
+    }
+    window.open(body.url, "_blank", "noopener");
+  } catch {
+    showToast("Network error — couldn't reach the server.");
+  }
 }
 
 // Collects a required reason/note before an approve or reject goes through
@@ -1434,6 +1535,14 @@ async function renderVolunteers(course) {
         ),
       );
     }
+
+    // Review whatever the volunteer uploaded — transcripts are added on the
+    // volunteer dashboard (see transcript-upload.js).
+    actionsEl.appendChild(
+      makeApplicantActionBtn("Transcript", "", () =>
+        viewTranscript(vol.user_id, name),
+      ),
+    );
 
     li.appendChild(row);
     volunteerListEl.appendChild(li);
@@ -2298,6 +2407,10 @@ shortfallToggleEl.addEventListener("change", () => {
   renderCourseList();
 });
 
+// Resizing the window can push the boards into or out of overflowing the
+// strip without any re-render happening, so the hint needs its own check.
+window.addEventListener("resize", updateRailHint);
+
 // "/" jumps to the course search from anywhere on the page, unless the
 // organiser is already typing into a field (so it doesn't hijack real input).
 document.addEventListener("keydown", (event) => {
@@ -2343,9 +2456,9 @@ const ORGANISER_TOUR_STEPS = [
   },
   {
     selector: ".org-rail",
-    title: "Your course register",
-    body: "Every course lives here with its fill rate and status. Search it, filter to short-staffed courses only, or add a new course to staff.",
-    placement: "right",
+    title: "Your course portfolio",
+    body: "Every course is a board in this strip — scroll sideways to browse them all. Each board shows how staffed the course is; pick one to work it.",
+    placement: "bottom",
   },
   {
     selector: "#emptyState",
@@ -2478,6 +2591,9 @@ async function init() {
   if (courseParam) {
     const course = COURSES.find((c) => String(c.id) === courseParam);
     if (course) selectCourse(course.id);
+    else if (courseScope) {
+      showToast("That course isn't part of your organiser access.");
+    }
   }
 
   // Arriving from the timetable grid with ?edit=<courseId> jumps straight to
@@ -2488,6 +2604,8 @@ async function init() {
     if (course) {
       selectCourse(course.id);
       openCourseModal(course);
+    } else if (courseScope) {
+      showToast("That course isn't part of your organiser access.");
     }
   }
 

@@ -41,6 +41,10 @@
         <a href="timetable.html">Timetable</a>
         <a href="timesheet-review.html">Timesheets</a>
         <a href="hours-budget-report.html">Budget Report</a>
+        <!-- Revealed by user-badge.js for the super-organiser only. -->
+        <a href="organiser-requests.html" data-super-only hidden>
+          Organiser Requests
+        </a>
         <a href="#" id="tour-link">Take a Tour</a>
       </nav>
 
@@ -213,20 +217,25 @@
         </article>
       </section>
 
-      <div class="org-layout">
-        <aside class="org-rail" aria-labelledby="railHeading">
-          <header class="rail-head">
-            <h2 id="railHeading">Courses</h2>
-            <search>
-              <input
-                type="search"
-                id="courseSearch"
-                class="rail-search"
-                placeholder="Find a course…"
-                aria-label="Search courses"
-              />
-            </search>
-          </header>
+      <section class="org-rail" aria-labelledby="railHeading">
+        <header class="rail-head">
+          <h2 id="railHeading">
+            Course portfolio
+            <span class="rail-count" id="railCount">0</span>
+          </h2>
+          <p class="rail-hint" id="railHint" hidden></p>
+        </header>
+
+        <div class="rail-tools">
+          <search>
+            <input
+              type="search"
+              id="courseSearch"
+              class="rail-search"
+              placeholder="Find a course…"
+              aria-label="Search courses"
+            />
+          </search>
           <label class="shortfall-toggle">
             <input type="checkbox" id="shortfallToggle" />
             Show short-staffed courses only
@@ -234,18 +243,23 @@
           <button class="btn-primary rail-add" id="addCourseBtn" type="button">
             + Add course
           </button>
-          <nav aria-label="Course list">
-            <ul class="course-list" id="courseList">
-              <!-- injected -->
-            </ul>
-          </nav>
-        </aside>
+        </div>
 
+        <nav class="rail-scroll" aria-label="Course list">
+          <ul class="course-list" id="courseList">
+            <!-- injected -->
+          </ul>
+          <p class="empty-copy" id="courseListEmpty" hidden>
+            No courses match — try a different search.
+          </p>
+        </nav>
+      </section>
+
+      <div class="org-layout">
         <section class="org-detail" aria-label="Course detail">
           <section class="empty-state" id="emptyState">
             <p>
-              Pick a course from the register to see who's on it, and who could
-              be.
+              Pick a course board above to see who's on it, and who could be.
             </p>
           </section>
 
@@ -871,12 +885,13 @@
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
     <script type="module">
-      // Organiser-only page — bounce signed-out visitors to login and any
-      // other signed-in role back to their own home page. A module script
-      // so it stays out of the way of the keyboard-nav test harness, which
-      // loads board.js inline as a classic script.
+      // Organiser page (shared with the super-organiser admin) — bounce
+      // signed-out visitors to login and any other signed-in role back to
+      // their own home page. A module script so it stays out of the way of
+      // the keyboard-nav test harness, which loads board.js inline as a
+      // classic script.
       import { requireRole } from "../js/storage.js";
-      requireRole("organiser");
+      requireRole(["organiser", "super_organiser"]);
     </script>
   </body>
 </html>
