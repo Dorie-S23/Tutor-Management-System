@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profile | Tutor Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/global.css" />
+    <script src="../js/theme.js"></script>
+  </head>
+  <body class="tutor-app" data-page-role="tutor">
+    <header class="app-header">
+      <h1>Profile</h1>
+      <nav class="tab-nav">
+        <a href="dashboard.html">Dashboard</a>
+        <a href="log-hours.html">Log Hours</a>
+        <a href="calendar.html">Calendar</a>
+        <a href="timesheets.html">Timesheets</a>
+        <a href="modules.html">Module Application</a>
+        <a href="profile.html" aria-current="page">Profile</a>
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
+        </div>
+        <a href="#" id="logout-button">Logout</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="card">
+        <h2>Your details</h2>
+        <p class="card-hint">
+          Keep these up to date — they're used on your timesheet claims and by
+          the tutoring team to reach you. Your email is tied to your login and
+          can't be changed here; ask an organiser if it needs updating.
+        </p>
+
+        <form id="profile-form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="profile-name">Full name</label>
+              <input
+                type="text"
+                id="profile-name"
+                autocomplete="name"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="profile-email">Email address</label>
+              <input type="email" id="profile-email" readonly />
+            </div>
+            <div class="form-field">
+              <label for="profile-student-number">Student number</label>
+              <input type="text" id="profile-student-number" required />
+            </div>
+            <div class="form-field">
+              <label for="profile-cell-phone">Cell phone number</label>
+              <input
+                type="tel"
+                id="profile-cell-phone"
+                autocomplete="tel"
+                placeholder="e.g. 082 123 4567 or +27 82 123 4567"
+              />
+            </div>
+            <div class="form-actions">
+              <button
+                type="submit"
+                class="btn-primary"
+                id="profile-save-btn"
+                disabled
+              >
+                Save profile
+              </button>
+            </div>
+          </div>
+          <p class="field-error" id="profile-error" hidden></p>
+        </form>
+      </div>
+    </main>
+
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
+
+    <script type="module" src="../js/profile.js"></script>
+    <script src="../js/notifications.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
+</html>

@@ -16,6 +16,7 @@ const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
 const notificationsRoutes = require("./server/routes/notifications");
 const auditLogRoutes = require("./server/routes/auditLog");
 const allocationDraftsRoutes = require("./server/routes/allocationDrafts");
+const profileRoutes = require("./server/routes/profile");
 
 // Supabase client
 const supabase = createClient(
@@ -93,5 +94,8 @@ app.use("/api/audit-log", auditLogRoutes);
 
 // Whole-school auto allocation drafts + publish/restore
 app.use("/api/allocation-drafts", allocationDraftsRoutes);
+
+// Self-service profile for tutors and student volunteers
+app.use("/api/profile", profileRoutes);
 
 module.exports = app;

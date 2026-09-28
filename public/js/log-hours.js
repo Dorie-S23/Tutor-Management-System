@@ -28,6 +28,7 @@ const calendarNavLink = document.getElementById("calendar-nav-link");
 const mySessionsNavLink = document.getElementById("my-sessions-nav-link");
 const timesheetsNavLink = document.getElementById("timesheets-nav-link");
 const modulesNavLink = document.getElementById("modules-nav-link");
+const profileNavLink = document.getElementById("profile-nav-link");
 if (currentUser.role === "student") {
   if (dashboardNavLink) dashboardNavLink.href = "StudentView.html";
   // calendar.html is the tutor calendar (timetable import, recurring
@@ -39,12 +40,18 @@ if (currentUser.role === "student") {
   // volunteer.
   if (timesheetsNavLink) timesheetsNavLink.hidden = true;
   if (modulesNavLink) modulesNavLink.hidden = true;
+  if (profileNavLink) profileNavLink.href = "student-profile.html";
 } else {
   // "My Sessions" is a student-volunteer concept (sessions they've
   // volunteered for) — hide it for anyone else (tutors, organisers,
   // educators) so they can't wander onto a student-only page and get stuck
   // (its Dashboard link only knows how to get back to StudentView.html).
   if (mySessionsNavLink) mySessionsNavLink.hidden = true;
+  // Only tutors and student volunteers have a profile page — organisers
+  // and educators have no details to edit.
+  if (profileNavLink && currentUser.role !== "tutor") {
+    profileNavLink.hidden = true;
+  }
 }
 
 const form = document.getElementById("entry-form");

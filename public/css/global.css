@@ -1734,6 +1734,13 @@ input[type="search"]:focus-visible {
   outline-offset: 1px;
 }
 
+/* Display-only fields (e.g. the profile page's login email) — shaded like
+   the editable inputs beside them but visibly not editable. */
+.form-field input[readonly] {
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
 .form-actions {
   display: flex;
   gap: 10px;

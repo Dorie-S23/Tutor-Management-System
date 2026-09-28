@@ -21,7 +21,8 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - **Fields**:
 - `id` (uuid, PK) — the Supabase Auth user UUID
 - `email` (text, required)
-- `name` (text)
+- `name` (text) — the account holder's full name; registration and the profile page both use a single full-name field
+- `cell_phone` (text) — not collected at registration, so this starts as `null`; filled in from the profile page (`/api/profile`), which checks it's a valid South African cell number
 - `role` (text) — `student`, `tutor`, `educator` or `organiser`
 
 #### `students`
