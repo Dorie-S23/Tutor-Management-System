@@ -13,7 +13,8 @@ import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 
 // This page (timesheets.html) is tutor-only — a payroll claim for hours
 // tutored. Without this, any signed-in user could land here directly.
-if (!requireRole("tutor")) {
+const currentUser = requireRole("tutor");
+if (!currentUser) {
   throw new Error("Not authorized");
 }
 
@@ -35,6 +36,65 @@ const yearOfStudyField = document.getElementById("yearOfStudy");
 const payrollNumberField = document.getElementById("payrollNumber");
 const hourlyRateField = document.getElementById("hourlyRate");
 const headOfSchoolField = document.getElementById("headOfSchool");
+
+// The Profile page (profile.html) is the source of truth for the claim
+// form's identity fields. When it has a value for one of them, that value
+// wins over any locally saved copy and the field locks here — the only way
+// to change it is on the Profile page. The remaining fields (year of
+// study, payroll number, hourly rate, head of school) exist only on this
+// page and stay editable.
+let accountProfile = null;
+
+const PROFILE_SYNCED_FIELDS = [
+  ["name", fullNameField],
+  ["studentNumber", studentNumberField],
+  ["email", emailField],
+  ["cellPhone", cellPhoneField],
+];
+
+// The details the claim renders from: the locally saved profile, with any
+// Profile-page values layered over it.
+function profileDetails() {
+  const local = getProfile() || {};
+  const account = accountProfile || {};
+  return {
+    ...local,
+    fullName: account.name || local.fullName || "",
+    studentNumber: account.studentNumber || local.studentNumber || "",
+    email: account.email || local.email || "",
+    cellPhone: account.cellPhone || local.cellPhone || "",
+  };
+}
+
+async function loadAccountProfile() {
+  try {
+    const res = await fetch(
+      `/api/profile/${encodeURIComponent(currentUser.id)}`,
+    );
+    if (!res.ok) return; // no profile on record — local-only details stand
+    accountProfile = await res.json();
+  } catch {
+    // Offline or erroring API — the locally saved details still work.
+  }
+}
+
+// Locks each synced field the Profile page has a value for, and surfaces
+// the hint explaining where to change them.
+function applyProfileLocks() {
+  let locked = 0;
+  for (const [key, field] of PROFILE_SYNCED_FIELDS) {
+    const value = accountProfile?.[key];
+    if (typeof value === "string" && value.trim() !== "") {
+      field.readOnly = true;
+      field.title = "From your Profile page — change it there.";
+      locked += 1;
+    } else {
+      field.readOnly = false;
+      field.removeAttribute("title");
+    }
+  }
+  document.getElementById("details-sync-hint").hidden = locked === 0;
+}
 
 const rangeFromField = document.getElementById("rangeFrom");
 const rangeToField = document.getElementById("rangeTo");
@@ -97,8 +157,7 @@ function formatCurrency(amount) {
 }
 
 function loadProfileIntoForm() {
-  const profile = getProfile();
-  if (!profile) return;
+  const profile = profileDetails();
   fullNameField.value = profile.fullName || "";
   studentNumberField.value = profile.studentNumber || "";
   emailField.value = profile.email || "";
@@ -136,7 +195,7 @@ function defaultRange() {
 }
 
 async function renderClaim() {
-  const profile = getProfile();
+  const profile = profileDetails();
   const hasProfile = !!(
     profile &&
     profile.fullName &&
@@ -422,10 +481,14 @@ rangeToField.value = to;
 submitMonthField.value = todayStr().slice(0, 7);
 updateSubmitMonthHint();
 
-loadProfileIntoForm();
-safeRenderClaim();
-
 (async () => {
+  // Profile-page values land before the first render so the claim never
+  // briefly shows stale locally saved identity fields.
+  await loadAccountProfile();
+  loadProfileIntoForm();
+  applyProfileLocks();
+  safeRenderClaim();
+
   await loadSubmissions();
 
   // Arriving from a "timesheet reviewed" or "timesheet due" notification —
