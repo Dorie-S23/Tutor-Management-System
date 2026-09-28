@@ -22,6 +22,11 @@
       "server/routes/**/*.js",
       "!**/*.test.js",
       "!**/node_modules/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "json-summary"
     ]
   },
   "repository": {

@@ -2,10 +2,26 @@ name: Tests
 
 on: [push]
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
-      - run: npm test
+      - run: npm test -- --coverage
+
+      - name: Generate coverage badge
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/coverage/integrate-code-coverage'
+        run: npx --yes coverage-badges-cli --source coverage/coverage-summary.json --output coverage/coverage.svg --style flat
+
+      - name: Publish badge to badges branch
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/coverage/integrate-code-coverage'
+        run: |
+          cd coverage
+          git init -q -b badges
+          git add coverage.svg
+          git -c user.name=gitea-actions -c user.email=actions@local commit -qm "Update coverage badge"
+          git push -q --force "https://${{ secrets.GITEA_TOKEN }}@sdp.ms.wits.ac.za/the-devden/Tutor-Management-System.git" badges
