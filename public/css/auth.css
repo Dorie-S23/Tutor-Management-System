@@ -704,3 +704,17 @@
     animation: none !important;
   }
 }
+
+html[data-theme="dark"] {
+  --auth-field: #202a26;
+  --auth-focus-ring: rgba(154, 199, 211, 0.2);
+}
+
+html[data-theme="dark"] .auth-panel {
+  background: radial-gradient(120% 80% at 50% 0%, #283832 0%, var(--paper) 55%);
+}
+
+html[data-theme="dark"] .form-group input:focus,
+html[data-theme="dark"] .form-group select:focus {
+  background: var(--auth-field);
+}

@@ -1114,3 +1114,60 @@ input[type="search"]:focus-visible {
     transition: none !important;
   }
 }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #121815;
+  --panel: #1c2621;
+  --ink: #edf4ee;
+  --ink-soft: #bdc9c0;
+  --ink-faint: #91a198;
+  --line: #3b4a42;
+  --line-soft: #2b3630;
+  --navy: #9ac7d3;
+  --navy-bg: #20363a;
+  --green: #98d5ad;
+  --green-bg: #1f3a2a;
+  --green-line: #477b58;
+  --amber: #f0c579;
+  --amber-bg: #44351f;
+  --amber-line: #8b6b35;
+  --red: #f1a79a;
+  --red-bg: #432822;
+  --red-line: #8a4c40;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+.theme-toggle {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--navy);
+  background: var(--navy-bg);
+  color: var(--ink);
+}
+
+.auth-header .theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
+@media (max-width: 500px) {
+  .auth-header .theme-toggle {
+    top: 12px;
+    right: 12px;
+  }
+}

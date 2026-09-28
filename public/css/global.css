@@ -2650,3 +2650,104 @@ body.tutor-app {
 .submission-detail table {
   width: 100%;
 }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #121815;
+  --panel: #1c2621;
+  --ink: #edf4ee;
+  --ink-soft: #bdc9c0;
+  --ink-faint: #91a198;
+  --line: #3b4a42;
+  --line-soft: #2b3630;
+  --navy: #9ac7d3;
+  --navy-bg: #20363a;
+  --green: #98d5ad;
+  --green-bg: #1f3a2a;
+  --green-line: #477b58;
+  --amber: #f0c579;
+  --amber-bg: #44351f;
+  --amber-line: #8b6b35;
+  --red: #f1a79a;
+  --red-bg: #432822;
+  --red-line: #8a4c40;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.14);
+  --ta-bg: #141a20;
+  --ta-surface: #1d2630;
+  --ta-border: #3c4957;
+  --ta-text: #eff3f8;
+  --ta-text-muted: #b8c2ce;
+  --ta-primary: #9cb3ff;
+  --ta-primary-hover: #bac9ff;
+  --ta-danger: #f29a9a;
+  --ta-danger-hover: #ffc0c0;
+}
+
+.theme-toggle {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--navy);
+  background: var(--navy-bg);
+  color: var(--ink);
+}
+
+.tutor-app .theme-toggle {
+  padding: 0.55rem 0.75rem;
+  border-color: var(--ta-border);
+  border-radius: 6px;
+  background: var(--ta-surface);
+  color: var(--ta-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.tutor-app .theme-toggle:hover {
+  border-color: var(--ta-primary);
+  background: var(--ta-bg);
+}
+
+html[data-theme="dark"] .tutor-app #logout-button,
+html[data-theme="dark"] .tutor-app .btn-danger,
+html[data-theme="dark"] .calendar-class-pill {
+  background: var(--ta-surface);
+}
+
+html[data-theme="dark"] .tutor-app .stat-tile--accent {
+  background: #202e45;
+  border-color: #465c82;
+}
+
+html[data-theme="dark"] .tutor-app .claim-form {
+  color: var(--ta-text);
+}
+
+html[data-theme="dark"] .tutor-app .claim-form th,
+html[data-theme="dark"] .tutor-app .claim-form td {
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .tutor-app .claim-info-table th,
+html[data-theme="dark"] .tutor-app .claim-tasks-table th,
+html[data-theme="dark"] .tutor-app .claim-footer-table th,
+html[data-theme="dark"] .tutor-app .claim-hos-table th {
+  background: var(--ta-bg);
+}
+
+@media (max-width: 600px) {
+  .theme-toggle {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+}
