@@ -68,6 +68,51 @@ const workloadListEl = document.getElementById("workloadList");
 const workloadEmptyEl = document.getElementById("workloadEmpty");
 const globalWeeklyCapEl = document.getElementById("globalWeeklyCap");
 const applyCapBtn = document.getElementById("applyCapBtn");
+const statTutorCountEl = document.getElementById("statTutorCount");
+const statTotalHoursEl = document.getElementById("statTotalHours");
+const statNearCapEl = document.getElementById("statNearCap");
+const statAvgRateEl = document.getElementById("statAvgRate");
+
+// Latest workload rows, kept so the stat tiles can recompute whenever
+// either list reloads.
+let workloadCache = [];
+
+function initials(name) {
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+// Fills the four stat tiles from the two caches. Every lookup is guarded so
+// the page still boots if the tiles are ever missing from the markup.
+function renderTutorStats() {
+  const tutors = window.__tutorsCache || [];
+
+  if (statTutorCountEl) statTutorCountEl.textContent = String(tutors.length);
+
+  const rated = tutors.filter((t) => t.hourly_rate != null);
+  if (statAvgRateEl) {
+    statAvgRateEl.textContent = rated.length
+      ? `R${Math.round(rated.reduce((sum, t) => sum + Number(t.hourly_rate), 0) / rated.length)}/h`
+      : "—";
+  }
+
+  const totalHours = workloadCache.reduce(
+    (sum, t) => sum + (t.assignedHours || 0),
+    0,
+  );
+  if (statTotalHoursEl) statTotalHoursEl.textContent = `${totalHours}h`;
+
+  const cap = getGlobalCap();
+  const nearCap =
+    cap > 0
+      ? workloadCache.filter((t) => (t.assignedHours || 0) / cap >= 0.8).length
+      : 0;
+  if (statNearCapEl) statNearCapEl.textContent = String(nearCap);
+}
 
 async function loadTutors() {
   const res = await fetch("/api/tutors");
@@ -97,16 +142,24 @@ function renderTutors(tutors) {
   emptyCopyEl.hidden = tutors.length > 0;
 
   tutors.forEach((tutor) => {
-    const level = ACADEMIC_LEVEL_LABELS[tutor.academic_level] || "";
+    const level = ACADEMIC_LEVEL_LABELS[tutor.academic_level] || "—";
     const rate = tutor.hourly_rate;
     const rateLabel = rate != null ? `R${rate}/h` : "";
     const tr = document.createElement("tr");
     tr.dataset.tutorId = tutor.id;
     tr.innerHTML = `
-      <td>${tutor.name || ""}</td>
-      <td>${tutor.student_number || ""}</td>
-      <td>${tutor.email || ""}</td>
-      <td>${level}${rateLabel ? ` <span class="tutor-rate-badge">${rateLabel}</span>` : ""}</td>
+      <td>
+        <span class="cell-tutor">
+          <span class="avatar">${initials(tutor.name || "?")}</span>
+          <span class="name-block">
+            <span class="name">${tutor.name || ""}</span>
+            <span class="role">${level}</span>
+          </span>
+        </span>
+      </td>
+      <td class="cell-sub">${tutor.student_number || ""}</td>
+      <td class="cell-sub">${tutor.email || ""}</td>
+      <td>${rateLabel ? `<span class="tutor-rate-badge">${rateLabel}</span>` : "—"}</td>
       <td class="row-actions">
         <button type="button" class="btn-small btn-small-neutral" data-action="edit">Edit</button>
         <button type="button" class="btn-small" data-action="delete">Delete</button>
@@ -122,6 +175,7 @@ function renderTutors(tutors) {
   });
 
   applyHighlight();
+  renderTutorStats();
 }
 
 async function loadWorkload() {
@@ -136,6 +190,7 @@ async function loadWorkload() {
 }
 
 function renderWorkload(tutors) {
+  workloadCache = tutors;
   workloadListEl.innerHTML = "";
   workloadEmptyEl.hidden = tutors.length > 0;
 
@@ -170,6 +225,8 @@ function renderWorkload(tutors) {
       : "No approved courses";
     workloadListEl.appendChild(row);
   });
+
+  renderTutorStats();
 }
 
 function startEdit(tutor) {

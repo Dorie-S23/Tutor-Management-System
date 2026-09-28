@@ -3,233 +3,426 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tutors | Tutor Management System</title>
+    <title>Manage Tutors | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
     <script src="../js/theme.js"></script>
   </head>
-  <body>
-    <header class="board-header board-header--brand">
-      <hgroup class="header-left">
-        <p class="eyebrow">
-          <img src="../images/images.png" alt="" class="eyebrow-logo" />
-          School of Computer Science &amp; Applied Mathematics
-        </p>
-        <h1>Tutors</h1>
-      </hgroup>
 
-      <img
-        src="../images/Wits-890x664.png"
-        alt="University of the Witwatersrand"
-        class="header-wits-logo"
-      />
+  <body data-theme="organiser">
+    <header class="app-navbar">
+      <a class="brand-mark" href="board.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
 
-      <div class="header-actions">
-        <div class="universal-search">
-          <input
-            type="search"
-            id="universalSearchInput"
-            class="universal-search-input"
-            placeholder="Search courses, tutors, timesheets…"
-            aria-label="Universal search"
-          />
-          <ul
-            class="universal-search-results"
-            id="universalSearchResults"
-            hidden
-          ></ul>
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="board.html">Courses</a>
+        <a href="tutors.html" aria-current="page">Manage Tutors</a>
+        <a href="timetable.html">Timetable</a>
+        <a href="timesheet-review.html">Timesheets</a>
+        <a href="hours-budget-report.html">Budget Report</a>
+        <!-- Revealed by user-badge.js for the super-organiser only. -->
+        <a href="organiser-requests.html" data-super-only hidden>
+          Organiser Requests
+        </a>
+      </nav>
+
+      <div class="navbar-right">
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
         </div>
 
-        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Organiser</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
       </div>
-      <button class="btn btn-danger" id="logout-button" type="button">
-        Logout
-      </button>
     </header>
 
-    <main class="tutors-layout">
-      <!-- Row 1 left: Add / edit tutor -->
-      <section class="card tutor-form-card" aria-labelledby="formHeading">
-        <h2 id="formHeading">Add a tutor</h2>
-        <form id="tutorForm">
-          <input type="hidden" id="tutorId" />
-          <div class="form-field">
-            <label for="name">Name</label>
-            <input type="text" id="name" required />
-          </div>
-          <div class="form-field">
-            <label for="studentNumber">Student number</label>
-            <input type="text" id="studentNumber" required />
-          </div>
-          <div class="form-field">
-            <label for="email">Email</label>
-            <input type="email" id="email" required />
-          </div>
-          <div class="form-field">
-            <label for="academicLevel">Academic level</label>
-            <select id="academicLevel" required>
-              <option value="">—</option>
-              <option value="third_year">3rd year</option>
-              <option value="honours">Honours</option>
-              <option value="masters">Masters</option>
-              <option value="phd">PhD</option>
-            </select>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="submitBtn">
-              Add tutor
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost"
-              id="cancelEditBtn"
+    <main class="app-main">
+      <header class="page-head">
+        <div>
+          <h1>Manage Tutors</h1>
+          <p class="page-sub">
+            The roster, hourly rates, and this week's workload — all in one
+            place.
+          </p>
+        </div>
+        <div class="head-actions">
+          <div class="universal-search">
+            <input
+              type="search"
+              id="universalSearchInput"
+              class="universal-search-input"
+              placeholder="Search courses, tutors, timesheets…"
+              aria-label="Universal search"
+            />
+            <ul
+              class="universal-search-results"
+              id="universalSearchResults"
               hidden
-            >
-              Cancel
-            </button>
+            ></ul>
           </div>
-        </form>
+        </div>
+      </header>
+
+      <section class="org-stats" aria-label="Tutor overview">
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Tutors on the roll
+          </p>
+          <p class="org-stat__value" id="statTutorCount">0</p>
+        </article>
+
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Hours committed
+          </p>
+          <p class="org-stat__value" id="statTotalHours">0h</p>
+        </article>
+
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Near or over cap
+          </p>
+          <p class="org-stat__value" id="statNearCap">0</p>
+        </article>
+
+        <article class="org-stat">
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <circle cx="12" cy="12" r="2" />
+              <path d="M6 12h.01M18 12h.01" />
+            </svg>
+            Average rate
+          </p>
+          <p class="org-stat__value" id="statAvgRate">—</p>
+        </article>
       </section>
 
-      <!-- Row 1 right: General settings (global cap + role rates) -->
-      <section class="card settings-card" aria-labelledby="settingsHeading">
-        <h2 id="settingsHeading">General settings</h2>
-        <p class="hint">These values apply to every tutor.</p>
+      <div class="org-layout org-layout--tutors">
+        <div class="tutor-boards">
+          <aside class="org-rail" aria-labelledby="formHeading">
+            <header class="rail-head">
+              <h2 id="formHeading">Add a tutor</h2>
+            </header>
+            <p class="hint">
+              New tutors appear in the roster below straight away.
+            </p>
+            <form id="tutorForm">
+              <input type="hidden" id="tutorId" />
+              <label class="field">
+                <span class="field-label">Name</span>
+                <input type="text" id="name" required />
+              </label>
+              <label class="field">
+                <span class="field-label">Student number</span>
+                <input type="text" id="studentNumber" required />
+              </label>
+              <label class="field">
+                <span class="field-label">Email</span>
+                <input type="email" id="email" required />
+              </label>
+              <label class="field">
+                <span class="field-label">Academic level</span>
+                <select id="academicLevel" required>
+                  <option value="">—</option>
+                  <option value="third_year">3rd year</option>
+                  <option value="honours">Honours</option>
+                  <option value="masters">Masters</option>
+                  <option value="phd">PhD</option>
+                </select>
+              </label>
+              <div class="form-actions">
+                <button type="submit" class="btn-primary" id="submitBtn">
+                  Add tutor
+                </button>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  id="cancelEditBtn"
+                  hidden
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </aside>
 
-        <div class="settings-section">
-          <h3 class="settings-sub">Weekly hour cap</h3>
-          <p class="hint">Maximum hours any tutor can be scheduled per week.</p>
-          <div class="settings-cap-row">
-            <input
-              type="number"
-              id="globalWeeklyCap"
-              step="1"
-              min="0"
-              max="6"
-              value="6"
-            />
-            <span class="settings-cap-unit">hrs / week</span>
+          <div class="side-panel">
+            <h2 class="side-panel__title">Weekly hour cap</h2>
+            <p class="hint">
+              Maximum hours any tutor can be scheduled per week.
+            </p>
+            <div class="cap-row">
+              <input
+                type="number"
+                id="globalWeeklyCap"
+                step="1"
+                min="0"
+                max="6"
+                value="6"
+                aria-label="Weekly hour cap"
+              />
+              <span class="hint">hrs / week</span>
+            </div>
             <button
               type="button"
-              class="btn btn-small-primary"
+              class="btn-secondary btn-block"
               id="applyCapBtn"
             >
               Apply to all
             </button>
           </div>
+
+          <div class="side-panel">
+            <h2 class="side-panel__title">Hourly rates by role</h2>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Rate (R/h)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>3rd year tutor</td>
+                  <td>
+                    <input
+                      type="number"
+                      class="rate-input"
+                      data-level="third_year"
+                      step="1"
+                      min="0"
+                      aria-label="3rd year tutor rate"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td>Honours tutor</td>
+                  <td>
+                    <input
+                      type="number"
+                      class="rate-input"
+                      data-level="honours"
+                      step="1"
+                      min="0"
+                      aria-label="Honours tutor rate"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td>Masters tutor</td>
+                  <td>
+                    <input
+                      type="number"
+                      class="rate-input"
+                      data-level="masters"
+                      step="1"
+                      min="0"
+                      aria-label="Masters tutor rate"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td>PhD tutor</td>
+                  <td>
+                    <input
+                      type="number"
+                      class="rate-input"
+                      data-level="phd"
+                      step="1"
+                      min="0"
+                      aria-label="PhD tutor rate"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="form-actions">
+              <button
+                type="button"
+                class="btn-secondary btn-block"
+                id="saveRatesBtn"
+              >
+                Save rates
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div class="settings-section">
-          <h3 class="settings-sub">Hourly rates by role</h3>
-          <table class="rates-table">
-            <thead>
-              <tr>
-                <th>Role</th>
-                <th>Rate (R/h)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>3rd year tutor</td>
-                <td>
-                  <input
-                    type="number"
-                    class="rate-input"
-                    data-level="third_year"
-                    step="1"
-                    min="0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td>Honours tutor</td>
-                <td>
-                  <input
-                    type="number"
-                    class="rate-input"
-                    data-level="honours"
-                    step="1"
-                    min="0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td>Masters tutor</td>
-                <td>
-                  <input
-                    type="number"
-                    class="rate-input"
-                    data-level="masters"
-                    step="1"
-                    min="0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td>PhD tutor</td>
-                <td>
-                  <input
-                    type="number"
-                    class="rate-input"
-                    data-level="phd"
-                    step="1"
-                    min="0"
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <button
-            type="button"
-            class="btn btn-small-primary"
-            id="saveRatesBtn"
-            style="margin-top: 12px"
-          >
-            Save rates
-          </button>
-        </div>
-      </section>
+        <section class="org-detail" aria-label="Tutor roster and workload">
+          <div class="panel">
+            <h2 class="side-panel__title">The roster</h2>
+            <div class="table-wrap">
+              <table class="tutors-table">
+                <thead>
+                  <tr>
+                    <th>Tutor</th>
+                    <th>Student #</th>
+                    <th>Email</th>
+                    <th>Rate</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tutorsTableBody"></tbody>
+              </table>
+            </div>
+            <p class="empty-copy" id="emptyCopy" hidden>
+              No tutors yet — add one in the panel above.
+            </p>
+          </div>
 
-      <!-- Row 2: All tutors table (full width) -->
-      <section class="card tutor-table-card" aria-labelledby="listHeading">
-        <h2 id="listHeading">All tutors</h2>
-        <table class="tutors-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Student #</th>
-              <th>Email</th>
-              <th>Level</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="tutorsTableBody"></tbody>
-        </table>
-        <p class="empty-copy" id="emptyCopy" hidden>
-          No tutors yet — add one above.
-        </p>
-      </section>
-
-      <!-- Row 3: Workload spread (full width) -->
-      <section class="card workload-card" aria-labelledby="workloadHeading">
-        <h2 id="workloadHeading">Workload spread</h2>
-        <p class="hint">
-          Each tutor's approved course hours against the global weekly cap.
-        </p>
-        <div class="workload-list" id="workloadList"></div>
-        <p class="empty-copy" id="workloadEmpty" hidden>No tutors yet.</p>
-      </section>
+          <div class="panel">
+            <h2 class="side-panel__title">Workload spread</h2>
+            <p class="hint">
+              Each tutor's approved course hours against the weekly cap, busiest
+              first.
+            </p>
+            <div class="workload-list" id="workloadList"></div>
+            <p class="empty-copy" id="workloadEmpty" hidden>No tutors yet.</p>
+          </div>
+        </section>
+      </div>
     </main>
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+    <script src="../js/user-badge.js"></script>
     <script src="../js/universal-search.js"></script>
     <script src="../js/tutors.js"></script>
+    <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
+    <script type="module">
+      // Organiser page (shared with the super-organiser admin) — bounce
+      // signed-out visitors to login and any other signed-in role back to
+      // their own home page.
+      import { requireRole } from "../js/storage.js";
+      requireRole(["organiser", "super_organiser"]);
+    </script>
   </body>
 </html>

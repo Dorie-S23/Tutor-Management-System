@@ -49,7 +49,7 @@ function fillAndSubmit(window, { email = "someone@students.wits.ac.za" } = {}) {
   doc.getElementById("email").value = email;
   doc.getElementById("password").value = "correct horse battery staple";
   doc.getElementById("confirm-password").value = "correct horse battery staple";
-  doc.getElementById("role").value = "student";
+  doc.getElementById("role").value = "volunteer";
   doc.getElementById("student-number").value = "1234567";
 
   const form = doc.getElementById("register-form");
@@ -97,7 +97,7 @@ describe("registration Wits-email validation", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     const message = window.document.getElementById("register-message");
     expect(message.textContent).toBe("Please use a Wits email address.");
-    expect(message.style.color).toBe("red");
+    expect(message.classList.contains("is-error")).toBe(true);
   });
 
   test("an address merely containing 'wits.ac.za' outside the domain is still rejected", async () => {

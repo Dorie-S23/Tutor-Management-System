@@ -7,25 +7,36 @@ const router = express.Router();
 
 const VALID_STATUSES = ["pending", "approved", "rejected"];
 
-// "YYYY-MM-DD" + N days -> "YYYY-MM-DD", using UTC so there's no DST edge case
-// in pure date-string arithmetic (unlike public/js/storage.js's local-time
-// version, which exists for calendar *display*, not server-side math).
-function addDays(dateStr, days) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+// Timesheet periods are calendar months as of the monthly-timesheet change,
+// so the `week_start` column (kept as-is — no schema migration) stores the
+// period's first day, "YYYY-MM-01". Accepts a full date or a "YYYY-MM"
+// picker value and normalises both.
+function getMonthStart(dateStr) {
+  const [y, m] = dateStr.split("-").map(Number);
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-01`;
 }
 
-// Same Monday-start convention as public/js/storage.js's getWeekStart, done
-// in UTC for the same reason addDays above is — safe pure date-string math.
-function getWeekStart(dateStr) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  const day = date.getUTCDay(); // 0 = Sunday, 1 = Monday, ...
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  date.setUTCDate(date.getUTCDate() + diffToMonday);
-  return date.toISOString().slice(0, 10);
+// The last day of the month `monthStart` falls in — day 0 of the next month.
+function getMonthEnd(monthStart) {
+  const [y, m] = monthStart.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${monthStart.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+}
+
+// Month-start + n months (n may be negative), landing on a month's first day.
+function addMonths(monthStart, months) {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + months, 1)).toISOString().slice(0, 10);
+}
+
+// "September 2026" — how notifications name a period, matching the UI labels.
+function formatMonth(monthStart) {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 // GET /api/timesheets?tutorId=... — a tutor's own submissions
@@ -47,12 +58,14 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
-// POST /api/timesheets — a tutor submits one week's logged hours for sign-off.
-// weekStart is the Monday of that week (matches public/js/storage.js's
-// getWeekStart). The snapshot is derived from hour_entries here, not trusted
-// from the client, so later edits to hour_entries can't retroactively change
-// an already-submitted week. The table's (user_id, week_start) primary key
-// guards against double-submitting the same week.
+// POST /api/timesheets — a tutor submits one month's logged hours for
+// sign-off. weekStart is any date in the target month (the picker sends the
+// first); it's normalised to that month's first day, which is what gets
+// stored as the period key. The snapshot is derived from hour_entries here,
+// not trusted from the client, so later edits to hour_entries can't
+// retroactively change an already-submitted month. The table's
+// (user_id, week_start) primary key guards against double-submitting the
+// same month.
 router.post("/", async (req, res) => {
   const { tutorId, weekStart } = req.body ?? {};
 
@@ -61,15 +74,19 @@ router.post("/", async (req, res) => {
       .status(400)
       .json({ error: "tutorId and weekStart are required" });
   }
+  if (!/^\d{4}-\d{2}(-\d{2})?$/.test(weekStart)) {
+    return res.status(400).json({ error: "weekStart must be a date" });
+  }
 
-  const weekEnd = addDays(weekStart, 6);
+  const monthStart = getMonthStart(weekStart);
+  const monthEnd = getMonthEnd(monthStart);
 
   const { data: entries, error: entriesError } = await supabase
     .from("hour_entries")
     .select("date, hours, start_time, end_time, task_type, subject, notes")
     .eq("user_id", tutorId)
-    .gte("date", weekStart)
-    .lte("date", weekEnd)
+    .gte("date", monthStart)
+    .lte("date", monthEnd)
     .order("date");
 
   if (entriesError) {
@@ -78,7 +95,7 @@ router.post("/", async (req, res) => {
   if (entries.length === 0) {
     return res
       .status(400)
-      .json({ error: "No logged hours found for that week" });
+      .json({ error: "No logged hours found for that month" });
   }
 
   const totalHours = entries.reduce((sum, e) => sum + Number(e.hours), 0);
@@ -87,7 +104,7 @@ router.post("/", async (req, res) => {
     .from("timesheets")
     .insert({
       user_id: tutorId,
-      week_start: weekStart,
+      week_start: monthStart,
       status: "pending",
       total_hours: totalHours,
       entries_snapshot: entries,
@@ -96,10 +113,10 @@ router.post("/", async (req, res) => {
     .single();
 
   if (error) {
-    // Postgres unique/PK violation — a timesheet for this tutor+week already exists
+    // Postgres unique/PK violation — a timesheet for this tutor+month already exists
     if (error.code === "23505") {
       return res.status(409).json({
-        error: "You've already submitted a timesheet for that week",
+        error: "You've already submitted a timesheet for that month",
       });
     }
     return res.status(500).json({ error: error.message });
@@ -149,7 +166,7 @@ router.get("/payroll-export", async (req, res) => {
     "Tutor name",
     "Student number",
     "Email",
-    "Week starting",
+    "Month",
     "Hours",
     "Hourly rate",
     "Amount",
@@ -169,7 +186,8 @@ router.get("/payroll-export", async (req, res) => {
       tutor?.name ?? "Unknown",
       tutor?.student_number ?? "",
       tutor?.email ?? "",
-      t.week_start,
+      // "YYYY-MM" — the month the timesheet covers.
+      t.week_start.slice(0, 7),
       t.total_hours,
       rate ?? "",
       amount,
@@ -224,10 +242,11 @@ router.patch("/:userId/:weekStart", async (req, res) => {
   }
 
   if (status === "approved" || status === "rejected") {
+    const month = formatMonth(data.week_start);
     const message =
       status === "approved"
-        ? `Your timesheet for the week of ${data.week_start} was approved.`
-        : `Your timesheet for the week of ${data.week_start} was rejected: ${reviewerNote.trim()}`;
+        ? `Your timesheet for ${month} was approved.`
+        : `Your timesheet for ${month} was rejected: ${reviewerNote.trim()}`;
 
     notify(data.user_id, {
       type: "timesheet_status",
@@ -242,11 +261,12 @@ router.patch("/:userId/:weekStart", async (req, res) => {
   res.json(data);
 });
 
-// GET /api/timesheets/due-reminder?tutorId=... — checks whether last week's
-// logged hours were never submitted, and if so, sends a one-time "timesheet
-// due" notification. There's no scheduled job in this app, so this is
-// checked (idempotently, via a lookup for a reminder already sent for that
-// week) whenever the tutor's dashboard loads, rather than on a real timer.
+// GET /api/timesheets/due-reminder?tutorId=... — checks whether last
+// calendar month's logged hours were never submitted, and if so, sends a
+// one-time "timesheet due" notification. There's no scheduled job in this
+// app, so this is checked (idempotently, via a lookup for a reminder already
+// sent for that month) whenever the tutor's dashboard loads, rather than on
+// a real timer.
 router.get("/due-reminder", async (req, res) => {
   const { tutorId } = req.query;
   if (!tutorId) {
@@ -254,8 +274,8 @@ router.get("/due-reminder", async (req, res) => {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const lastWeekStart = addDays(getWeekStart(today), -7);
-  const lastWeekEnd = addDays(lastWeekStart, 6);
+  const lastMonthStart = addMonths(getMonthStart(today), -1);
+  const lastMonthEnd = getMonthEnd(lastMonthStart);
 
   const [
     { data: entries, error: entriesError },
@@ -265,14 +285,18 @@ router.get("/due-reminder", async (req, res) => {
       .from("hour_entries")
       .select("id")
       .eq("user_id", tutorId)
-      .gte("date", lastWeekStart)
-      .lte("date", lastWeekEnd)
+      .gte("date", lastMonthStart)
+      .lte("date", lastMonthEnd)
       .limit(1),
     supabase
       .from("timesheets")
       .select("user_id")
       .eq("user_id", tutorId)
-      .eq("week_start", lastWeekStart)
+      // Any period key within the month counts as submitted — including
+      // rows left over from the old weekly scheme (a Monday date).
+      .gte("week_start", lastMonthStart)
+      .lte("week_start", lastMonthEnd)
+      .limit(1)
       .maybeSingle(),
   ]);
 
@@ -292,7 +316,7 @@ router.get("/due-reminder", async (req, res) => {
     .select("id")
     .eq("user_id", tutorId)
     .eq("type", "timesheet_due")
-    .eq("related_id", lastWeekStart)
+    .eq("related_id", lastMonthStart)
     .maybeSingle();
 
   if (reminderError) {
@@ -305,9 +329,9 @@ router.get("/due-reminder", async (req, res) => {
   const { error: insertError } = await supabase.from("notifications").insert({
     user_id: tutorId,
     type: "timesheet_due",
-    message: `You logged hours for the week of ${lastWeekStart} but haven't submitted a timesheet for it yet.`,
+    message: `You logged hours in ${formatMonth(lastMonthStart)} but haven't submitted a timesheet for it yet.`,
     related_entity: "timesheet",
-    related_id: lastWeekStart,
+    related_id: lastMonthStart,
     read: false,
   });
 

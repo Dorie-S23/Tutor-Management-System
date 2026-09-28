@@ -1,12 +1,17 @@
-// log-hours.js is the tutor/student "log your hours" page module. The
-// real nav.js/storage.js imports can't load here (they fetch the API), so
-// both import statements are stripped and their functions are replaced by
-// stubs appended after the real source — in the one eval scope, the later
-// function declarations win. Everything else (role-based nav tweaks,
-// hours-from-times math, the confirm dialog wrapper, week navigation, and
-// the whole submit/edit/delete flow) is the real code running inside
-// jsdom, with the //# sourceURL tag so Jest's v8 coverage attributes the
-// lines back to the real file.
+// log-hours.js is the tutor-only "Log your hours" wizard: it loads the
+// modules the tutor is approved to tutor (as chips and select options),
+// lets them pick one of that module's upcoming scheduled sessions — which
+// locks the date and times to that slot — and rolls every logged entry up
+// into the month table below. The real nav.js/storage.js/sessionTiming.js
+// imports can't load here (they fetch the API or redirect), so all three
+// import statements are stripped and their functions are replaced by stubs
+// appended after the real source — in the one eval scope, the later
+// function declarations win (and hoist above the page's top-level guard).
+// Everything else (role guard, module loading, session chips, hours-from-
+// times math, the confirm dialog wrapper, month navigation, and the whole
+// submit/edit/delete flow) is the real code running inside jsdom, with the
+// //# sourceURL tag so Jest's v8 coverage attributes the lines back to the
+// real file.
 const fs = require("fs");
 const path = require("path");
 const { JSDOM, VirtualConsole } = require("jsdom");
@@ -20,8 +25,17 @@ const rawLogHoursJs = fs.readFileSync(
 const STUBS = `
 function highlightActiveTab() {}
 function renderWelcomeHeading() {}
-function getCurrentUser() {
-  return window.__user;
+// Mirrors storage.js: the caller gets the user back only when their role
+// is allowed — everyone else is redirected away and gets null (the page's
+// top-level guard then throws, letting the redirect happen).
+function requireRole(role) {
+  const user = window.__user;
+  const allowed = Array.isArray(role) ? role : [role];
+  if (!user || !allowed.includes(user.role)) {
+    window.location.href = user ? "dashboard.html" : "login.html";
+    return null;
+  }
+  return user;
 }
 function addEntry(entry) {
   window.__added.push(entry);
@@ -42,24 +56,41 @@ function findDuplicateEntry(payload, excludeId) {
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
-function getWeekStart(dateStr) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
-  return dt.getFullYear() + "-" + pad2(dt.getMonth() + 1) + "-" + pad2(dt.getDate());
+function getMonthStart(dateStr) {
+  return dateStr.slice(0, 7) + "-01";
 }
-function addDays(dateStr, days) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  return dt.getFullYear() + "-" + pad2(dt.getMonth() + 1) + "-" + pad2(dt.getDate());
+function addMonths(monthStart, months) {
+  const [y, m] = monthStart.split("-").map(Number);
+  const d = new Date(y, m - 1 + months, 1);
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-01";
 }
-function getEntriesForWeek(weekStart) {
-  window.__weekQueries.push(weekStart);
+function toDateStr(date) {
+  return (
+    date.getFullYear() +
+    "-" +
+    pad2(date.getMonth() + 1) +
+    "-" +
+    pad2(date.getDate())
+  );
+}
+function getEntriesForMonth(monthStart) {
+  window.__monthQueries.push(monthStart);
   return Promise.resolve(window.__entries);
 }
 function todayStr() {
   return window.__today;
+}
+// sessionTiming.js reads the real clock, which would make these tests
+// flaky around midnight — hand the page whatever the test asked for
+// instead. The three functions mirror its server/loggingWindow.js rule.
+function windowStatus() {
+  return window.__status;
+}
+function windowNote() {
+  return window.__note;
+}
+function windowBlockMessage() {
+  return window.__blockMessage;
 }
 `;
 
@@ -73,29 +104,40 @@ const PAGE = `
     <a href="profile.html" id="profile-nav-link"></a>
   </nav>
   <main>
-    <h2 id="form-title">Log hours</h2>
-    <form id="entry-form">
-      <input type="hidden" id="entry-id">
-      <input type="hidden" id="hours">
-      <input type="date" id="date">
-      <select id="taskType">
-        <option value="Tutoring">Tutoring</option>
-        <option value="Marking">Marking</option>
-      </select>
-      <input type="time" id="startTime">
-      <input type="time" id="endTime">
-      <p id="form-error" hidden></p>
-      <input type="text" id="subject">
-      <select id="courseSelect"><option value="">No specific course</option></select>
-      <p id="hours-display">—</p>
-      <textarea id="notes"></textarea>
-      <button type="submit" id="submit-btn">Add entry</button>
-      <button type="button" id="cancel-edit-btn" hidden>Cancel</button>
-    </form>
-    <button type="button" id="prev-week-btn"></button>
-    <span id="week-label"></span>
-    <button type="button" id="next-week-btn"></button>
-    <p>Total this week: <strong id="week-total">0</strong> hours</p>
+    <section id="courseStep">
+      <div id="courseChips"></div>
+    </section>
+    <section id="sessionStep" hidden>
+      <div id="sessionChips"></div>
+    </section>
+    <section id="attendanceCard" hidden>
+      <p id="scheduledBox" hidden>
+        <span id="scheduledWhen"></span>
+        <span id="scheduledVenue"></span>
+      </p>
+      <h2 id="form-title">Log your hours</h2>
+      <form id="entry-form">
+        <input type="hidden" id="entry-id">
+        <input type="hidden" id="hours">
+        <input type="date" id="date" readonly>
+        <input type="time" id="startTime" readonly>
+        <input type="time" id="endTime" readonly>
+        <select id="taskType">
+          <option value="Tutoring">Tutoring</option>
+          <option value="Marking">Marking</option>
+        </select>
+        <select id="courseSelect"><option value="">Select a module</option></select>
+        <p id="hours-display">—</p>
+        <textarea id="notes"></textarea>
+        <p id="form-error" hidden></p>
+        <button type="submit" id="submit-btn">Add entry</button>
+        <button type="button" id="cancel-edit-btn" hidden>Cancel</button>
+      </form>
+    </section>
+    <button type="button" id="prev-month-btn"></button>
+    <span id="month-label"></span>
+    <button type="button" id="next-month-btn"></button>
+    <p>Total this month: <strong id="month-total">0</strong> hours</p>
     <table><tbody id="entries-body"></tbody></table>
     <p id="empty-state" hidden></p>
     <dialog id="confirm-modal">
@@ -107,9 +149,46 @@ const PAGE = `
   </main>
 `;
 
-const COURSES = [
-  { id: "3", course_code: "COMS1015A", course_name: "Computer Science 1A" },
-  { id: "4", course_code: "MATH1000", course_name: "Intro Maths" },
+const APPLICATIONS = [
+  {
+    status: "approved",
+    course_id: "3",
+    courses: {
+      id: "3",
+      course_code: "COMS1015A",
+      course_name: "Computer Science 1A",
+      Day_of_tut: "Wednesday",
+      tutor_start_time: "09:00:00",
+      tutor_end_time: "11:00:00",
+      venues: "MSB 101",
+    },
+  },
+  {
+    status: "pending",
+    course_id: "9",
+    courses: {
+      id: "9",
+      course_code: "PHYS1014",
+      course_name: "Physics 1",
+      Day_of_tut: "Friday",
+      tutor_start_time: "10:00:00",
+      tutor_end_time: "12:00:00",
+      venues: "",
+    },
+  },
+  {
+    status: "approved",
+    course_id: "4",
+    courses: {
+      id: "4",
+      course_code: "MATH1000",
+      course_name: "Intro Maths",
+      Day_of_tut: "Thursday",
+      tutor_start_time: "14:00:00",
+      tutor_end_time: "16:00:00",
+      venues: "TBC",
+    },
+  },
 ];
 
 const ENTRY_E1 = {
@@ -119,7 +198,6 @@ const ENTRY_E1 = {
   startTime: "09:00",
   endTime: "11:00",
   taskType: "Marking",
-  subject: "PHYS1000",
   courseId: 4,
   notes: "bring notes",
 };
@@ -131,7 +209,6 @@ const ENTRY_E2 = {
   startTime: null,
   endTime: null,
   taskType: "Tutoring",
-  subject: "COMS1015A",
   courseId: null,
   notes: "",
 };
@@ -145,7 +222,7 @@ function jsonResponse(body, ok = true) {
 function loadLogHours({
   user = { id: "tutor-1", name: "Tutor One", role: "tutor" },
   entries = [],
-  coursesRespond = () => jsonResponse(COURSES),
+  applicationsRespond = () => jsonResponse(APPLICATIONS),
 } = {}) {
   // The redirect on the not-logged-in path is jsdom's "Not implemented:
   // navigation" — swallow it through a quiet virtual console.
@@ -155,12 +232,12 @@ function loadLogHours({
   const logHoursJs = rawLogHoursJs
     .replace(/import\s*{[^}]*}\s*from\s*["']\.\/nav\.js["'];?/, "")
     .replace(/import\s*{[\s\S]*?}\s*from\s*["']\.\/storage\.js["'];?/, "")
+    .replace(/import\s*{[\s\S]*?}\s*from\s*["']\.\/sessionTiming\.js["'];?/, "")
     // Top-level await only works in a module; a classic script (which is
-    // what jsdom executes) needs the bare call. Everything else the page
-    // awaits sits inside async functions, so this is the only change.
-    .replace(/\nawait render\(\);\s*$/, "\nrender();");
+    // what jsdom executes) needs the bare call — the page has exactly one.
+    .replace("\nawait render();", "\nrender();");
 
-  const courseFetches = [];
+  const fetches = [];
 
   const dom = new JSDOM(`<!doctype html><html><body>${PAGE}</body></html>`, {
     url: "http://localhost/log-hours.html",
@@ -175,18 +252,27 @@ function loadLogHours({
       window.HTMLDialogElement.prototype.close = function () {
         this.removeAttribute("open");
       };
+      // jsdom has no layout, so record the wizard's scroll-into-view calls
+      // instead of performing them.
+      window.HTMLElement.prototype.scrollIntoView = function (options) {
+        window.__scrollIntoViewCalls.push(options);
+      };
       window.__user = user;
       window.__today = "2026-09-30"; // a Wednesday
       window.__entries = entries;
       window.__duplicate = null;
+      window.__status = "open";
+      window.__note = "";
+      window.__blockMessage = "";
       window.__added = [];
       window.__updated = [];
       window.__deleted = [];
-      window.__weekQueries = [];
+      window.__monthQueries = [];
       window.__duplicateQueries = [];
+      window.__scrollIntoViewCalls = [];
       window.fetch = (url) => {
-        courseFetches.push(String(url));
-        return coursesRespond(String(url));
+        fetches.push(String(url));
+        return applicationsRespond(String(url));
       };
     },
   });
@@ -196,10 +282,10 @@ function loadLogHours({
       `${logHoursJs}\n${STUBS}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "log-hours.js")).href}`,
     );
   } catch (err) {
-    // The not-logged-in path throws by design after redirecting.
+    // The not-logged-in / wrong-role path throws by design after redirecting.
   }
 
-  return { win: dom.window, courseFetches };
+  return { win: dom.window, fetches };
 }
 
 // Types a value into one of the time fields, firing the "input" event the
@@ -210,25 +296,60 @@ function setTime(win, id, value) {
   field.dispatchEvent(new win.Event("input", { bubbles: true }));
 }
 
+function submitForm(win) {
+  win.document
+    .getElementById("entry-form")
+    .dispatchEvent(
+      new win.Event("submit", { bubbles: true, cancelable: true }),
+    );
+}
+
 describe("log-hours.js", () => {
   test("redirects away when nobody is signed in", () => {
     const { win } = loadLogHours({ user: null });
 
-    expect(win.__weekQueries).toHaveLength(0); // render() never ran
+    expect(win.__monthQueries).toHaveLength(0); // render() never ran
     expect(win.__added).toHaveLength(0);
     win.close();
   });
 
-  test("role-based nav targets and course options", async () => {
-    const { win, courseFetches } = loadLogHours({});
+  test("stays tutor-only — students and organisers are sent away", () => {
+    const student = loadLogHours({
+      user: { id: "s1", name: "Student One", role: "student" },
+    });
+    expect(student.win.__monthQueries).toHaveLength(0);
+    expect(student.fetches).toHaveLength(0);
+    student.win.close();
+
+    const organiser = loadLogHours({
+      user: { id: "o1", name: "Organiser One", role: "organiser" },
+    });
+    expect(organiser.win.__monthQueries).toHaveLength(0);
+    expect(organiser.fetches).toHaveLength(0);
+    organiser.win.close();
+  });
+
+  test("loads the approved modules and wires the role-based nav", async () => {
+    const { win, fetches } = loadLogHours({});
     await flush();
 
     const doc = win.document;
-    expect(courseFetches).toEqual(["/api/courses"]);
+    expect(fetches).toEqual(["/api/tutor-applications?tutorId=tutor-1"]);
     const options = doc.getElementById("courseSelect").options;
-    expect(options).toHaveLength(3);
+    expect(options).toHaveLength(3); // placeholder + the two approved modules
     expect(options[1].textContent).toBe("COMS1015A — Computer Science 1A");
     expect(options[2].value).toBe("4");
+
+    // The chip grid mirrors the select — the pending application is not
+    // one of the tutor's modules.
+    const chips = doc.querySelectorAll(".course-chip");
+    expect(chips).toHaveLength(2);
+    expect(chips[0].querySelector(".course-chip__code").textContent).toBe(
+      "COMS1015A",
+    );
+    expect(chips[0].querySelector(".course-chip__name").textContent).toBe(
+      "Computer Science 1A",
+    );
 
     // Tutor: student-only links hidden, profile link kept.
     expect(doc.getElementById("my-sessions-nav-link").hidden).toBe(true);
@@ -239,43 +360,18 @@ describe("log-hours.js", () => {
     win.close();
   });
 
-  test("student and organiser nav variants", async () => {
-    const student = loadLogHours({
-      user: { id: "s1", name: "Student One", role: "student" },
-      // A non-ok courses response: the picker quietly stays empty.
-      coursesRespond: () => jsonResponse({ error: "nope" }, false),
+  test("shows a retry message when the modules can't be loaded", async () => {
+    const { win } = loadLogHours({
+      applicationsRespond: () => Promise.reject(new Error("offline")),
     });
     await flush();
-    const studentDoc = student.win.document;
-    expect(
-      studentDoc.getElementById("dashboard-nav-link").getAttribute("href"),
-    ).toBe("StudentView.html");
-    expect(
-      studentDoc.getElementById("calendar-nav-link").getAttribute("href"),
-    ).toBe("student-calendar.html");
-    expect(
-      studentDoc.getElementById("profile-nav-link").getAttribute("href"),
-    ).toBe("student-profile.html");
-    expect(studentDoc.getElementById("timesheets-nav-link").hidden).toBe(true);
-    expect(studentDoc.getElementById("modules-nav-link").hidden).toBe(true);
-    expect(studentDoc.getElementById("courseSelect").options).toHaveLength(1);
 
-    const organiser = loadLogHours({
-      user: { id: "o1", name: "Organiser One", role: "organiser" },
-      // A rejected fetch: also quietly ignored.
-      coursesRespond: () => Promise.reject(new Error("offline")),
-    });
-    await flush();
-    const organiserDoc = organiser.win.document;
-    expect(organiserDoc.getElementById("my-sessions-nav-link").hidden).toBe(
-      true,
+    const doc = win.document;
+    expect(doc.getElementById("courseChips").textContent).toContain(
+      "Couldn't load your modules right now",
     );
-    expect(organiserDoc.getElementById("profile-nav-link").hidden).toBe(true);
-    expect(
-      organiserDoc.getElementById("dashboard-nav-link").getAttribute("href"),
-    ).toBe("dashboard.html");
-    student.win.close();
-    organiser.win.close();
+    expect(doc.getElementById("courseSelect").options).toHaveLength(1);
+    win.close();
   });
 
   test("recomputes hours from start/end times", async () => {
@@ -285,21 +381,24 @@ describe("log-hours.js", () => {
     const doc = win.document;
     const hoursField = doc.getElementById("hours");
     const display = doc.getElementById("hours-display");
+    expect(display.textContent).toBe("—"); // nothing picked yet
 
     setTime(win, "startTime", "09:00");
-    setTime(win, "endTime", "09:20"); // rounds to 0 — too short to log
+    setTime(win, "endTime", "09:20"); // under half an hour — not billable
     expect(hoursField.value).toBe("");
-    expect(display.textContent).toBe("Too short to log (rounds to 0 hours)");
+    expect(display.textContent).toBe("Rounds to 0h");
 
     setTime(win, "endTime", "08:00"); // not after the start — left alone
-    expect(display.textContent).toBe("Too short to log (rounds to 0 hours)");
+    expect(hoursField.value).toBe("");
+    expect(display.textContent).toBe("Rounds to 0h");
 
     setTime(win, "endTime", "10:20"); // 80 minutes → 1 hour
     expect(hoursField.value).toBe("1");
+    expect(display.textContent).toBe("1h");
 
     setTime(win, "endTime", "11:00"); // 2 hours
     expect(hoursField.value).toBe("2");
-    expect(display.textContent).toBe("2");
+    expect(display.textContent).toBe("2h");
 
     setTime(win, "endTime", ""); // incomplete range — cleared
     expect(hoursField.value).toBe("");
@@ -312,95 +411,135 @@ describe("log-hours.js", () => {
     win.close();
   });
 
-  test("renders the week, logs, edits, and deletes entries", async () => {
+  test("only lets a session be logged inside its window", async () => {
+    const { win } = loadLogHours({});
+    await flush();
+
+    const doc = win.document;
+    // The stub answers for the real clock, so pin the window state.
+    win.__status = "early";
+    win.__blockMessage =
+      "You can only log a session while it's happening — logging opens at 09:00.";
+
+    doc.querySelector(".course-chip").click();
+    // Locked sessions say so on the chip itself.
+    expect(
+      doc.querySelector(".session-chip").classList.contains("is-locked"),
+    ).toBe(true);
+
+    doc.querySelector(".session-chip").click();
+
+    // Picking a not-yet-open session explains why straight away…
+    const formError = doc.getElementById("form-error");
+    expect(formError.hidden).toBe(false);
+    expect(formError.textContent).toBe(win.__blockMessage);
+
+    // …and submitting is refused with the same reason, no round-trip.
+    submitForm(win);
+    await flush();
+    expect(win.__added).toHaveLength(0);
+    expect(win.__duplicateQueries).toHaveLength(0);
+    expect(formError.textContent).toBe(win.__blockMessage);
+    win.close();
+  });
+
+  test("logs a scheduled session, edits, and deletes entries", async () => {
     const { win } = loadLogHours({ entries: [ENTRY_E1, ENTRY_E2] });
     await flush();
 
     const doc = win.document;
-    const weekTotal = doc.getElementById("week-total");
+    const monthTotal = doc.getElementById("month-total");
     const entriesBody = doc.getElementById("entries-body");
     const emptyState = doc.getElementById("empty-state");
     const toast = doc.getElementById("toast");
 
-    // Initial render: both entries, week starts on the Monday.
-    expect(win.__weekQueries).toEqual(["2026-09-28"]);
-    expect(weekTotal.textContent).toBe("3.5");
-    expect(doc.getElementById("week-label").textContent).not.toBe("");
+    // Initial render: both entries, rolled up into the month total.
+    expect(win.__monthQueries).toEqual(["2026-09-01"]);
+    expect(monthTotal.textContent).toBe("3.5");
+    expect(doc.getElementById("month-label").textContent).not.toBe("");
     expect(entriesBody.querySelectorAll("tr")).toHaveLength(2);
     expect(emptyState.hidden).toBe(true);
+    expect(entriesBody.querySelectorAll("tr")[0].children[1].textContent).toBe(
+      "2h",
+    );
     expect(entriesBody.querySelectorAll("tr")[1].children[4].textContent).toBe(
       "",
     ); // blank notes cell still rendered
 
-    // Submitting without a valid time range is rejected up front.
-    doc
-      .getElementById("entry-form")
-      .dispatchEvent(
-        new win.Event("submit", { bubbles: true, cancelable: true }),
-      );
+    // Nothing can be logged before a scheduled session is picked.
+    submitForm(win);
     const formError = doc.getElementById("form-error");
     expect(formError.textContent).toBe(
-      "Enter a start and end time that add up to at least one whole hour.",
+      "Pick one of the scheduled sessions first.",
     );
     expect(formError.hidden).toBe(false);
 
-    // Fill a valid range and an overlapping entry: duplicate check fires.
-    setTime(win, "startTime", "09:00");
-    setTime(win, "endTime", "11:00");
-    doc.getElementById("subject").value = " COMS1015A ";
+    // Pick the module, then one of its Wednesday sessions: the date and
+    // times lock to that slot and the hours follow.
+    doc.querySelector(".course-chip").click();
+    expect(doc.getElementById("sessionStep").hidden).toBe(false);
+    const sessionChips = doc.querySelectorAll(".session-chip");
+    expect(sessionChips).toHaveLength(4); // the next four Wednesday slots
+    expect(sessionChips[0].classList.contains("is-open")).toBe(true);
+    sessionChips[0].click();
+
+    const sessionDate = doc.getElementById("date").value;
+    expect(sessionDate).not.toBe("");
+    expect(doc.getElementById("startTime").value).toBe("09:00");
+    expect(doc.getElementById("endTime").value).toBe("11:00");
+    expect(doc.getElementById("hours").value).toBe("2");
+    expect(doc.getElementById("attendanceCard").hidden).toBe(false);
+    expect(doc.getElementById("scheduledBox").hidden).toBe(false);
+    expect(doc.getElementById("scheduledVenue").textContent).toBe("MSB 101");
+    expect(doc.getElementById("scheduledWhen").textContent).toContain(
+      "09:00–11:00",
+    );
+    expect(win.__scrollIntoViewCalls).toEqual([
+      { behavior: "smooth", block: "nearest" },
+    ]);
+
+    // An overlapping entry: the duplicate check fires on submit.
     win.__duplicate = { id: "other" };
-    doc
-      .getElementById("entry-form")
-      .dispatchEvent(
-        new win.Event("submit", { bubbles: true, cancelable: true }),
-      );
+    submitForm(win);
     await flush();
     expect(formError.textContent).toBe(
       "This overlaps an entry you've already logged for this day.",
     );
     expect(win.__duplicateQueries[0]).toEqual([
       {
-        date: "2026-09-30",
+        date: sessionDate,
         hours: 2,
         startTime: "09:00",
         endTime: "11:00",
         taskType: "Tutoring",
-        subject: "COMS1015A",
-        courseId: null,
+        courseId: 3,
         notes: "",
       },
       null,
     ]);
 
-    // No duplicate: the entry is added, with the picked course and
-    // trimmed notes.
+    // No duplicate: the entry is added — notes trimmed, module kept.
     win.__duplicate = null;
-    doc.getElementById("courseSelect").value = "3";
     doc.getElementById("notes").value = " some notes ";
-    doc
-      .getElementById("entry-form")
-      .dispatchEvent(
-        new win.Event("submit", { bubbles: true, cancelable: true }),
-      );
+    submitForm(win);
     await flush();
     expect(win.__added).toEqual([
       {
-        date: "2026-09-30",
+        date: sessionDate,
         hours: 2,
         startTime: "09:00",
         endTime: "11:00",
         taskType: "Tutoring",
-        subject: "COMS1015A",
         courseId: 3,
         notes: "some notes",
       },
     ]);
-    expect(doc.getElementById("form-title").textContent).toBe("Log hours");
+    expect(doc.getElementById("form-title").textContent).toBe("Log your hours");
     expect(doc.getElementById("submit-btn").textContent).toBe("Add entry");
     expect(doc.getElementById("cancel-edit-btn").hidden).toBe(true);
     expect(toast.textContent).toBe("Entry added.");
-    expect(toast.classList.contains("toast--success")).toBe(true);
-    expect(win.__weekQueries).toHaveLength(2);
+    expect(toast.classList.contains("show")).toBe(true);
+    expect(win.__monthQueries).toHaveLength(2);
 
     // Edit the first entry: the form fills from the stored values.
     const scrollCalls = [];
@@ -409,18 +548,15 @@ describe("log-hours.js", () => {
       .querySelectorAll("tr")[0]
       .querySelector(".btn-link");
     editBtn.click();
+    await flush(); // enterEditMode awaits ensureCourseOption
     expect(doc.getElementById("entry-id").value).toBe("e1");
     expect(doc.getElementById("form-title").textContent).toBe("Edit entry");
     expect(doc.getElementById("submit-btn").textContent).toBe("Save changes");
     expect(doc.getElementById("cancel-edit-btn").hidden).toBe(false);
-    expect(doc.getElementById("hours-display").textContent).toBe("2");
+    expect(doc.getElementById("hours-display").textContent).toBe("2h");
     expect(scrollCalls).toEqual([{ top: 0, behavior: "smooth" }]);
 
-    doc
-      .getElementById("entry-form")
-      .dispatchEvent(
-        new win.Event("submit", { bubbles: true, cancelable: true }),
-      );
+    submitForm(win);
     await flush();
     expect(win.__updated).toEqual([
       {
@@ -431,7 +567,6 @@ describe("log-hours.js", () => {
           startTime: "09:00",
           endTime: "11:00",
           taskType: "Marking",
-          subject: "PHYS1000",
           courseId: 4,
           notes: "bring notes",
         },
@@ -442,57 +577,61 @@ describe("log-hours.js", () => {
 
     // Cancel restores the add-mode form.
     doc.getElementById("cancel-edit-btn").click();
-    expect(doc.getElementById("form-title").textContent).toBe("Log hours");
+    expect(doc.getElementById("form-title").textContent).toBe("Log your hours");
 
     // Delete: cancelling the confirm dialog keeps the entry…
     const dialog = doc.getElementById("confirm-modal");
-    entriesBody.querySelectorAll("tr")[0].querySelector(".btn-danger").click();
+    const deleteBtn = () =>
+      entriesBody.querySelectorAll("tr")[0].querySelector(".btn-link--danger");
+    deleteBtn().click();
     expect(dialog.hasAttribute("open")).toBe(true);
     expect(doc.getElementById("confirm-modal-message").textContent).toBe(
       "Delete this entry?",
     );
     doc.getElementById("confirm-modal-cancel-btn").click();
+    await flush();
     expect(win.__deleted).toHaveLength(0);
 
     // …Escape dismissal does the same…
-    entriesBody.querySelectorAll("tr")[0].querySelector(".btn-danger").click();
+    deleteBtn().click();
     dialog.dispatchEvent(new win.Event("cancel"));
+    await flush();
     expect(win.__deleted).toHaveLength(0);
 
     // …and confirming deletes and re-renders.
-    entriesBody.querySelectorAll("tr")[0].querySelector(".btn-danger").click();
+    deleteBtn().click();
     doc.getElementById("confirm-modal-confirm-btn").click();
     await flush();
     expect(win.__deleted).toEqual(["e1"]);
-    expect(win.__weekQueries).toHaveLength(4);
+    expect(win.__monthQueries).toHaveLength(4);
     expect(toast.textContent).toBe("Entry deleted.");
-    expect(toast.classList.contains("toast--danger")).toBe(true);
+    expect(toast.classList.contains("show")).toBe(true);
     win.close();
   });
 
-  test("shows the empty state and navigates between weeks", async () => {
+  test("shows the empty state and navigates between months", async () => {
     const { win } = loadLogHours({ entries: [] });
     await flush();
 
     const doc = win.document;
     expect(doc.getElementById("empty-state").hidden).toBe(false);
     expect(doc.getElementById("entries-body").children).toHaveLength(0);
-    expect(doc.getElementById("week-total").textContent).toBe("0");
+    expect(doc.getElementById("month-total").textContent).toBe("0");
 
-    doc.getElementById("prev-week-btn").click();
+    doc.getElementById("prev-month-btn").click();
     await flush();
-    expect(win.__weekQueries).toEqual(["2026-09-28", "2026-09-21"]);
+    expect(win.__monthQueries).toEqual(["2026-09-01", "2026-08-01"]);
 
-    doc.getElementById("next-week-btn").click();
-    doc.getElementById("next-week-btn").click();
+    doc.getElementById("next-month-btn").click();
+    doc.getElementById("next-month-btn").click();
     await flush();
-    expect(win.__weekQueries).toEqual([
-      "2026-09-28",
-      "2026-09-21",
-      "2026-09-28",
-      "2026-10-05",
+    expect(win.__monthQueries).toEqual([
+      "2026-09-01",
+      "2026-08-01",
+      "2026-09-01",
+      "2026-10-01",
     ]);
-    expect(doc.getElementById("week-label").textContent).not.toBe("");
+    expect(doc.getElementById("month-label").textContent).not.toBe("");
     win.close();
   });
 });

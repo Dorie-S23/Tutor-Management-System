@@ -3,27 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard | Tutor Management System</title>
+    <title>Dashboard | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
     <script src="../js/theme.js"></script>
   </head>
-  <body class="tutor-app">
-    <header class="app-header">
-      <h1>Tutor Dashboard</h1>
-      <nav class="tab-nav">
-        <a href="dashboard.html">Dashboard</a>
+
+  <body data-theme="tutor">
+    <header class="app-navbar">
+      <a class="brand-mark" href="dashboard.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
+
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="dashboard.html" aria-current="page">Dashboard</a>
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html">Calendar</a>
         <a href="timesheets.html">Timesheets</a>
         <a href="modules.html">Module Application</a>
         <a href="profile.html">Profile</a>
-        <a href="#" id="tour-link">Take the tour</a>
+        <a href="#" id="tour-link">Take a Tour</a>
+      </nav>
+
+      <div class="navbar-right">
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -66,85 +89,156 @@
             </p>
           </div>
         </div>
-        <a href="#" id="logout-button">Logout</a>
-      </nav>
+
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Tutor</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
     </header>
 
-    <main>
-      <div class="card card--welcome">
-        <h2 id="welcome-heading">Welcome</h2>
-        <p>
-          Use the sections below to log your tutoring hours for the week or
-          review your timesheets.
-        </p>
-      </div>
+    <main class="app-main">
+      <div class="dash-layout">
+        <div class="dash-main">
+          <section class="stat-grid stat-grid--3" aria-label="Overview">
+            <article class="stat-card stat-card--periwinkle">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="12" rx="2" ry="2" />
+                <line x1="2" y1="20" x2="22" y2="20" />
+              </svg>
+              <p class="stat-value" id="stat-courses-assigned">0</p>
+              <p class="stat-label">Courses assigned</p>
+              <p class="stat-sublabel">This term</p>
+            </article>
 
-      <div class="stat-grid">
-        <div class="stat-tile">
-          <span class="stat-label">Hours worked this week</span>
-          <span class="stat-value" id="stat-hours-worked">0</span>
+            <article class="stat-card stat-card--mint">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <p class="stat-value" id="stat-hours-worked">0</p>
+              <p class="stat-label">Hours this week</p>
+              <p class="stat-sublabel" id="stat-hours-sublabel"></p>
+            </article>
+
+            <article class="stat-card stat-card--lavender">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+              <p class="stat-value" id="stat-timesheets-due">0</p>
+              <p class="stat-label">Timesheets due</p>
+              <p class="stat-sublabel" id="stat-timesheets-sublabel">
+                Awaiting submission
+              </p>
+            </article>
+          </section>
+
+          <section aria-labelledby="upcoming-heading">
+            <div class="section-head">
+              <h2 class="section-title" id="upcoming-heading">
+                Upcoming sessions
+              </h2>
+              <a class="btn-primary" href="log-hours.html">+ Log hours</a>
+            </div>
+
+            <div id="upcoming-sessions-list" hidden>
+              <div class="session-list" id="upcoming-sessions-items">
+                <!-- rendered by dashboard.js -->
+              </div>
+            </div>
+            <p class="upcoming-empty" id="upcoming-sessions-empty" hidden>
+              No upcoming sessions yet.
+              <a href="modules.html">Apply to tutor a module</a> to get
+              scheduled.
+            </p>
+          </section>
+
+          <div id="excusals-list" class="applications-list" hidden>
+            <h3>Your upcoming excusals</h3>
+            <ul id="excusals-items">
+              <!-- rendered by dashboard.js -->
+            </ul>
+          </div>
         </div>
-        <div class="stat-tile">
-          <span class="stat-label">Hours remaining</span>
-          <span class="stat-value" id="stat-hours-remaining">0</span>
-          <span class="stat-sublabel" id="stat-hours-sublabel"></span>
-        </div>
-        <div class="stat-tile stat-tile--accent">
-          <span class="stat-label">Next session</span>
-          <span class="stat-value stat-value--session" id="stat-next-session"
-            >—</span
-          >
-          <span class="stat-sublabel" id="stat-next-session-sublabel"></span>
-        </div>
-      </div>
 
-      <div class="card">
-        <h2>Upcoming sessions</h2>
-        <p>Sessions from the modules you've been approved to tutor.</p>
+        <aside class="dash-col" aria-label="At a glance">
+          <section class="dash-panel dash-panel--notif">
+            <h2 class="dash-panel__title">Notifications</h2>
+            <ul id="dashNotifList">
+              <!-- rendered by notifications.js -->
+            </ul>
+            <p class="dash-panel__empty" id="dashNotifEmpty" hidden>
+              You're all caught up.
+            </p>
+          </section>
 
-        <div id="upcoming-sessions-list" class="applications-list" hidden>
-          <ul id="upcoming-sessions-items"></ul>
-        </div>
-        <p class="upcoming-empty" id="upcoming-sessions-empty" hidden>
-          No upcoming sessions yet.
-          <a href="modules.html">Apply to tutor a module</a> to get scheduled.
-        </p>
-      </div>
+          <section class="dash-panel dash-panel--courses">
+            <h2 class="dash-panel__title">My courses</h2>
+            <div id="dashCoursesList">
+              <!-- rendered by dashboard.js -->
+            </div>
+            <p class="dash-panel__empty" id="dashCoursesEmpty" hidden>
+              No courses yet — apply from Module applications.
+            </p>
+          </section>
 
-      <div class="card">
-        <h2>Excuse yourself from a session</h2>
-        <p>Can't make a tutorial? Let the organiser know which one and why.</p>
-        <button class="btn-primary" id="excuse-btn" type="button">
-          Excuse yourself from a session
-        </button>
-
-        <div id="excusals-list" class="applications-list" hidden>
-          <h3>Your upcoming excusals</h3>
-          <ul id="excusals-items"></ul>
-        </div>
-      </div>
-
-      <div class="tile-grid">
-        <a class="tile" href="log-hours.html">
-          <h3>Log Hours</h3>
-          <p>Record the hours you've tutored this week.</p>
-        </a>
-        <a class="tile" href="timesheets.html">
-          <h3>Timesheets</h3>
-          <p>Review your submitted timesheets.</p>
-        </a>
-        <a class="tile" href="calendar.html">
-          <h3>Calendar</h3>
-          <p>See your tutoring sessions laid out by month.</p>
-        </a>
-        <a class="tile" href="modules.html">
-          <h3>Module Application</h3>
-          <p>Apply to tutor a module and track your applications.</p>
-        </a>
+          <section class="dash-panel dash-panel--capacity">
+            <h2 class="dash-panel__title">Weekly capacity</h2>
+            <div class="capacity-head">
+              <p class="capacity-value" id="capacity-value">0h used</p>
+              <p class="capacity-max" id="capacity-max"></p>
+            </div>
+            <div class="capacity-bar">
+              <div class="capacity-bar__fill" id="capacity-bar-fill"></div>
+            </div>
+            <p class="capacity-caption" id="capacity-caption"></p>
+          </section>
+        </aside>
       </div>
     </main>
 
-    <output class="toast" id="toast" role="status" aria-live="polite"></output>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <dialog
       class="modal"
@@ -174,13 +268,21 @@
         </label>
 
         <label class="field">
-          <span class="field-label">Session date</span>
-          <input
-            type="date"
-            id="excuse-date-input"
-            name="session_date"
-            required
-          />
+          <span class="field-label">Session</span>
+          <select id="excuse-session-select" name="session_type" required>
+            <option value="" disabled selected>
+              Choose a course first&hellip;
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Date</span>
+          <select id="excuse-date-input" name="session_date" required>
+            <option value="" disabled selected>
+              Choose a session first&hellip;
+            </option>
+          </select>
         </label>
 
         <label class="field">
@@ -208,6 +310,7 @@
       </form>
     </dialog>
 
+    <script src="../js/user-badge.js"></script>
     <script src="../js/onboarding.js"></script>
     <script type="module" src="../js/dashboard.js"></script>
     <script src="../js/notifications.js"></script>

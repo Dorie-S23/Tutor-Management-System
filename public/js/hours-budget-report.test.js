@@ -1,8 +1,10 @@
 // hours-budget-report.js drives the hours-budget-report page: it fetches
-// the per-course report, groups rows by course, and renders budget/spent/
-// remaining headers plus a per-tutor table. Plain browser script — loaded
-// into a real jsdom window with a stubbed fetch and the //# sourceURL tag
-// so Jest's v8 coverage attributes executed lines back to the real file.
+// the per-course report, groups rows by course into one collapsible card
+// per course — budget and spend in the card's summary, the tutor
+// breakdown in the table inside — and rolls the page totals into the stat
+// tiles and allocation bars. Plain browser script — loaded into a real
+// jsdom window with a stubbed fetch and the //# sourceURL tag so Jest's
+// v8 coverage attributes executed lines back to the real file.
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
@@ -21,6 +23,12 @@ const PAGE = `
   <main id="reportSections"></main>
   <p id="emptyCopy" hidden></p>
   <p id="unlinkedWarning" hidden></p>
+  <div id="budgetBars"></div>
+  <p id="budgetBarsEmpty" hidden></p>
+  <div id="statTotalHours"></div>
+  <div id="statTotalCost"></div>
+  <div id="statBudgetUsed"></div>
+  <div id="statOverBudget"></div>
   <div id="toast"></div>
 `;
 
@@ -95,27 +103,46 @@ describe("hours-budget-report.js", () => {
     const doc = win.document;
     expect(calls[0]).toBe("/api/hour-entries/report?");
 
-    const sections = doc.querySelectorAll("#reportSections section.card");
+    const sections = doc.querySelectorAll(
+      "#reportSections details.report-course",
+    );
     expect(sections).toHaveLength(2);
+    expect(sections[0].open).toBe(true); // the first card starts expanded
 
-    // Sections are sorted by course code; MATH1000 comes first.
+    // Cards are sorted by course code; MATH1000 comes first. en-ZA groups
+    // thousands with a no-break space ("1 000"), so the expected hint is
+    // built with the same locale call the page uses — via textContent,
+    // since innerHTML would escape it to &nbsp;.
+    const r1000 = `R${(1000).toLocaleString("en-ZA")}`;
     const mathHtml = sections[0].innerHTML;
     expect(mathHtml).toContain("MATH1000 — Intro Maths");
-    expect(mathHtml).toContain("Budget: R1000.00");
-    expect(mathHtml).toContain("partial — some tutors have no hourly rate set");
-    expect(mathHtml).toContain("R750.00"); // 1000 budget − 250 spent
+    expect(sections[0].textContent).toContain(`4.0 hrs · R250 of ${r1000}`); // 2.5 + 1.5 hrs, 1000 budget
+    expect(mathHtml).toContain(
+      "Some tutors on this course have no hourly rate set",
+    );
+    expect(mathHtml).toContain("R250.00"); // Ann's cost: 2.5 hrs × R100
     expect(mathHtml).toContain("Unknown tutor"); // null tutorName row
     expect(mathHtml).toContain("—"); // null hourly rate / cost
     expect(mathHtml).toContain("2.5 hrs");
 
     const physHtml = sections[1].innerHTML;
-    expect(physHtml).toContain("(over budget)"); // 100 budget, 250 spent
-    expect(physHtml).toContain("stat-value--attention");
+    expect(physHtml).toContain("5.0 hrs · R250 of R100"); // 100 budget, 250 spent
 
     expect(doc.getElementById("emptyCopy").hidden).toBe(true);
     expect(doc.getElementById("unlinkedWarning").hidden).toBe(false);
     expect(doc.getElementById("unlinkedWarning").textContent).toContain(
       "3.5 hrs across 2 entries",
+    );
+
+    // Stat tiles and allocation bars roll up the page totals.
+    expect(doc.getElementById("statTotalHours").textContent).toBe("9.0h");
+    expect(doc.getElementById("statTotalCost").textContent).toBe("R500");
+    expect(doc.getElementById("statBudgetUsed").textContent).toBe("45%");
+    expect(doc.getElementById("statOverBudget").textContent).toBe("1");
+    expect(doc.getElementById("budgetBarsEmpty").hidden).toBe(true);
+    expect(doc.querySelectorAll("#budgetBars .budget-row")).toHaveLength(2);
+    expect(doc.getElementById("budgetBars").innerHTML).toContain(
+      "budget-row__fill--over",
     );
 
     // Applying a filter re-fetches with the chosen dates.

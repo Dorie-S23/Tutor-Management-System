@@ -10,6 +10,21 @@ const COURSE_LEVEL_LABELS = {
   6: "phd",
 };
 
+// Accent hues cycled across the course boards at the top of the organiser
+// Courses page, so neighbouring boards are easy to tell apart at a glance.
+const BOARD_ACCENTS = [
+  "rgb(37, 99, 235)", // blue
+  "rgb(124, 58, 237)", // violet
+  "rgb(13, 148, 136)", // teal
+  "rgb(217, 119, 6)", // amber
+  "rgb(225, 29, 72)", // rose
+  "rgb(5, 150, 105)", // emerald
+  "rgb(79, 70, 229)", // indigo
+  "rgb(219, 39, 119)", // pink
+  "rgb(2, 132, 199)", // sky
+  "rgb(234, 88, 12)", // orange
+];
+
 // ---------- state ----------
 
 let activeCourseId = null;
@@ -18,6 +33,9 @@ let volunteerCounts = {}; // course_id -> number of approved volunteers
 let shortfallOnly = false; // when true, course rail shows only short-staffed courses, worst-first
 let pendingApplicationCounts = {}; // course_id -> number of pending tutor applications
 let pendingVolunteerCounts = {}; // course_id -> number of pending student volunteers
+let weeklyBudget = { planned: 0 }; // projected weekly spend across all assigned tutors
+let workloadRows = []; // latest /api/tutors/workload rows for the side panel
+let lastApplicantRows = { courseId: null, rows: null }; // most recent applicants for the active course
 
 // ---------- allocation balance ----------
 //
@@ -109,6 +127,7 @@ function mapCourseRow(row) {
     labStartTime: row.lab_start_time,
     labEndTime: row.lab_end_time,
     labVenues: row.lab_venues,
+    diagonalCount: row.diagonal_count ?? 0,
     tutorialSession:
       row.Day_of_tut && row.tutor_start_time && row.tutor_end_time
         ? {
@@ -226,6 +245,23 @@ function findVenueClashes(session, excludeCourseId = null, excludeType = null) {
   );
 }
 
+// An organiser approved for a course sees only that course — the ids ride
+// along on the session user from login (see routes/auth.js and
+// google-callback.html). Legacy organisers have no courseIds and keep full
+// access, as does the super-organiser.
+function sessionCourseScope() {
+  try {
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    return user && Array.isArray(user.courseIds)
+      ? new Set(user.courseIds.map(Number))
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const courseScope = sessionCourseScope();
+
 async function fetchCourses() {
   try {
     const res = await fetch("/api/courses");
@@ -233,7 +269,14 @@ async function fetchCourses() {
     if (!res.ok) throw new Error(rows.error || "Failed to load courses");
 
     COURSES.length = 0;
-    rows.forEach((row) => COURSES.push(mapCourseRow(row)));
+    rows.forEach((row) => {
+      const course = mapCourseRow(row);
+      // Out-of-scope courses are dropped rather than hidden, so the rail,
+      // stats and every course picker built from COURSES shrink with them.
+      if (!courseScope || courseScope.has(Number(course.id))) {
+        COURSES.push(course);
+      }
+    });
   } catch (err) {
     showToast("Couldn't load courses from the database.");
   }
@@ -268,10 +311,12 @@ async function fetchTutorCount() {
 
 // No dedicated "pending applications across all courses" endpoint exists,
 // so this fetches per-course the same way renderApplicants() already does,
-// just for every course at once, and keeps only the counts.
+// just for every course at once, and keeps only the counts. The same rows
+// also feed the weekly budget projection (assigned rate × hours/week).
 async function fetchPendingApplicationCounts() {
   if (COURSES.length === 0) {
     pendingApplicationCounts = {};
+    setBudgetProjection([]);
     renderCourseList();
     return;
   }
@@ -287,16 +332,33 @@ async function fetchPendingApplicationCounts() {
         const pending = rows.filter(
           (a) => (a.status || "pending").toLowerCase() === "pending",
         ).length;
-        return [course.id, pending];
+        const plannedCost = rows
+          .filter((a) => (a.status || "").toLowerCase() === "approved")
+          .reduce((sum, a) => {
+            const rate = a.tutors?.hourly_rate;
+            return sum + (rate != null ? rate * (course.hoursNeeded || 0) : 0);
+          }, 0);
+        return { id: course.id, pending, plannedCost };
       }),
     );
-    pendingApplicationCounts = Object.fromEntries(results);
+    pendingApplicationCounts = Object.fromEntries(
+      results.map((r) => [r.id, r.pending]),
+    );
+    setBudgetProjection(results);
   } catch (err) {
     // Fails open, same as the rest of the board: badges just show 0 rather
     // than blocking the page if one course's fetch has a hiccup.
     pendingApplicationCounts = {};
+    setBudgetProjection([]);
   }
   renderCourseList();
+}
+
+function setBudgetProjection(results) {
+  weeklyBudget = {
+    planned: results.reduce((sum, r) => sum + r.plannedCost, 0),
+  };
+  renderBudgetPanel();
 }
 
 // Assumes /api/course-volunteers/counts accepts status=pending the same
@@ -313,6 +375,147 @@ async function fetchPendingVolunteerCounts() {
   renderCourseList();
 }
 
+// ---------- side panels (weekly budget / tutor load / needs attention) ----------
+
+const statBudgetEl = document.getElementById("statBudget");
+const weekBudgetUsedEl = document.getElementById("weekBudgetUsed");
+const weekBudgetTotalEl = document.getElementById("weekBudgetTotal");
+const weekBudgetBarEl = document.getElementById("weekBudgetBar");
+const weekBudgetNoteEl = document.getElementById("weekBudgetNote");
+const tutorLoadListEl = document.getElementById("tutorLoadList");
+const tutorLoadEmptyEl = document.getElementById("tutorLoadEmpty");
+const attentionListEl = document.getElementById("attentionList");
+
+function formatMoneyCompact(value) {
+  return `R${Math.round(Number(value) || 0).toLocaleString("en-ZA")}`;
+}
+
+function weeklyCap() {
+  const stored = localStorage.getItem("tms_global_weekly_cap");
+  return stored != null ? Number(stored) : 6;
+}
+
+function renderBudgetPanel() {
+  if (!statBudgetEl) return;
+  const cap = COURSES.reduce((sum, c) => sum + (c.budget || 0), 0);
+  const planned = weeklyBudget.planned;
+
+  if (!cap) {
+    statBudgetEl.textContent = "\u2014";
+    weekBudgetUsedEl.textContent = formatMoneyCompact(planned);
+    weekBudgetTotalEl.textContent = "set per course";
+    weekBudgetBarEl.style.width = "0%";
+    weekBudgetBarEl.classList.remove("budget-bar__fill--over");
+    weekBudgetNoteEl.textContent =
+      "Set a budget on a course to track this against it.";
+    return;
+  }
+
+  const pct = (planned / cap) * 100;
+  statBudgetEl.textContent = `${Math.round(pct)}%`;
+  weekBudgetUsedEl.textContent = formatMoneyCompact(planned);
+  weekBudgetTotalEl.textContent = `of ${formatMoneyCompact(cap)}`;
+  weekBudgetBarEl.style.width = `${Math.min(100, pct)}%`;
+  weekBudgetBarEl.classList.toggle("budget-bar__fill--over", planned > cap);
+  const remaining = cap - planned;
+  weekBudgetNoteEl.textContent =
+    remaining >= 0
+      ? `${formatMoneyCompact(remaining)} remaining this week.`
+      : `${formatMoneyCompact(Math.abs(remaining))} over the weekly budget.`;
+}
+
+async function fetchTutorWorkload() {
+  try {
+    const res = await fetch("/api/tutors/workload");
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load workload");
+    workloadRows = rows;
+  } catch (err) {
+    workloadRows = [];
+  }
+  renderTutorLoad();
+  renderAttention();
+}
+
+function renderTutorLoad() {
+  if (!tutorLoadListEl) return;
+  tutorLoadListEl.innerHTML = "";
+  const rows = [...workloadRows].sort(
+    (a, b) => (b.assignedHours || 0) - (a.assignedHours || 0),
+  );
+  tutorLoadEmptyEl.hidden = rows.length > 0;
+  const cap = weeklyCap();
+
+  rows.slice(0, 6).forEach((tutor) => {
+    const ratio = cap > 0 ? (tutor.assignedHours || 0) / cap : 0;
+    const fillClass =
+      ratio > 1
+        ? " load-item__fill--over"
+        : ratio >= 0.8
+          ? " load-item__fill--warn"
+          : "";
+    const item = document.createElement("div");
+    item.className = "load-item";
+    item.innerHTML = `
+      <span class="load-item__name"></span>
+      <span class="load-item__hours">${tutor.assignedHours || 0}/${cap}h</span>
+      <span class="load-item__track"><span class="load-item__fill${fillClass}" style="width: ${Math.min(100, ratio * 100)}%"></span></span>
+    `;
+    item.querySelector(".load-item__name").textContent =
+      tutor.name || "Unnamed tutor";
+    item.title = tutor.courses?.length
+      ? tutor.courses
+          .map((c) => `${c.course_code} (${c.hours_per_week}h)`)
+          .join(", ")
+      : "No approved courses";
+    tutorLoadListEl.appendChild(item);
+  });
+}
+
+const ATTENTION_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+const OK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
+function renderAttention() {
+  if (!attentionListEl) return;
+  const understaffed = COURSES.filter((c) => shortfall(c) > 0).length;
+  const pendingDecisions = COURSES.reduce((sum, c) => sum + pendingCount(c), 0);
+  const cap = weeklyCap();
+  const overCap = workloadRows.filter(
+    (t) => cap > 0 && (t.assignedHours || 0) > cap,
+  ).length;
+
+  const items = [];
+  if (understaffed > 0)
+    items.push(
+      `${understaffed} ${understaffed === 1 ? "course is" : "courses are"} still understaffed.`,
+    );
+  if (pendingDecisions > 0)
+    items.push(
+      `${pendingDecisions} ${pendingDecisions === 1 ? "decision" : "decisions"} waiting on applications or volunteers.`,
+    );
+  if (overCap > 0)
+    items.push(
+      `${overCap} ${overCap === 1 ? "tutor is" : "tutors are"} over their weekly hour cap.`,
+    );
+
+  attentionListEl.innerHTML = "";
+  if (items.length === 0) {
+    const li = document.createElement("li");
+    li.className = "is-clear";
+    li.innerHTML = `${OK_ICON}<span></span>`;
+    li.querySelector("span").textContent =
+      "All caught up \u2014 nothing needs attention right now.";
+    attentionListEl.appendChild(li);
+    return;
+  }
+  items.forEach((text) => {
+    const li = document.createElement("li");
+    li.innerHTML = `${ATTENTION_ICON}<span></span>`;
+    li.querySelector("span").textContent = text;
+    attentionListEl.appendChild(li);
+  });
+}
+
 // ---------- helpers ----------
 
 function initials(name) {
@@ -327,6 +530,10 @@ function initials(name) {
 // ---------- rendering: course rail ----------
 
 const courseListEl = document.getElementById("courseList");
+const courseListEmptyEl = document.getElementById("courseListEmpty");
+const railScrollEl = document.querySelector(".rail-scroll");
+const railCountEl = document.getElementById("railCount");
+const railHintEl = document.getElementById("railHint");
 const courseSearchEl = document.getElementById("courseSearch");
 const shortfallToggleEl = document.getElementById("shortfallToggle");
 const statFilledEl = document.getElementById("statFilled");
@@ -378,6 +585,8 @@ function renderCourseList() {
   const totalPending = COURSES.reduce((sum, c) => sum + pendingCount(c), 0);
   statPendingEl.textContent = totalPending;
   statPendingEl.classList.toggle("stat-value--attention", totalPending > 0);
+  renderAttention();
+  renderBudgetPanel();
 
   courseListEl.innerHTML = "";
 
@@ -399,6 +608,7 @@ function renderCourseList() {
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
     const pending = pendingCount(course);
+    const isShort = shortfall(course) > 0;
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -411,14 +621,31 @@ function renderCourseList() {
     // every single one to get anywhere else on the page.
     btn.tabIndex = course.id === activeCourseId ? 0 : -1;
     btn.dataset.courseId = String(course.id);
+    // Accent colour comes from the course's position in the full list, so
+    // searching or filtering never reshuffles the boards' hues.
+    btn.style.setProperty(
+      "--accent",
+      BOARD_ACCENTS[COURSES.indexOf(course) % BOARD_ACCENTS.length],
+    );
+    const statusClass = isFull
+      ? "course-card__status--full"
+      : isShort
+        ? "course-card__status--short"
+        : "course-card__status--open";
+    const statusLabel = isFull ? "Staffed" : isShort ? "Needs tutors" : "Open";
     btn.innerHTML = `
-        <span class="course-code">${course.code}</span>
-        <span class="course-name">${course.name}</span>
-        <div class="card-foot">
-          <span>${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"} assigned, ${volunteerCounts[course.id] ?? 0} volunteered</span>
-          <span class="status-pill ${isFull ? "filled" : "open"}">${isFull ? "Staffed" : shortfall(course) > 0 ? `Short ${shortfall(course)}` : "Open"}</span>
-          ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
-        </div>
+        <span class="course-card__top">
+          <span class="course-card__code">${course.code}</span>
+          <span class="course-card__status ${statusClass}">${statusLabel}</span>
+        </span>
+        <span class="course-card__name">${course.name}</span>
+        <span class="course-card__foot">
+          <span class="course-card__meta">${volunteerCounts[course.id] ?? 0} volunteered</span>
+          <span class="course-card__pills">
+            ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
+            <span class="course-card__fill">${course.tutorsAssigned} / ${course.tutorsNeeded ?? "\u2014"}</span>
+          </span>
+        </span>
       `;
     btn.addEventListener("click", () => {
       selectCourse(course.id);
@@ -436,6 +663,24 @@ function renderCourseList() {
   if (cards.length && !cards.some((c) => c.tabIndex === 0)) {
     cards[0].tabIndex = 0;
   }
+
+  railCountEl.textContent = String(COURSES.length);
+  courseListEmptyEl.hidden = visible.length > 0;
+  lastVisibleCourseCount = visible.length;
+  updateRailHint();
+}
+
+// The "scroll horizontally" nudge only makes sense while the boards actually
+// overflow the strip, so it's re-checked after every render and on window
+// resizes — either the card count or the available width can change it.
+let lastVisibleCourseCount = 0;
+
+function updateRailHint() {
+  const overflow =
+    lastVisibleCourseCount > 0 &&
+    railScrollEl.scrollWidth > railScrollEl.clientWidth;
+  railHintEl.textContent = `Scroll horizontally to view all ${lastVisibleCourseCount} courses`;
+  railHintEl.hidden = !overflow;
 }
 
 function focusCourseCard(courseId) {
@@ -575,16 +820,23 @@ function renderDetail() {
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
   document.getElementById("dSession").textContent = buildSessionSummary(course);
-  document.getElementById("dHours").textContent = course.hoursNeeded ?? "—";
+  document.getElementById("dHours").textContent =
+    course.hoursNeeded ?? "\u2014";
+  document.getElementById("dMinMark").textContent =
+    course.minMark != null ? `${course.minMark}%` : "\u2014";
   document.getElementById("dTutorsAssigned").textContent =
-    `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}`;
+    `${course.tutorsAssigned} / ${course.tutorsNeeded ?? "\u2014"}`;
   document.getElementById("dVolunteered").textContent =
     volunteerCounts[course.id] ?? 0;
   document.getElementById("dBudget").textContent = formatMoney(course.budget);
-  document.getElementById("dRemainingBudget").textContent = "—";
+  document.getElementById("dRemainingBudget").textContent = "\u2014";
 
-  renderAssignmentCard(course);
+  renderAssignmentCard(
+    course,
+    lastApplicantRows.courseId === course.id ? lastApplicantRows.rows : null,
+  );
   renderApplicants(course);
+  renderDiagonals(course);
   renderExcusals(course);
   renderVolunteers(course);
 }
@@ -601,6 +853,7 @@ const LEVEL_LABELS = {
 
 const applicantListEl = document.getElementById("applicantList");
 const applicantsEmptyEl = document.getElementById("applicantsEmpty");
+const applicantsCountEl = document.getElementById("applicantsCount");
 
 let applicantsRequestId = 0;
 
@@ -783,7 +1036,11 @@ async function renderApplicants(course) {
   applicantListEl.innerHTML = "";
   applicantsEmptyEl.hidden = true;
 
+  lastApplicantRows = { courseId: course.id, rows };
   renderRemainingBudget(course, rows);
+  renderAssignmentCard(course, rows);
+  applicantsCountEl.textContent = String(rows.length);
+  applicantsCountEl.hidden = rows.length === 0;
 
   if (rows.length === 0) {
     applicantsEmptyEl.hidden = false;
@@ -881,7 +1138,7 @@ async function renderApplicants(course) {
         );
       }
       actionsEl.appendChild(
-        makeApplicantActionBtn("Reject", "", () =>
+        makeApplicantActionBtn("Reject", "reject", () =>
           openReasonModal(
             `Reject ${name}'s application?`,
             "Reject with this reason",
@@ -925,6 +1182,14 @@ async function renderApplicants(course) {
       );
     }
 
+    // Review whatever the applicant uploaded — transcripts are added on the
+    // application pages (see transcript-upload.js).
+    actionsEl.appendChild(
+      makeApplicantActionBtn("Transcript", "", () =>
+        viewTranscript(app.tutor_id, name),
+      ),
+    );
+
     li.appendChild(row);
 
     const balanceMeta = buildBalanceMeta(app);
@@ -946,6 +1211,30 @@ function makeApplicantActionBtn(label, variant, onClick, disabledTitle) {
     btn.addEventListener("click", onClick);
   }
   return btn;
+}
+
+// Opens an applicant's uploaded transcript. Files live in a private Supabase
+// Storage bucket, so the page asks for a short-lived signed URL instead of
+// linking the object directly; "nothing uploaded yet" is a normal state,
+// answered with a toast rather than an error.
+async function viewTranscript(userId, name) {
+  try {
+    const res = await fetch(
+      `/api/transcripts/${encodeURIComponent(userId)}/signed-url`,
+    );
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 404) {
+      showToast(`${name} hasn't uploaded a transcript yet.`);
+      return;
+    }
+    if (!res.ok) {
+      showToast(body.error || "Couldn't open that transcript.");
+      return;
+    }
+    window.open(body.url, "_blank", "noopener");
+  } catch {
+    showToast("Network error — couldn't reach the server.");
+  }
 }
 
 // Collects a required reason/note before an approve or reject goes through
@@ -1158,9 +1447,31 @@ overrideForm.addEventListener("submit", async (e) => {
 
 const excusalListEl = document.getElementById("excusalList");
 const excusalsEmptyEl = document.getElementById("excusalsEmpty");
+const excusalsCountEl = document.getElementById("excusalsCount");
 
 let excusalsRequestId = 0;
 let lastExcusalsSnapshot = null;
+
+// Which of the course's sessions an excusal is for — its stored
+// session_type, or for an older excusal without one, whichever session
+// meets on that weekday.
+function excusedSession(course, excusal) {
+  const sessions = [
+    course.tutorialSession && {
+      key: "tutorial",
+      type: "Tutorial",
+      ...course.tutorialSession,
+    },
+    course.labSession && { key: "lab", type: "Lab", ...course.labSession },
+  ].filter(Boolean);
+  if (excusal.session_type) {
+    return sessions.find((s) => s.key === excusal.session_type) || null;
+  }
+  const weekday = new Date(
+    `${excusal.session_date}T00:00:00`,
+  ).toLocaleDateString("en-US", { weekday: "long" });
+  return sessions.find((s) => s.day === weekday) || null;
+}
 
 async function renderExcusals(course) {
   const requestId = ++excusalsRequestId;
@@ -1188,6 +1499,9 @@ async function renderExcusals(course) {
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = rows.filter((e) => e.session_date >= today);
 
+  excusalsCountEl.textContent = String(upcoming.length);
+  excusalsCountEl.hidden = upcoming.length === 0;
+
   if (upcoming.length === 0) {
     excusalsEmptyEl.hidden = false;
     return;
@@ -1195,6 +1509,14 @@ async function renderExcusals(course) {
 
   upcoming.forEach((excusal) => {
     const name = excusal.tutors?.name || "Unknown";
+    const session = excusedSession(course, excusal);
+    const when = new Date(
+      `${excusal.session_date}T00:00:00`,
+    ).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
 
     const li = document.createElement("li");
     const row = document.createElement("div");
@@ -1203,14 +1525,87 @@ async function renderExcusals(course) {
     row.innerHTML = `
       <span class="avatar">${initials(name)}</span>
       <span class="name-block">
-        <span class="name">${name}</span>
-        <span class="role">${excusal.session_date}${excusal.reason ? ` — ${excusal.reason}` : ""}</span>
+        <span class="name"></span>
+        <span class="role"></span>
       </span>
+      <span class="stamp-row"></span>
     `;
+    row.querySelector(".name").textContent = name;
+    row.querySelector(".role").textContent = [
+      when,
+      session ? `${session.start}–${session.end}` : null,
+      excusal.reason,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (session) {
+      const stamp = document.createElement("span");
+      stamp.className = "stamp";
+      stamp.textContent = session.type;
+      row.querySelector(".stamp-row").appendChild(stamp);
+    }
+
+    // Which volunteer (if any) was automatically put in to cover it.
+    const coverStamp = document.createElement("span");
+    coverStamp.className = excusal.cover?.name ? "stamp ok" : "stamp warn";
+    coverStamp.textContent = excusal.cover?.name
+      ? `Covered by ${excusal.cover.name}`
+      : "No cover";
+    row.querySelector(".stamp-row").appendChild(coverStamp);
+
+    if (excusal.swap_to_user_id) {
+      const swapStamp = document.createElement("span");
+      swapStamp.className = "stamp warn";
+      swapStamp.textContent = `Swap asked → ${excusal.swap_to?.name || "volunteer"}`;
+      row.querySelector(".stamp-row").appendChild(swapStamp);
+    }
+
+    const actions = document.createElement("span");
+    actions.className = "applicant-actions";
+    actions.appendChild(
+      makeApplicantActionBtn(
+        excusal.cover?.name ? "Reassign" : "Find cover",
+        "",
+        () => findCover(course, excusal, name),
+      ),
+    );
+    row.appendChild(actions);
 
     li.appendChild(row);
     excusalListEl.appendChild(li);
   });
+}
+
+// Re-runs the automatic cover assignment for one excusal — fills it if it's
+// uncovered, or hands it to the next best volunteer if it's covered.
+async function findCover(course, excusal, tutorName) {
+  if (
+    excusal.cover?.name &&
+    !confirm(
+      `Take ${excusal.cover.name} off covering ${tutorName}'s session and pick another volunteer?`,
+    )
+  ) {
+    return;
+  }
+  try {
+    const res = await fetch(
+      `/api/session-excusals/${encodeURIComponent(excusal.id)}/find-cover`,
+      { method: "POST" },
+    );
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't find a cover.");
+      return;
+    }
+    showToast(
+      body.cover?.name
+        ? `${body.cover.name} will cover ${tutorName}'s session.`
+        : `No approved volunteer on ${course.code} is free for that session.`,
+    );
+    renderExcusals(course);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
 }
 
 // ---------- volunteers ----------
@@ -1302,7 +1697,7 @@ async function renderVolunteers(course) {
         ),
       );
       actionsEl.appendChild(
-        makeApplicantActionBtn("Reject", "", () =>
+        makeApplicantActionBtn("Reject", "reject", () =>
           openReasonModal(
             `Reject ${name}'s volunteer request?`,
             "Reject with this reason",
@@ -1346,6 +1741,14 @@ async function renderVolunteers(course) {
       );
     }
 
+    // Review whatever the volunteer uploaded — transcripts are added on the
+    // volunteer dashboard (see transcript-upload.js).
+    actionsEl.appendChild(
+      makeApplicantActionBtn("Transcript", "", () =>
+        viewTranscript(vol.user_id, name),
+      ),
+    );
+
     li.appendChild(row);
     volunteerListEl.appendChild(li);
   });
@@ -1388,6 +1791,7 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
     }
 
     renderVolunteers(course);
+    renderDiagonals(course);
     fetchVolunteerCounts();
     // Approving/un-approving a volunteer now changes the course's
     // assigned-tutor count too (see courseVolunteers.js), so the shortfall/
@@ -1540,14 +1944,38 @@ postOverflowSessionForm.addEventListener("submit", async (e) => {
   }
 });
 
-function renderAssignmentCard(course) {
+function renderAssignmentCard(course, applicantRows = null) {
   const isFull =
     !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
   const className =
     "assignment-card " + (course.tutorsAssigned > 0 ? "filled" : "empty");
-  const html = isFull
-    ? `<p class="empty-copy">This course is fully staffed — ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
-    : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "—"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
+
+  let html;
+  if (applicantRows) {
+    const approved = applicantRows.filter(
+      (app) => (app.status || "").toLowerCase() === "approved",
+    );
+    const chips = approved
+      .map((app) => {
+        const name = app.Tutor_name || app.tutors?.name || "Unknown";
+        return `<span class="tutor-chip"><span class="avatar">${initials(name)}</span>${name}</span>`;
+      })
+      .join("");
+    const open = Math.max(
+      0,
+      (course.tutorsNeeded ?? 0) - course.tutorsAssigned,
+    );
+    const summary = isFull
+      ? `<span class="slots-done">All ${course.tutorsNeeded} slots filled</span>`
+      : `<span class="slots-open">${pluralise(open, "slot")} still open</span>`;
+    html =
+      `<p class="assignment-card__title">Assigned tutors</p>` +
+      `<div class="tutor-chips">${chips || `<span class="empty-copy">Nobody assigned yet.</span>`}${summary}</div>`;
+  } else {
+    html = isFull
+      ? `<p class="empty-copy">This course is fully staffed \u2014 ${course.tutorsAssigned} of ${course.tutorsNeeded} tutor spots filled.</p>`
+      : `<p class="empty-copy">${course.tutorsAssigned} of ${course.tutorsNeeded ?? "\u2014"} tutor spots filled. Approve an applicant below to fill the rest.</p>`;
+  }
 
   const snapshot = `${course.id}:${className}:${html}`;
   if (snapshot === lastAssignmentCardSnapshot) return;
@@ -1556,6 +1984,190 @@ function renderAssignmentCard(course) {
   assignmentCardEl.className = className;
   assignmentCardEl.innerHTML = html;
 }
+
+// ---------- diagonals ----------
+// A large course can be split into diagonals (A, B, C…); each approved tutor
+// and student volunteer is placed in one. The count is set from the course
+// form's "Split into diagonals" checkbox; placement happens here.
+
+const diagonalsPanelEl = document.getElementById("diagonalsPanel");
+const diagonalGridEl = document.getElementById("diagonalGrid");
+const splitDiagonalsBtn = document.getElementById("splitDiagonalsBtn");
+
+let diagonalsRequestId = 0;
+let lastDiagonalsSnapshot = null;
+
+function pluralise(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+async function renderDiagonals(course) {
+  const requestId = ++diagonalsRequestId;
+
+  if (!course.diagonalCount) {
+    diagonalsPanelEl.hidden = true;
+    lastDiagonalsSnapshot = null;
+    return;
+  }
+  diagonalsPanelEl.hidden = false;
+
+  let data;
+  try {
+    const res = await fetch(`/api/courses/${course.id}/diagonals`);
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load diagonals");
+  } catch (err) {
+    if (requestId === diagonalsRequestId)
+      showToast("Couldn't load diagonals for this course.");
+    return;
+  }
+
+  // the active course may have changed while this request was in flight
+  if (requestId !== diagonalsRequestId) return;
+
+  const snapshot = `${course.id}:${JSON.stringify(data)}`;
+  if (snapshot === lastDiagonalsSnapshot) return;
+  lastDiagonalsSnapshot = snapshot;
+
+  const labels = data.diagonals.map((d) => d.label);
+  const groups = [...data.diagonals];
+  const unassignedCount =
+    data.unassigned.tutors.length + data.unassigned.volunteers.length;
+  if (unassignedCount > 0) {
+    groups.push({ label: null, ...data.unassigned });
+  }
+
+  diagonalGridEl.innerHTML = "";
+  groups.forEach((group) => {
+    diagonalGridEl.appendChild(buildDiagonalCard(course, group, labels));
+  });
+}
+
+function buildDiagonalCard(course, group, labels) {
+  const card = document.createElement("section");
+  card.className =
+    "diagonal-card" + (group.label ? "" : " diagonal-card--unassigned");
+
+  const head = document.createElement("header");
+  head.className = "diagonal-card-head";
+  const title = document.createElement("h4");
+  title.textContent = group.label ? `Diagonal ${group.label}` : "Unassigned";
+  const counts = document.createElement("p");
+  counts.className = "diagonal-card-counts";
+  counts.textContent = `${pluralise(group.tutors.length, "tutor")} · ${pluralise(group.volunteers.length, "volunteer")}`;
+  head.append(title, counts);
+  card.appendChild(head);
+
+  [
+    ["tutor", "Tutors", group.tutors],
+    ["volunteer", "Volunteers", group.volunteers],
+  ].forEach(([kind, heading, members]) => {
+    const sub = document.createElement("p");
+    sub.className = "diagonal-card-sub";
+    sub.textContent = heading;
+    card.appendChild(sub);
+
+    if (members.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "empty-copy";
+      empty.textContent = "None yet.";
+      card.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement("ul");
+    list.className = "diagonal-member-list";
+    members.forEach((member) => {
+      list.appendChild(buildDiagonalMember(course, kind, member, labels));
+    });
+    card.appendChild(list);
+  });
+
+  return card;
+}
+
+function buildDiagonalMember(course, kind, member, labels) {
+  const li = document.createElement("li");
+  li.className = "diagonal-member";
+
+  const name = document.createElement("span");
+  name.className = "diagonal-member-name";
+  name.textContent = member.name;
+  name.title = member.email;
+
+  const select = document.createElement("select");
+  select.className = "diagonal-member-select";
+  select.setAttribute("aria-label", `Diagonal for ${member.name}`);
+  [...labels, ""].forEach((label) => {
+    const option = document.createElement("option");
+    option.value = label;
+    option.textContent = label ? `Diagonal ${label}` : "Unassigned";
+    select.appendChild(option);
+  });
+  select.value = labels.includes(member.diagonal) ? member.diagonal : "";
+  select.addEventListener("change", () =>
+    moveDiagonalMember(course, kind, member, select.value || null, select),
+  );
+
+  li.append(name, select);
+  return li;
+}
+
+async function moveDiagonalMember(course, kind, member, diagonal, select) {
+  select.disabled = true;
+  try {
+    const res = await fetch(`/api/courses/${course.id}/diagonals/members`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, id: member.id, diagonal }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't move them to that diagonal.");
+    } else {
+      showToast(
+        diagonal
+          ? `${member.name} moved to diagonal ${diagonal}`
+          : `${member.name} taken out of their diagonal`,
+      );
+    }
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  }
+  renderDiagonals(course);
+}
+
+splitDiagonalsBtn.addEventListener("click", async () => {
+  const course = COURSES.find((c) => c.id === activeCourseId);
+  if (!course?.diagonalCount) return;
+  if (
+    !confirm(
+      `Split ${course.code}'s approved tutors and students evenly across ${course.diagonalCount} diagonals? This replaces everyone's current diagonal.`,
+    )
+  ) {
+    return;
+  }
+
+  splitDiagonalsBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/courses/${course.id}/diagonals/split`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      showToast(body.error || "Couldn't split this course into diagonals.");
+      return;
+    }
+    showToast(`${course.code} split across ${course.diagonalCount} diagonals.`);
+    renderDiagonals(course);
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    splitDiagonalsBtn.disabled = false;
+  }
+});
 
 // ---------- bulk-fill obvious assignments ----------
 
@@ -1913,6 +2525,10 @@ const hasTutorialInput = document.getElementById("hasTutorialInput");
 const hasLabInput = document.getElementById("hasLabInput");
 const tutorialFieldsEl = document.getElementById("tutorialFields");
 const labFieldsEl = document.getElementById("labFields");
+const hasDiagonalsInput = document.getElementById("hasDiagonalsInput");
+const diagonalFieldsEl = document.getElementById("diagonalFields");
+const diagonalCountInput = document.getElementById("diagonalCountInput");
+const diagonalCountHint = document.getElementById("diagonalCountHint");
 
 let editingCourseId = null; // null = adding a new course, otherwise id of course being edited
 
@@ -1951,6 +2567,42 @@ function updateLabVisibility() {
 
 hasTutorialInput.addEventListener("change", updateTutorialVisibility);
 hasLabInput.addEventListener("change", updateLabVisibility);
+
+// Previews how the course's approved tutors/students would divide across
+// the chosen number of diagonals, e.g. "A: 2 tutors, 40 students · B: …".
+function updateDiagonalHint() {
+  const n = Number(diagonalCountInput.value);
+  if (!Number.isInteger(n) || n < 2 || n > 26) {
+    diagonalCountHint.textContent =
+      "Diagonals are labelled A, B, C… (between 2 and 26).";
+    return;
+  }
+  const labels = Array.from({ length: n }, (_, i) =>
+    String.fromCharCode(65 + i),
+  );
+  if (editingCourseId === null) {
+    diagonalCountHint.textContent = `Diagonals ${labels[0]}–${labels[n - 1]}. Approved tutors and students can be split across them from the course page.`;
+    return;
+  }
+  const course = COURSES.find((c) => c.id === editingCourseId);
+  const tutors = course?.tutorsAssigned ?? 0;
+  const students = volunteerCounts[editingCourseId] ?? 0;
+  const perDiagonal = (total) => {
+    const low = Math.floor(total / n);
+    return total % n === 0 ? `${low}` : `${low}–${low + 1}`;
+  };
+  diagonalCountHint.textContent = `Diagonals ${labels[0]}–${labels[n - 1]}: roughly ${perDiagonal(tutors)} of ${tutors} tutors and ${perDiagonal(students)} of ${students} approved students each.`;
+}
+
+function updateDiagonalVisibility() {
+  const checked = hasDiagonalsInput.checked;
+  diagonalFieldsEl.hidden = !checked;
+  diagonalCountInput.required = checked;
+  updateDiagonalHint();
+}
+
+hasDiagonalsInput.addEventListener("change", updateDiagonalVisibility);
+diagonalCountInput.addEventListener("input", updateDiagonalHint);
 
 function openCourseModal(course = null) {
   editingCourseId = course ? course.id : null;
@@ -1993,13 +2645,18 @@ function openCourseModal(course = null) {
       : "";
     labVenuesInput.value = course.labVenues ?? "";
     hasLabInput.checked = !!(course.dayOfLab || course.labVenues);
+
+    hasDiagonalsInput.checked = course.diagonalCount > 0;
+    diagonalCountInput.value = course.diagonalCount || "";
   } else {
     hasTutorialInput.checked = false;
     hasLabInput.checked = false;
+    hasDiagonalsInput.checked = false;
   }
 
   updateTutorialVisibility();
   updateLabVisibility();
+  updateDiagonalVisibility();
 
   addCourseModal.showModal();
   document.getElementById("courseCodeInput").focus();
@@ -2198,9 +2855,29 @@ addCourseForm.addEventListener("submit", async (e) => {
       labChecked && labStartTimeValue !== "" ? labStartTimeValue : null,
     lab_end_time: labChecked && labEndTimeValue !== "" ? labEndTimeValue : null,
     lab_venues: labChecked ? labVenuesInput.value.trim() || null : null,
+    has_diagonals: hasDiagonalsInput.checked,
+    diagonal_count: hasDiagonalsInput.checked
+      ? Number(diagonalCountInput.value)
+      : null,
   };
 
   const isEditing = editingCourseId !== null;
+
+  const previousDiagonals =
+    COURSES.find((c) => c.id === editingCourseId)?.diagonalCount ?? 0;
+  const nextDiagonals = payload.diagonal_count ?? 0;
+  if (
+    isEditing &&
+    nextDiagonals < previousDiagonals &&
+    !confirm(
+      nextDiagonals === 0
+        ? "Turn off diagonals? Everyone's diagonal placement on this course will be cleared."
+        : `Reduce to ${nextDiagonals} diagonals? Anyone in a diagonal past ${String.fromCharCode(64 + nextDiagonals)} goes back to unassigned.`,
+    )
+  ) {
+    return;
+  }
+
   addCourseSubmitBtn.disabled = true;
   addCourseSubmitBtn.textContent = isEditing ? "Saving…" : "Adding…";
 
@@ -2256,6 +2933,10 @@ shortfallToggleEl.addEventListener("change", () => {
   renderCourseList();
 });
 
+// Resizing the window can push the boards into or out of overflowing the
+// strip without any re-render happening, so the hint needs its own check.
+window.addEventListener("resize", updateRailHint);
+
 // "/" jumps to the course search from anywhere on the page, unless the
 // organiser is already typing into a field (so it doesn't hijack real input).
 document.addEventListener("keydown", (event) => {
@@ -2288,64 +2969,53 @@ function getSessionUserId() {
 
 const ORGANISER_TOUR_STEPS = [
   {
-    selector: ".header-right",
+    selector: ".org-stats",
     title: "Your snapshot",
-    body: "At a glance: how many courses are fully staffed, how many tutors are on the roll, and how many applications or volunteers still need a decision.",
+    body: "At a glance: how many courses are fully staffed, how many tutors are on the roll, and how much of this week's budget is already committed.",
     placement: "bottom",
   },
   {
-    selector: "#statPending",
-    title: "Needs review",
-    body: 'This counts every pending tutor application and student volunteer across all courses. Courses with something waiting also get a "to review" badge in the list on the left.',
+    selector: ".org-toolbar",
+    title: "Search and shortcuts",
+    body: "Search across courses, tutors, and timesheets from one box — and use the fill-with-casuals shortcut when you need to close staffing gaps in bulk.",
     placement: "bottom",
   },
   {
-    selector: "#courseSearch",
-    title: "Find a course",
-    body: "Search by course code or name to jump straight to it.",
+    selector: ".org-rail",
+    title: "Your course portfolio",
+    body: "Every course is a board in this strip — scroll sideways to browse them all. Each board shows how staffed the course is; pick one to work it.",
     placement: "bottom",
   },
   {
-    selector: ".shortfall-toggle",
-    title: "Spot the gaps",
-    body: "Toggle this to show only short-staffed courses, worst shortfall first — handy when you're trying to close gaps quickly.",
+    selector: "#emptyState",
+    title: "Work a course",
+    body: "Pick a course from the register to see its applications and volunteers, then approve or reject right from there.",
     placement: "bottom",
   },
   {
-    selector: "#addCourseBtn",
-    title: "Add a course",
-    body: "New course to staff? Add it here with its code, department, hours needed, and session time.",
+    selector: ".detail-card",
+    title: "The selected course",
+    body: "Staffing progress, assigned tutors, budget, and every decision waiting on you for the course you've selected.",
     placement: "bottom",
   },
   {
-    selector: "#courseList",
-    title: "Pick a course",
-    body: "Click any course to see who's assigned, who's applied, who's volunteered, and any session excusals — approve or reject right from there.",
-    placement: "right",
+    selector: ".org-side",
+    title: "This week, at a glance",
+    body: "Track weekly budget spend, tutor workloads against their caps, and anything that needs your attention.",
+    placement: "left",
   },
   {
-    selector: "a[href='tutors.html']",
-    title: "Manage tutors",
-    body: "The full tutor roster lives here — add, edit, or remove tutors, and set hourly rates and weekly hour caps.",
-    placement: "bottom",
-  },
-  {
-    selector: "a[href='timesheet-review.html']",
-    title: "Review timesheets",
-    body: "Logged hours from tutors show up here for you to review.",
-    placement: "bottom",
-  },
-  {
-    selector: "a[href='hours-budget-report.html']",
-    title: "Hours & budget report",
-    body: "See logged tutoring hours broken down by tutor and course, with cost calculated against each course's budget.",
+    selector: ".tab-nav",
+    title: "Get around",
+    body: "Jump between courses, tutors, the timetable, timesheet review, and the budget report from here.",
     placement: "bottom",
   },
 ];
 
-const tourBtn = document.getElementById("tour-button");
-if (tourBtn) {
-  tourBtn.addEventListener("click", () => {
+const tourLinkEl = document.getElementById("tour-link");
+if (tourLinkEl) {
+  tourLinkEl.addEventListener("click", (e) => {
+    e.preventDefault();
     window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
       tourId: "organiser-board",
       userId: getSessionUserId(),
@@ -2401,6 +3071,7 @@ async function refreshBoard() {
       fetchVolunteerCounts(),
       fetchPendingApplicationCounts(),
       fetchPendingVolunteerCounts(),
+      fetchTutorWorkload(),
     ]);
     lastSyncedAt = new Date();
     tickSyncStatusLabel();
@@ -2434,6 +3105,7 @@ async function init() {
   fetchVolunteerCounts();
   fetchPendingApplicationCounts();
   fetchPendingVolunteerCounts();
+  fetchTutorWorkload();
   lastSyncedAt = new Date();
   tickSyncStatusLabel();
   startPollingSync();
@@ -2445,6 +3117,9 @@ async function init() {
   if (courseParam) {
     const course = COURSES.find((c) => String(c.id) === courseParam);
     if (course) selectCourse(course.id);
+    else if (courseScope) {
+      showToast("That course isn't part of your organiser access.");
+    }
   }
 
   // Arriving from the timetable grid with ?edit=<courseId> jumps straight to
@@ -2455,12 +3130,19 @@ async function init() {
     if (course) {
       selectCourse(course.id);
       openCourseModal(course);
+    } else if (courseScope) {
+      showToast("That course isn't part of your organiser access.");
     }
   }
+
+  // ?tour=1 — set by the "Take a Tour" link on the other organiser pages —
+  // replays the tour even for organisers who've already seen it.
+  const wantsTour = params.get("tour") === "1";
 
   window.Onboarding?.start(ORGANISER_TOUR_STEPS, {
     tourId: "organiser-board",
     userId: getSessionUserId(),
+    force: wantsTour,
   });
 }
 

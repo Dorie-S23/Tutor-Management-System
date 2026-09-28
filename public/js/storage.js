@@ -7,7 +7,11 @@ export function getCurrentUser() {
   const raw = sessionStorage.getItem("user");
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const user = JSON.parse(raw);
+    // Accounts created before the Volunteer rename were stored with
+    // role "student" — normalise them so every page sees "volunteer".
+    if (user && user.role === "student") user.role = "volunteer";
+    return user;
   } catch {
     return null;
   }
@@ -15,15 +19,21 @@ export function getCurrentUser() {
 
 // Where each role lands after login (mirrors the switch in auth.js).
 const ROLE_HOME = {
-  student: "StudentView.html",
+  volunteer: "StudentView.html",
   tutor: "dashboard.html",
+  // Legacy accounts created before the Volunteer rename.
   educator: "educator.html",
   organiser: "board.html",
+  // The single admin account that reviews organiser requests — it shares
+  // the organiser board, with every course visible.
+  super_organiser: "board.html",
 };
 
 // Guards a role-specific page: sends a signed-out visitor to login, and
 // sends a signed-in visitor of the *wrong* role back to their own home page
 // instead of letting them view (and act on) a page built for another role.
+// allowedRole is one role, or a list of roles for pages shared between
+// them (e.g. the board serves both organisers and the super-organiser).
 // Call this at the top of a page's script, before anything else runs.
 export function requireRole(allowedRole) {
   const user = getCurrentUser();
@@ -31,7 +41,8 @@ export function requireRole(allowedRole) {
     window.location.href = "login.html";
     return null;
   }
-  if (user.role !== allowedRole) {
+  const allowed = Array.isArray(allowedRole) ? allowedRole : [allowedRole];
+  if (!allowed.includes(user.role)) {
     window.location.href = ROLE_HOME[user.role] || "login.html";
     return null;
   }
@@ -150,6 +161,19 @@ export async function getWeekTotal(weekStart) {
   return entries.reduce((sum, e) => sum + Number(e.hours), 0);
 }
 
+// A calendar month's entries — the period timesheets are submitted for.
+// monthStart is the month's first day ("YYYY-MM-01").
+export async function getEntriesForMonth(monthStart) {
+  const monthEnd = addDays(addMonths(monthStart, 1), -1);
+  const entries = await getEntries();
+  return entries.filter((e) => e.date >= monthStart && e.date <= monthEnd);
+}
+
+export async function getMonthTotal(monthStart) {
+  const entries = await getEntriesForMonth(monthStart);
+  return entries.reduce((sum, e) => sum + Number(e.hours), 0);
+}
+
 export async function getEntriesForDate(dateStr) {
   const entries = await getEntries();
   return entries.filter((e) => e.date === dateStr);
@@ -157,7 +181,9 @@ export async function getEntriesForDate(dateStr) {
 
 // --- Date helpers (pure, no network) ----------------------------------
 
-// Monday-based week start for a given 'YYYY-MM-DD' date string.
+// Monday-based week start for a given 'YYYY-MM-DD' date string. Timesheets
+// moved to months (getMonthStart below), but this is still used for the
+// dashboard's "hours this week" stat against the weekly hours cap.
 export function getWeekStart(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -174,7 +200,19 @@ export function addDays(dateStr, days) {
   return toDateStr(date);
 }
 
-function toDateStr(date) {
+// First day of the calendar month a 'YYYY-MM-DD' date falls in — the period
+// key timesheets are stored under ("YYYY-MM-01").
+export function getMonthStart(dateStr) {
+  return `${dateStr.slice(0, 7)}-01`;
+}
+
+// Month-start + n months (n may be negative), landing on a month's first day.
+export function addMonths(monthStart, months) {
+  const [y, m] = monthStart.split("-").map(Number);
+  return toDateStr(new Date(y, m - 1 + months, 1));
+}
+
+export function toDateStr(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");

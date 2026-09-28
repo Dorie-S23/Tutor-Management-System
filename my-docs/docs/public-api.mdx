@@ -1,0 +1,132 @@
+---
+sidebar_position: 5.9
+---
+
+# Public API
+
+The externally-consumable half of the API: a read-only, no-authentication course catalogue under `/api/v1`, aimed at anything outside the app itself — a department page, a bot, a volunteer's own tooling.
+
+## Overview
+
+The app's internal routes under `/api/*` are built for its own frontend and change together with it. The public API is a deliberately separate, curated surface:
+
+- **Read-only.** Only `GET` is implemented. A write method on a known path returns `405` with an `Allow: GET, HEAD` header, so a broken integration fails loudly and correctly instead of appearing to work.
+- **Curated fields.** The query selects only the columns the public shape needs, so internal-only data — `budget`, `min_mark`, assigned-tutor counters, venues, internal numeric ids — is never even fetched, let alone returned.
+- **Versioned.** The path carries `v1` (see [Versioning & stability](#versioning--stability)).
+- **No authentication.** No key, no token, no account.
+- **Cached.** Responses carry `Cache-Control: public, max-age=300, s-maxage=300`, so browsers and Cloudflare's edge can serve repeats for up to five minutes.
+- **CORS open.** The app-wide `cors()` middleware sends `Access-Control-Allow-Origin: *`, so a page on any origin can call it from the browser.
+
+:::info Not the same as `/api/courses`
+`GET /api/courses` already exists for the app's own pages, but it returns `select("*")` — including `budget` and `min_mark`. It is an internal route: unversioned, and free to change whenever the frontend does. The public API is a separate endpoint that re-shapes the same data into a small, stable, safe projection — it is not a second way to reach the internal one.
+:::
+
+## Base URL
+
+| Environment | Base URL                                     |
+| ----------- | -------------------------------------------- |
+| Production  | `https://tutorx.devden.workers.dev/api/v1`   |
+| Local dev   | `http://localhost:3000/api/v1` (`npm start`) |
+
+## Endpoints
+
+### `GET /api/v1` — discovery
+
+Describes the API and lists its resources, so a consumer landing on the base path isn't left guessing.
+
+```bash
+curl https://tutorx.devden.workers.dev/api/v1
+```
+
+```json
+{
+  "name": "TutorX public API",
+  "description": "Read-only public course catalogue for the Wits School of Computer Science and Applied Mathematics tutoring programme.",
+  "version": "v1",
+  "documentation": "https://tutorx-documentation.devden.workers.dev/docs/public-api",
+  "resources": {
+    "courses": "/api/v1/courses"
+  }
+}
+```
+
+### `GET /api/v1/courses` — list courses
+
+All courses, ordered by course code, wrapped in a `data` envelope with a `meta.count` so pagination or extra metadata can be added later without breaking the shape. Optional filters:
+
+```bash
+curl "https://tutorx.devden.workers.dev/api/v1/courses?department=Computer%20Science&session_type=lab"
+```
+
+```json
+{
+  "data": [
+    {
+      "course_code": "COMS2000",
+      "course_name": "Data Structures",
+      "department": "Computer Science",
+      "session_types": ["tutorial", "lab"],
+      "openings": 2
+    }
+  ],
+  "meta": { "count": 1 }
+}
+```
+
+| Query parameter | Values             | Behaviour                                                                                                               |
+| --------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `department`    | any string         | Exact match, case-insensitive (`computer science` finds `Computer Science`). An empty or omitted value means no filter. |
+| `session_type`  | `tutorial` / `lab` | Only courses running that session type. Any other value is a `400`.                                                     |
+
+### `GET /api/v1/courses/{code}` — one course
+
+Looks a course up by its unique code instead of the internal numeric id. The match is case-insensitive in both directions — `coms2000` finds `COMS2000`, and `COMS1033` finds a course stored as `coms1033`.
+
+```bash
+curl https://tutorx.devden.workers.dev/api/v1/courses/COMS2000
+```
+
+```json
+{
+  "data": {
+    "course_code": "COMS2000",
+    "course_name": "Data Structures",
+    "department": "Computer Science",
+    "session_types": ["tutorial", "lab"],
+    "openings": 2
+  }
+}
+```
+
+An unknown code is a `404` with `{ "error": "Course not found" }`.
+
+## Course fields
+
+| Field           | Type     | Description                                                                                                      |
+| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `course_code`   | string   | Unique code, e.g. `COMS2000`. Use it to fetch a single course.                                                   |
+| `course_name`   | string   | Human-readable name, e.g. `Data Structures`.                                                                     |
+| `department`    | string   | Owning department; what the `department` filter matches against.                                                 |
+| `session_types` | string[] | Which tutoring sessions the course runs: `["tutorial"]`, `["lab"]`, or both — `["tutorial", "lab"]`.             |
+| `openings`      | integer  | Tutor positions still open (`tutors needed` minus already assigned, clamped at 0). `0` means the course is full. |
+
+## Errors
+
+Every error response shares the app-wide shape — `{ "error": "human-readable message" }` — with a status that means something:
+
+| Status | When                            | Body example                                                         |
+| ------ | ------------------------------- | -------------------------------------------------------------------- |
+| `400`  | A filter value isn't valid      | `{ "error": "session_type must be either \"tutorial\" or \"lab\"" }` |
+| `404`  | The course code doesn't exist   | `{ "error": "Course not found" }`                                    |
+| `405`  | A non-GET on a known path       | `{ "error": "This API is read-only — only GET is supported" }`       |
+| `500`  | The database call itself failed | `{ "error": "<database message>" }`                                  |
+
+## Versioning & stability
+
+- The `v1` prefix is part of the contract. New optional fields may be added to responses within `v1` — consumers should ignore fields they don't recognise.
+- Any breaking change (renaming or removing a field, changing a status code, changing what a filter means) ships as a new prefix (`/api/v2`) alongside `v1`, so existing integrations keep working.
+- Data is as fresh as the latest organiser edit — the catalogue is whatever is live on the organiser board; there is no separate publishing step. Caching means a response may be up to five minutes old.
+
+## Implementation
+
+`server/routes/publicApi.js` — three `GET` handlers plus the read-only `405` guard, mounted at `/api/v1` in `app.js`. Behaviour is covered by `server/routes/publicApi.test.js` (field shaping, session-type derivation, filters, error paths), and it deploys with the rest of the app (`npm run deploy`, Cloudflare Workers), which is what makes the production base URL above live.

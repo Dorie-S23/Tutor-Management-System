@@ -3,21 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Calendar | Tutor Management System</title>
-    <link rel="stylesheet" href="../css/global.css" />
+    <title>Calendar | TutorX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/app.css" />
     <script src="../js/theme.js"></script>
   </head>
 
-  <body class="tutor-app" data-page-role="tutor">
-    <header class="app-header">
-      <h1>Calendar</h1>
-      <nav class="tab-nav">
-        <a href="dashboard.html" id="dashboard-nav-link">Dashboard</a>
+  <body data-page-role="tutor" data-theme="tutor">
+    <header class="app-navbar">
+      <a class="brand-mark" href="dashboard.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
+
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="dashboard.html">Dashboard</a>
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html" aria-current="page">Calendar</a>
-        <a href="timesheets.html" id="timesheets-nav-link">Timesheets</a>
+        <a href="timesheets.html">Timesheets</a>
         <a href="modules.html">Module Application</a>
         <a href="profile.html">Profile</a>
+      </nav>
+
+      <div class="navbar-right">
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -60,11 +88,47 @@
             </p>
           </div>
         </div>
-        <a href="#" id="logout-button">Logout</a>
-      </nav>
+
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Tutor</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
     </header>
 
-    <main>
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <h1>My calendar</h1>
+          <p class="page-sub">
+            Your weekly tutorial and lab sessions, plus any classes you add.
+          </p>
+        </div>
+        <div class="calendar-legend" aria-hidden="true">
+          <span class="legend-item">
+            <span class="legend-swatch legend-swatch--class"></span>Classes
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-swatch--session"></span>Tutorial
+            sessions
+          </span>
+        </div>
+      </div>
+
       <div class="card" id="import-timetable-card">
         <h2>Import timetable</h2>
         <p class="card-hint">
@@ -167,7 +231,7 @@
         </form>
       </div>
 
-      <div class="card">
+      <div class="panel">
         <div class="calendar-nav">
           <button type="button" id="prev-month-btn" class="btn-secondary">
             &larr; Prev
@@ -229,6 +293,7 @@
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
+    <script src="../js/user-badge.js"></script>
     <script type="module" src="../js/calendar.js"></script>
     <script type="module" src="../js/timetable-import.js"></script>
     <script src="../js/notifications.js"></script>

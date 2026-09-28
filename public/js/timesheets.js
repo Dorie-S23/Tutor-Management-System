@@ -5,8 +5,8 @@ import {
   getProfile,
   saveProfile,
   todayStr,
-  getWeekStart,
-  getWeekTotal,
+  getMonthStart,
+  getMonthTotal,
   requireRole,
 } from "./storage.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
@@ -39,13 +39,13 @@ const headOfSchoolField = document.getElementById("headOfSchool");
 const rangeFromField = document.getElementById("rangeFrom");
 const rangeToField = document.getElementById("rangeTo");
 const printBtn = document.getElementById("printBtn");
-const submitWeekStartField = document.getElementById("submitWeekStart");
+const submitMonthField = document.getElementById("submitMonth");
 const submitTimesheetBtn = document.getElementById("submitTimesheetBtn");
-const submitWeekHint = document.getElementById("submitWeekHint");
+const submitMonthHint = document.getElementById("submitMonthHint");
 const timesheetHint = document.getElementById("timesheet-hint");
 const claimWrapper = document.getElementById("claimWrapper");
 const claimRowsEl = document.getElementById("claimRows");
-const submissionsTableBody = document.getElementById("submissionsTableBody");
+const submissionsListEl = document.getElementById("submissionsList");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 
 const disputeModal = document.getElementById("disputeModal");
@@ -55,8 +55,9 @@ const disputeModalContext = document.getElementById("disputeModalContext");
 const disputeMessageInput = document.getElementById("disputeMessageInput");
 const disputeSubmitBtn = document.getElementById("disputeSubmitBtn");
 
-// This tutor's most recent dispute per submitted week, keyed by weekStart —
-// only need the latest one to know whether "Dispute" or a status badge shows.
+// This tutor's most recent dispute per submitted month, keyed by weekStart
+// (the stored period key, "YYYY-MM-01") — only need the latest one to know
+// whether "Dispute" or a status badge shows.
 let latestDisputeByWeek = new Map();
 let pendingDispute = null; // { weekStart } for whichever row opened the modal
 
@@ -74,6 +75,15 @@ function toDisplayDate(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
+}
+
+// "September 2026" — the calendar month one submission covers.
+function formatMonthLabel(monthStart) {
+  const date = new Date(`${monthStart}T00:00:00`);
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function formatDuration(hours) {
@@ -205,14 +215,14 @@ async function loadDisputes(userId) {
     const disputes = await res.json();
     if (!res.ok) throw new Error(disputes.error);
 
-    // The API orders newest-first, so the first one seen per week is the latest.
+    // The API orders newest-first, so the first one seen per month is the latest.
     latestDisputeByWeek = new Map();
     disputes.forEach((d) => {
       if (!latestDisputeByWeek.has(d.timesheet_week_start)) {
         latestDisputeByWeek.set(d.timesheet_week_start, d);
       }
     });
-  } catch (err) {
+  } catch {
     latestDisputeByWeek = new Map();
   }
 }
@@ -222,7 +232,7 @@ function renderDisputeCell(sub) {
 
   const dispute = latestDisputeByWeek.get(sub.week_start);
   if (dispute && !dispute.resolved) {
-    return `<span class="status-pill disputed">dispute pending</span>`;
+    return `<span class="status-pill disputed">Disputed</span>`;
   }
 
   const label = dispute ? "Dispute again" : "Dispute";
@@ -240,52 +250,63 @@ async function loadSubmissions() {
     );
     rows = await res.json();
     if (!res.ok) throw new Error(rows.error || "Failed to load timesheets");
-  } catch (err) {
+  } catch {
     return;
   }
 
   await loadDisputes(user.id);
 
-  submissionsTableBody.innerHTML = "";
+  submissionsListEl.innerHTML = "";
   submissionsEmptyEl.hidden = rows.length > 0;
 
   rows.forEach((sub) => {
-    const tr = document.createElement("tr");
-    tr.dataset.weekStart = sub.week_start;
-    tr.innerHTML = `
-      <td>${toDisplayDate(sub.week_start)}</td>
-      <td>${sub.total_hours}</td>
-      <td>
-        <span class="status-pill ${sub.status}">${sub.status}</span>
-        ${sub.reviewer_note ? `<p class="hint">${sub.reviewer_note}</p>` : ""}
-      </td>
-      <td>${toDisplayDate(sub.submitted_at.slice(0, 10))}</td>
-      <td>${renderDisputeCell(sub)}</td>
+    const status = (sub.status || "pending").toLowerCase();
+    const dispute = latestDisputeByWeek.get(sub.week_start);
+    const disputed = dispute && !dispute.resolved;
+    const note = disputed
+      ? "Disputed — please review and resubmit."
+      : sub.reviewer_note || "";
+
+    const row = document.createElement("div");
+    row.className = "ts-row";
+    row.dataset.weekStart = sub.week_start;
+    row.innerHTML = `
+      <div>
+        <p class="ts-row__week">${formatMonthLabel(sub.week_start)}</p>
+        ${note ? `<p class="ts-row__dispute">${note}</p>` : ""}
+      </div>
+      <span class="status-pill ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+      <div class="ts-row__right">
+        <p class="ts-row__hours">${Number(sub.total_hours)}h</p>
+        <p class="ts-row__date">${sub.submitted_at.slice(0, 10)}</p>
+      </div>
+      <div class="ts-row__action">${renderDisputeCell(sub)}</div>
     `;
-    submissionsTableBody.appendChild(tr);
+    submissionsListEl.appendChild(row);
   });
 }
 
-async function updateSubmitWeekHint() {
-  const weekStart = submitWeekStartField.value;
-  if (!weekStart) {
-    submitWeekHint.textContent = "";
+async function updateSubmitMonthHint() {
+  const monthValue = submitMonthField.value; // "YYYY-MM"
+  if (!monthValue) {
+    submitMonthHint.textContent = "";
     return;
   }
-  const total = await getWeekTotal(weekStart);
-  submitWeekHint.textContent = `${total} hrs logged for the week of ${toDisplayDate(weekStart)}.`;
+  const monthStart = getMonthStart(monthValue);
+  const total = await getMonthTotal(monthStart);
+  submitMonthHint.textContent = `${total} hrs logged for ${formatMonthLabel(monthStart)}.`;
 }
 
-submitWeekStartField.addEventListener("change", () => {
-  // Snap whatever date is picked to that week's Monday.
-  submitWeekStartField.value = getWeekStart(submitWeekStartField.value);
-  updateSubmitWeekHint();
-});
+submitMonthField.addEventListener("change", updateSubmitMonthHint);
 
 submitTimesheetBtn.addEventListener("click", async () => {
   const user = getCurrentUser();
   if (!user) {
     showToast("You need to be signed in to submit a timesheet.", "danger");
+    return;
+  }
+  if (!submitMonthField.value) {
+    showToast("Pick a month to submit.", "danger");
     return;
   }
 
@@ -296,7 +317,8 @@ submitTimesheetBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tutorId: user.id,
-        weekStart: submitWeekStartField.value,
+        // The picker gives "YYYY-MM"; the server wants a date in the month.
+        weekStart: getMonthStart(submitMonthField.value),
       }),
     });
     const body = await res.json();
@@ -306,7 +328,7 @@ submitTimesheetBtn.addEventListener("click", async () => {
     }
     showToast("Timesheet submitted for approval.");
     await loadSubmissions();
-  } catch (err) {
+  } catch {
     showToast("Network error — couldn't reach the server.", "danger");
   } finally {
     submitTimesheetBtn.disabled = false;
@@ -317,7 +339,7 @@ function openDisputeModal(weekStart) {
   pendingDispute = { weekStart };
   disputeForm.reset();
   disputeFormError.hidden = true;
-  disputeModalContext.textContent = `Raising a dispute about the week of ${toDisplayDate(weekStart)}.`;
+  disputeModalContext.textContent = `Raising a dispute about ${formatMonthLabel(weekStart)}.`;
   disputeModal.showModal();
   disputeMessageInput.focus();
 }
@@ -337,7 +359,7 @@ disputeModal.addEventListener("click", (e) => {
   if (e.target === disputeModal) closeDisputeModal();
 });
 
-submissionsTableBody.addEventListener("click", (e) => {
+submissionsListEl.addEventListener("click", (e) => {
   const btn = e.target.closest('[data-action="dispute"]');
   if (btn) openDisputeModal(btn.dataset.week);
 });
@@ -374,7 +396,7 @@ disputeForm.addEventListener("submit", async (e) => {
     closeDisputeModal();
     showToast("Dispute submitted.");
     await loadSubmissions();
-  } catch (err) {
+  } catch {
     disputeFormError.textContent = "Network error — couldn't reach the server.";
     disputeFormError.hidden = false;
   } finally {
@@ -386,12 +408,19 @@ printBtn.addEventListener("click", () => window.print());
 rangeFromField.addEventListener("change", safeRenderClaim);
 rangeToField.addEventListener("change", safeRenderClaim);
 
+// The head's "New timesheet" button points at the submit tool below.
+document.getElementById("new-timesheet-btn").addEventListener("click", () => {
+  submitMonthField.focus({ preventScroll: true });
+  submitMonthField.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
 const { from, to } = defaultRange();
 rangeFromField.value = from;
 rangeToField.value = to;
 
-submitWeekStartField.value = getWeekStart(todayStr());
-updateSubmitWeekHint();
+// Pre-select the current calendar month.
+submitMonthField.value = todayStr().slice(0, 7);
+updateSubmitMonthHint();
 
 loadProfileIntoForm();
 safeRenderClaim();
@@ -400,11 +429,11 @@ safeRenderClaim();
   await loadSubmissions();
 
   // Arriving from a "timesheet reviewed" or "timesheet due" notification —
-  // scroll to and flash the week it was about.
+  // scroll to and flash the month it was about.
   const highlightWeek = consumeQueryParam("highlightWeek");
   if (highlightWeek) {
     scrollAndHighlight(
-      submissionsTableBody.querySelector(
+      submissionsListEl.querySelector(
         `[data-week-start="${CSS.escape(highlightWeek)}"]`,
       ),
     );

@@ -41,7 +41,9 @@
 
       function redirectPathForRole(role) {
         switch (role) {
+          // Legacy accounts created before the Volunteer rename.
           case "student":
+          case "volunteer":
             return "/html/StudentView.html";
 
           case "tutor":
@@ -51,6 +53,7 @@
             return "/html/educator.html";
 
           case "organiser":
+          case "super_organiser":
             return "/html/board.html";
 
           default:
@@ -210,6 +213,60 @@
 
           console.log("Existing user detected:", profile);
 
+          /*
+           * =================================================
+           * STEP 8
+           * ORGANISER APPROVAL GATE
+           *
+           * Mirrors POST /api/auth/login: a pending or
+           * denied request blocks sign-in; an approved
+           * request carries the course access the board
+           * filters on; legacy organisers (no request
+           * rows) keep full access.
+           * =================================================
+           */
+
+          const profileRole =
+            profile.role === "student" ? "volunteer" : profile.role;
+
+          let courseIds;
+
+          if (profileRole === "organiser") {
+            const { data: requestRows, error: requestsError } =
+              await supabaseClient
+                .from("organiser_requests")
+                .select("course_id, status")
+                .eq("user_id", user.id);
+
+            if (requestsError) {
+              console.error("Organiser request lookup error:", requestsError);
+
+              status.textContent = "Could not check your organiser request.";
+
+              return;
+            }
+
+            const rows = requestRows || [];
+
+            if (rows.length > 0) {
+              const approved = rows.filter((row) => row.status === "approved");
+
+              if (approved.length > 0) {
+                courseIds = approved.map((row) => row.course_id);
+              } else {
+                await supabaseClient.auth.signOut();
+
+                status.textContent = rows.some(
+                  (row) => row.status === "pending",
+                )
+                  ? "Your organiser request is still awaiting approval — you can sign in once the super-organiser approves it."
+                  : "Your organiser request was denied.";
+
+                return;
+              }
+            }
+          }
+
           status.textContent = "Login successful. Redirecting...";
 
           /*
@@ -228,7 +285,11 @@
               id: user.id,
               email: user.email,
               name: profile.name,
-              role: profile.role,
+              // Legacy "student" profiles are reported as "volunteer".
+              role: profileRole,
+              // Approved courses an organiser is limited to — absent
+              // for legacy organisers, who keep full access.
+              ...(courseIds ? { courseIds } : {}),
             }),
           );
 
@@ -237,7 +298,7 @@
            * their role.
            */
 
-          window.location.href = redirectPathForRole(profile.role);
+          window.location.href = redirectPathForRole(profileRole);
         } catch (error) {
           console.error("Google callback error:", error);
 

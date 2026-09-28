@@ -1,6 +1,8 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { notify } = require("./notificationHelpers");
+const { fillUncoveredForCourse, reassignCoversOf } = require("./sessionCover");
+const { hasTranscript, storageFailure } = require("./transcriptStorage");
 const { recordAudit } = require("../utils/auditLog");
 
 const router = express.Router();
@@ -144,6 +146,18 @@ async function postCourseApplication(req, res) {
   if (Number.isInteger(course.min_mark) && markNum < course.min_mark) {
     return res.status(403).json({
       error: `You need at least ${course.min_mark} for ${course.course_code} to volunteer — you entered ${markNum}.`,
+    });
+  }
+
+  // An application needs a transcript on file for the organiser to review —
+  // the upload section below this page's course boards provides it.
+  const transcript = await hasTranscript(userId);
+  if (transcript.error) {
+    return storageFailure(res, transcript.error);
+  }
+  if (!transcript.has) {
+    return res.status(403).json({
+      error: "Please upload your transcript before applying.",
     });
   }
 
@@ -340,6 +354,18 @@ router.patch("/:id", async (req, res) => {
       relatedId: data.id,
     }).catch((err) =>
       console.warn("Failed to notify about volunteer status:", err),
+    );
+  }
+
+  // Keep session covers in step: a newly approved volunteer can fill any
+  // uncovered upcoming sessions, and one taken off the course hands theirs on.
+  if (status === "approved" && !wasApproved) {
+    fillUncoveredForCourse(data.course_id).catch((err) =>
+      console.warn("Failed to fill uncovered sessions:", err),
+    );
+  } else if (wasApproved && status !== "approved") {
+    reassignCoversOf(data.user_id, data.course_id).catch((err) =>
+      console.warn("Failed to reassign session covers:", err),
     );
   }
 

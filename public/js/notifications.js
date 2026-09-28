@@ -25,6 +25,10 @@ function getCurrentUser() {
   const list = document.getElementById("notifList");
   const empty = document.getElementById("notifEmpty");
   const markAllBtn = document.getElementById("notifMarkAllBtn");
+  // Optional secondary mounts for the tutor dashboard's notifications panel —
+  // absent on every other page, so the panel rendering below is skipped there.
+  const dashList = document.getElementById("dashNotifList");
+  const dashEmpty = document.getElementById("dashNotifEmpty");
 
   // Nothing to do if this page has no bell markup, or nobody's signed in
   // (some pages are reachable before login redirects fire).
@@ -56,7 +60,7 @@ function getCurrentUser() {
     session_change: {
       param: "highlightCourse",
       tutor: "dashboard.html",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     application_status: {
       param: "highlightApplication",
@@ -64,7 +68,7 @@ function getCurrentUser() {
     },
     volunteer_status: {
       param: "highlightApplication",
-      student: "StudentView.html",
+      volunteer: "StudentView.html",
     },
     timesheet_status: {
       param: "highlightWeek",
@@ -73,6 +77,45 @@ function getCurrentUser() {
     timesheet_due: {
       param: "highlightWeek",
       tutor: "timesheets.html",
+    },
+    // A volunteer covering a tutor's excused session
+    cover_assigned: {
+      param: "highlightCover",
+      volunteer: "StudentView.html",
+    },
+    cover_reminder: {
+      param: "highlightCover",
+      volunteer: "StudentView.html",
+    },
+    cover_cancelled: {
+      param: "highlightCover",
+      volunteer: "StudentView.html",
+    },
+    // Volunteers swapping a cover between themselves
+    swap_request: {
+      param: "highlightSwap",
+      volunteer: "StudentView.html",
+    },
+    swap_accepted: {
+      param: "highlightCover",
+      volunteer: "StudentView.html",
+    },
+    swap_declined: {
+      param: "highlightCover",
+      volunteer: "StudentView.html",
+    },
+    swap_withdrawn: {
+      param: "highlightCover",
+      volunteer: "StudentView.html",
+    },
+    // The excused tutor, hearing who (if anyone) is covering for them
+    cover_found: {
+      param: "highlightExcusal",
+      tutor: "dashboard.html",
+    },
+    cover_unavailable: {
+      param: "highlightExcusal",
+      tutor: "dashboard.html",
     },
   };
 
@@ -83,6 +126,26 @@ function getCurrentUser() {
     if (!page) return null;
     return `${page}?${entry.param}=${encodeURIComponent(n.related_id)}`;
   }
+
+  // Sidebar-panel icons for the dashboard: a teal check for good news, a red
+  // alert for problems, and a neutral info glyph for everything else.
+  const DASH_ICONS = {
+    check: `<svg class="dash-notif-icon dash-notif-icon--check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+    alert: `<svg class="dash-notif-icon dash-notif-icon--alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+    info: `<svg class="dash-notif-icon dash-notif-icon--info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+  };
+
+  // Anything not listed here falls back to the neutral info icon.
+  const DASH_ICON_BUCKETS = {
+    cover_assigned: "check",
+    cover_found: "check",
+    swap_accepted: "check",
+    timesheet_due: "alert",
+    cover_unavailable: "alert",
+    cover_cancelled: "alert",
+    swap_declined: "alert",
+    swap_withdrawn: "alert",
+  };
 
   async function markRead(id) {
     try {
@@ -97,7 +160,24 @@ function getCurrentUser() {
     }
   }
 
+  // The latest list, kept so a click that marks an item read can re-render
+  // both mounts (bell dropdown + dashboard panel) with the updated state.
+  let current = [];
+
+  // Marks read when needed, then follows the notification's destination —
+  // which may be null (unknown type/role), in which case nothing happens.
+  async function openNotification(n) {
+    if (!n.read) {
+      n.read = true;
+      render(current);
+      await markRead(n.id);
+    }
+    const dest = destinationFor(n);
+    if (dest) window.location.href = dest;
+  }
+
   function render(notifications) {
+    current = notifications;
     const unreadCount = notifications.filter((n) => !n.read).length;
     badge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
     badge.hidden = unreadCount === 0;
@@ -120,18 +200,38 @@ function getCurrentUser() {
       meta.textContent = timeAgo(n.created_at);
       li.appendChild(meta);
 
-      li.addEventListener("click", async () => {
-        if (!n.read) {
-          n.read = true;
-          render(notifications);
-          await markRead(n.id);
-        }
-        const dest = destinationFor(n);
-        if (dest) window.location.href = dest;
-      });
+      li.addEventListener("click", () => openNotification(n));
 
       list.appendChild(li);
     });
+
+    // Optional secondary mount: the tutor dashboard's side panel, capped at
+    // the latest few so it stays a glance rather than a second inbox.
+    if (dashList) {
+      dashList.innerHTML = "";
+      if (dashEmpty) dashEmpty.hidden = notifications.length > 0;
+
+      notifications.slice(0, 4).forEach((n) => {
+        const li = document.createElement("li");
+        li.className = "dash-panel__item";
+        li.insertAdjacentHTML(
+          "beforeend",
+          DASH_ICONS[DASH_ICON_BUCKETS[n.type] || "info"],
+        );
+
+        const body = document.createElement("div");
+        const message = document.createElement("p");
+        message.textContent = n.message;
+        const meta = document.createElement("p");
+        meta.className = "dash-notif-time";
+        meta.textContent = timeAgo(n.created_at);
+        body.append(message, meta);
+        li.appendChild(body);
+
+        li.addEventListener("click", () => openNotification(n));
+        dashList.appendChild(li);
+      });
+    }
   }
 
   async function load() {

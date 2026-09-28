@@ -2,11 +2,22 @@ const submissionListEl = document.getElementById("submissionList");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 const statusFilterEl = document.getElementById("statusFilter");
 const exportPayrollBtn = document.getElementById("exportPayrollBtn");
+const statusChipsEl = document.getElementById("statusChips");
+const reviewPendingBtn = document.getElementById("reviewPendingBtn");
+const viewDisputesBtn = document.getElementById("viewDisputesBtn");
+const verifyPendingMetaEl = document.getElementById("verifyPendingMeta");
+const verifyDecidedMetaEl = document.getElementById("verifyDecidedMeta");
+const verifyDisputeMetaEl = document.getElementById("verifyDisputeMeta");
+const verifyRejectedMetaEl = document.getElementById("verifyRejectedMeta");
 
 // Disputes for the currently-loaded submissions, keyed by "userId_weekStart".
 // Only unresolved ones are fetched — once resolved, a submission's row goes
 // back to showing just its ordinary status.
 let openDisputesByKey = new Map();
+
+// Flat list of every open dispute, for the summary card's "Review disputes"
+// action (the map above is keyed for per-row lookups only).
+let openDisputeList = [];
 
 function submissionKey(userId, weekStart) {
   return `${userId}_${weekStart}`;
@@ -27,6 +38,16 @@ function toDisplayDate(dateStr) {
   return `${d}/${m}/${y}`;
 }
 
+// "September 2026" — the calendar month a submission covers (week_start
+// stores the month's first day).
+function formatMonthLabel(monthStart) {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function makeActionBtn(label, variant, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
@@ -43,6 +64,7 @@ async function loadOpenDisputes() {
     if (!res.ok) throw new Error(disputes.error);
 
     openDisputesByKey = new Map();
+    openDisputeList = disputes;
     disputes.forEach((dispute) => {
       const key = submissionKey(
         dispute.timesheet_user_id,
@@ -56,7 +78,9 @@ async function loadOpenDisputes() {
     // Disputes are a secondary signal on top of the review queue — don't
     // block the page over them, just show submissions without dispute pills.
     openDisputesByKey = new Map();
+    openDisputeList = [];
   }
+  updateDisputeCard();
 }
 
 async function loadSubmissions() {
@@ -110,7 +134,7 @@ function renderSubmission(sub) {
   const li = document.createElement("li");
   li.dataset.key = key;
   const row = document.createElement("div");
-  row.className = "tutor-row";
+  row.className = "review-row";
   row.innerHTML = `
     <span class="avatar">${initials(name)}</span>
     <span class="name-block">
@@ -118,7 +142,7 @@ function renderSubmission(sub) {
       <span class="role">${user?.email || ""}</span>
     </span>
     <span class="stamp-row">
-      <span class="stamp">Week of ${toDisplayDate(sub.week_start)}</span>
+      <span class="stamp">${formatMonthLabel(sub.week_start)}</span>
       <span class="stamp">${sub.total_hours} hrs</span>
     </span>
     <span class="status-pill ${status}">${status}</span>
@@ -134,7 +158,7 @@ function renderSubmission(sub) {
   if (disputes.length > 0) {
     actionsEl.appendChild(
       makeActionBtn("View dispute", "btn-small-neutral", () =>
-        openDisputeModal(sub, name, disputes),
+        openDisputeModal(disputes, name),
       ),
     );
   }
@@ -153,7 +177,7 @@ function renderSubmission(sub) {
       ),
     );
     actionsEl.appendChild(
-      makeActionBtn("Reject", "", () =>
+      makeActionBtn("Reject", "reject", () =>
         openReasonModal({
           title: "Reject timesheet",
           fieldLabel: "Reason for rejection",
@@ -175,7 +199,7 @@ function renderSubmission(sub) {
   li.appendChild(row);
   if (status !== "pending" && sub.reviewer_note) {
     const noteEl = document.createElement("p");
-    noteEl.className = "hint";
+    noteEl.className = "review-note";
     noteEl.textContent = `Note: ${sub.reviewer_note}`;
     li.appendChild(noteEl);
   }
@@ -314,17 +338,20 @@ reasonForm.addEventListener("submit", async (e) => {
 // ---------- dispute modal ----------
 
 const disputeModal = document.getElementById("disputeModal");
+const disputeModalHeading = document.getElementById("disputeModalHeading");
 const disputeModalBody = document.getElementById("disputeModalBody");
 const disputeResolveBtn = document.getElementById("disputeResolveBtn");
 
 let pendingDisputes = []; // every open dispute currently shown in the modal
 
-function openDisputeModal(sub, name, disputes) {
+function openDisputeModal(disputes, fallbackName) {
+  disputeModalHeading.textContent =
+    disputes.length > 1 ? "Open disputes" : "Dispute";
   disputeModalBody.innerHTML = disputes
     .map(
       (d) => `
       <p class="hint">
-        <strong>${d.users?.name || name}</strong> —
+        <strong>${d.users?.name || fallbackName}</strong> —
         ${new Date(d.created_at).toLocaleString()}
       </p>
       <p>${d.message}</p>
@@ -374,6 +401,88 @@ disputeResolveBtn.addEventListener("click", async () => {
   }
 });
 
+// ---------- review summary (verify cards + filter chips) ----------
+
+function syncStatusChips() {
+  if (!statusChipsEl) return;
+  statusChipsEl.querySelectorAll(".filter-chip").forEach((chip) => {
+    chip.classList.toggle(
+      "is-active",
+      chip.dataset.status === statusFilterEl.value,
+    );
+  });
+}
+
+function updateChipCounts(counts) {
+  if (!statusChipsEl) return;
+  const labels = {
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    "": "All",
+  };
+  const total = counts.pending + counts.approved + counts.rejected;
+  statusChipsEl.querySelectorAll(".filter-chip").forEach((chip) => {
+    const status = chip.dataset.status;
+    const count = status === "" ? total : counts[status] || 0;
+    chip.textContent = `${labels[status]} (${count})`;
+  });
+}
+
+function updateDisputeCard() {
+  const count = openDisputeList.length;
+  if (verifyDisputeMetaEl) {
+    verifyDisputeMetaEl.textContent = count
+      ? `${count} open dispute${count === 1 ? "" : "s"}`
+      : "No open disputes";
+  }
+  if (viewDisputesBtn) viewDisputesBtn.disabled = count === 0;
+}
+
+// The queue loads one status at a time, so the summary's counts come from a
+// separate all-status fetch — they don't need refetching on every filter
+// change, just once per page load.
+async function loadReviewSummary() {
+  try {
+    const res = await fetch("/api/timesheets");
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load timesheets");
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    rows.forEach((row) => {
+      const status = (row.status || "pending").toLowerCase();
+      if (counts[status] != null) counts[status] += 1;
+    });
+    updateChipCounts(counts);
+    if (verifyPendingMetaEl)
+      verifyPendingMetaEl.textContent = `${counts.pending} pending`;
+    if (verifyDecidedMetaEl)
+      verifyDecidedMetaEl.textContent = `${counts.approved + counts.rejected} decided`;
+    if (verifyRejectedMetaEl)
+      verifyRejectedMetaEl.textContent = `${counts.rejected} rejected`;
+  } catch (err) {
+    // The counts are a nicety — the queue below still loads without them.
+  }
+}
+
+statusChipsEl?.addEventListener("click", (e) => {
+  const chip = e.target.closest(".filter-chip");
+  if (!chip) return;
+  statusFilterEl.value = chip.dataset.status;
+  syncStatusChips();
+  loadSubmissions();
+});
+
+reviewPendingBtn?.addEventListener("click", () => {
+  statusFilterEl.value = "pending";
+  syncStatusChips();
+  loadSubmissions();
+});
+
+viewDisputesBtn?.addEventListener("click", () => {
+  if (openDisputeList.length === 0) return;
+  openDisputeModal(openDisputeList, "Tutor");
+});
+
 let toastTimer = null;
 function showToast(message) {
   const el = document.getElementById("toast");
@@ -414,4 +523,6 @@ if (new URLSearchParams(window.location.search).get("highlight")) {
   statusFilterEl.value = "";
 }
 
+syncStatusChips();
+loadReviewSummary();
 loadSubmissions();

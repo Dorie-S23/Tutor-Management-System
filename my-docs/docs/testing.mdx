@@ -25,8 +25,8 @@ npx jest server/routes/tutors.test.js     # run a single file
 npx jest server/routes                    # run everything under a folder
 ```
 
-:::info Not wired into CI yet
-None of the three Gitea Actions workflows (`format.yml`, `deploy.yml`, `docs-deploy.yml` — see [Backend → Deployment](./backend.mdx#deployment)) run `npm test`. Tests only run when someone runs them locally. Adding a `test.yml` workflow (or a step in an existing one) is an open gap, not a decision to leave it out.
+:::info Runs in CI
+`test.yml` runs `npm ci` + `npm test` on every push, alongside `format.yml`'s Prettier check (see [Backend → Deployment](./backend.mdx#deployment)).
 :::
 
 ## Project Structure
@@ -37,20 +37,14 @@ Tests are **co-located** with the file they test, not gathered in a separate `__
 server/
 ├── testUtils/
 │   └── fakeSupabase.js          # shared in-memory Supabase fake
-└── routes/
+└── routes/                      # every route file has a co-located test
     ├── tutors.js
     ├── tutors.test.js            # sits right next to what it tests
-    ├── tutorApplications.js
-    ├── tutorApplications.test.js
-    ├── courseVolunteers.js
-    ├── courseVolunteers.test.js
-    ├── timesheets.js
-    ├── timesheets.test.js
-    ├── courses.js
-    ├── courses.test.js
-    ├── sessionExcusals.js
-    └── sessionExcusals.test.js
-public/js/
+    └── ...
+routes/                          # auth lives outside server/, and so does its test
+├── auth.js
+└── auth.test.js
+public/js/                       # frontend tests sit next to the script they load
 ├── storage.js
 ├── storage.test.js
 ├── board.js
@@ -63,16 +57,24 @@ Naming: `<name>.test.js` mirrors the source file by default; when a test only co
 
 Every `server/routes/*.test.js` file is a genuine API test, not just a unit test with a mocked-out network layer: [Supertest](https://www.npmjs.com/package/supertest) sends a real HTTP request (`GET`/`POST`/`PUT`/`PATCH`/`DELETE`, real URL, real JSON body) at a real Express app with the router mounted, and the app handles it through its actual routing, validation, and response logic. The only thing faked is the database call at the bottom of each route — `fakeSupabase` stands in for Supabase so tests don't depend on network access or mutate a real (shared) database, but every layer between "HTTP request comes in" and "database call goes out" runs for real, including status codes, JSON error shapes, and side effects on the in-memory data.
 
-Every route file under `server/routes/` currently has API test coverage:
+Every route file under `server/routes/` (plus `routes/auth.js`) currently has API test coverage:
 
-| Route file             | Endpoints covered                                                                                                                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tutorApplications.js` | `GET /`, `GET /obvious-fill`, `POST /`, `POST /bulk-approve`, `PATCH /:id` (approve/reject/reset, capacity + weekly-hour-cap checks, the `override`/`allocation_overrides` bypass path), `DELETE /:id` |
-| `courseVolunteers.js`  | `GET /`, `GET /counts`, `POST /`, `PATCH /:id` (approve/reject/reset), `DELETE /`                                                                                                                      |
-| `timesheets.js`        | `GET /` (incl. `?status=` filter), `POST /`, `GET /payroll-export`, `PATCH /:userId/:weekStart` (approve/reject, `reviewed_at` stamping)                                                               |
-| `tutors.js`            | `GET /`, `GET /:id`, `POST /` (incl. the Supabase Auth signup flow, stubbed), `PUT /:id`, `DELETE /:id`, `PUT /bulk`, `POST /bulk-rates`, `PUT /:id/busy-times`, `GET /:id/assignment-check`           |
-| `courses.js`           | `GET /`, `POST /` (incl. venue-clash detection), `PUT /:id`, `DELETE /:id`, `PATCH /:id/tutors-assigned`                                                                                               |
-| `sessionExcusals.js`   | `GET /`, `POST /` (incl. tutorial-day and assignment checks), `DELETE /:id`                                                                                                                            |
+| Route file             | Endpoints covered                                                                                                                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routes/auth.js`       | `POST /api/auth/login` (incl. the legacy `student` → `volunteer` role rename and the Google-account password hint)                                                                                                          |
+| `courseDiagonals.js`   | `GET /`, `POST /split` (even split), `PATCH /members`, plus the `splitEvenly`/`diagonalLabels` helpers called directly                                                                                                      |
+| `courseVolunteers.js`  | `GET /`, `GET /counts`, `POST /`, `PATCH /:id` (approve/reject/reset), `DELETE /`                                                                                                                                           |
+| `courses.js`           | `GET /`, `POST /` (incl. venue-clash detection), `PUT /:id`, `DELETE /:id`, `PATCH /:id/tutors-assigned`                                                                                                                    |
+| `hourEntries.js`       | `POST /`, `PUT /:id`, `GET /report` (hours-budget report), plus the tutor and volunteer-cover logging-window rules                                                                                                          |
+| `notifications.js`     | `GET /` (per-user, newest first), `PATCH /:id`, `PATCH /read-all`                                                                                                                                                           |
+| `publicApi.js`         | `GET /api/v1`, `GET /api/v1/courses`, `GET /api/v1/courses/:code`, read-only enforcement (see [Public API](./public-api.mdx))                                                                                               |
+| `sessionCover.js`      | helper, not a router — `sessionCover.test.js` mounts the real excusals + notifications routers and covers automatic cover assignment, cover reminders, volunteer-to-volunteer swaps, and covers kept in step with approvals |
+| `sessionExcusals.js`   | `GET /`, `POST /` (incl. tutorial-day and assignment checks), `DELETE /:id`; the cover/swap sub-actions (`/:id/find-cover`, `/:id/decline-cover`, `/:id/swap-*`) are covered in `sessionCover.test.js`                      |
+| `timetable.js`         | `POST /api/timetable/parse` (Gemini call stubbed via a mocked `fetch`)                                                                                                                                                      |
+| `timesheetDisputes.js` | `GET /` (incl. `?raisedBy=`/`?resolved=` filters), `POST /` (only reviewed timesheets), `PATCH /:id/resolve`                                                                                                                |
+| `timesheets.js`        | `GET /` (incl. `?status=` filter), `POST /`, `GET /payroll-export`, `GET /due-reminder`, `PATCH /:userId/:weekStart` (approve/reject, `reviewed_at` stamping)                                                               |
+| `tutorApplications.js` | `GET /`, `GET /obvious-fill`, `POST /`, `POST /bulk-approve`, `PATCH /:id` (approve/reject/reset, capacity + weekly-hour-cap checks, the `override`/`allocation_overrides` bypass path), `DELETE /:id`                      |
+| `tutors.js`            | `GET /`, `GET /rates`, `GET /:id`, `POST /` (incl. the Supabase Auth signup flow, stubbed), `PUT /:id`, `DELETE /:id`, `PUT /bulk`, `POST /bulk-rates`, `PUT /:id/busy-times`, `GET /:id/assignment-check`                  |
 
 Pattern used by every `server/routes/*.test.js` file:
 
@@ -119,27 +121,28 @@ Frontend files ship as plain browser scripts (some ES modules, some classic scri
 
 ### Unit tests
 
-Yes — `public/js/storage.test.js` and `public/js/calendar.render-race.test.js` are true unit tests: each one exercises a single function in isolation, with no HTTP call and no simulated multi-step user journey. JSDOM is only there to load the browser-style source (`export function ...`, `sessionStorage`/`fetch` references); the assertions themselves are plain "call the function, check the return value."
+Yes — `public/js/storage.test.js`, `calendar.render-race.test.js`, `sessionTiming.test.js`, and `timetable-parser.test.js` are true unit tests: each one exercises a single function in isolation, with no HTTP call and no simulated multi-step user journey. JSDOM is only there to load the browser-style source (`export function ...`, `sessionStorage`/`fetch` references); the assertions themselves are plain "call the function, check the return value."
 
 - **`public/js/storage.test.js`** — attaches `storage.js`'s exported functions to `window.__storage` and calls them directly: `getWeekStart`/`addDays` (pure date arithmetic), `findDuplicateEntry` (overlap-detection logic — a regression test for a reported bug where a third logged entry slipped past the overlap check), `getCurrentUser`/`requireRole` (session/role logic, redirect target asserted via a fake `window.location` stand-in), and the `saveProfile`/`getSchedule`/schedule-exception helpers (regression coverage for a bug where one signed-in user's data leaked into another's on the same browser).
 - **`public/js/calendar.render-race.test.js`** — isolates `calendar.js`'s `render()` function by replacing every function it calls (`getScheduleForDate`, `getEntriesForDate`, `requireRole`, etc.) with a minimal stub, then calls `render()` directly to reproduce and guard a specific concurrency race (a second `render()` call finishing before an in-flight first one, and the first one's late-arriving results clobbering the second's correct output).
+- **`public/js/sessionTiming.test.js`** — calls the real `sessionTiming.js` functions (`windowStatus`/`windowNote`/`windowBlockMessage` — the client mirror of the server's logging-window rule) with a pinned clock, covering the "during the session + 10-minute grace" windows.
+- **`public/js/timetable-parser.test.js`** — calls the real `parseTimetablePdfWithGemini`/`firstOccurrenceOnOrAfter` with a stubbed `fetch`. Only the server-AI path is exercised — the OCR fallback needs real canvas + WASM workers and is verified manually.
 
 :::info The backend doesn't unit-test its own helper functions in isolation
-Pure logic embedded in a route file — `tutorApplications.js`'s applicant-ranking score, `courses.js`'s `parseVenues`/`sharedVenues` venue-clash math, `timetable-parser.js`'s grid-reconstruction geometry — isn't called directly by a dedicated unit test. It's exercised indirectly, through the [API Testing](#api-testing) suite above (e.g. `courses.test.js`'s venue-clash tests send a real `POST`/`PUT` and assert on the resulting 409, rather than importing `parseVenues` and calling it directly). That's a reasonable choice here — these functions aren't exported for reuse elsewhere, so testing them only through the route that owns them avoids testing an implementation detail directly — but it does mean the "pure unit test" label only really applies to the frontend suites above.
+Pure logic embedded in a route file — e.g. `tutorApplications.js`'s applicant-ranking score or `courses.js`'s `parseVenues`/`sharedVenues` venue-clash math — isn't called directly by a dedicated unit test. It's exercised indirectly, through the [API Testing](#api-testing) suite above (e.g. `courses.test.js`'s venue-clash tests send a real `POST`/`PUT` and assert on the resulting 409, rather than importing `parseVenues` and calling it directly). That's a reasonable choice here — these functions aren't exported for reuse elsewhere, so testing them only through the route that owns them avoids testing an implementation detail directly — but it does mean the "pure unit test" label only really applies to the frontend suites above.
 :::
 
 ### Interaction tests
 
-`public/js/board.keyboard-nav.test.js` and `public/js/auth.register-email.test.js` are closer to component/integration tests: instead of calling an exported function directly, they load the real `.html` + `.js` into JSDOM and drive it the way a user would — dispatching real `KeyboardEvent`s to navigate the course rail, or submitting a real form — then assert on the resulting DOM state, rather than on a function's return value.
+`public/js/board.keyboard-nav.test.js`, `auth.register-email.test.js`, `calendar.day-view.test.js`, `onboarding.test.js`, and `volunteer-timesheets.render.test.js` are closer to component/integration tests: instead of calling an exported function directly, they load the real `.html` + `.js` into JSDOM and drive it the way a user would — dispatching real `KeyboardEvent`s to navigate the course rail, submitting a real form, clicking a day cell to open the day view, walking the onboarding spotlight tour's page lock, or rendering the volunteer timesheet list (a regression test for the weekly → monthly switch) — then assert on the resulting DOM state, rather than on a function's return value.
 
 ## Coverage
 
-Every backend route file has API test coverage (see the table above) — `tutorApplications.js`, `courseVolunteers.js`, `timesheets.js`, `tutors.js`, `courses.js`, and `sessionExcusals.js`.
+Every backend route file has API test coverage (see the table above).
 
 Known gaps, in rough priority order:
 
-- **`public/js/board.js`** and **`public/js/timesheet-review.js`** — only `board.js`'s keyboard navigation is covered; the actual organiser workflows (approving applications/volunteers, the guided tour, the shortfall filter) aren't. `board.js` also has no `requireRole()` login guard of its own (noted in a comment at `public/js/board.js:1476`) — worth a regression test if that gets fixed.
-- **No CI test stage** (see the callout above).
+- **`public/js/board.js`** and **`public/js/timesheet-review.js`** — only `board.js`'s keyboard navigation is covered; the actual organiser workflows (approving applications/volunteers, the guided tour, the shortfall filter) aren't. `board.js` also has no `requireRole()` login guard of its own (noted in a comment in `public/js/board.js` — it reads the `sessionStorage` user key directly) — worth a regression test if that gets fixed.
 - **No live/integration testing against a real Supabase instance** — every API test here runs against `fakeSupabase`, so a real Postgres-level bug (a genuine constraint mismatch, an RLS policy, a Postgrest quirk `fakeSupabase` doesn't model) wouldn't be caught by this suite. Deliberate tradeoff, not an oversight — see the note above about why tests don't touch the real, shared database.
 
 ## User Acceptance Testing

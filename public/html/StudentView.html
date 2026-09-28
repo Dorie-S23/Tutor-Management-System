@@ -3,42 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StudyConnect | Student Volunteer</title>
+    <title>Volunteer Dashboard | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
     <script src="../js/theme.js"></script>
   </head>
 
   <body>
-    <header class="board-header board-header--brand">
-      <hgroup class="header-left">
-        <p class="eyebrow">
-          <img src="../images/images.png" alt="" class="eyebrow-logo" />
-          School of Computer Science &amp; Applied Mathematics
-        </p>
-        <h1 id="welcome-heading">Welcome!</h1>
-      </hgroup>
+    <header class="app-navbar">
+      <a class="brand-mark" href="StudentView.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
 
-      <img
-        src="../images/Wits-890x664.png"
-        alt="University of the Witwatersrand"
-        class="header-wits-logo"
-      />
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="StudentView.html" aria-current="page">Dashboard</a>
+        <a href="my-sessions.html">My sessions</a>
+        <a href="volunteer-log-hours.html">Log Hours</a>
+        <a href="student-calendar.html">Calendar</a>
+        <a href="volunteer-timesheets.html">Completed sessions</a>
+        <a href="student-profile.html">Profile</a>
+        <a href="#" id="tour-link">Take a Tour</a>
+      </nav>
 
-      <div class="header-actions">
-        <a class="btn btn-ghost" href="StudentView.html" aria-current="page"
-          >Dashboard</a
-        >
-        <a class="btn btn-ghost" href="my-sessions.html">My Sessions</a>
-        <a class="btn btn-ghost" href="student-log-hours.html">Log Hours</a>
-        <a class="btn btn-ghost" href="student-calendar.html">Calendar</a>
-        <a class="btn btn-ghost" href="student-profile.html">Profile</a>
-        <a class="btn btn-ghost" href="#" id="tour-link">Take the tour</a>
+      <div class="navbar-right">
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -81,26 +89,139 @@
             </p>
           </div>
         </div>
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Volunteer</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
       </div>
-      <button class="btn btn-danger" id="logout-button" type="button">
-        Logout
-      </button>
     </header>
 
-    <main class="dashboard-layout">
-      <section class="card" aria-labelledby="stats-heading">
-        <h2 id="stats-heading">Your Progress</h2>
-        <div class="header-stat" style="align-items: flex-start">
-          <span class="stat-value" id="stat-hours-volunteered">0</span>
-          <span class="stat-label">Hours Volunteered</span>
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <h1 id="welcome-heading">Volunteer dashboard</h1>
+          <p class="page-sub">
+            Find support sessions, track your hours, and stay on top of your
+            commitments.
+          </p>
         </div>
+        <a class="btn-primary" href="volunteer-log-hours.html">
+          Log volunteer hours
+        </a>
+      </div>
+
+      <section class="stat-grid" aria-label="Overview">
+        <article class="stat-card stat-card--blue">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+            <path
+              d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+            />
+          </svg>
+          <p class="stat-value" id="stat-open-sessions">0</p>
+          <p class="stat-label">Open sessions</p>
+        </article>
+
+        <article class="stat-card stat-card--indigo">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <p class="stat-value" id="stat-pending-claims">0</p>
+          <p class="stat-label">Pending claims</p>
+        </article>
+
+        <article class="stat-card stat-card--teal">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+            />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+          </svg>
+          <p class="stat-value" id="stat-hours-month">0h</p>
+          <p class="stat-label">Hours this month</p>
+        </article>
+
+        <article class="stat-card stat-card--violet">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          <p class="stat-value" id="stat-upcoming-sessions">0</p>
+          <p class="stat-label">Upcoming sessions</p>
+        </article>
+
+        <article class="stat-card">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="8" r="6" />
+            <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+          </svg>
+          <p class="stat-value" id="stat-hours-volunteered">0</p>
+          <p class="stat-label">Hours volunteered</p>
+        </article>
       </section>
 
       <section class="card" aria-labelledby="courses-heading">
         <h2 id="courses-heading">Modules You Can Tutor</h2>
         <p class="hint">Courses currently looking for student volunteers.</p>
 
-        <div class="course-list" aria-label="Available courses" id="courseList">
+        <div class="session-grid" id="courseList">
           <!-- rendered by studentview.js -->
         </div>
       </section>
@@ -112,11 +233,7 @@
           to run it, not a standing weekly commitment.
         </p>
 
-        <div
-          class="course-list"
-          aria-label="Open sessions"
-          id="openSessionsList"
-        >
+        <div class="session-grid" id="openSessionsList">
           <!-- rendered by studentview.js -->
         </div>
       </section>
@@ -127,20 +244,66 @@
           Every module you've volunteered for — pending, approved, or rejected.
         </p>
 
-        <div class="course-list" id="pendingList">
+        <div class="session-grid" id="pendingList">
           <!-- rendered by studentview.js -->
         </div>
       </section>
 
-      <section class="card" aria-labelledby="sessions-heading">
-        <div class="assign-panel-head">
-          <h2 id="sessions-heading">Upcoming Sessions</h2>
-          <a class="btn btn-ghost btn-small-pad" href="my-sessions.html"
-            >View all</a
+      <section
+        class="panel transcript-panel"
+        id="transcript-panel"
+        aria-labelledby="transcript-heading"
+      >
+        <h2 id="transcript-heading">Your transcript</h2>
+        <p class="hint">
+          Organisers review your transcript alongside your mark, so you need one
+          on file before you can volunteer. Upload a PDF, PNG, or JPEG — up to
+          5&nbsp;MB.
+        </p>
+        <div class="transcript-panel__row">
+          <span
+            class="transcript-status"
+            id="transcript-status"
+            aria-live="polite"
           >
+            Checking&hellip;
+          </span>
+          <div class="transcript-panel__actions">
+            <button
+              class="btn-secondary"
+              id="transcript-view-btn"
+              type="button"
+              hidden
+            >
+              View transcript
+            </button>
+            <button
+              class="btn-primary"
+              id="transcript-upload-btn"
+              type="button"
+            >
+              Upload transcript
+            </button>
+          </div>
+        </div>
+        <input
+          type="file"
+          id="transcript-input"
+          accept="application/pdf,image/png,image/jpeg"
+          hidden
+        />
+        <p class="field-error" id="transcript-error" hidden></p>
+      </section>
+
+      <section aria-labelledby="sessions-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="sessions-heading">
+            My upcoming sessions
+          </h2>
+          <a class="section-hint" href="my-sessions.html">View all</a>
         </div>
 
-        <div class="course-list" id="upcomingSessionsList">
+        <div class="session-grid" id="upcomingSessionsList">
           <!-- rendered by studentview.js -->
         </div>
       </section>
@@ -148,8 +311,23 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <script src="../js/user-badge.js"></script>
     <script src="../js/onboarding.js"></script>
     <script type="module" src="../js/studentview.js"></script>
+    <script type="module">
+      import { getCurrentUser } from "../js/storage.js";
+      import { highlightActiveTab } from "../js/nav.js";
+      import { initTranscriptUpload } from "../js/transcript-upload.js";
+
+      // studentview.js stays import-light so the dashboard tests can run it as
+      // a classic script; the nav highlight and the transcript panel are
+      // module-only helpers, so they are wired up here instead.
+      const user = getCurrentUser();
+      if (user) {
+        highlightActiveTab();
+        initTranscriptUpload(user.id);
+      }
+    </script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
   </body>

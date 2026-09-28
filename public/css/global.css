@@ -954,6 +954,91 @@ input[type="search"]:focus-visible {
   color: var(--ink-faint);
 }
 
+/* ---------- diagonals ---------- */
+
+.diagonal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.diagonal-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.diagonal-card--unassigned {
+  border-style: dashed;
+  background: var(--amber-bg);
+  border-color: var(--amber-line);
+}
+
+.diagonal-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.diagonal-card-head h4 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 15px;
+}
+
+.diagonal-card-counts {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.diagonal-card-sub {
+  margin: 10px 0 4px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.diagonal-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.diagonal-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.diagonal-member-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagonal-member-select {
+  flex-shrink: 0;
+  width: auto;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
 /* ---------- confirm bar ---------- */
 
 .confirm-bar {
@@ -1928,6 +2013,495 @@ input[type="search"]:focus-visible {
 }
 
 /* ============================================================
+   STUDENT DASHBOARD (StudentView / My Sessions / Profile)
+   Scoped under body.student-app so it can't affect other pages.
+   ============================================================ */
+
+.student-app * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.student-app {
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  color: #222;
+  line-height: 1.5;
+}
+
+.student-app > header {
+  background: #ffffff;
+  border-bottom: 1px solid #ddd;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-app > header h1 {
+  color: #2563eb;
+  font-size: 24px;
+}
+
+.student-app nav {
+  display: flex;
+  gap: 10px;
+}
+
+.student-app nav a {
+  color: #555;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.student-app nav a:hover,
+.student-app nav a[aria-current="page"] {
+  background: #eaf1ff;
+  color: #2563eb;
+}
+
+.student-app main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 35px 25px;
+}
+
+.student-app main > section {
+  margin-bottom: 30px;
+}
+
+.student-app main > section:first-child {
+  margin-bottom: 30px;
+}
+
+.student-app main > section:first-child h2 {
+  font-size: 30px;
+}
+
+.student-app main > section:first-child p {
+  color: #777;
+}
+
+.student-app section > header {
+  margin-bottom: 20px;
+}
+
+.student-app section > header h2 {
+  font-size: 22px;
+}
+
+.student-app section > header p {
+  color: #777;
+}
+
+.student-app main > section:nth-child(2) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.student-app main > section:nth-child(2) > h2 {
+  grid-column: 1 / -1;
+}
+
+.student-app main > section:nth-child(2) article {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.student-app main > section:nth-child(2) article h3 {
+  color: #2563eb;
+  font-size: 28px;
+}
+
+.student-app main > section:nth-child(2) article p {
+  color: #777;
+}
+
+.student-app main > section:nth-child(3) {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.student-app main > section:nth-child(3) > section {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.student-app main > section:nth-child(3) article {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.student-app main > section:nth-child(3) article h3 {
+  margin-bottom: 8px;
+}
+
+.student-app main > section:nth-child(3) article p {
+  color: #777;
+  font-size: 14px;
+  margin-bottom: 15px;
+}
+
+.student-app .session-meta {
+  color: #555;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px !important;
+}
+
+.student-app .session-note {
+  flex-grow: 1;
+}
+
+.student-app .empty-state {
+  grid-column: 1 / -1;
+  color: #777;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.student-app button {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 7px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: auto;
+}
+
+.student-app button:hover {
+  background: #1d4ed8;
+}
+
+.student-app main > section:last-child {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.student-app main > section:last-child > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-app main > section:last-child article {
+  border-top: 1px solid #eee;
+  padding: 18px 0;
+}
+
+.student-app main > section:last-child article h3 {
+  margin-bottom: 5px;
+}
+
+.student-app main > section:last-child article p {
+  color: #777;
+}
+
+.student-app strong {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #e8f7ed;
+  color: #22863a;
+  font-size: 13px;
+}
+
+.student-app > footer {
+  border-top: 1px solid #ddd;
+  background: white;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.student-app > footer p {
+  color: #777;
+}
+
+.student-app .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translate(-50%, 20px);
+  background: #1f2430;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+}
+
+.student-app .toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.student-app .card {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.student-app .card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-app .session-list article {
+  border-top: 1px solid #eee;
+  padding: 18px 0;
+}
+
+.student-app .session-list article:first-child {
+  border-top: none;
+}
+
+.student-app .session-list article h3 {
+  margin-bottom: 5px;
+}
+
+.student-app .session-list article p {
+  color: #777;
+}
+
+/* A session this volunteer is covering for an excused tutor. */
+.student-app .session-list article.session-cover {
+  border-left: 4px solid #3457d5;
+  background: #eef2fd;
+  padding-left: 14px;
+  padding-right: 14px;
+  border-radius: 6px;
+}
+
+.student-app .session-list article .session-cover-badge {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3457d5;
+}
+
+/* Another volunteer asking this student to take their session over. */
+.student-app .session-list article.session-swap-request {
+  border-left-color: #a66a17;
+  background: #fbf4e6;
+}
+
+.student-app .session-swap-request .session-cover-badge {
+  color: #a66a17;
+}
+
+/* "Can't make it" → pick who takes over; pending request; accept/decline. */
+.student-app .swap-controls {
+  margin-top: 10px;
+}
+
+.student-app .swap-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.student-app .swap-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+.student-app .swap-select {
+  padding: 7px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  max-width: 360px;
+}
+
+.student-app .swap-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.student-app .swap-panel .swap-buttons {
+  margin-top: 0;
+}
+
+.student-app .swap-buttons button,
+.student-app .swap-controls > button {
+  width: auto;
+  margin-top: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.student-app .swap-buttons .btn-secondary {
+  background: white;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.student-app .swap-buttons .btn-secondary:hover {
+  background: #f3f3f3;
+}
+
+.student-app .session-list article .swap-pending {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a66a17;
+}
+
+.student-app .btn-cancel {
+  width: auto;
+  display: block;
+  margin-top: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+  background: white;
+  color: #d33;
+  border: 1px solid #d33;
+}
+
+.student-app .btn-cancel:hover {
+  background: #d33;
+  color: white;
+}
+
+.student-app .status-pill {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.student-app .status-pill.completed {
+  background: #e8f7ed;
+  color: #22863a;
+}
+
+.student-app .status-pill.missed {
+  background: #fdecea;
+  color: #d33;
+}
+
+.student-app .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.student-app .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.student-app .form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.student-app .form-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.student-app .form-field input,
+.student-app .form-field textarea {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.student-app .checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.student-app .checkbox-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #222;
+}
+
+.student-app .form-actions button {
+  width: auto;
+  padding: 10px 20px;
+}
+
+@media (max-width: 800px) {
+  .student-app > header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .student-app main > section:nth-child(2) {
+    grid-template-columns: 1fr;
+  }
+
+  .student-app main > section:nth-child(3) > section {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .student-app .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 500px) {
+  .student-app > header nav {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .student-app main > section:nth-child(3) > section {
+    grid-template-columns: 1fr;
+  }
+
+  .student-app > footer {
+    flex-direction: column;
+    gap: 15px;
+  }
+}
+
+/* ============================================================
    TUTOR TIMESHEET APP (Dashboard / Calendar / Log Hours / Timesheets)
    Scoped under body.tutor-app so it can't affect other pages — except
    the shared component rules flagged "shared" below: their markup is
@@ -2394,6 +2968,32 @@ body.tutor-app {
   font-size: 0.9rem;
 }
 
+/* An upcoming session the tutor has excused themselves from. */
+.tutor-app .application-row--excused {
+  border-style: dashed !important;
+  opacity: 0.85;
+}
+
+.tutor-app .excused-note {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a03d2c;
+}
+
+/* Who's covering an excusal — or that nobody is yet. */
+.tutor-app .excusal-cover {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tutor-app .excusal-cover--found {
+  color: #2f6b4f;
+}
+
+.tutor-app .excusal-cover--pending {
+  color: #a66a17;
+}
+
 .tutor-app .placeholder {
   text-align: center;
   color: var(--ta-text-muted);
@@ -2525,6 +3125,51 @@ body.tutor-app {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A session the tutor has excused themselves from — kept on the calendar
+   so they can still see it, but struck through, faded and tagged. */
+.tutor-app .calendar-course-pill--excused {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.tutor-app .calendar-excused-label {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+/* A tutor's session a student volunteer is covering. */
+.tutor-app .calendar-course-pill--cover {
+  border-width: 2px;
+}
+
+.tutor-app .calendar-cover-tag {
+  display: inline-block;
+  margin-right: 0.3rem;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: #3457d5;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+.tutor-app .calendar-excused-tag {
+  display: inline-block;
+  margin-right: 0.3rem;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: #a03d2c;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
 }
 
 .tutor-app #timetable-debug-text {

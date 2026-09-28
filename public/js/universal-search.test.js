@@ -118,9 +118,10 @@ describe("universal-search.js", () => {
     expect(results.innerHTML).toContain(
       "timesheet-review.html?highlight=u1_2026-09-01T00:00:00",
     );
-    expect(results.innerHTML).toContain("week of 01/09/2026");
+    // Timesheets are keyed by calendar month: "September 2026".
+    expect(results.innerHTML).toContain("September 2026");
     // Null week_start renders an empty date rather than crashing.
-    expect(results.innerHTML).toContain("Ann Smith — week of ");
+    expect(results.innerHTML).toContain('highlight=u3_null">Ann Smith — </a>');
 
     // Tutor email match, with a null name falling back to "Unnamed tutor".
     type("zed");

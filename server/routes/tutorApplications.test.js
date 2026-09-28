@@ -3,6 +3,7 @@ const request = require("supertest");
 const { fakeSupabase } = require("../testUtils/fakeSupabase");
 
 let tables;
+let storageFiles;
 let mockSupabase;
 
 // The route module grabs the Supabase client via `require("../supabaseClient")`
@@ -11,6 +12,7 @@ let mockSupabase;
 // beforeEach() reassigns for every test.
 jest.mock("../supabaseClient", () => ({
   from: (...args) => mockSupabase.from(...args),
+  storage: { from: (...args) => mockSupabase.storage.from(...args) },
 }));
 
 const tutorApplicationsRouter = require("./tutorApplications");
@@ -33,7 +35,10 @@ beforeEach(() => {
     audit_log: [],
     tutor_busy_times: [],
   };
-  mockSupabase = fakeSupabase(tables);
+  // The transcripts bucket exists and starts empty; tests whose request
+  // should get past the transcript check seed a file into it.
+  storageFiles = { transcripts: [] };
+  mockSupabase = fakeSupabase(tables, {}, storageFiles);
 });
 
 describe("POST /api/tutor-applications", () => {
@@ -47,6 +52,8 @@ describe("POST /api/tutor-applications", () => {
         course_level: 4, // honours
       },
     ];
+    // The "accepts" tests below flow through the transcript check.
+    storageFiles.transcripts.push("tutor-1/transcript.pdf");
   });
 
   function validApplication(overrides = {}) {
@@ -96,6 +103,39 @@ describe("POST /api/tutor-applications", () => {
       .send(validApplication({ academicLevel: "phd" }));
 
     expect(res.status).toBe(201);
+  });
+
+  test("refuses an application until a transcript is on file", async () => {
+    storageFiles.transcripts.length = 0;
+
+    const res = await request(buildApp())
+      .post("/api/tutor-applications")
+      .send(validApplication());
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe(
+      "Please upload your transcript before applying.",
+    );
+    expect(tables.tutor_subject_preference).toHaveLength(0);
+  });
+
+  test("answers 502 when the transcript storage lookup itself fails", async () => {
+    mockSupabase.storage.from = () => ({
+      list: async () => ({
+        data: null,
+        error: { message: "FetchError: request to Supabase failed" },
+      }),
+    });
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(buildApp())
+      .post("/api/tutor-applications")
+      .send(validApplication());
+
+    errorSpy.mockRestore();
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/unavailable/);
+    expect(tables.tutor_subject_preference).toHaveLength(0);
   });
 });
 
@@ -424,6 +464,7 @@ describe("POST /api/tutor-applications/bulk-approve", () => {
     // status write lands; the second must still go through.
     mockSupabase = fakeSupabase(
       tables,
+      {},
       {},
       {
         onBeforeResolve: (table, operation) => {
@@ -904,6 +945,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
       mockSupabase = fakeSupabase(
         tables,
         {},
+        {},
         {
           onBeforeResolve: (table, operation) => {
             if (
@@ -954,6 +996,7 @@ describe("PATCH /api/tutor-applications/:id", () => {
       // course read and its guarded counter bump.
       mockSupabase = fakeSupabase(
         tables,
+        {},
         {},
         {
           onBeforeResolve: (table, operation) => {
@@ -1170,6 +1213,7 @@ describe("PATCH /api/tutor-applications/:id/lock", () => {
     // update resolves.
     mockSupabase = fakeSupabase(
       tables,
+      {},
       {},
       {
         onBeforeResolve: (table, operation) => {

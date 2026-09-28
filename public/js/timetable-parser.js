@@ -1,9 +1,11 @@
-// Timetable PDFs from this university's exports have no embedded text layer
-// (they're a print-to-PDF of a rendered grid, so every glyph is an outlined
-// shape, not a Tj text operator) — so parsing means rendering each page to a
-// bitmap and running OCR over it, all in the browser. There's no free hosted
-// text-extraction API for this, so pdf.js (rendering) and Tesseract.js (OCR)
-// are loaded from a CDN at parse time instead of shipping them in the bundle.
+// Reading timetable PDFs happens in two layers. The primary path uploads the
+// PDF to our own /api/timetable/parse route, which hands it to Google's
+// Gemini API — a multimodal model that reads PDFs directly (including these
+// exports' outlined-shape pages, which have no text layer) and replies with
+// structured JSON. When that route can't be reached, the fallback is entirely
+// in-browser: render each page to a bitmap and run OCR over it — pdf.js
+// (rendering) and Tesseract.js (OCR) are loaded from a CDN at parse time
+// instead of shipping them in the bundle.
 // The PDF never has real calendar dates attached to its weekly grid, so this
 // module also computes each class's first occurrence from a user-chosen start date.
 
@@ -270,9 +272,70 @@ function mergeEntries(rawEntries) {
   return Array.from(merged.values());
 }
 
-// Renders each page of the PDF to a bitmap, OCRs it, and reconstructs the
-// weekly class grid — entirely in the browser, no server round-trip.
+// Composes the single display title the review table edits from the model's
+// two name fields — code first when both are present.
+function composeTitle(cls) {
+  const code = (cls.courseCode || "").trim();
+  const name = (cls.courseName || "").trim();
+  if (code && name) return `${code} - ${name}`;
+  return code || name;
+}
+
+// Primary parse path: the PDF is uploaded as-is to our server route, which
+// sends it to Gemini and returns { classes: [{ courseCode, courseName,
+// dayName, startTime, endTime, venue }] }. A 4xx means the request itself was
+// rejected (wrong file type, too large) — that's thrown as definitive. 5xx or
+// network failures mark `aiUnavailable` so the caller can fall back to OCR.
+export async function parseTimetablePdfWithGemini(file, onProgress) {
+  onProgress?.("Asking the AI reader to scan the PDF…");
+
+  let response;
+  try {
+    response = await fetch("/api/timetable/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/pdf" },
+      body: file,
+    });
+  } catch {
+    const err = new Error("Could not reach the AI reader.");
+    err.aiUnavailable = true;
+    throw err;
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const err = new Error(
+      payload?.error || "The AI reader could not read that PDF.",
+    );
+    err.aiUnavailable = response.status >= 500;
+    throw err;
+  }
+
+  const payload = await response.json();
+  return (payload.classes || []).map((cls) => ({
+    title: composeTitle(cls),
+    dayName: cls.dayName,
+    dayOfWeek: DAY_NAMES.indexOf(cls.dayName),
+    startTime: cls.startTime,
+    endTime: cls.endTime,
+    venue: cls.venue,
+  }));
+}
+
+// Reads the PDF, preferring the server-side AI reader and falling back to the
+// in-browser OCR pipeline below when the AI route is unavailable (not
+// configured, rate-limited, offline…) but not when it definitively rejected
+// the file (empty/broken/oversized — OCR would only fail the same way).
 export async function parseTimetablePdf(file, onProgress) {
+  try {
+    return await parseTimetablePdfWithGemini(file, onProgress);
+  } catch (err) {
+    if (!err.aiUnavailable) throw err;
+    onProgress?.(
+      "AI reader unavailable — reading the PDF on this device instead…",
+    );
+  }
+
   onProgress?.("Loading PDF reader…");
   const [pdfjsLib, Tesseract] = await Promise.all([
     loadPdfjs(),

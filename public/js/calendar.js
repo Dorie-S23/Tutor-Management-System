@@ -78,6 +78,77 @@ function courseColor(courseId) {
 // either way, just a different source table.
 let courseSessions = [];
 
+// The tutor's own session excusals, keyed so render() can look up whether a
+// given course session on a given date is excused:
+// "<courseId>|<date>|<tutorial|lab>". Excusals recorded before session_type
+// existed have none, and are keyed "<courseId>|<date>|*" (any session that day).
+let excusalsByKey = new Map();
+
+function excusalKey(courseId, dateStr, sessionType) {
+  return `${courseId}|${dateStr}|${sessionType || "*"}`;
+}
+
+function findExcusal(session, dateStr) {
+  return (
+    excusalsByKey.get(
+      excusalKey(session.courseId, dateStr, session.type.toLowerCase()),
+    ) || excusalsByKey.get(excusalKey(session.courseId, dateStr, null))
+  );
+}
+
+async function fetchExcusals() {
+  try {
+    const res = await fetch(
+      `/api/session-excusals?tutorId=${encodeURIComponent(currentUser.id)}`,
+    );
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load excusals");
+    excusalsByKey = new Map(
+      rows.map((e) => [
+        excusalKey(e.course_id, e.session_date, e.session_type),
+        e,
+      ]),
+    );
+  } catch {
+    excusalsByKey = new Map();
+  }
+}
+
+// For a student volunteer: the tutors' sessions they've been assigned to
+// cover, keyed by date, so render() can drop a "Cover" pill onto that day.
+let coversByDate = new Map();
+
+async function fetchCovers() {
+  try {
+    const res = await fetch(
+      `/api/session-excusals?coverUserId=${encodeURIComponent(currentUser.id)}`,
+    );
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load covers");
+    coversByDate = new Map();
+    for (const excusal of rows) {
+      const course = excusal.courses || {};
+      const isLab = excusal.session_type === "lab";
+      const start = isLab ? course.lab_start_time : course.tutor_start_time;
+      const end = isLab ? course.lab_end_time : course.tutor_end_time;
+      const cover = {
+        courseId: excusal.course_id,
+        courseCode: course.course_code || "Session",
+        type: isLab ? "Lab" : "Tutorial",
+        start: start ? start.slice(0, 5) : "",
+        end: end ? end.slice(0, 5) : "",
+        venue: (isLab ? course.lab_venues : course.venues) || "",
+        tutorName: excusal.tutors?.name || "a tutor",
+      };
+      const list = coversByDate.get(excusal.session_date) || [];
+      list.push(cover);
+      coversByDate.set(excusal.session_date, list);
+    }
+  } catch {
+    coversByDate = new Map();
+  }
+}
+
 function sessionsFromCourse(course, courseId) {
   const sessions = [];
   if (!course) return sessions;
@@ -147,6 +218,11 @@ async function fetchVolunteerCourseSessions() {
 }
 
 async function fetchCourseSessions() {
+  if (!isTutor) {
+    await fetchCovers();
+  } else {
+    await fetchExcusals();
+  }
   try {
     courseSessions = isTutor
       ? await fetchTutorCourseSessions()
@@ -186,6 +262,14 @@ function renderCourseColorKey() {
     chip.style.color = palette.text;
     chip.textContent = courseCode;
     courseColorKeyEl.appendChild(chip);
+  }
+
+  if (excusalsByKey.size > 0) {
+    const excusedChip = document.createElement("span");
+    excusedChip.className = "course-color-chip";
+    excusedChip.innerHTML =
+      '<span class="calendar-excused-tag">Excused</span><span class="calendar-excused-label">struck through</span> = you&rsquo;ve excused yourself';
+    courseColorKeyEl.appendChild(excusedChip);
   }
   courseColorKeyEl.hidden = false;
 }
@@ -259,11 +343,19 @@ function showConfirm(message, confirmLabel = "Confirm") {
   });
 }
 
-function openAddClassForm(dateStr) {
+function openAddClassForm(dateStr, startTime) {
   addClassDateInput.value = dateStr || todayStr();
+  addClassStartInput.value = startTime || "";
+  addClassEndInput.value = startTime ? oneHourLater(startTime) : "";
   addClassCard.hidden = false;
   addClassCard.scrollIntoView({ behavior: "smooth", block: "center" });
   addClassSubjectInput.focus();
+}
+
+// "14:30" -> "15:30" (capped at 23:00), so a slot clicked on the day view
+// pre-fills a sensible end time in the add-class form.
+function oneHourLater(timeStr) {
+  return minutesToTimeStr(Math.min(timeToMinutes(timeStr) + 60, 23 * 60));
 }
 
 function closeAddClassForm() {
@@ -366,8 +458,18 @@ async function render() {
 
     if (canManageSchedule) {
       cell.classList.add("calendar-day-clickable");
-      cell.title = "Click to add a class on this day";
-      cell.addEventListener("click", () => openAddClassForm(cellDateStr));
+      cell.title = "Click to open this day in detail";
+      cell.addEventListener("click", (e) => {
+        // Pills inside the cell (sessions, classes, logged hours) handle
+        // their own clicks — those shouldn't also open the day view.
+        if (
+          e.target.closest(
+            ".calendar-course-pill, .calendar-class-pill, .calendar-session-pill",
+          )
+        )
+          return;
+        openDayView(cellDateStr);
+      });
     }
 
     const dayNumber = document.createElement("span");
@@ -380,13 +482,49 @@ async function render() {
       for (const s of courseSessions) {
         if (s.dayIndex !== cellWeekday) continue;
         const palette = courseColor(s.courseId);
+        const excusal = findExcusal(s, cellDateStr);
         const pill = document.createElement("div");
         pill.className = "calendar-course-pill";
         pill.style.background = palette.bg;
         pill.style.borderColor = palette.border;
         pill.style.color = palette.text;
-        pill.textContent = `${s.start} ${s.courseCode} · ${s.type === "Lab" ? "Lab" : "Tut"}`;
-        pill.title = `${s.courseCode} ${s.type} · ${s.start}–${s.end}${s.venue ? ` · ${s.venue}` : ""}`;
+        const label = `${s.start} ${s.courseCode} · ${s.type === "Lab" ? "Lab" : "Tut"}`;
+        const details = `${s.courseCode} ${s.type} · ${s.start}–${s.end}${s.venue ? ` · ${s.venue}` : ""}`;
+        if (excusal) {
+          pill.classList.add("calendar-course-pill--excused");
+          const tag = document.createElement("span");
+          tag.className = "calendar-excused-tag";
+          tag.textContent = "Excused";
+          const text = document.createElement("span");
+          text.className = "calendar-excused-label";
+          text.textContent = label;
+          pill.append(tag, text);
+          const coverText = excusal.cover?.name
+            ? ` · ${excusal.cover.name} is covering`
+            : " · no volunteer cover yet";
+          pill.title = `You're excused from this session — ${details}${coverText}${excusal.reason ? ` · Reason: ${excusal.reason}` : ""}`;
+        } else {
+          pill.textContent = label;
+          pill.title = details;
+        }
+        cell.appendChild(pill);
+      }
+    } else {
+      for (const c of coversByDate.get(cellDateStr) || []) {
+        const palette = courseColor(c.courseId);
+        const pill = document.createElement("div");
+        pill.className = "calendar-course-pill calendar-course-pill--cover";
+        pill.style.background = palette.bg;
+        pill.style.borderColor = palette.border;
+        pill.style.color = palette.text;
+        const tag = document.createElement("span");
+        tag.className = "calendar-cover-tag";
+        tag.textContent = "Cover";
+        pill.append(
+          tag,
+          `${c.start} ${c.courseCode} · ${c.type === "Lab" ? "Lab" : "Tut"}`,
+        );
+        pill.title = `You're covering ${c.courseCode} ${c.type} for ${c.tutorName} · ${c.start}–${c.end}${c.venue ? ` · ${c.venue}` : ""}`;
         cell.appendChild(pill);
       }
     }
@@ -763,6 +901,383 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
 
   overlay.appendChild(box);
   document.body.appendChild(overlay);
+}
+
+// ---------- day view ----------
+
+// Clicking a day cell opens this instead of jumping straight to the add-class
+// form: a scrollable hour grid with time stamps and lines, the day's sessions
+// and classes as blocks sized to their real times (overlapping ones sit side
+// by side), and empty slots that hand off to the add-class form pre-filled
+// with that day and time.
+const DAY_VIEW_OPEN_HOUR = 6;
+const DAY_VIEW_CLOSE_HOUR = 22;
+const DAY_VIEW_HOUR_HEIGHT = 52; // px per hour row
+
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function minutesToTimeStr(totalMinutes) {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// Everything happening on one day, gathered from the same sources the month
+// cells draw from (course sessions/covers, added classes, cancellations).
+function dayViewEventsForDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const weekday = new Date(y, m - 1, d).getDay();
+  const events = [];
+
+  if (isTutor) {
+    for (const s of courseSessions) {
+      if (s.dayIndex !== weekday) continue;
+      events.push({
+        kind: "course",
+        courseId: s.courseId,
+        start: s.start,
+        end: s.end,
+        label: `${s.courseCode} · ${s.type}`,
+        meta: s.venue || "",
+        excusal: findExcusal(s, dateStr),
+      });
+    }
+  } else {
+    for (const c of coversByDate.get(dateStr) || []) {
+      events.push({
+        kind: "cover",
+        start: c.start,
+        end: c.end,
+        label: `${c.courseCode} · ${c.type}`,
+        meta: c.venue || "",
+        coverTutor: c.tutorName,
+      });
+    }
+  }
+
+  for (const cls of getScheduleForDate(dateStr)) {
+    events.push({
+      kind: "class",
+      start: cls.startTime,
+      end: cls.endTime,
+      label: cls.title,
+      meta: cls.venue || "",
+      cls,
+      modified: !!cls.isModifiedOccurrence,
+    });
+  }
+
+  for (const cls of getCancelledOccurrencesForDate(dateStr)) {
+    events.push({
+      kind: "cancelled",
+      start: cls.startTime,
+      end: cls.endTime,
+      label: cls.title,
+      cls,
+    });
+  }
+
+  return events;
+}
+
+// Splits events into those with usable start/end times (placed on the grid)
+// and those without (listed as chips under it). Overlapping blocks get their
+// own column so they sit side by side instead of covering each other.
+function placeDayEvents(events) {
+  const placed = [];
+  const untimed = [];
+
+  for (const ev of events) {
+    const startMin = timeToMinutes(ev.start);
+    const endMin = timeToMinutes(ev.end);
+    if (startMin === null || endMin === null || endMin <= startMin) {
+      untimed.push(ev);
+      continue;
+    }
+    placed.push({ ...ev, startMin, endMin });
+  }
+
+  placed.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  const columnEnds = [];
+  for (const ev of placed) {
+    let col = columnEnds.findIndex((end) => end <= ev.startMin);
+    if (col === -1) {
+      columnEnds.push(ev.endMin);
+      col = columnEnds.length - 1;
+    } else {
+      columnEnds[col] = ev.endMin;
+    }
+    ev.col = col;
+  }
+
+  const columnCount = Math.max(1, columnEnds.length);
+  for (const ev of placed) {
+    ev.leftPct = (ev.col / columnCount) * 100;
+    ev.widthPct = 100 / columnCount;
+  }
+
+  return { placed, untimed };
+}
+
+function buildDayEventBlock(ev, dateStr, openHour, closeDayView) {
+  const block = document.createElement("div");
+  block.className = "day-view-event";
+
+  const top = ((ev.startMin - openHour * 60) / 60) * DAY_VIEW_HOUR_HEIGHT;
+  const height = Math.max(
+    28,
+    ((ev.endMin - ev.startMin) / 60) * DAY_VIEW_HOUR_HEIGHT - 4,
+  );
+  block.style.top = `${top + 2}px`;
+  block.style.height = `${height}px`;
+  block.style.left = `calc(${ev.leftPct}% + 3px)`;
+  block.style.width = `calc(${ev.widthPct}% - 6px)`;
+
+  const range = `${ev.start}–${ev.end}`;
+  const timeLine = document.createElement("span");
+  timeLine.className = "day-view-event-time";
+  timeLine.textContent = range;
+
+  const labelLine = document.createElement("span");
+  labelLine.className = "day-view-event-label";
+
+  if (ev.kind === "course") {
+    const palette = courseColor(ev.courseId);
+    block.style.background = palette.bg;
+    block.style.borderColor = palette.border;
+    block.style.color = palette.text;
+    if (ev.excusal) {
+      block.classList.add("day-view-event--excused");
+      const tag = document.createElement("span");
+      tag.className = "calendar-excused-tag";
+      tag.textContent = "Excused";
+      const text = document.createElement("span");
+      text.className = "calendar-excused-label";
+      text.textContent = ev.label;
+      labelLine.append(tag, text);
+      const coverText = ev.excusal.cover?.name
+        ? `${ev.excusal.cover.name} is covering`
+        : "no volunteer cover yet";
+      block.title = `You're excused from this session — ${ev.label} · ${range}${ev.meta ? ` · ${ev.meta}` : ""} · ${coverText}`;
+    } else {
+      labelLine.textContent = ev.label;
+      block.title = `${ev.label} · ${range}${ev.meta ? ` · ${ev.meta}` : ""}`;
+    }
+  } else if (ev.kind === "cover") {
+    block.classList.add("day-view-event--cover");
+    const tag = document.createElement("span");
+    tag.className = "calendar-cover-tag";
+    tag.textContent = "Cover";
+    labelLine.append(tag, ev.label);
+    block.title = `You're covering ${ev.label} for ${ev.coverTutor} · ${range}${ev.meta ? ` · ${ev.meta}` : ""}`;
+  } else if (ev.kind === "class") {
+    block.classList.add("day-view-event--class", "day-view-event--editable");
+    labelLine.textContent = ev.modified ? `${ev.label} \u270E` : ev.label;
+    block.title = ev.modified
+      ? `${ev.label} · ${range}${ev.meta ? ` · ${ev.meta}` : ""} · edited for this day`
+      : `${ev.label} · ${range}${ev.meta ? ` · ${ev.meta}` : ""}`;
+    block.addEventListener("click", () => {
+      closeDayView();
+      openOccurrenceModal(ev.cls, dateStr, false);
+    });
+  } else if (ev.kind === "cancelled") {
+    block.classList.add(
+      "day-view-event--cancelled",
+      "day-view-event--editable",
+    );
+    labelLine.textContent = `\u2715 ${ev.label}`;
+    block.title = `${ev.label} cancelled for this day · click to restore`;
+    block.addEventListener("click", () => {
+      closeDayView();
+      openOccurrenceModal(ev.cls, dateStr, true);
+    });
+  } else {
+    block.classList.add("day-view-event--hours");
+    labelLine.textContent = ev.label;
+    block.title = `${ev.label} · ${range}`;
+  }
+
+  block.append(timeLine, labelLine);
+  return block;
+}
+
+async function openDayView(dateStr) {
+  if (document.querySelector(".day-view-overlay")) return;
+
+  let entries = [];
+  try {
+    entries = await getEntriesForDate(dateStr);
+  } catch {
+    entries = [];
+  }
+
+  const events = dayViewEventsForDate(dateStr);
+  for (const entry of entries) {
+    events.push({
+      kind: "hours",
+      start: entry.startTime,
+      end: entry.endTime,
+      label: `${entry.hours}h${entry.subject ? ` · ${entry.subject}` : ""}`,
+      meta: entry.notes || "",
+    });
+  }
+
+  const { placed, untimed } = placeDayEvents(events);
+
+  // The grid always covers the normal day and stretches further if something
+  // on this date starts earlier or ends later.
+  let openHour = DAY_VIEW_OPEN_HOUR;
+  let closeHour = DAY_VIEW_CLOSE_HOUR;
+  for (const ev of placed) {
+    openHour = Math.min(openHour, Math.floor(ev.startMin / 60));
+    closeHour = Math.max(closeHour, Math.ceil(ev.endMin / 60));
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "day-view-overlay";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    inset: "0",
+    background: "rgba(0,0,0,0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: "1000",
+    padding: "24px 0",
+  });
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "day-view-heading");
+
+  const box = document.createElement("div");
+  box.className = "day-view";
+  Object.assign(box.style, {
+    maxWidth: "560px",
+    width: "94%",
+    maxHeight: "88vh",
+  });
+
+  function closeDayView() {
+    document.removeEventListener("keydown", onKey);
+    overlay.remove();
+  }
+  function onKey(e) {
+    if (e.key === "Escape") closeDayView();
+  }
+
+  const head = document.createElement("header");
+  head.className = "day-view-head";
+
+  const title = document.createElement("h2");
+  title.id = "day-view-heading";
+  title.textContent = new Date(dateStr + "T00:00:00").toLocaleDateString(
+    undefined,
+    { weekday: "long", month: "long", day: "numeric" },
+  );
+  head.appendChild(title);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "day-view-close";
+  closeBtn.setAttribute("aria-label", "Close day view");
+  closeBtn.textContent = "\u00D7";
+  closeBtn.addEventListener("click", closeDayView);
+  head.appendChild(closeBtn);
+
+  box.appendChild(head);
+
+  if (canManageSchedule) {
+    const hint = document.createElement("p");
+    hint.className = "card-hint day-view-hint";
+    hint.textContent = "Click an empty time slot to add a class on this day.";
+    box.appendChild(hint);
+  }
+
+  if (placed.length === 0 && untimed.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "day-view-empty";
+    empty.textContent = "Nothing scheduled on this day yet.";
+    box.appendChild(empty);
+  }
+
+  const scroll = document.createElement("div");
+  scroll.className = "day-view-scroll";
+
+  const grid = document.createElement("div");
+  grid.className = "day-view-grid";
+  grid.style.height = `${(closeHour - openHour) * DAY_VIEW_HOUR_HEIGHT}px`;
+
+  for (let h = openHour; h <= closeHour; h++) {
+    const line = document.createElement("div");
+    line.className = "day-view-hour";
+    line.style.top = `${(h - openHour) * DAY_VIEW_HOUR_HEIGHT}px`;
+
+    const label = document.createElement("span");
+    label.className = "day-view-time";
+    label.textContent = `${String(h).padStart(2, "0")}:00`;
+    line.appendChild(label);
+    grid.appendChild(line);
+
+    if (h < closeHour) {
+      const half = document.createElement("div");
+      half.className = "day-view-hour day-view-hour--half";
+      half.style.top = `${(h - openHour) * DAY_VIEW_HOUR_HEIGHT + DAY_VIEW_HOUR_HEIGHT / 2}px`;
+      grid.appendChild(half);
+    }
+  }
+
+  const lane = document.createElement("div");
+  lane.className = "day-view-lane";
+  for (const ev of placed) {
+    lane.appendChild(buildDayEventBlock(ev, dateStr, openHour, closeDayView));
+  }
+  grid.appendChild(lane);
+
+  if (canManageSchedule) {
+    // Clicking an empty slot (anything that isn't an event block) closes the
+    // day view and opens the add-class form pre-filled with this day and the
+    // clicked, half-hour-snapped time.
+    lane.addEventListener("click", (e) => {
+      if (e.target.closest(".day-view-event")) return;
+      const rect = lane.getBoundingClientRect();
+      const offsetMin = ((e.clientY - rect.top) / DAY_VIEW_HOUR_HEIGHT) * 60;
+      const snapped = Math.floor(Math.max(0, offsetMin) / 30) * 30;
+      const clamped = Math.min(snapped, (closeHour - openHour) * 60 - 30);
+      closeDayView();
+      openAddClassForm(dateStr, minutesToTimeStr(openHour * 60 + clamped));
+    });
+  }
+
+  scroll.appendChild(grid);
+
+  if (untimed.length > 0) {
+    const extra = document.createElement("div");
+    extra.className = "day-view-extra";
+    for (const ev of untimed) {
+      const chip = document.createElement("span");
+      chip.className = "day-view-extra-chip";
+      chip.textContent = `${ev.label}${ev.meta ? ` · ${ev.meta}` : ""}`;
+      extra.appendChild(chip);
+    }
+    scroll.appendChild(extra);
+  }
+
+  box.appendChild(scroll);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeDayView();
+  });
+  document.addEventListener("keydown", onKey);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  closeBtn.focus();
 }
 
 clearClassesBtn.addEventListener("click", async () => {

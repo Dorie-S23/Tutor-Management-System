@@ -847,6 +847,32 @@ body > footer p {
   white-space: nowrap;
 }
 
+/* A tutor's session this volunteer is covering (colours set inline per course). */
+.calendar-course-pill--cover {
+  border: 2px solid transparent;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-cover-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #2563eb;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
 /* Responsive */
 
 @media (max-width: 800px) {
