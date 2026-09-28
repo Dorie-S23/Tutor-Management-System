@@ -1,5 +1,8 @@
 # Tutor Management System
 
+![coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/coverage.svg)
+![tests](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/actions/workflows/test.yml/badge.svg?branch=main)
+
 A web app for organising tutor allocations to courses — tracking which courses need tutors, matching tutors against courses, and flagging clashes (marks, timetable, hours remaining).
 
 Link: https://tutorx.devden.workers.dev/
