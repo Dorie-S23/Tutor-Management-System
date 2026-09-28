@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const html = fs.readFileSync(
   path.join(__dirname, "..", "html", "my-sessions.html"),
@@ -20,7 +21,7 @@ function loadPage({
   const pageHtml = html
     .replace(
       '<script src="../js/my-sessions.js"></script>',
-      `<script>${scriptSrc}</script>`,
+      `<script>${scriptSrc}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "my-sessions.js")).href}</script>`,
     )
     .replace('<script src="../js/logout.js"></script>', "");
 

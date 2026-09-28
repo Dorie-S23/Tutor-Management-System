@@ -13,6 +13,7 @@
   },
   "jest": {
     "testEnvironment": "node",
+    "coverageProvider": "v8",
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/my-docs/"
