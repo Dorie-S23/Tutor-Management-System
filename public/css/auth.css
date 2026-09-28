@@ -232,6 +232,169 @@ body {
   color: rgb(147, 197, 253);
 }
 
+/* Brand panel carousel — the hero alternates between two slides (the product
+   highlights and “who TutorX is for”, one card per role) with a crossfade,
+   steered by the pill dots under the slides. */
+
+.auth-brand-slides {
+  position: relative;
+}
+
+.auth-brand-slide {
+  position: absolute;
+
+  inset: 0 0 auto;
+
+  opacity: 0;
+
+  visibility: hidden;
+
+  transition:
+    opacity 0.5s ease,
+    visibility 0.5s ease;
+}
+
+.auth-brand-slide.is-active {
+  position: relative;
+
+  opacity: 1;
+
+  visibility: visible;
+}
+
+.auth-brand-roles {
+  list-style: none;
+
+  margin: 26px 0 0;
+
+  padding: 0;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 11px;
+}
+
+.auth-brand-roles li {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 13px;
+
+  padding: 13px 15px;
+
+  border: 1px solid rgba(255, 255, 255, 0.14);
+
+  border-radius: 14px;
+
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth-role-icon {
+  flex-shrink: 0;
+
+  width: 36px;
+
+  height: 36px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 10px;
+
+  background: rgba(147, 197, 253, 0.16);
+
+  color: rgb(191, 219, 254);
+}
+
+.auth-role-icon svg {
+  width: 19px;
+
+  height: 19px;
+}
+
+.auth-role-text {
+  min-width: 0;
+}
+
+.auth-role-text strong {
+  display: block;
+
+  font-size: 13.5px;
+
+  font-weight: 700;
+
+  color: #ffffff;
+}
+
+.auth-role-text span {
+  display: block;
+
+  margin-top: 3px;
+
+  font-size: 12px;
+
+  line-height: 1.5;
+
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.auth-brand-dots {
+  display: flex;
+
+  gap: 8px;
+
+  margin-top: 26px;
+}
+
+.auth-brand-dot {
+  width: 8px;
+
+  height: 8px;
+
+  padding: 0;
+
+  border: none;
+
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.35);
+
+  cursor: pointer;
+
+  transition:
+    width 0.25s ease,
+    background-color 0.25s ease;
+}
+
+.auth-brand-dot.is-active {
+  width: 24px;
+
+  background: #ffffff;
+}
+
+.auth-brand-dot:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.auth-brand-dot:focus-visible {
+  outline: 2px solid rgb(147, 197, 253);
+
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-brand-slide,
+  .auth-brand-dot {
+    transition: none;
+  }
+}
+
 /* Wits footer */
 
 .auth-brand-foot {
@@ -243,9 +406,9 @@ body {
 }
 
 .brand-foot-tile {
-  width: 36px;
+  width: 40px;
 
-  height: 36px;
+  height: 40px;
 
   display: flex;
 
@@ -255,15 +418,19 @@ body {
 
   border-radius: 9px;
 
-  background: rgba(255, 255, 255, 0.1);
+  background: #fff;
 
-  color: rgb(147, 197, 253);
+  overflow: hidden;
+
+  flex-shrink: 0;
 }
 
-.brand-foot-tile svg {
-  width: 19px;
+.brand-foot-tile img {
+  width: 100%;
 
-  height: 19px;
+  height: 100%;
+
+  object-fit: cover;
 }
 
 .auth-brand-caption {

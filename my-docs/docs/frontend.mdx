@@ -8,7 +8,7 @@ How the browser-facing side of the app is built, and the conventions to follow w
 
 ## Overview
 
-Everything under `public/` — one plain HTML page per screen, one script per page, and a handful of shared helpers. Covers four roles (student, tutor, organiser, educator), each with their own set of pages behind a shared login.
+Everything under `public/` — one plain HTML page per screen, one script per page, and a handful of shared helpers. Covers three roles (volunteer, tutor, organiser), each with their own set of pages behind a shared login. The volunteer role was renamed from "student" — accounts created before the rename still store `student` and are aliased back to `volunteer` at login. The educator role was dropped (see [Dev Plan → Roles](./dev-plan.mdx#roles)).
 
 ## Tech Stack
 
@@ -32,26 +32,37 @@ There's no separate frontend install or dev server to start. Follow [Getting Sta
 public/
 ├── html/                # one .html file per page
 │   ├── login.html, register.html,
-│   │   google-register.html, google-callback.html   # auth
-│   ├── StudentView.html, my-sessions.html,
-│   │   log-hours.html, calendar.html, profile.html   # student pages
-│   ├── dashboard.html, timesheets.html               # tutor pages
-│   ├── educator.html                                 # educator page
-│   └── board.html, tutors.html                       # organiser pages
+│   │   google-register.html, google-callback.html          # auth
+│   ├── StudentView.html, volunteer-log-hours.html,
+│   │   student_calender.html, volunteer-timesheets.html    # volunteer pages
+│   ├── dashboard.html, log-hours.html, calendar.html,
+│   │   timesheets.html, modules.html                       # tutor pages
+│   ├── board.html, tutors.html, timetable.html,
+│   │   timesheet-review.html, hours-budget-report.html     # organiser pages
+│   ├── educator.html                                       # leftover static page from the dropped educator role
+│   └── profile.html, my-sessions.html                      # stub pages (no backing data yet)
 ├── css/
 │   ├── style.css                  # student pages
 │   ├── global.css                 # organiser pages (board / tutors)
 │   └── auth.css, auth-global.css  # login / register
 └── js/
-    ├── nav.js          # highlights the active nav tab
-    ├── storage.js      # fetch() wrapper around the hour-entries / course API
-    ├── sessions.js     # reads the logged-in user out of sessionStorage
-    ├── logout.js       # shared handler for any page with a #logout-button
-    ├── auth.js         # login/register form handling, incl. Google OAuth
-    └── <page>.js        # one script per page (studentview.js, calendar.js, board.js, ...)
+    ├── nav.js              # highlights the active nav tab
+    ├── storage.js          # fetch() wrapper around the hour-entries / course API
+    ├── sessions.js         # reads the logged-in user out of sessionStorage
+    ├── logout.js           # shared handler for any page with a #logout-button
+    ├── auth.js             # login/register form handling, incl. Google OAuth
+    ├── auth-ui.js          # show/hide password toggles on the auth pages
+    ├── notifications.js    # the bell icon — polls /api/notifications every 45s
+    ├── user-badge.js       # fills the navbar's user pill (name + role)
+    ├── onboarding.js       # shared first-run guided tour (spotlight walkthrough)
+    ├── universal-search.js # header search across courses / tutors / timesheets
+    ├── highlightTarget.js  # scroll-to-and-flash for notification deep links
+    ├── sessionTiming.js    # client mirror of the server's logging-window rule
+    ├── timetable-import.js # review-and-save UI for a parsed timetable PDF
+    └── <page>.js           # one script per page (studentview.js, calendar.js, board.js, ...)
 ```
 
-Each page is self-contained — its `.html` links only the stylesheet and script(s) it needs. Different areas of the app can look and behave differently without a shared design system forcing consistency across all of them.
+Each page is self-contained — its `.html` links only the stylesheet and script(s) it needs. Different areas of the app can look and behave differently without a shared design system forcing consistency across all of them. The look-and-feel reference for the whole UI is the Figma mockup linked from the [Dev Plan](./dev-plan.mdx).
 
 ## How a Page Works
 

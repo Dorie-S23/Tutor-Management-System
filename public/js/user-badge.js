@@ -16,13 +16,24 @@
 
   if (nameEl) nameEl.textContent = user.name || "Account";
 
+  const role = String(user.role || "").toLowerCase();
+
   if (roleEl) {
-    const role = String(user.role || "").toLowerCase();
     // Accounts created before the Volunteer rename were stored with role
     // "student" — show them as volunteers here too.
-    const label = role === "student" ? "volunteer" : role;
+    let label = role === "student" ? "volunteer" : role;
+    // The admin role's technical name reads poorly in a badge.
+    if (label === "super_organiser") label = "Super organiser";
     roleEl.textContent = label
       ? label.charAt(0).toUpperCase() + label.slice(1)
       : "Member";
+  }
+
+  // Nav links reserved for the super-organiser are rendered hidden and
+  // revealed here (e.g. the Organiser Requests tab).
+  if (role === "super_organiser") {
+    document.querySelectorAll("[data-super-only]").forEach((el) => {
+      el.hidden = false;
+    });
   }
 })();

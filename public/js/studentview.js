@@ -10,6 +10,7 @@
 import { getEntries, requireRole } from "./storage.js";
 import { highlightActiveTab } from "./nav.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
+import { initTranscriptUpload } from "./transcript-upload.js";
 
 // These pages are volunteer-only — symmetric with the guard on the tutor
 // pages, so a tutor can't wander in here either.
@@ -846,6 +847,9 @@ if (tourLink) {
     renderCourses(),
     renderApplicationStats(),
     fetchUpcomingSessions(),
+    // The transcript panel is below the course boards on this page; a
+    // volunteer application isn't accepted until one is on file.
+    initTranscriptUpload(currentUser.id),
   ]);
 
   // Arriving from a "session changed" notification — scroll to and flash

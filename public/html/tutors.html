@@ -41,6 +41,10 @@
         <a href="timetable.html">Timetable</a>
         <a href="timesheet-review.html">Timesheets</a>
         <a href="hours-budget-report.html">Budget Report</a>
+        <!-- Revealed by user-badge.js for the super-organiser only. -->
+        <a href="organiser-requests.html" data-super-only hidden>
+          Organiser Requests
+        </a>
       </nav>
 
       <div class="navbar-right">
@@ -413,10 +417,11 @@
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
     <script type="module">
-      // Organiser-only page — bounce signed-out visitors to login and any
-      // other signed-in role back to their own home page.
+      // Organiser page (shared with the super-organiser admin) — bounce
+      // signed-out visitors to login and any other signed-in role back to
+      // their own home page.
       import { requireRole } from "../js/storage.js";
-      requireRole("organiser");
+      requireRole(["organiser", "super_organiser"]);
     </script>
   </body>
 </html>

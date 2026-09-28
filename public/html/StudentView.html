@@ -211,6 +211,52 @@
         </div>
       </section>
 
+      <section
+        class="panel transcript-panel"
+        id="transcript-panel"
+        aria-labelledby="transcript-heading"
+      >
+        <h2 id="transcript-heading">Your transcript</h2>
+        <p class="hint">
+          Organisers review your transcript alongside your mark, so you need one
+          on file before you can volunteer. Upload a PDF, PNG, or JPEG — up to
+          5&nbsp;MB.
+        </p>
+        <div class="transcript-panel__row">
+          <span
+            class="transcript-status"
+            id="transcript-status"
+            aria-live="polite"
+          >
+            Checking&hellip;
+          </span>
+          <div class="transcript-panel__actions">
+            <button
+              class="btn-secondary"
+              id="transcript-view-btn"
+              type="button"
+              hidden
+            >
+              View transcript
+            </button>
+            <button
+              class="btn-primary"
+              id="transcript-upload-btn"
+              type="button"
+            >
+              Upload transcript
+            </button>
+          </div>
+        </div>
+        <input
+          type="file"
+          id="transcript-input"
+          accept="application/pdf,image/png,image/jpeg"
+          hidden
+        />
+        <p class="field-error" id="transcript-error" hidden></p>
+      </section>
+
       <section aria-labelledby="sessions-heading">
         <div class="section-head">
           <h2 class="section-title" id="sessions-heading">

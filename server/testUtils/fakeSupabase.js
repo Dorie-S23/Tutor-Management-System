@@ -19,9 +19,107 @@
 //   const supabase = fakeSupabase(tables, {
 //     course_volunteers: [["user_id", "course_id"]],
 //   });
+//
+// A third argument adds a minimal Supabase Storage stand-in, backed by the
+// same plain-arrays idea: each bucket maps to an array of stored files
+// (path strings, or objects for richer seeds). The arrays are mutated in
+// place, so tests can seed a pre-uploaded transcript and inspect what the
+// route stored. A bucket whose value is not an array (e.g. null, or simply
+// absent) stands for a bucket that was never created — matching real
+// Storage (verified live), list() quietly answers empty while every write
+// fails with "Bucket not found", which the transcript routes surface as a
+// friendly "not set up yet" error:
+//   const storageFiles = { transcripts: ["tutor-1/transcript.pdf"] };
+//   const supabase = fakeSupabase(tables, {}, storageFiles);
 
-function fakeSupabase(tables, uniqueConstraints = {}) {
+function fakeSupabase(tables, uniqueConstraints = {}, storageFiles = {}) {
   return {
+    storage: {
+      from(bucketName) {
+        const bucket = storageFiles[bucketName];
+
+        if (!Array.isArray(bucket)) {
+          const notFound = { message: "Bucket not found" };
+          return {
+            // Real Storage lists a missing bucket as empty rather than
+            // erroring; only the write operations fail.
+            list: async () => ({ data: [], error: null }),
+            upload: async () => ({ data: null, error: notFound }),
+            remove: async () => ({ data: null, error: notFound }),
+            createSignedUrl: async () => ({ data: null, error: notFound }),
+          };
+        }
+
+        const asEntry = (item) =>
+          typeof item === "string" ? { name: item } : item;
+
+        return {
+          // Non-recursive, like the real thing: only the direct children of
+          // `folder` come back, with `name` stripped of the folder prefix.
+          list: async (folder = "") => {
+            const prefix = folder
+              ? `${String(folder).replace(/\/+$/, "")}/`
+              : "";
+            const entries = bucket
+              .map(asEntry)
+              .filter((entry) => entry.name.startsWith(prefix))
+              .map((entry) => ({
+                ...entry,
+                name: entry.name.slice(prefix.length),
+              }))
+              .filter((entry) => entry.name && !entry.name.includes("/"))
+              .map((entry) => ({
+                name: entry.name,
+                updated_at: entry.updatedAt ?? null,
+                metadata: entry.metadata ?? null,
+              }));
+            return { data: entries, error: null };
+          },
+          upload: async (path, body, opts = {}) => {
+            const existing = bucket.findIndex(
+              (item) => asEntry(item).name === path,
+            );
+            const entry = {
+              name: path,
+              updatedAt: new Date().toISOString(),
+              metadata: {
+                size: body?.length ?? 0,
+                mimetype: opts.contentType ?? null,
+              },
+            };
+            if (existing !== -1) {
+              if (!opts.upsert) {
+                return { data: null, error: { message: "Duplicate" } };
+              }
+              bucket[existing] = entry;
+            } else {
+              bucket.push(entry);
+            }
+            return { data: { path }, error: null };
+          },
+          remove: async (paths) => {
+            const wanted = new Set(Array.isArray(paths) ? paths : [paths]);
+            for (let i = bucket.length - 1; i >= 0; i -= 1) {
+              if (wanted.has(asEntry(bucket[i]).name)) bucket.splice(i, 1);
+            }
+            return { data: null, error: null };
+          },
+          createSignedUrl: async (path, expiresIn) => {
+            const found = bucket.some((item) => asEntry(item).name === path);
+            if (!found) {
+              return { data: null, error: { message: "Object not found" } };
+            }
+            return {
+              data: {
+                signedUrl: `https://fake-supabase.test/storage/v1/object/sign/${bucketName}/${path}?token=fake-token&expiresIn=${expiresIn}`,
+              },
+              error: null,
+            };
+          },
+        };
+      },
+    },
+
     from(tableName) {
       const rows = tables[tableName];
       if (!rows) {

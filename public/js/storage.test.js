@@ -173,6 +173,7 @@ describe("requireRole", () => {
     ["tutor", "dashboard.html"],
     ["educator", "educator.html"],
     ["organiser", "board.html"],
+    ["super_organiser", "board.html"],
   ])(
     "sends a signed-in %s back to their own home page instead of the wrong-role page",
     (role, home) => {
@@ -190,6 +191,30 @@ describe("requireRole", () => {
     const result = window.__storage.requireRole("tutor");
     expect(result).toBeNull();
     expect(window.__location.href).toBe("login.html");
+  });
+
+  // The organiser pages are shared with the super-organiser admin, so their
+  // guards pass both roles as an array rather than a single string.
+  test("an array of allowed roles lets any listed role through", () => {
+    const window = loadStorage();
+    setCurrentUser(window, { id: "u1", role: "super_organiser" });
+    const result = window.__storage.requireRole([
+      "organiser",
+      "super_organiser",
+    ]);
+    expect(result).toEqual({ id: "u1", role: "super_organiser" });
+    expect(window.__location.href).toBe("");
+  });
+
+  test("an array guard still bounces a role that isn't listed", () => {
+    const window = loadStorage();
+    setCurrentUser(window, { id: "u1", role: "tutor" });
+    const result = window.__storage.requireRole([
+      "organiser",
+      "super_organiser",
+    ]);
+    expect(result).toBeNull();
+    expect(window.__location.href).toBe("dashboard.html");
   });
 });
 

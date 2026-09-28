@@ -2559,6 +2559,41 @@ td {
   color: var(--faint);
 }
 
+/* ---------- Transcript upload panel (modules.html, StudentView.html) ---------- */
+
+/* On the volunteer dashboard the panel sits directly in the main column
+   between two sections, so it carries its own vertical rhythm; on
+   modules.html it's a page-stack child already spaced by the stack's gap. */
+.app-main > .transcript-panel {
+  margin: 30px 0;
+}
+
+.transcript-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-top: 16px;
+}
+
+.transcript-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.transcript-status--ok {
+  color: rgb(4, 120, 87);
+}
+
+.transcript-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 td.actions {
   text-align: right;
   white-space: nowrap;
@@ -2854,24 +2889,25 @@ body[data-theme="organiser"] textarea:focus {
 
 .org-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 288px;
+  grid-template-columns: minmax(0, 1fr) 288px;
   gap: 18px;
   align-items: start;
 }
 
-/* ---------- Course rail ---------- */
+/* ---------- Course portfolio strip ---------- */
 
 .org-rail {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 13px 13px 10px;
+  padding: 14px 16px 6px;
+  margin-bottom: 18px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .rail-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
@@ -2885,13 +2921,31 @@ body[data-theme="organiser"] textarea:focus {
   color: var(--ink-3);
 }
 
-.rail-head search {
+.rail-count {
+  margin-left: 2px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-hint {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.rail-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.rail-tools search {
   display: block;
   flex: none;
 }
 
 .rail-search {
-  width: 128px;
+  width: 200px;
   padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2910,48 +2964,72 @@ body[data-theme="organiser"] textarea:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 2px 0 10px;
   font-size: 12px;
   color: var(--muted);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .rail-add {
-  width: 100%;
-  margin-bottom: 10px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .course-list {
   list-style: none;
   margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
+  padding: 2px 2px 10px;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+}
+
+.course-list > li {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
 }
 
 .course-card {
-  display: block;
-  width: 100%;
-  padding: 10px 12px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 208px;
+  min-height: 116px;
+  padding: 13px 13px 11px;
+  overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 12px;
   background: #fff;
   text-align: left;
   font: inherit;
   cursor: pointer;
   transition:
     border-color 0.12s ease,
+    box-shadow 0.12s ease,
     background 0.12s ease;
 }
 
+/* Coloured top bar — each board's hue is its inline --accent. */
+.course-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--accent, var(--blue));
+}
+
 .course-card:hover {
-  border-color: var(--blue-line);
+  border-color: var(--accent, var(--blue-line));
 }
 
 .course-card.active {
-  border-color: var(--blue);
-  background: var(--blue-tint-2);
-  box-shadow: 0 0 0 1px var(--blue);
+  border-color: var(--accent, var(--blue));
+  background: color-mix(in srgb, var(--accent, var(--blue)) 5%, #ffffff);
+  box-shadow: 0 0 0 1px var(--accent, var(--blue));
 }
 
 .course-card__top {
@@ -2963,45 +3041,41 @@ body[data-theme="organiser"] textarea:focus {
 
 .course-card__code {
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.3px;
-  color: var(--blue-dark);
+  color: var(--accent, var(--blue-dark));
 }
 
-.course-card__fill {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+.course-card__status {
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.course-card__status--full {
+  color: rgb(5, 150, 105);
+}
+
+.course-card__status--short {
+  color: rgb(220, 38, 38);
+}
+
+.course-card__status--open {
+  color: var(--faint);
 }
 
 .course-card__name {
-  display: block;
-  margin-top: 3px;
-  font-size: 12.5px;
+  margin-top: 5px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--ink-2);
-}
-
-.course-card__track {
-  display: block;
-  height: 5px;
-  margin-top: 8px;
-  border-radius: 999px;
-  background: rgb(241, 245, 249);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.course-card__bar {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: rgb(16, 185, 129);
-}
-
-.course-card__bar--short {
-  background: rgb(244, 63, 94);
 }
 
 .course-card__foot {
@@ -3009,24 +3083,34 @@ body[data-theme="organiser"] textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 10px;
 }
 
 .course-card__meta {
   font-size: 11px;
   color: var(--faint);
+  white-space: nowrap;
 }
 
 .course-card__pills {
   display: inline-flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 6px;
 }
 
 .course-card .status-pill {
   padding: 2px 8px;
   font-size: 10px;
+}
+
+.course-card__fill {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ---------- Course detail ---------- */
@@ -4683,8 +4767,16 @@ body[data-theme="organiser"] textarea:focus {
 /* ---------- Responsive (organiser) ---------- */
 
 @media (max-width: 1280px) {
+  .org-side .side-panel {
+    min-width: 0;
+  }
+}
+
+/* Below this the course detail and the side panels stop fitting
+   side-by-side, so the panels drop to a three-up row underneath. */
+@media (max-width: 1080px) {
   .org-layout {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .org-side {
@@ -4692,8 +4784,8 @@ body[data-theme="organiser"] textarea:focus {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .org-side .side-panel {
-    min-width: 0;
+  .detail-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -4705,12 +4797,6 @@ body[data-theme="organiser"] textarea:focus {
   }
 }
 
-@media (max-width: 1080px) {
-  .detail-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 900px) {
   .org-layout {
     grid-template-columns: 1fr;
@@ -4718,6 +4804,23 @@ body[data-theme="organiser"] textarea:focus {
 
   .org-side {
     grid-template-columns: 1fr;
+  }
+
+  .rail-tools {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .rail-tools search {
+    flex: 1 1 180px;
+  }
+
+  .rail-search {
+    width: 100%;
+  }
+
+  .rail-add {
+    margin-left: 0;
   }
 
   .tutor-boards {

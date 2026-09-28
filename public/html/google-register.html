@@ -92,6 +92,21 @@
           </div>
 
           <!-- =========================
+                     ORGANISER COURSE
+
+                     Shown only for:
+                     - Organiser
+                     ========================= -->
+
+          <div class="form-group" id="course-group" style="display: none">
+            <label for="course"> Course to organise </label>
+
+            <select id="course" name="course">
+              <option value="" disabled selected>Select a course</option>
+            </select>
+          </div>
+
+          <!-- =========================
                      SUBMIT
                      ========================= -->
 
@@ -158,6 +173,53 @@
         "student-number-group",
       );
       const studentNumberInput = document.getElementById("student-number");
+      const courseGroup = document.getElementById("course-group");
+      const courseSelect = document.getElementById("course");
+
+      /* ================================================
+         ORGANISER COURSES
+
+         Fetched at most once, the first time "organiser"
+         is picked — the same lazy load as register.html's
+         copy in public/js/auth.js.
+         ================================================ */
+
+      let coursesRequested = false;
+
+      async function loadCoursesOnce() {
+        if (coursesRequested) return;
+
+        coursesRequested = true;
+
+        try {
+          const response = await fetch("/api/courses");
+
+          const rows = await response.json();
+
+          if (!response.ok) {
+            throw new Error(rows.error || "Failed to load courses");
+          }
+
+          rows.forEach((row) => {
+            const option = document.createElement("option");
+
+            option.value = row.id;
+
+            option.textContent = `${row.course_code} — ${row.course_name}`;
+
+            courseSelect.appendChild(option);
+          });
+        } catch (error) {
+          console.error("Course load error:", error);
+
+          coursesRequested = false;
+
+          setMessage(
+            "Couldn't load the course list — please try again.",
+            "error",
+          );
+        }
+      }
 
       /* ================================================
          ROLE CHANGE
@@ -167,9 +229,17 @@
         studentNumberGroup.style.display = "none";
         studentNumberInput.required = false;
 
+        courseGroup.style.display = "none";
+        courseSelect.required = false;
+        courseSelect.value = "";
+
         if (roleSelect.value === "volunteer" || roleSelect.value === "tutor") {
           studentNumberGroup.style.display = "block";
           studentNumberInput.required = true;
+        } else if (roleSelect.value === "organiser") {
+          courseGroup.style.display = "block";
+          courseSelect.required = true;
+          loadCoursesOnce();
         }
       });
 
@@ -192,7 +262,13 @@
 
         const role = roleSelect.value;
         const studentNumber = studentNumberInput.value.trim();
+        const courseId = courseSelect.value;
         const googleAccessToken = sessionStorage.getItem("googleAccessToken");
+
+        if (role === "organiser" && !courseId) {
+          setMessage("Choose the course you want to organise.", "error");
+          return;
+        }
 
         const requestBody = {
           googleUserId: googleUserId,
@@ -200,6 +276,7 @@
           name: googleName,
           role: role,
           studentNumber: studentNumber,
+          courseId: role === "organiser" ? Number(courseId) : undefined,
           accessToken: googleAccessToken,
         };
 
@@ -219,6 +296,27 @@
           if (!response.ok) {
             setMessage(result.error || "Registration failed.", "error");
             console.error("Google registration error:", result);
+            return;
+          }
+
+          /* New organisers can't sign in until the super-organiser
+             approves their course request — say so instead of starting
+             a session they can't use yet. */
+          if (result.user.role === "organiser") {
+            setMessage(
+              "Registration received! Your organiser request is awaiting approval — you can sign in once it's approved.",
+              "success",
+            );
+
+            sessionStorage.removeItem("googleUserId");
+            sessionStorage.removeItem("googleEmail");
+            sessionStorage.removeItem("googleName");
+            sessionStorage.removeItem("googleAccessToken");
+
+            setTimeout(() => {
+              window.location.href = "/html/login.html";
+            }, 2500);
+
             return;
           }
 
@@ -250,6 +348,7 @@
               break;
 
             case "organiser":
+            case "super_organiser":
               window.location.href = "/html/board.html";
               break;
 

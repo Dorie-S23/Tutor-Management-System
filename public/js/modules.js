@@ -1,6 +1,7 @@
 import { highlightActiveTab } from "./nav.js";
 import { requireRole } from "./storage.js";
 import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
+import { initTranscriptUpload } from "./transcript-upload.js";
 
 // This page (modules.html) is tutor-only — applying to tutor a module isn't
 // a concept that applies to other roles.
@@ -520,6 +521,9 @@ applyForm?.addEventListener("submit", async (e) => {
   await fetchCourses();
   await fetchMyAcademicLevel(currentUser.id);
   await fetchMyApplications(currentUser.id);
+  // An application isn't accepted until a transcript is on file — this
+  // panel is where it's uploaded (see transcript-upload.js).
+  await initTranscriptUpload(currentUser.id);
 
   // Arriving from an "application status changed" notification — scroll to
   // and flash the application it was about.

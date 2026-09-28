@@ -3,12 +3,14 @@ const request = require("supertest");
 const { fakeSupabase } = require("../testUtils/fakeSupabase");
 
 let tables;
+let storageFiles;
 let mockSupabase;
 
 // The route module grabs the Supabase client via `require("../supabaseClient")`
 // at load time, so the mock has to be in place before it's required below.
 jest.mock("../supabaseClient", () => ({
   from: (...args) => mockSupabase.from(...args),
+  storage: { from: (...args) => mockSupabase.storage.from(...args) },
 }));
 
 const courseVolunteersRouter = require("./courseVolunteers");
@@ -22,9 +24,16 @@ function buildApp() {
 
 beforeEach(() => {
   tables = { courses: [], course_volunteers: [], notifications: [] };
-  mockSupabase = fakeSupabase(tables, {
-    course_volunteers: [["user_id", "course_id"]],
-  });
+  // The transcripts bucket exists and starts empty; tests whose request
+  // should get past the transcript check seed a file into it.
+  storageFiles = { transcripts: [] };
+  mockSupabase = fakeSupabase(
+    tables,
+    {
+      course_volunteers: [["user_id", "course_id"]],
+    },
+    storageFiles,
+  );
 });
 
 describe("POST /api/course-volunteers", () => {
@@ -37,6 +46,9 @@ describe("POST /api/course-volunteers", () => {
         min_mark: 60,
       },
     ];
+    // The tests below that reach the insert flow through the transcript
+    // check; the ones that fail validation or the mark bar never get there.
+    storageFiles.transcripts.push("student-1/transcript.pdf");
   });
 
   test("a student meeting the mark requirement is recorded as a pending volunteer", async () => {
@@ -125,6 +137,39 @@ describe("POST /api/course-volunteers", () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("You've already volunteered for COMS1000.");
     expect(tables.course_volunteers).toHaveLength(1);
+  });
+
+  test("refuses a volunteer application until a transcript is on file", async () => {
+    storageFiles.transcripts.length = 0;
+
+    const res = await request(buildApp())
+      .post("/api/course-volunteers")
+      .send({ userId: "student-1", courseId: 1, mark: 75 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe(
+      "Please upload your transcript before applying.",
+    );
+    expect(tables.course_volunteers).toHaveLength(0);
+  });
+
+  test("answers 502 when the transcript storage lookup itself fails", async () => {
+    mockSupabase.storage.from = () => ({
+      list: async () => ({
+        data: null,
+        error: { message: "FetchError: request to Supabase failed" },
+      }),
+    });
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(buildApp())
+      .post("/api/course-volunteers")
+      .send({ userId: "student-1", courseId: 1, mark: 75 });
+
+    errorSpy.mockRestore();
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/unavailable/);
+    expect(tables.course_volunteers).toHaveLength(0);
   });
 });
 

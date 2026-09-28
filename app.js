@@ -6,6 +6,7 @@ const app = express();
 
 const authRoutes = require("./routes/auth");
 const coursesRoutes = require("./server/routes/courses");
+const publicApiRoutes = require("./server/routes/publicApi");
 const courseDiagonalsRoutes = require("./server/routes/courseDiagonals");
 const tutorsRoutes = require("./server/routes/tutors");
 const hourEntriesRoutes = require("./server/routes/hourEntries");
@@ -13,8 +14,11 @@ const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
 const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
 const timesheetsRoutes = require("./server/routes/timesheets");
 const timesheetDisputesRoutes = require("./server/routes/timesheetDisputes");
+const organiserRequestsRoutes = require("./server/routes/organiserRequests");
 const sessionExcusalsRoutes = require("./server/routes/sessionExcusals");
 const notificationsRoutes = require("./server/routes/notifications");
+const timetableRoutes = require("./server/routes/timetable");
+const transcriptRoutes = require("./server/routes/transcripts");
 
 // Supabase client
 const supabase = createClient(
@@ -65,6 +69,9 @@ app.use("/api/auth", authRoutes);
 // Course management routes
 app.use("/api/courses", coursesRoutes);
 
+// Public read-only API for external consumers (course catalogue)
+app.use("/api/v1", publicApiRoutes);
+
 // Splitting a large course's tutors and volunteers into diagonals (A, B, C…)
 app.use("/api/courses/:courseId/diagonals", courseDiagonalsRoutes);
 
@@ -84,10 +91,19 @@ app.use("/api/timesheets", timesheetsRoutes);
 // Corrections and disputes raised against a reviewed timesheet
 app.use("/api/timesheet-disputes", timesheetDisputesRoutes);
 
+// Organiser course-access requests, reviewed by the super-organiser
+app.use("/api/organiser-requests", organiserRequestsRoutes);
+
 // Tutor self-excusal from a scheduled session
 app.use("/api/session-excusals", sessionExcusalsRoutes);
 
 // Per-user in-app notification feed
 app.use("/api/notifications", notificationsRoutes);
+
+// Timetable PDF reading (Google Gemini — see public/js/timetable-parser.js)
+app.use("/api/timetable", timetableRoutes);
+
+// Applicant transcript upload + signed-URL viewing (Supabase Storage)
+app.use("/api/transcripts", transcriptRoutes);
 
 module.exports = app;

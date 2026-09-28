@@ -24,11 +24,16 @@ const ROLE_HOME = {
   // Legacy accounts created before the Volunteer rename.
   educator: "educator.html",
   organiser: "board.html",
+  // The single admin account that reviews organiser requests — it shares
+  // the organiser board, with every course visible.
+  super_organiser: "board.html",
 };
 
 // Guards a role-specific page: sends a signed-out visitor to login, and
 // sends a signed-in visitor of the *wrong* role back to their own home page
 // instead of letting them view (and act on) a page built for another role.
+// allowedRole is one role, or a list of roles for pages shared between
+// them (e.g. the board serves both organisers and the super-organiser).
 // Call this at the top of a page's script, before anything else runs.
 export function requireRole(allowedRole) {
   const user = getCurrentUser();
@@ -36,7 +41,8 @@ export function requireRole(allowedRole) {
     window.location.href = "login.html";
     return null;
   }
-  if (user.role !== allowedRole) {
+  const allowed = Array.isArray(allowedRole) ? allowedRole : [allowedRole];
+  if (!allowed.includes(user.role)) {
     window.location.href = ROLE_HOME[user.role] || "login.html";
     return null;
   }

@@ -14,11 +14,12 @@ A single hand-written Express API in front of Supabase — every request from th
 
 - **[Node.js](https://nodejs.org/)** — runtime.
 - **[Express 5](https://expressjs.com/)** — routing and middleware.
-- **[Supabase](https://supabase.com/)** (`@supabase/supabase-js`) — hosted Postgres for data storage, plus Supabase Auth for sign-up/sign-in (not a hand-rolled JWT system).
+- **[Supabase](https://supabase.com/)** (`@supabase/supabase-js`) — hosted Postgres for data storage, plus Supabase Auth for sign-up/sign-in (not a hand-rolled JWT system), plus Supabase Storage for the private applicant-transcript bucket.
 - **[dotenv](https://www.npmjs.com/package/dotenv)** — loads `.env` locally (Cloudflare Workers gets its environment a different way, via `wrangler` secrets/vars — not covered by `dotenv` in production).
 - **[cors](https://www.npmjs.com/package/cors)** — CORS headers.
+- **[Google Gemini API](https://ai.google.dev/)** — reads uploaded timetable PDFs for `/api/timetable/parse`, called with plain `fetch` (no SDK dependency).
 
-The timetable-PDF-import feature (calendar page) runs entirely client-side — no backend route, no API key. `public/js/timetable-parser.js` loads [pdf.js](https://mozilla.github.io/pdf.js/) and [Tesseract.js](https://tesseract.projectnaptha.com/) from a CDN at parse time, renders the PDF to a bitmap in the browser, and OCRs it (these PDF exports have no embedded text layer — they're outlined shapes, not real text — so OCR is the only option). This was previously an LLM-based server route (first Anthropic, briefly prototyped with Gemini); it was rebuilt client-side-only after settling on not paying for or depending on a hosted API for this.
+The timetable-PDF-import feature (calendar page) has two layers. Primary: `public/js/timetable-parser.js` uploads the PDF to `POST /api/timetable/parse`, which sends it to [Google Gemini](https://ai.google.dev/) and replies with the extracted classes as JSON — [External Services](./external-services.mdx) covers the integration. Fallback: when that route can't be reached, the same client module loads [pdf.js](https://mozilla.github.io/pdf.js/) and [Tesseract.js](https://tesseract.projectnaptha.com/) from a CDN and reads the PDF on-device (these exports have no embedded text layer — they're outlined shapes, not real text — so a multimodal model or OCR are the only ways to read them at all).
 
 ## Prerequisites
 
@@ -36,6 +37,8 @@ Environment variables the server reads:
 | `SUPABASE_URL`      | Yes      | Your Supabase project's URL                                                                                                                                                                                |
 | `SUPABASE_ANON_KEY` | Yes      | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
 | `PORT`              | No       | Defaults to `3000`                                                                                                                                                                                         |
+| `GEMINI_API_KEY`    | No       | Google AI Studio key that powers the timetable AI reader (`POST /api/timetable/parse`). Without it the route answers `503` and the calendar page falls back to on-device OCR — nothing else is affected.   |
+| `GEMINI_MODEL`      | No       | Overrides the Gemini model used for timetable parsing (defaults to `gemini-3.6-flash`)                                                                                                                     |
 
 There's no separate migration or seed step — the Postgres schema (tables, columns, constraints) is managed directly in the Supabase dashboard's SQL editor, not via migration files in this repo.
 
@@ -52,15 +55,29 @@ app.js                     # the Express app itself — middleware + every route
 server.js                  # Node entry point: requires app.js, adds express.static, listens
 worker.js                  # Cloudflare Workers entry point: same app.js, no express.static
 routes/
-└── auth.js                 # /api/auth/register, /login, /google, /google/register
+└── auth.js                 # /api/auth — register, login, Google sign-in/register
 server/
 ├── supabaseClient.js       # Supabase client shared by everything under server/routes/
+├── dayNames.js             # Sunday–Saturday lookup, shared by several routes
+├── loggingWindow.js        # "log hours only while the session is on" rule (10-min grace)
 └── routes/
     ├── courses.js           # /api/courses — CRUD + tutor-assignment counter
-    ├── tutors.js             # /api/tutors
-    ├── hourEntries.js        # /api/hour-entries — a student's logged hours
-    ├── courseVolunteers.js   # /api/course-volunteers — mark-gated volunteer applications
-    └── tutorApplications.js  # /api/tutor-applications — year-gated tutor applications
+    ├── publicApi.js         # /api/v1 — public read-only course catalogue (see Public API)
+    ├── courseDiagonals.js   # /api/courses/:id/diagonals — split a big course into groups A–Z
+    ├── tutors.js            # /api/tutors — CRUD, workload, bulk edits, rates, busy times
+    ├── academicLevelRates.js  # helper (not mounted) — hourly rates per academic level
+    ├── hourEntries.js       # /api/hour-entries — logged hours + the hours/budget report
+    ├── courseVolunteers.js  # /api/course-volunteers — mark-gated volunteer applications
+    ├── tutorApplications.js # /api/tutor-applications — year-gated tutor applications
+    ├── timesheets.js        # /api/timesheets — monthly submissions, review, payroll export
+    ├── timesheetDisputes.js # /api/timesheet-disputes — disputes against reviewed timesheets
+    ├── sessionExcusals.js   # /api/session-excusals — tutor self-excusal + cover hand-off
+    ├── sessionCover.js      # helper (not mounted) — auto-picks covers, swaps, reminders
+    ├── notifications.js     # /api/notifications — per-user notification feed
+    ├── notificationHelpers.js # helper (not mounted) — fire-and-forget notify()
+    ├── transcripts.js       # /api/transcripts — applicant transcript upload + signed URLs
+    ├── transcriptStorage.js # helper (not mounted) — transcript bucket access for other routes
+    └── timetable.js         # /api/timetable/parse — Gemini reads an uploaded timetable PDF
 models/
 └── User.js                  # plain User data class
 ```
@@ -72,15 +89,17 @@ models/
 ## API Conventions
 
 - Every endpoint lives under `/api/*` and is a plain Express route — no framework-generated CRUD, no GraphQL.
-- Request/response bodies are JSON (`express.json()` / `express.urlencoded()`).
+- Request/response bodies are JSON (`express.json()` / `express.urlencoded()`) — the two exceptions are the file-upload routes, which take raw bytes instead of multipart (`express.raw`): `POST /api/timetable/parse` (a timetable PDF, `application/pdf`, 15 MB limit) and `POST /api/transcripts/:userId` (an applicant transcript — PDF/PNG/JPEG, 5 MB limit).
 - Errors are always `{ "error": "human-readable message" }`, with a status code that means something:
   - `400` — bad/missing input, caught before touching the database
   - `401` — authentication failed (wrong password, no session)
   - `403` — authenticated, but not allowed to do this (e.g. a mark below a course's minimum)
   - `404` — the thing referenced doesn't exist
   - `409` — conflicts with something that already exists (duplicate application, taken course code)
+  - `413` — an uploaded file is over its route's size limit
   - `500` — the database/Supabase call itself failed
-- No API versioning and no OpenAPI/Swagger spec — routes are small and read top-to-bottom instead.
+  - `502`/`503` — an upstream dependency is unavailable: Gemini unreachable (`502`), or transcript storage missing/unconfigured (`503`)
+- Internal `/api/*` routes are unversioned — they're small, read top-to-bottom, and change together with the frontend that calls them. The one versioned surface is the public read-only catalogue under `/api/v1/*` ([Public API](./public-api.mdx)), where external consumers need a stable contract. No OpenAPI/Swagger spec anywhere — the docs on this site are the reference.
 - Validation (required fields, numeric ranges, business rules like "mark must be ≥ course minimum") happens in the route handler itself, before any database call — never trust the client to have already checked.
 
 ## Development Guide
@@ -114,11 +133,12 @@ npm run deploy      # wrangler deploy — ships to Cloudflare Workers
 
 In the Workers build, static files in `public/` are served by Cloudflare's assets layer (configured in `wrangler.toml`) instead of `express.static`.
 
-CI runs on **Gitea Actions** (`.gitea/workflows/`), not GitLab CI — `sdp.ms.wits.ac.za` is a self-hosted Gitea instance, so the `.gitlab-ci.yml` file in the repo root is inert and never runs; ignore it. Three workflows run on push to `main`:
+CI runs on **Gitea Actions** (`.gitea/workflows/`), not GitLab CI — `sdp.ms.wits.ac.za` is a self-hosted Gitea instance, so the `.gitlab-ci.yml` file in the repo root is inert and never runs; ignore it. Four workflows:
 
 - `format.yml` — Prettier check (`npm run format:check`) on every push.
-- `deploy.yml` — deploys the app itself to Cloudflare Workers via `wrangler deploy`.
-- `docs-deploy.yml` — builds this documentation site and deploys it to Cloudflare Pages via `wrangler pages deploy`, only when something under `my-docs/` changes.
+- `test.yml` — Jest suite (`npm test`) on every push.
+- `deploy.yml` — deploys the app to Cloudflare Workers via `wrangler deploy` on push to `main`.
+- `docs-deploy.yml` — builds this documentation site and deploys it to Cloudflare Pages, on push to `main` when something under `my-docs/` changes.
 
 :::danger Open security item
 Every Supabase table currently has Row Level Security **disabled**. Supabase auto-generates a full REST API for every table via PostgREST — with RLS off, anyone holding the anon key (which is unavoidably public, it ships in the browser) can read and write every table directly, completely bypassing this hand-written API. This has been confirmed live: it's possible to pull every user's real name, email and role straight from Supabase with nothing but the anon key.

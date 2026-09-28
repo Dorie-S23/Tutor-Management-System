@@ -8,7 +8,7 @@ Every third-party service and CDN this app actually talks to: why it was chosen 
 
 ## Overview
 
-Four external services are in active use — one database/auth backend, one indirect OAuth provider, and two CDN-hosted asset loads. Nothing else in the app makes an outbound call to a third party: no payment processor, no email/SMS provider, no analytics/tracking script, no AI/LLM API (there was one — see [Removed: LLM-based timetable parsing](#removed-llm-based-timetable-parsing) below).
+Five external services are in active use — one database/auth/storage backend, one indirect OAuth provider, one AI API, and two CDN-hosted asset loads (which serve as that AI API's fallback). Nothing else in the app makes an outbound call to a third party: no payment processor, no email/SMS provider, no analytics/tracking script. The timetable reader's back-and-forth — LLM-only, then OCR-only, now both — is summarised in [Timetable parsing: a brief history](#timetable-parsing-a-brief-history) below.
 
 ## Supabase — database + auth
 
@@ -30,7 +30,20 @@ The app's only backend-as-a-service dependency, and the one everything else is b
   - `public/html/google-callback.html` — a client-side instance, loaded from `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`, with the URL/anon key inline in the HTML
 - Every `server/routes/*.js` file talks to Postgres through the JS query builder (`supabase.from("table").select()/.insert()/.update()/.delete()`, with `.eq()`/`.neq()`/`.in()`/`.order()`/`.single()` etc.) — this compiles down to calls against Supabase's auto-generated PostgREST API, so the app never writes raw SQL.
 - Auth (`routes/auth.js`) uses Supabase's own user table and session tokens for email/password sign-up and login — the app doesn't store or hash passwords itself.
+- `server/routes/transcripts.js` also drives this client's **Storage** API — the private `transcripts` bucket described next — through the same SDK and key as everything else.
 - **Caveat, not a strength:** Row Level Security is currently disabled on every table (flagged as an open item in [Backend](./backend.mdx#deployment)), so the suitability of "PostgREST auto-generates a REST API" cuts both ways — it's convenient, but it also means the anon key currently grants direct read/write to everything unless RLS gets turned back on.
+
+### Applicant transcripts (Supabase Storage)
+
+Tutor and volunteer applications each require a transcript on file, which the organiser reviews from the course boards. Those files can't be database rows (they're binary, up to 5 MB each) and can't live on the server's disk — production runs on Cloudflare Workers, which has no persistent filesystem — so they go to Supabase Storage: no extra service to provision, and the same SDK/credentials already in use.
+
+How it works:
+
+- **Private bucket, one folder per user.** Files are stored at `<userId>/transcript.<pdf|png|jpg>` in a private `transcripts` bucket. `userId` is the Supabase auth user id, which all roles share (see `routes/auth.js`), so one layout serves both tutor and volunteer applications.
+- **Uploads are raw-body POSTs** (`POST /api/transcripts/:userId`, `express.raw`, 5 MB limit), and the bytes' magic number is checked against the declared content type — the client sets that header, so it isn't trusted on its own. PNG/JPEG are accepted alongside PDF so a phone photo of a printed transcript works too.
+- **Viewing goes through short-lived signed URLs.** `GET /api/transcripts/:userId/signed-url` asks Storage for a URL valid for 5 minutes; `board.js` opens it in a new tab when an organiser clicks a row's Transcript button (and shows a toast when nothing has been uploaded). The bucket itself is never public.
+- **Applications are gated on it.** `POST /api/tutor-applications` and `POST /api/course-volunteers` refuse with `403` until a transcript is on record (`hasTranscript()` in `server/routes/transcriptStorage.js`).
+- **Setup is manual, once per Supabase project** — create the private `transcripts` bucket and a policy for the anon role (step 3 in [Getting Started](./getting-started.mdx)). Until that's done, an upload answers `503` with a message saying so (status checks just look empty), rather than failing opaquely.
 
 ## Google OAuth — via Supabase, not a direct integration
 
@@ -64,17 +77,17 @@ Each page that needs custom typography (most of `public/html/`) carries a `<link
 
 ### Why it's suitable
 
-This is the interesting one, and it replaced an earlier LLM-based approach (see below) specifically because it's a better fit:
+This pipeline is the on-device fallback for timetable parsing, kept alongside the primary AI reader ([Google Gemini](#google-gemini-api--reading-timetable-pdfs) below) because it covers what the AI route can't — no API key in a given environment, quota exhausted, or Google unreachable:
 
-- **The source PDFs leave no other option than OCR.** Wits's exported "My Class Schedule" PDFs are a print-to-PDF of a rendered grid — every character is an outlined shape (a path), not a `Tj` text-drawing operator, so there's no embedded text layer to read directly. Rendering to a bitmap and running OCR is the only way to recover the text at all, whether that OCR runs client- or server-side.
-- **Running it client-side avoids paying for or depending on a hosted API** for something that doesn't need one — no per-request cost, no API key to provision or leak, and it keeps working even if a hosted OCR/LLM vendor changes pricing or goes down.
-- **Privacy**: the PDF (which contains a student's real class schedule) never leaves the browser — nothing is uploaded anywhere.
+- **The source PDFs leave no other option than OCR or a multimodal model.** Wits's exported "My Class Schedule" PDFs are a print-to-PDF of a rendered grid — every character is an outlined shape (a path), not a `Tj` text-drawing operator, so there's no embedded text layer to read directly. Rendering to a bitmap and running OCR is the only way to recover the text without an LLM.
+- **Running it client-side avoids paying for or depending on a hosted API** — no per-request cost, no API key to provision or leak, and the feature keeps working even when the hosted AI vendor's quota runs out or the service goes down.
+- **Privacy**: on this path the PDF (which contains a student's real class schedule) never leaves the browser — worth stating explicitly, since the primary AI path does upload it to our server and on to Google.
 - **Both libraries are the standard, actively-maintained choice for their job**, not a niche pick: pdf.js is Mozilla's own PDF renderer (the same engine Firefox uses to display PDFs in-tab), and Tesseract.js is a WebAssembly port of the long-established Tesseract OCR engine, built specifically to run OCR inside a browser tab.
 - **Loading from jsdelivr instead of bundling them** keeps the no-build-step frontend simple — one `import()` statement instead of a bundler config — while jsdelivr's CDN caching means most visitors already have these exact pinned versions cached from some other site.
 
 ### How it works
 
-The whole pipeline lives in `public/js/timetable-parser.js`, invoked when a user uploads a timetable PDF on the calendar page:
+The whole pipeline lives in `public/js/timetable-parser.js`, invoked when a user uploads a timetable PDF on the calendar page and the server-side AI reader turns out to be unavailable:
 
 1. **Lazy load.** `loadPdfjs()` / `loadTesseract()` dynamically `import()` the libraries from jsdelivr only when a PDF is actually being parsed — pages that never touch this feature never pay for the download.
    ```js
@@ -88,21 +101,45 @@ The whole pipeline lives in `public/js/timetable-parser.js`, invoked when a user
 4. **Reconstruct the grid.** `parseGridWords()` uses those word positions — not the text alone — to work out which words share a row/column, i.e. to rebuild the timetable's grid structure (day columns, time rows, class blocks) purely from geometry. `mergeEntries()` then folds adjacent OCR'd fragments of the same class back into single entries.
 5. **Output.** The function returns a plain array of `{ title, dayName, dayOfWeek, startTime, endTime, venue }` objects — the rest of the app (busy-times import) treats this exactly like any other structured input, with no awareness that OCR was involved.
 6. The Tesseract worker is explicitly `terminate()`d in a `finally` block once every page is processed, freeing the WASM worker thread.
+7. **Reached only as a fallback.** `parseTimetablePdf()` tries the AI route first; this pipeline runs when that attempt fails with `aiUnavailable` set (a 5xx from our route or a network error — see the Gemini section). A 4xx rejection such as "wrong file type" is surfaced to the user as-is instead, because OCR would only repeat the same failure.
 
-## Removed: LLM-based timetable parsing
+## Google Gemini API — reading timetable PDFs
 
-An earlier version of this same feature called a hosted LLM API server-side — first Anthropic, briefly swapped for Gemini — instead of the current client-side pdf.js/Tesseract approach. It's fully gone from the code as of this branch:
+### Why it's suitable
 
-- `server/timetableRoutes.js`, `server/anthropicClient.js`, and `server/geminiClient.js` don't exist in `HEAD`.
-- `app.js` doesn't require or mount any timetable/Anthropic/Gemini route.
-- Repo-wide search for `anthropic`/`gemini`/`openai` (excluding `node_modules`) turns up nothing in `server/` or `public/js/` — only historical mentions in these docs.
+- **PDF-native multimodal input.** `generateContent` accepts the PDF file itself (base64 inline data), not just pre-extracted text — so it can read the outlined-shape exports that have no text layer at all, and it copes with whatever layout a student's own timetable export happens to use, not just the one grid the in-browser OCR was tuned against.
+- **Structured output instead of free text.** The request sets `responseJsonSchema`, so the model must answer in the exact `{ classes: [{ courseCode, courseName, dayName, startTime, endTime, venue }] }` shape the calendar import needs — no brittle parsing of prose.
+- **A free tier covers this project's volume** (one small request per uploaded PDF), and there's no new dependency: the call is a single `fetch` POST, so nothing extra ships to the Workers runtime.
+- **The key stays server-side.** `GEMINI_API_KEY` is read by the route, not by the browser — the client only ever talks to our own `/api/timetable/parse`.
 
-:::info Dead env vars left behind — worth deleting
-Local `.env` still has a populated `GEMINI_API_KEY`, and `.dev.vars` has an empty `ANTHROPIC_API_KEY`. **Neither is read anywhere in the code** (only `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `PORT` are). Both files are gitignored and untracked, so this isn't a leaked credential in repo history — just unused local leftovers from the removed feature. Worth deleting (and rotating the Gemini key, since it's a real one) next time you're touching `.env`.
-:::
+### How it works
+
+All of it lives in `server/routes/timetable.js`, mounted at `/api/timetable`:
+
+1. **Upload.** `public/js/timetable-parser.js` POSTs the raw PDF bytes (`Content-Type: application/pdf`) — not multipart — so the route reads them with `express.raw` (15 MB limit, comfortably inside Gemini's 20 MB inline-request cap after base64 inflation).
+2. **Validate.** Content type must be `application/pdf`, the body must contain the `%PDF-` magic bytes within its first 1024 bytes, and `GEMINI_API_KEY` must be configured — otherwise `400`/`503` before any API call is made.
+3. **Ask Gemini.** One `fetch` to `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent` (overridable with `GEMINI_MODEL`), authenticated with an `x-goog-api-key` header. The body carries the PDF as `inlineData` plus the extraction prompt and the JSON schema. A 90-second `AbortController` timeout bounds the call, and transient `5xx` responses are retried twice with a short backoff before giving up.
+4. **Normalise.** Even though the schema pins the model's output shape, the route still validates every row (day name against the canonical list, `HH:MM` times, at least one of code/name present) and drops anything unusable rather than trusting the model blindly. Rows are sorted by day and start time.
+5. **Respond.** `{ classes: [...] }` on success. Failures are split deliberately: `400`/`413` mean the _request_ was bad (surfaced to the user, no fallback), while `502`/`503` mean the _reader_ was unavailable — the client marks the AI path unavailable and switches to the in-browser OCR pipeline (previous section).
+
+:::info Setup
+
+- **Local:** `GEMINI_API_KEY` in `.env` (see [Getting Started](./getting-started.mdx)) — plus an optional `GEMINI_MODEL` override.
+- **Production (Cloudflare Worker):** `npx wrangler secret put GEMINI_API_KEY` — `.env` isn't read there ([Backend](./backend.mdx) explains the split).
+- **No key?** The route answers `503` and the calendar page quietly reads PDFs on-device instead — the feature never hard-fails just because AI parsing is unconfigured.
+- **Free-tier limits apply.** The free plan caps this model at ~20 requests/minute and occasionally answers `503 ("high demand")` during spikes; one upload = one request, so normal use stays well under it. The route retries `5xx` spikes twice with a short backoff, a rate-limit `429` fails fast to the OCR fallback (a 2-second retry can't outwait a minute-long quota window), and if the AI path is unavailable the client still reads the PDF on-device — a busy minute degrades gracefully, it doesn't break the feature.
+  :::
+
+## Timetable parsing: a brief history
+
+The feature has changed shape twice, and this page has documented each state:
+
+1. **Server-side LLM only** — the original implementation (`server/timetableRoutes.js` + `server/geminiClient.js`, first Anthropic then Gemini, on the `feature/external_api` branch) called the model for everything and had no client-side reader at all.
+2. **Client-side OCR only** — the rewrite that replaced it ran pdf.js + Tesseract.js entirely in the browser, with no server route and no API key anywhere. (This is the pipeline the fallback above still uses.)
+3. **Hybrid (current)** — Gemini is back as the primary reader via the same route, and the OCR pipeline is kept as the automatic fallback. `GEMINI_API_KEY` is read by the code again, so treat it as live config, not a leftover.
 
 ## Everything else
 
 - All `fetch()` calls in `public/js/**` (storage.js, board.js, tutors.js, dashboard.js, etc.) hit this app's own `/api/...` routes — same-origin, not an external service.
 - No `axios` or `XMLHttpRequest` anywhere in the repo.
-- `package.json` dependencies are limited to `@supabase/supabase-js`, `cors`, `dotenv`, `express` (+ dev deps `jest`, `jsdom`, `prettier`, `supertest`, `wrangler`) — no payment, email/SMS, analytics, or AI SDK among them.
+- `package.json` dependencies are limited to `@supabase/supabase-js`, `cors`, `dotenv`, `express` (+ dev deps `jest`, `jsdom`, `prettier`, `supertest`, `wrangler`) — no payment, email/SMS, analytics, or AI SDK among them: the Gemini call is a plain `fetch`.

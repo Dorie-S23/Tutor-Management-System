@@ -23,6 +23,11 @@ const studentNumberGroup = document.getElementById("student-number-group");
 
 const studentNumberInput = document.getElementById("student-number");
 
+// Organiser-only course dropdown (register.html only — null elsewhere).
+const courseGroup = document.getElementById("course-group");
+
+const courseSelect = document.getElementById("course");
+
 const googleRegisterButton = document.getElementById("google-register-button");
 
 if (googleRegisterButton) {
@@ -53,7 +58,79 @@ if (roleSelect) {
       // No longer required
       studentNumberInput.required = false;
     }
+
+    /* -------------------------
+           Organiser course choice
+
+           Shown only for organisers — the list is
+           fetched from the course register on first
+           use, so the other roles never pay for it.
+           ------------------------- */
+
+    if (courseGroup && courseSelect) {
+      if (roleSelect.value === "organiser") {
+        courseGroup.style.display = "block";
+
+        courseSelect.required = true;
+
+        loadCoursesOnce();
+      } else {
+        courseGroup.style.display = "none";
+
+        courseSelect.required = false;
+
+        courseSelect.value = "";
+      }
+    }
   });
+}
+
+/* =========================
+   ORGANISER COURSES
+   ========================= */
+
+// Fetched at most once, however often the role is switched back and forth.
+// A failed load resets the flag so picking "organiser" again retries.
+let coursesRequested = false;
+
+async function loadCoursesOnce() {
+  if (coursesRequested) return;
+
+  coursesRequested = true;
+
+  const message = document.getElementById("register-message");
+
+  try {
+    const response = await fetch(`${API_URL}/api/courses`);
+
+    const rows = await response.json();
+
+    if (!response.ok) {
+      throw new Error(rows.error || "Failed to load courses");
+    }
+
+    rows.forEach((row) => {
+      const option = document.createElement("option");
+
+      option.value = row.id;
+
+      option.textContent = `${row.course_code} — ${row.course_name}`;
+
+      courseSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error("Course load error:", error);
+
+    coursesRequested = false;
+
+    if (message) {
+      setMessage(
+        message,
+        "Couldn't load the course list — please try again.",
+        "error",
+      );
+    }
+  }
 }
 
 /* =========================
@@ -105,6 +182,8 @@ if (registerForm) {
       .getElementById("student-number")
       .value.trim();
 
+    const courseId = courseSelect ? courseSelect.value : "";
+
     const message = document.getElementById("register-message");
 
     /* -------------------------
@@ -144,6 +223,16 @@ if (registerForm) {
       return;
     }
 
+    /* -------------------------
+           Check organiser course
+           ------------------------- */
+
+    if (role === "organiser" && !courseId) {
+      setMessage(message, "Choose the course you want to organise.", "error");
+
+      return;
+    }
+
     setMessage(message, "Creating your account...");
 
     try {
@@ -160,6 +249,7 @@ if (registerForm) {
           password,
           role,
           studentNumber,
+          courseId: role === "organiser" ? Number(courseId) : undefined,
         }),
       });
 
@@ -177,11 +267,20 @@ if (registerForm) {
 
       /* -------------------------
                Registration successful
+
+               Organisers can't sign in until the
+               super-organiser approves their course
+               request, so say so instead of promising
+               an immediate login.
                ------------------------- */
 
       setMessage(
         message,
-        "Registration successful! Redirecting to login...",
+
+        role === "organiser"
+          ? "Registration successful! Your organiser request is awaiting approval — you can sign in once it's approved."
+          : "Registration successful! Redirecting to login...",
+
         "success",
       );
 
@@ -281,6 +380,7 @@ if (loginForm) {
             break;
 
           case "organiser":
+          case "super_organiser":
             window.location.href = "board.html";
             break;
 
