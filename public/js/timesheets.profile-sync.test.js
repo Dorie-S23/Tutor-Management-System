@@ -2,12 +2,11 @@
 // claim form's identity fields (name, student number, email, cell phone):
 // non-empty Profile values overwrite the locally saved copies, lock the
 // corresponding fields, and feed the rendered claim. Fields the Profile
-// page doesn't hold (year of study, payroll number, hourly rate, head of
-// school) stay editable and locally sourced, and a missing/failing profile
-// fetch leaves the old local-only behaviour untouched. Loads the real
-// storage.js + timesheets.js sources into jsdom, the same way
-// volunteer-timesheets.render.test.js does, stubbing only the network,
-// nav and dialog bits.
+// page doesn't hold (year of study, payroll number) stay editable and
+// locally sourced, and a missing/failing profile fetch leaves the old
+// local-only behaviour untouched. Loads the real storage.js + timesheets.js
+// sources into jsdom, the same way volunteer-timesheets.render.test.js does,
+// stubbing only the network, nav and dialog bits.
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
@@ -42,6 +41,8 @@ const LOCAL_PROFILE = {
   cellPhone: "011 000 0000",
   yearOfStudy: "honours",
   payrollNumber: "P-100",
+  // Legacy keys from when the form collected them — saving the form now
+  // must drop these, not carry them forward.
   hourlyRate: 150,
   headOfSchool: "Prof Local",
 };
@@ -68,8 +69,6 @@ const PAGE_HTML = `<!doctype html><html><body>
       <option value="phd">PhD</option>
     </select>
     <input type="text" id="payrollNumber" />
-    <input type="number" id="hourlyRate" />
-    <input type="text" id="headOfSchool" />
   </form>
   <p class="hint" id="details-sync-hint" hidden>
     Your name, student number, email and phone number come from your
@@ -86,10 +85,9 @@ const PAGE_HTML = `<!doctype html><html><body>
     <span id="cYear"></span><span id="cFullName"></span>
     <span id="cStudentNo"></span><span id="cPayrollNo"></span>
     <span id="cEmail"></span><span id="cYearOfStudy"></span>
-    <span id="cCellPhone"></span><span id="cHeadOfSchool"></span>
+    <span id="cCellPhone"></span>
     <div id="claimRows"></div>
     <span id="cSignDate"></span><span id="cTotalHours"></span>
-    <span id="cTotalAmount"></span>
   </div>
   <div id="submissionsList"></div>
   <p id="submissionsEmpty" hidden></p>
@@ -229,8 +227,6 @@ describe("timesheets profile sync", () => {
     // Fields the Profile page doesn't hold stay editable and locally sourced.
     expect(doc.getElementById("yearOfStudy").value).toBe("honours");
     expect(doc.getElementById("payrollNumber").value).toBe("P-100");
-    expect(doc.getElementById("hourlyRate").value).toBe("150");
-    expect(doc.getElementById("headOfSchool").value).toBe("Prof Local");
 
     // The claim renders the Profile page's values, not the local copies.
     expect(doc.getElementById("claimWrapper").hidden).toBe(false);
@@ -242,7 +238,6 @@ describe("timesheets profile sync", () => {
     expect(doc.getElementById("cCellPhone").textContent).toBe("082 123 4567");
     expect(doc.getElementById("cPayrollNo").textContent).toBe("P-100");
     expect(doc.getElementById("cYearOfStudy").textContent).toBe("Honours");
-    expect(doc.getElementById("cHeadOfSchool").textContent).toBe("Prof Local");
   });
 
   test("fields the Profile page leaves empty stay editable and fall back to local values", async () => {
@@ -326,7 +321,9 @@ describe("timesheets profile sync", () => {
     expect(saved.cellPhone).toBe("082 123 4567");
     // …and the editable fields update as before.
     expect(saved.payrollNumber).toBe("P-200");
-    expect(saved.hourlyRate).toBe(150);
     expect(saved.yearOfStudy).toBe("honours");
+    // The removed fields don't survive a save.
+    expect(saved.hourlyRate).toBeUndefined();
+    expect(saved.headOfSchool).toBeUndefined();
   });
 });

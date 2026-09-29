@@ -546,6 +546,44 @@
             </div>
 
             <!-- =========================
+                      ORGANISER COURSE
+
+                      Shown only for:
+                      - Organiser
+
+                      Toggled by auth.js, which flips this group's
+                      inline display between none and block and loads
+                      the course list from /api/courses on first use —
+                      keep the inline display so the toggle can find it.
+                      ========================= -->
+
+            <div class="form-group" id="course-group" style="display: none">
+              <label for="course">Course to organise</label>
+
+              <div class="input-wrap">
+                <span class="input-icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path
+                      d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+                    />
+                  </svg>
+                </span>
+
+                <select id="course" name="course">
+                  <option value="" disabled selected>Select a course</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- =========================
                       SUBMIT
                       ========================= -->
 

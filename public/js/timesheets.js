@@ -34,15 +34,12 @@ const emailField = document.getElementById("email");
 const cellPhoneField = document.getElementById("cellPhone");
 const yearOfStudyField = document.getElementById("yearOfStudy");
 const payrollNumberField = document.getElementById("payrollNumber");
-const hourlyRateField = document.getElementById("hourlyRate");
-const headOfSchoolField = document.getElementById("headOfSchool");
 
 // The Profile page (profile.html) is the source of truth for the claim
 // form's identity fields. When it has a value for one of them, that value
 // wins over any locally saved copy and the field locks here — the only way
 // to change it is on the Profile page. The remaining fields (year of
-// study, payroll number, hourly rate, head of school) exist only on this
-// page and stay editable.
+// study, payroll number) exist only on this page and stay editable.
 let accountProfile = null;
 
 const PROFILE_SYNCED_FIELDS = [
@@ -151,11 +148,6 @@ function formatDuration(hours) {
   return `${n}${n === 1 ? "hr" : "hrs"}`;
 }
 
-function formatCurrency(amount) {
-  const rounded = Math.round(amount * 100) / 100;
-  return `R${rounded % 1 === 0 ? rounded : rounded.toFixed(2)}`;
-}
-
 function loadProfileIntoForm() {
   const profile = profileDetails();
   fullNameField.value = profile.fullName || "";
@@ -164,8 +156,6 @@ function loadProfileIntoForm() {
   cellPhoneField.value = profile.cellPhone || "";
   yearOfStudyField.value = profile.yearOfStudy || "third_year";
   payrollNumberField.value = profile.payrollNumber || "";
-  hourlyRateField.value = profile.hourlyRate != null ? profile.hourlyRate : "";
-  headOfSchoolField.value = profile.headOfSchool || "";
 }
 
 function safeRenderClaim() {
@@ -181,8 +171,6 @@ profileForm.addEventListener("submit", (event) => {
     cellPhone: cellPhoneField.value.trim(),
     yearOfStudy: yearOfStudyField.value,
     payrollNumber: payrollNumberField.value.trim(),
-    hourlyRate: hourlyRateField.value ? Number(hourlyRateField.value) : null,
-    headOfSchool: headOfSchoolField.value.trim(),
   });
   safeRenderClaim();
   showToast("Profile details saved.");
@@ -216,8 +204,6 @@ async function renderClaim() {
   document.getElementById("cYearOfStudy").textContent =
     YEAR_OF_STUDY_LABELS[profile.yearOfStudy] || "";
   document.getElementById("cCellPhone").textContent = profile.cellPhone || "";
-  document.getElementById("cHeadOfSchool").textContent =
-    profile.headOfSchool || "";
 
   const from = rangeFromField.value;
   const to = rangeToField.value;
@@ -261,9 +247,9 @@ async function renderClaim() {
     to || todayStr(),
   );
   document.getElementById("cTotalHours").textContent = totalHours;
-  document.getElementById("cTotalAmount").textContent = profile.hourlyRate
-    ? formatCurrency(totalHours * profile.hourlyRate)
-    : "";
+  // Total Amount (and the Head of School block above) are left blank for
+  // payroll to complete on the printed claim — tutors no longer enter a
+  // rate here.
 }
 
 async function loadDisputes(userId) {

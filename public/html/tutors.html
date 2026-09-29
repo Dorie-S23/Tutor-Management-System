@@ -42,6 +42,7 @@
         <a href="timetable.html">Timetable</a>
         <a href="timesheet-review.html">Timesheets</a>
         <a href="hours-budget-report.html">Budget Report</a>
+        <a href="allocation-history.html">History</a>
         <!-- Revealed by user-badge.js for the super-organiser only. -->
         <a href="organiser-requests.html" data-super-only hidden>
           Organiser Requests
@@ -274,32 +275,6 @@
           </aside>
 
           <div class="side-panel">
-            <h2 class="side-panel__title">Weekly hour cap</h2>
-            <p class="hint">
-              Maximum hours any tutor can be scheduled per week.
-            </p>
-            <div class="cap-row">
-              <input
-                type="number"
-                id="globalWeeklyCap"
-                step="1"
-                min="0"
-                max="6"
-                value="6"
-                aria-label="Weekly hour cap"
-              />
-              <span class="hint">hrs / week</span>
-            </div>
-            <button
-              type="button"
-              class="btn-secondary btn-block"
-              id="applyCapBtn"
-            >
-              Apply to all
-            </button>
-          </div>
-
-          <div class="side-panel">
             <h2 class="side-panel__title">Hourly rates by role</h2>
             <table class="data-table">
               <thead>
@@ -372,6 +347,32 @@
                 Save rates
               </button>
             </div>
+          </div>
+
+          <div class="side-panel">
+            <h2 class="side-panel__title">Weekly hour cap</h2>
+            <p class="hint">
+              Maximum hours any tutor can be scheduled per week.
+            </p>
+            <div class="cap-row">
+              <input
+                type="number"
+                id="globalWeeklyCap"
+                step="1"
+                min="0"
+                max="6"
+                value="6"
+                aria-label="Weekly hour cap"
+              />
+              <span class="hint">hrs / week</span>
+            </div>
+            <button
+              type="button"
+              class="btn-secondary btn-block"
+              id="applyCapBtn"
+            >
+              Apply to all
+            </button>
           </div>
         </div>
 

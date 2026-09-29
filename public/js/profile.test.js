@@ -25,7 +25,6 @@ function makeStubs(user) {
   return `
 function requireRole() { return ${JSON.stringify(user)}; }
 function highlightActiveTab() {}
-function renderWelcomeHeading(name) { window.__welcomeHeading = name; }
 `;
 }
 
@@ -111,9 +110,24 @@ describe("profile.js — student volunteer page", () => {
     const { window } = loadPage();
     await wait();
 
-    expect(window.document.getElementById("profile-name").value).toBe(
-      "Test Student",
+    // "Test Student" splits into the first/last fields at the first space.
+    expect(window.document.getElementById("profile-first-name").value).toBe(
+      "Test",
     );
+    expect(window.document.getElementById("profile-last-name").value).toBe(
+      "Student",
+    );
+    // The banner identity row mirrors the same profile.
+    expect(
+      window.document.getElementById("profile-display-name").textContent,
+    ).toBe("Test Student");
+    expect(
+      window.document.getElementById("profile-avatar-initials").textContent,
+    ).toBe("TS");
+    expect(
+      window.document.getElementById("profile-display-student-number")
+        .textContent,
+    ).toBe("1234567");
     expect(window.document.getElementById("profile-email").value).toBe(
       "student@students.wits.ac.za",
     );
@@ -134,7 +148,10 @@ describe("profile.js — student volunteer page", () => {
     const { window, calls } = loadPage();
     await wait();
 
-    window.document.getElementById("profile-name").value = "Samuel";
+    // Rename to a single name — clear the prefilled last name so the join
+    // sends just "Samuel".
+    window.document.getElementById("profile-first-name").value = "Samuel";
+    window.document.getElementById("profile-last-name").value = "";
     window.document.getElementById("profile-student-number").value = "7654322";
     window.document.getElementById("profile-cell-phone").value =
       "+27 82 555 1234";
@@ -151,11 +168,16 @@ describe("profile.js — student volunteer page", () => {
       cellPhone: "+27 82 555 1234",
     });
 
-    // The session copy and welcome heading follow the new name.
+    // The session copy and banner identity follow the new name.
     expect(JSON.parse(window.sessionStorage.getItem("user")).name).toBe(
       "Samuel",
     );
-    expect(window.__welcomeHeading).toBe("Samuel");
+    expect(
+      window.document.getElementById("profile-display-name").textContent,
+    ).toBe("Samuel");
+    expect(
+      window.document.getElementById("profile-avatar-initials").textContent,
+    ).toBe("SA");
     expect(window.document.getElementById("toast").textContent).toContain(
       "saved",
     );
@@ -224,8 +246,11 @@ describe("profile.js — tutor page", () => {
     await wait();
 
     expect(calls[0].url).toContain("/api/profile/tutor-1");
-    expect(window.document.getElementById("profile-name").value).toBe(
-      "Test Tutor",
+    expect(window.document.getElementById("profile-first-name").value).toBe(
+      "Test",
+    );
+    expect(window.document.getElementById("profile-last-name").value).toBe(
+      "Tutor",
     );
     expect(window.document.getElementById("profile-email").value).toBe(
       "tutor@wits.ac.za",
