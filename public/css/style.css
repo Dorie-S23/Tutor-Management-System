@@ -924,7 +924,7 @@ html[data-theme="dark"] {
 
 html[data-theme="dark"] body {
   background: #0b1120;
-  color: #cbd5e1;
+  color: #dbe4f0;
 }
 
 html[data-theme="dark"] body > header {
@@ -933,7 +933,7 @@ html[data-theme="dark"] body > header {
 }
 
 html[data-theme="dark"] nav a {
-  color: #94a3b8;
+  color: #a9b6c9;
 }
 
 html[data-theme="dark"] nav a:hover,
@@ -965,11 +965,11 @@ html[data-theme="dark"] .notif-item--unread {
 }
 
 html[data-theme="dark"] .notif-message {
-  color: #cbd5e1;
+  color: #dbe4f0;
 }
 
 html[data-theme="dark"] .notif-bell-btn {
-  color: #94a3b8;
+  color: #a9b6c9;
 }
 
 html[data-theme="dark"] .notif-bell-btn:hover {

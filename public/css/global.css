@@ -3417,9 +3417,9 @@ html[data-theme="dark"] {
   color-scheme: dark;
   --paper: #121815;
   --panel: #1c2621;
-  --ink: #edf4ee;
-  --ink-soft: #bdc9c0;
-  --ink-faint: #91a198;
+  --ink: #f4f9f5;
+  --ink-soft: #ccd7cf;
+  --ink-faint: #a6b5ab;
   --line: #3b4a42;
   --line-soft: #2b3630;
   --navy: #9ac7d3;
