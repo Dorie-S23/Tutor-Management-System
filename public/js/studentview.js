@@ -772,7 +772,9 @@ function renderApplications(applications) {
 // Only an approved, claimed session (session_date set) belongs in "Upcoming
 // Sessions" — a plain course application has no date to show yet, and a
 // rejected or still-pending claim isn't a real commitment. Past-dated ones
-// are excluded too — those live on My Sessions. A whole-course approval has
+// are excluded too, and a same-day one drops off the moment its end time
+// passes (the rule toCoverEntry() applies to covers) — those live on My
+// Sessions. A whole-course approval has
 // no session_date of its own — it's a standing recurring commitment, not a
 // one-off — so its "next occurrence" is derived from the course's own
 // Day_of_tut/Day_of_lab here rather than read off the row. One entry per
@@ -854,12 +856,17 @@ function renderUpcomingSessions(applications, coverEntries = []) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const nowTime = new Date().toTimeString().slice(0, 5);
   const claimedSessions = applications
     .filter(
       (app) =>
         app.status === "approved" &&
         app.session_date &&
-        app.session_date >= today,
+        // Same-day claims only count while the session hasn't finished,
+        // so nothing that's already happened lingers under "Upcoming".
+        (app.session_date > today ||
+          (app.session_date === today &&
+            (!app.end_time || app.end_time.slice(0, 5) > nowTime))),
     )
     .map((app) => ({
       courseId: app.course_id,

@@ -15,10 +15,11 @@
      attendance history), so Past stays dated sessions only.
    - Covers picked up from a tutor's excusal (session_excusals rows
      with this volunteer as cover_user_id) — the sessions the Log
-     Hours page lets them log into Completed sessions. Covers land in
-     Upcoming or Past by date like everything else, so "no past
-     sessions" can't sit next to a Completed sessions list that holds
-     the very sessions.
+     Hours page lets them log into Completed sessions. Covers and
+     claims alike move to Past the moment their session has finished
+     — a same-day one flips as its end time passes, not at midnight —
+     so "no past sessions" can't sit next to a Completed sessions
+     list that holds the very sessions.
    A plain classic script, not a module — reads the signed-in user
    straight out of sessionStorage, same as board.js does, rather than
    importing storage.js's requireRole().
@@ -77,6 +78,23 @@ function formatSessionDate(dateStr) {
 
 function formatSessionTime(t) {
   return t ? t.slice(0, 5) : "";
+}
+
+// "HH:MM" of the current local time; session end times compare against
+// this so a same-day session flips to Past the moment it ends, rather
+// than waiting for the date to roll over.
+function nowTimeStr() {
+  return new Date().toTimeString().slice(0, 5);
+}
+
+// A dated entry has ended once its day is in the past, or — for today —
+// once its end time has passed (the rule the dashboard's covers use when
+// they drop off its Upcoming card). Without an end time a same-day
+// session can't be judged, so it stays upcoming until the date changes.
+function hasEnded(entry, today) {
+  if (entry.session_date < today) return true;
+  if (entry.session_date > today) return false;
+  return !!entry.end_time && entry.end_time.slice(0, 5) <= nowTimeStr();
 }
 
 // Mirrors the copies in studentview.js (and DAY_NAMES in
@@ -250,17 +268,18 @@ async function renderSessions() {
       : [];
 
   const today = new Date().toISOString().slice(0, 10);
+  // The split is by end time, not just date — see hasEnded().
   const claimedSessions = applications.filter(
     (app) => app.status === "approved" && app.session_date,
   );
   const datedSessions = [...claimedSessions, ...covers];
 
   const past = datedSessions
-    .filter((entry) => entry.session_date < today)
+    .filter((entry) => hasEnded(entry, today))
     .sort((a, b) => b.session_date.localeCompare(a.session_date));
 
   const upcoming = [
-    ...datedSessions.filter((entry) => entry.session_date >= today),
+    ...datedSessions.filter((entry) => !hasEnded(entry, today)),
     ...recurringSessionEntries(applications),
   ].sort(
     (a, b) =>

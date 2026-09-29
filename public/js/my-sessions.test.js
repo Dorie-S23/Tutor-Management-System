@@ -20,6 +20,7 @@ function loadPage({
   applicationsFail = false,
   covers = [],
   coversFail = false,
+  now = null,
 } = {}) {
   const pageHtml = html
     .replace(
@@ -35,6 +36,23 @@ function loadPage({
     runScripts: "dangerously",
     pretendToBeVisual: true,
     beforeParse(window) {
+      // Pin the clock for the same-day boundary tests (see FIXED_NOW): the
+      // page reads new Date() both for its "today" and for the end-time
+      // comparison, so both have to agree on a single instant.
+      if (now !== null) {
+        const RealDate = window.Date;
+        const fixedMs = new RealDate(now).getTime();
+        class FixedDate extends RealDate {
+          constructor(...args) {
+            if (args.length === 0) super(fixedMs);
+            else super(...args);
+          }
+          static now() {
+            return fixedMs;
+          }
+        }
+        window.Date = FixedDate;
+      }
       if (user) {
         window.sessionStorage.setItem("user", JSON.stringify(user));
       }
@@ -56,6 +74,20 @@ function loadPage({
 function wait(ms = 50) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// A fixed clock for the same-day boundary tests. The page takes its "today"
+// from toISOString() — the UTC date, "2026-09-29" for this instant whichever
+// timezone the suite runs in — while end times compare as local "HH:MM", so
+// the fixtures below build those strings from the same instant.
+const FIXED_NOW = "2026-09-29T12:00:00Z";
+const fixedNowMs = Date.parse(FIXED_NOW);
+const fixedNowHm = new Date(fixedNowMs).toTimeString().slice(0, 5);
+const oneMinuteEarlierHm = new Date(fixedNowMs - 60000)
+  .toTimeString()
+  .slice(0, 5);
+const oneMinuteLaterHm = new Date(fixedNowMs + 60000)
+  .toTimeString()
+  .slice(0, 5);
 
 describe("my-sessions.js", () => {
   // jsdom doesn't implement real navigation — assigning window.location.href
@@ -264,6 +296,113 @@ describe("my-sessions.js", () => {
     expect(upcomingText).toContain("COVER1000");
     expect(upcomingText).toContain("Covering for Grace");
     expect(upcomingText).toContain("Tutorial:");
+    expect(window.document.getElementById("pastList").textContent).toContain(
+      "No past sessions",
+    );
+  });
+
+  test("moves a same-day claim to Past the moment its end time passes", async () => {
+    const { window } = loadPage({
+      now: FIXED_NOW,
+      applications: [
+        {
+          id: "s1",
+          status: "approved",
+          session_date: "2026-09-29",
+          start_time: `${oneMinuteEarlierHm}:00`,
+          end_time: `${fixedNowHm}:00`,
+          courses: { course_code: "TODAY1000", course_name: "Just finished" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(window.document.getElementById("pastList").textContent).toContain(
+      "TODAY1000",
+    );
+    expect(
+      window.document.getElementById("upcomingList").textContent,
+    ).not.toContain("TODAY1000");
+  });
+
+  test("moves a same-day cover to Past once its session has ended", async () => {
+    const { window } = loadPage({
+      now: FIXED_NOW,
+      covers: [
+        {
+          id: "e4",
+          course_id: "c4",
+          session_date: "2026-09-29",
+          session_type: "tutorial",
+          courses: {
+            course_code: "TODAYCOVER1000",
+            course_name: "Just covered",
+            tutor_start_time: `${oneMinuteEarlierHm}:00`,
+            tutor_end_time: `${fixedNowHm}:00`,
+            venues: "FNB1",
+          },
+          tutors: { name: "Ada" },
+        },
+      ],
+    });
+    await wait();
+
+    const pastText = window.document.getElementById("pastList").textContent;
+    expect(pastText).toContain("TODAYCOVER1000");
+    expect(pastText).toContain("Covered for Ada");
+    expect(
+      window.document.getElementById("upcomingList").textContent,
+    ).not.toContain("TODAYCOVER1000");
+  });
+
+  test("keeps a running cover under Upcoming until its session ends", async () => {
+    const { window } = loadPage({
+      now: FIXED_NOW,
+      covers: [
+        {
+          id: "e5",
+          course_id: "c5",
+          session_date: "2026-09-29",
+          session_type: "lab",
+          courses: {
+            course_code: "RUNNING1000",
+            course_name: "Running now",
+            lab_start_time: `${fixedNowHm}:00`,
+            lab_end_time: `${oneMinuteLaterHm}:00`,
+            lab_venues: "MSL002",
+          },
+          tutors: { name: "Grace" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingList").textContent,
+    ).toContain("RUNNING1000");
+    expect(window.document.getElementById("pastList").textContent).toContain(
+      "No past sessions",
+    );
+  });
+
+  test("keeps a same-day session with no end time under Upcoming", async () => {
+    const { window } = loadPage({
+      now: FIXED_NOW,
+      applications: [
+        {
+          id: "s1",
+          status: "approved",
+          session_date: "2026-09-29",
+          start_time: `${fixedNowHm}:00`,
+          courses: { course_code: "NOEND1000", course_name: "No end time" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingList").textContent,
+    ).toContain("NOEND1000");
     expect(window.document.getElementById("pastList").textContent).toContain(
       "No past sessions",
     );

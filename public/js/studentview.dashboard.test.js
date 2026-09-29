@@ -32,7 +32,12 @@ function consumeQueryParam() { return null; }
 function scrollAndHighlight() {}
 `;
 
-function loadPage({ courses = [], applications = [], openSessions = [] } = {}) {
+function loadPage({
+  courses = [],
+  applications = [],
+  openSessions = [],
+  now = null,
+} = {}) {
   const script = `<script>${stubs}\n${studentviewSrc}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "studentview.js")).href}</script>`;
   const pageHtml = html
     .replace(
@@ -49,6 +54,23 @@ function loadPage({ courses = [], applications = [], openSessions = [] } = {}) {
     runScripts: "dangerously",
     pretendToBeVisual: true,
     beforeParse(window) {
+      // Pin the clock for the same-day boundary tests (see FIXED_NOW): the
+      // page reads new Date() both for its "today" and for the end-time
+      // comparison, so both have to agree on a single instant.
+      if (now !== null) {
+        const RealDate = window.Date;
+        const fixedMs = new RealDate(now).getTime();
+        class FixedDate extends RealDate {
+          constructor(...args) {
+            if (args.length === 0) super(fixedMs);
+            else super(...args);
+          }
+          static now() {
+            return fixedMs;
+          }
+        }
+        window.Date = FixedDate;
+      }
       if (!window.CSS) window.CSS = {};
       if (!window.CSS.escape) {
         window.CSS.escape = (s) => String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
@@ -80,6 +102,20 @@ function loadPage({ courses = [], applications = [], openSessions = [] } = {}) {
 function wait(ms = 50) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// A fixed clock for the same-day boundary tests. The page takes its "today"
+// from toISOString() — the UTC date, "2026-09-29" for this instant whichever
+// timezone the suite runs in — while end times compare as local "HH:MM", so
+// the fixtures below build those strings from the same instant.
+const FIXED_NOW = "2026-09-29T12:00:00Z";
+const fixedNowMs = Date.parse(FIXED_NOW);
+const fixedNowHm = new Date(fixedNowMs).toTimeString().slice(0, 5);
+const oneMinuteEarlierHm = new Date(fixedNowMs - 60000)
+  .toTimeString()
+  .slice(0, 5);
+const oneMinuteLaterHm = new Date(fixedNowMs + 60000)
+  .toTimeString()
+  .slice(0, 5);
 
 describe("studentview.js — My Applications", () => {
   test("shows pending, approved and rejected applications together, not just pending", async () => {
@@ -654,6 +690,52 @@ describe("studentview.js — Upcoming Sessions", () => {
     ).map((h) => h.textContent);
 
     expect(codes).toEqual(["SOON1000", "FARAWAY1000"]);
+  });
+
+  test("drops a claimed session whose end time passed earlier today", async () => {
+    const { window } = loadPage({
+      now: FIXED_NOW,
+      applications: [
+        {
+          id: "s1",
+          course_id: 1,
+          status: "approved",
+          session_date: "2026-09-29",
+          start_time: `${oneMinuteEarlierHm}:00`,
+          end_time: `${fixedNowHm}:00`,
+          courses: { course_code: "FINISHED1000", course_name: "Finished" },
+        },
+      ],
+    });
+    await wait();
+
+    expect(
+      window.document.getElementById("upcomingSessionsList").textContent,
+    ).toContain("No upcoming sessions");
+  });
+
+  test("keeps a claimed session that is still running right now", async () => {
+    const { window } = loadPage({
+      now: FIXED_NOW,
+      applications: [
+        {
+          id: "s1",
+          course_id: 1,
+          status: "approved",
+          session_date: "2026-09-29",
+          start_time: `${fixedNowHm}:00`,
+          end_time: `${oneMinuteLaterHm}:00`,
+          courses: { course_code: "RUNNING1000", course_name: "Running" },
+        },
+      ],
+    });
+    await wait();
+
+    const codes = Array.from(
+      window.document.querySelectorAll("#upcomingSessionsList article h3"),
+    ).map((h) => h.textContent);
+
+    expect(codes).toEqual(["RUNNING1000"]);
   });
 
   test("shows the empty state when there's nothing upcoming", async () => {
