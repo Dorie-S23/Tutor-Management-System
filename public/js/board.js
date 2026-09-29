@@ -2652,9 +2652,10 @@ autoAllocatePublishBtn.addEventListener("click", async () => {
 
 const addCourseBtn = document.getElementById("addCourseBtn");
 
-// Adding a course is super-organiser-only (POST /api/courses enforces it
-// server-side too). The modal stays in the markup because the same dialog
-// is also the edit dialog for courses an organiser already manages.
+// Super-organiser-only controls (both enforced server-side too): adding a
+// course, and auto-allocate — one whole-school pass touches every course
+// with an open slot. The modals stay in the markup because the add dialog
+// doubles as the edit dialog for courses an organiser already manages.
 const sessionUserForRole = (() => {
   try {
     return JSON.parse(sessionStorage.getItem("user") || "null");
@@ -2662,7 +2663,10 @@ const sessionUserForRole = (() => {
     return null;
   }
 })();
-if (sessionUserForRole?.role !== "super_organiser") addCourseBtn.hidden = true;
+if (sessionUserForRole?.role !== "super_organiser") {
+  addCourseBtn.hidden = true;
+  autoAllocateBtn.hidden = true;
+}
 const editCourseBtn = document.getElementById("editCourseBtn");
 const deleteCourseBtn = document.getElementById("deleteCourseBtn");
 const deleteCourseModal = document.getElementById("deleteCourseModal");

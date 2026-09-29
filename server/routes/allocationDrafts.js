@@ -116,6 +116,20 @@ router.post("/auto-allocate", async (req, res) => {
     return res.status(400).json({ error: "organiserId is required" });
   }
 
+  // Super-organiser-only: one whole-school pass touches every course with
+  // an open slot, so it's reserved for the same account that can add or
+  // delete courses (same trust model — the caller passes their user id).
+  const { data: caller } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("id", organiserId)
+    .maybeSingle();
+  if (!caller || caller.role !== "super_organiser") {
+    return res
+      .status(403)
+      .json({ error: "Only the super-organiser can run auto-allocate" });
+  }
+
   const { data: courses, error: coursesError } = await supabase
     .from("courses")
     .select(
