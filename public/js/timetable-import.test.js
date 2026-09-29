@@ -37,6 +37,7 @@ function firstOccurrenceOnOrAfter(startDateStr, dayOfWeek) {
 
 const PAGE = `
   <input type="file" id="timetable-file">
+  <p id="timetable-file-name" hidden></p>
   <input type="date" id="semester-start">
   <input type="date" id="semester-end">
   <button id="parse-timetable-btn"></button>
@@ -90,7 +91,7 @@ function setFile(win) {
   Object.defineProperty(
     win.document.getElementById("timetable-file"),
     "files",
-    { value: [{}] },
+    { value: [{ name: "timetable.pdf" }] },
   );
 }
 
@@ -268,5 +269,21 @@ describe("timetable-import.js", () => {
     parseBtn.click();
     await flush();
     expect(status.textContent).toBe("Could not read that PDF.");
+  });
+
+  test("shows the chosen file name under the drop zone", () => {
+    const win = loadImport();
+    const doc = win.document;
+    const fileInput = doc.getElementById("timetable-file");
+    const fileName = doc.getElementById("timetable-file-name");
+
+    expect(fileName.hidden).toBe(true);
+    fileInput.dispatchEvent(new win.Event("change"));
+    expect(fileName.hidden).toBe(true);
+
+    setFile(win);
+    fileInput.dispatchEvent(new win.Event("change"));
+    expect(fileName.hidden).toBe(false);
+    expect(fileName.textContent).toBe("Selected: timetable.pdf");
   });
 });

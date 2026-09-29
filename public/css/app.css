@@ -275,7 +275,8 @@ button:focus-visible {
   align-items: center;
 }
 
-.notif-bell-btn {
+.notif-bell-btn,
+.tour-trigger {
   position: relative;
   width: 32px;
   height: 32px;
@@ -289,13 +290,22 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.notif-bell-btn:hover {
+.notif-bell-btn:hover,
+.tour-trigger:hover {
   background: rgba(37, 99, 235, 0.16);
 }
 
-.notif-bell-btn svg {
+.notif-bell-btn svg,
+.tour-trigger svg {
   width: 17px;
   height: 17px;
+}
+
+/* The tour trigger also exists as an anchor on pages that route through
+   StudentView.html?tour=1 instead of starting the tour in place. */
+a.tour-trigger {
+  text-decoration: none;
+  flex: none;
 }
 
 .notif-bell-badge {
@@ -1029,6 +1039,119 @@ textarea {
   color: #b91c1c;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* ---------- Timetable import card (tutor + student calendar) ---------- */
+
+.timetable-import-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.timetable-import-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--blue-tint);
+  color: var(--blue);
+}
+
+.timetable-import-head h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  color: var(--ink);
+}
+
+.timetable-import-head .card-hint {
+  max-width: 72ch;
+}
+
+.timetable-import-grid {
+  grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr));
+}
+
+/* The native file control sits invisibly over the dashed drop zone so the
+   whole area opens the picker; keyboard focus still lands on the input and
+   lights the zone up via :focus-within. */
+.file-drop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 41px;
+  padding: 8px 12px;
+  border: 1.5px dashed var(--blue-line);
+  border-radius: 8px;
+  background: var(--blue-tint-2);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.file-drop:hover,
+.file-drop:focus-within {
+  border-color: var(--blue);
+}
+
+.file-drop:focus-within {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.file-drop-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-drop-icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--blue);
+}
+
+.file-drop-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.file-drop-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.file-drop-copy small {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.file-drop-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+.timetable-import-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+#timetable-status {
+  margin-top: 14px;
 }
 
 .hours-readout {
@@ -2108,7 +2231,8 @@ td {
   }
 
   .stat-grid,
-  .form-grid {
+  .form-grid,
+  .timetable-import-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2819,7 +2943,8 @@ body[data-theme="tutor"] .role-badge {
   color: rgb(15, 118, 110);
 }
 
-body[data-theme="tutor"] .notif-bell-btn {
+body[data-theme="tutor"] .notif-bell-btn,
+body[data-theme="tutor"] .tour-trigger {
   background: rgba(15, 118, 110, 0.09);
   color: rgb(15, 118, 110);
 }
@@ -2833,7 +2958,8 @@ body[data-theme="tutor"] .theme-toggle:hover {
   background: rgba(15, 118, 110, 0.16);
 }
 
-body[data-theme="tutor"] .notif-bell-btn:hover {
+body[data-theme="tutor"] .notif-bell-btn:hover,
+body[data-theme="tutor"] .tour-trigger:hover {
   background: rgba(15, 118, 110, 0.16);
 }
 
@@ -3020,6 +3146,12 @@ html[data-theme="dark"] .course-card--locked.active {
 
 html[data-theme="dark"] .locked-panel {
   background: color-mix(in srgb, var(--ink) 3%, var(--page));
+}
+
+/* Blocked compare-modal rows keep their flattened look in dark mode —
+   the surface group above would otherwise raise them back up. */
+html[data-theme="dark"] .tutor-row.blocked {
+  background-color: var(--page);
 }
 
 /* Light-gray chrome becomes a raised dark gray. */
@@ -3302,7 +3434,8 @@ body[data-theme="organiser"] .role-badge {
   color: rgb(109, 40, 217);
 }
 
-body[data-theme="organiser"] .notif-bell-btn {
+body[data-theme="organiser"] .notif-bell-btn,
+body[data-theme="organiser"] .tour-trigger {
   background: rgba(124, 58, 237, 0.08);
   color: rgb(109, 40, 217);
 }
@@ -3316,7 +3449,8 @@ body[data-theme="organiser"] .theme-toggle:hover {
   background: rgba(124, 58, 237, 0.15);
 }
 
-body[data-theme="organiser"] .notif-bell-btn:hover {
+body[data-theme="organiser"] .notif-bell-btn:hover,
+body[data-theme="organiser"] .tour-trigger:hover {
   background: rgba(124, 58, 237, 0.15);
 }
 
@@ -4033,6 +4167,13 @@ body[data-theme="organiser"] textarea:focus {
   border: 1px solid var(--line);
   border-radius: 11px;
   background: #fff;
+}
+
+/* Stale rows in the compare modals (allocation history, board) — kept
+   visible for context but flattened so they read as unavailable. */
+.tutor-row.blocked {
+  background: var(--page);
+  opacity: 0.65;
 }
 
 .tutor-row .stamp-row {

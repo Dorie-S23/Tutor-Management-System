@@ -12,7 +12,12 @@ const MAX_PDF_BYTES = 15 * 1024 * 1024;
 // the SDK so there's no extra dependency and it works in the Workers runtime.
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
-const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
+// Which flash model is healthy rotates: Google answers 503 ("high demand")
+// per-model in bursts, and a model that was fine last month (3.5, 2.5) may
+// be retired outright (404). Probed 2026-09-29: 3.6/3.8 and both
+// *-latest aliases were 503-saturated while 3.7 answered cleanly, so 3.7 is
+// the default until it misbehaves; GEMINI_MODEL overrides without a deploy.
+const DEFAULT_GEMINI_MODEL = "gemini-3.7-flash";
 const GEMINI_TIMEOUT_MS = 90_000;
 
 // The flash models answer 503 ("This model is currently experiencing high

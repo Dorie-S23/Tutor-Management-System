@@ -1,7 +1,6 @@
-// Plain classic script (no imports), same as board.js — this page is
-// organiser-only and board.js itself has no login guard beyond reading
-// sessionStorage, so this mirrors that rather than inventing a stricter
-// pattern just for this page.
+// Plain classic script (no imports), same as board.js — the page itself
+// carries the same requireRole module guard the other organiser pages use,
+// so this script stays a simple classic script like its siblings.
 function getSessionUserId() {
   try {
     const raw = sessionStorage.getItem("user");
@@ -64,34 +63,39 @@ async function renderDrafts() {
 
   drafts.forEach((draft) => {
     const article = document.createElement("article");
+    article.className = "review-row";
     article.innerHTML = `
-      <span class="session-meta">${draft.name}</span>
-      <p class="session-note">
-        ${draft.assignmentCount} assignment${draft.assignmentCount === 1 ? "" : "s"}
-        &bull; created ${formatTimestamp(draft.created_at)}
-        ${draft.published_at ? `&bull; published ${formatTimestamp(draft.published_at)}` : ""}
-      </p>
+      <span class="name-block">
+        <span class="name">${draft.name}</span>
+        <span class="role">
+          ${draft.assignmentCount} assignment${draft.assignmentCount === 1 ? "" : "s"}
+          &bull; created ${formatTimestamp(draft.created_at)}
+          ${draft.published_at ? `&bull; published ${formatTimestamp(draft.published_at)}` : ""}
+        </span>
+      </span>
       <span class="status-pill ${draftPillClass(draft.status)}">${draft.status}</span>
+      <span class="applicant-actions"></span>
     `;
+    const actionsEl = article.querySelector(".applicant-actions");
 
     if (draft.status === "draft") {
       const compareBtn = document.createElement("button");
       compareBtn.type = "button";
-      compareBtn.className = "btn btn-ghost";
+      compareBtn.className = "btn-secondary";
       compareBtn.textContent = "Compare & publish";
       compareBtn.addEventListener("click", () => openCompareModal(draft));
-      article.appendChild(compareBtn);
+      actionsEl.appendChild(compareBtn);
     }
 
     if (draft.status === "published") {
       const restoreBtn = document.createElement("button");
       restoreBtn.type = "button";
-      restoreBtn.className = "btn btn-ghost";
+      restoreBtn.className = "btn-secondary";
       restoreBtn.textContent = "Restore";
       restoreBtn.addEventListener("click", () =>
         restoreDraft(draft, restoreBtn),
       );
-      article.appendChild(restoreBtn);
+      actionsEl.appendChild(restoreBtn);
     }
 
     draftsListEl.appendChild(article);
@@ -321,11 +325,14 @@ async function renderHistory() {
   entries.forEach((entry) => {
     const actor = entry.users?.name || entry.actor_id || "System";
     const article = document.createElement("article");
+    article.className = "review-row";
     article.innerHTML = `
-      <span class="session-meta">${entry.entity_type} ${entry.entity_id}</span>
-      <p class="session-note">
-        ${actor} &bull; ${formatTimestamp(entry.created_at)}
-      </p>
+      <span class="name-block">
+        <span class="name">${entry.entity_type} ${entry.entity_id}</span>
+        <span class="role">
+          ${actor} &bull; ${formatTimestamp(entry.created_at)}
+        </span>
+      </span>
       <span class="status-pill ${actionPillClass(entry.action)}">${entry.action}</span>
     `;
     historyListEl.appendChild(article);

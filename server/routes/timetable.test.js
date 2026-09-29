@@ -199,7 +199,7 @@ describe("POST /api/timetable/parse", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, options] = global.fetch.mock.calls[0];
     expect(url).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent",
     );
     expect(options.method).toBe("POST");
     expect(options.headers["x-goog-api-key"]).toBe("test-key");

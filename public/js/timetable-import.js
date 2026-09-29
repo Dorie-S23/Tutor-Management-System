@@ -13,6 +13,13 @@ const reviewSection = document.getElementById("timetable-review");
 const reviewBody = document.getElementById("timetable-review-body");
 const saveBtn = document.getElementById("save-timetable-btn");
 const cancelBtn = document.getElementById("cancel-timetable-btn");
+const fileNameEl = document.getElementById("timetable-file-name");
+
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files[0];
+  fileNameEl.hidden = !file;
+  fileNameEl.textContent = file ? `Selected: ${file.name}` : "";
+});
 
 let parsedClasses = [];
 
