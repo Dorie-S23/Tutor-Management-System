@@ -14,10 +14,20 @@ const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 // Which flash model is healthy rotates: Google answers 503 ("high demand")
 // per-model in bursts, and a model that was fine last month (3.5, 2.5) may
-// be retired outright (404). Probed 2026-09-29: 3.6/3.8 and both
-// *-latest aliases were 503-saturated while 3.7 answered cleanly, so 3.7 is
-// the default until it misbehaves; GEMINI_MODEL overrides without a deploy.
-const DEFAULT_GEMINI_MODEL = "gemini-3.7-flash";
+// be retired outright (404). Probed 2026-09-29 with real PDF payloads:
+// 3.6/3.8 and both *-latest aliases were 503-saturated, 3.7 was saturated on
+// multimodal requests, and 3.5-flash-lite / 3.1-flash-lite / 3-flash-preview
+// each parsed a timetable PDF cleanly. So the route walks this list in
+// order, and capacity failures move it on to the next candidate (see
+// FAILOVER_GEMINI_STATUSES) instead of depending on one model staying
+// healthy. GEMINI_MODEL pins a single model (no failover) for testing or
+// emergencies.
+const DEFAULT_GEMINI_MODELS = Object.freeze([
+  "gemini-3.7-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3-flash-preview",
+]);
 const GEMINI_TIMEOUT_MS = 90_000;
 
 // The flash models answer 503 ("This model is currently experiencing high
@@ -26,11 +36,16 @@ const GEMINI_TIMEOUT_MS = 90_000;
 // that those spikes are transient, so the route retries them a couple of
 // times with a short backoff; a healthy first attempt pays nothing (no delay
 // is added unless Gemini answered with one of these statuses).
-// 429 is deliberately NOT retried: on this key it means the free tier's
-// per-minute quota is spent, and a 2-second retry can't outwait a minute —
-// the client falls back to on-device OCR instead. 4xx means the request
-// itself was rejected, which would fail identically on a retry.
+// 429 is deliberately NOT retried against the same model: on this key it
+// means the free tier's per-minute quota is spent, and a 2-second retry
+// can't outwait a minute. Both it and 503 are answered per model, though,
+// so once a model's own retries are exhausted they move the route on to the
+// next candidate rather than straight to the 502 that triggers the client's
+// on-device OCR fallback. 404 joins that failover set because a retired
+// model name should not block the remaining candidates. Other 4xx means the
+// request itself was rejected, which would fail identically everywhere.
 const TRANSIENT_GEMINI_STATUSES = new Set([500, 502, 503, 504]);
+const FAILOVER_GEMINI_STATUSES = new Set([404, 429, 503]);
 const GEMINI_RETRY_DELAYS_MS = [700, 1600];
 
 const EXTRACT_PROMPT = `This PDF is a university student's weekly class timetable. Layouts vary between exports — it may be plain text rows, or a colored grid table with day-of-week columns and time-of-day rows. Extract every distinct weekly class session shown.
@@ -174,24 +189,42 @@ router.post(
       });
     }
 
-    const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+    const models = process.env.GEMINI_MODEL
+      ? [process.env.GEMINI_MODEL]
+      : DEFAULT_GEMINI_MODELS;
     const pdfBase64 = req.body.toString("base64");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
-    let response;
+    let response = null;
+    let failureStatus = null;
+    let failureDetail = "";
     try {
-      response = await fetchGemini(apiKey, model, pdfBase64, controller.signal);
-      for (const delay of GEMINI_RETRY_DELAYS_MS) {
-        if (!TRANSIENT_GEMINI_STATUSES.has(response.status)) break;
-        await response.text().catch(() => "");
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        response = await fetchGemini(
+      for (const model of models) {
+        let attempt = await fetchGemini(
           apiKey,
           model,
           pdfBase64,
           controller.signal,
         );
+        for (const delay of GEMINI_RETRY_DELAYS_MS) {
+          if (!TRANSIENT_GEMINI_STATUSES.has(attempt.status)) break;
+          await attempt.text().catch(() => "");
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          attempt = await fetchGemini(
+            apiKey,
+            model,
+            pdfBase64,
+            controller.signal,
+          );
+        }
+        if (attempt.ok) {
+          response = attempt;
+          break;
+        }
+        failureStatus = attempt.status;
+        failureDetail = (await attempt.text().catch(() => "")).slice(0, 500);
+        if (!FAILOVER_GEMINI_STATUSES.has(attempt.status)) break;
       }
     } catch (err) {
       console.error("Timetable parse: Gemini request failed:", err);
@@ -202,11 +235,10 @@ router.post(
       clearTimeout(timeout);
     }
 
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
+    if (!response) {
       console.error(
-        `Timetable parse: Gemini returned ${response.status}:`,
-        detail.slice(0, 500),
+        `Timetable parse: Gemini returned ${failureStatus}:`,
+        failureDetail,
       );
       return res
         .status(502)
@@ -257,3 +289,5 @@ router.use((err, req, res, next) => {
 });
 
 module.exports = router;
+// Exposed for tests: the cascade's default candidates, in failover order.
+module.exports.DEFAULT_GEMINI_MODELS = DEFAULT_GEMINI_MODELS;

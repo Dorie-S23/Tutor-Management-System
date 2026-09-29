@@ -3,6 +3,8 @@ const request = require("supertest");
 
 const timetableRouter = require("./timetable");
 
+const { DEFAULT_GEMINI_MODELS } = timetableRouter;
+
 // The route calls the real global fetch; every test swaps in a jest.fn() so
 // nothing ever leaves the test process. The real one is restored at the end.
 const realFetch = global.fetch;
@@ -256,7 +258,7 @@ describe("POST /api/timetable/parse", () => {
     expect(res.body.classes).toHaveLength(1);
   });
 
-  test("returns 502 without retrying when the key is rate-limited", async () => {
+  test("fails over across models on 429 and gives up with 502", async () => {
     global.fetch.mockResolvedValue({
       ok: false,
       status: 429,
@@ -267,9 +269,94 @@ describe("POST /api/timetable/parse", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toMatch(/AI reader/);
-    // A quota window is minutes long — a 2-second retry can't outwait it, so
-    // the route fails fast and the client falls back to OCR.
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    // A 429 quota window is minutes long, so the route never retries the
+    // same model — but it does give every default model one attempt before
+    // the client falls back to OCR.
+    expect(global.fetch).toHaveBeenCalledTimes(DEFAULT_GEMINI_MODELS.length);
+  });
+
+  test("fails over to the next model after a capacity error and succeeds", async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => "high demand",
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => "high demand",
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => "high demand",
+      })
+      .mockResolvedValueOnce(geminiOk([validClass()]));
+
+    const res = await postPdf(buildApp());
+
+    expect(res.status).toBe(200);
+    expect(res.body.classes).toHaveLength(1);
+    // The first model burns its attempt plus two retries, then the
+    // cascade moves on and the second model answers immediately.
+    expect(global.fetch).toHaveBeenCalledTimes(4);
+    expect(global.fetch.mock.calls[3][0]).toContain(
+      `models/${DEFAULT_GEMINI_MODELS[1]}:generateContent`,
+    );
+  }, 10_000);
+
+  test("fails over when a model has been retired (404)", async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => "model not found",
+      })
+      .mockResolvedValueOnce(geminiOk([validClass()]));
+
+    const res = await postPdf(buildApp());
+
+    expect(res.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch.mock.calls[1][0]).toContain(
+      `models/${DEFAULT_GEMINI_MODELS[1]}:generateContent`,
+    );
+  });
+
+  test("gives up with 502 when every model stays saturated", async () => {
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "high demand",
+    });
+
+    const res = await postPdf(buildApp());
+
+    expect(res.status).toBe(502);
+    // Each model pays for its own attempt plus two retries (with real
+    // backoff sleeps) before the cascade moves on.
+    expect(global.fetch).toHaveBeenCalledTimes(
+      DEFAULT_GEMINI_MODELS.length * 3,
+    );
+  }, 20_000);
+
+  test("does not cascade when GEMINI_MODEL pins a single model", async () => {
+    process.env.GEMINI_MODEL = "gemini-3.8-flash";
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "high demand",
+    });
+
+    const res = await postPdf(buildApp());
+
+    expect(res.status).toBe(502);
+    // The pinned model gets its own retries but nothing else is tried.
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(global.fetch.mock.calls[0][0]).toContain(
+      "models/gemini-3.8-flash:generateContent",
+    );
   });
 
   test("gives up with 502 when even the retries keep hitting 5xx", async () => {
