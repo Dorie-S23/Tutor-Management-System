@@ -63,7 +63,7 @@ server/
 ├── utils/
 │   └── auditLog.js         # audit-trail writer used by routes that change allocation state
 └── routes/
-    ├── courses.js           # /api/courses — CRUD + tutor-assignment counter
+    ├── courses.js           # /api/courses — CRUD + tutor-assignment counter (create: super-organiser only)
     ├── publicApi.js         # /api/v1 — public read-only course catalogue (see Public API)
     ├── courseDiagonals.js   # /api/courses/:id/diagonals — split a big course into groups A–Z
     ├── tutors.js            # /api/tutors — CRUD, workload, bulk edits, rates, busy times
@@ -82,6 +82,7 @@ server/
     ├── profile.js           # /api/profile — self-service profile for tutors and student volunteers
     ├── transcripts.js       # /api/transcripts — applicant transcript upload + signed URLs
     ├── transcriptStorage.js # helper (not mounted) — transcript bucket access for other routes
+    ├── organiserRequests.js # /api/organiser-requests — sign-up + additional-access review queue
     └── timetable.js         # /api/timetable/parse — Gemini reads an uploaded timetable PDF
 models/
 └── User.js                  # plain User data class

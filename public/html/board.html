@@ -452,6 +452,22 @@
                 <!-- injected -->
               </div>
             </section>
+
+            <!-- Shown in place of the activity panels when the selected
+                 course is outside the organiser's access — its details are
+                 visible, but managing it needs an access request first. -->
+            <section class="locked-panel" id="lockedPanel" hidden>
+              <h3>You don't have access to this course</h3>
+              <p class="hint">
+                You can see this course because every course is listed here, but
+                managing it is limited to its own organiser. Send a request to
+                the super-organiser to be added — you'll be notified once it's
+                reviewed.
+              </p>
+              <button class="btn-primary" id="requestAccessBtn" type="button">
+                Request access
+              </button>
+            </section>
           </article>
         </section>
 

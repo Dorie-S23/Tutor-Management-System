@@ -76,12 +76,13 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `organiser_requests`
 
-- One row per organiser sign-up: a request for access to a single course, approved or denied by the super-organiser (via `/api/organiser-requests`). Approval is what grants the organiser their course — the board filters to approved courses, and a pending or denied request blocks the account at sign-in. Organisers registered before requests existed have no rows here and keep full access to every course.
+- One row per access request, approved or denied by the super-organiser (via `/api/organiser-requests`). Two kinds: `signup` — filed when someone registers as an organiser, where approval grants their chosen course and unblocks their sign-in; `access` — filed from the board by an existing organiser asking for one more course, where approval widens their scope on their next sign-in. A pending or denied `signup` blocks the account at sign-in. Organisers registered before requests existed have no rows here and keep full access to every course.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
 - `user_id` (uuid, required, FK → `users.id`) — the requesting organiser
 - `course_id` (smallint, required, FK → `courses.id`) — the course they're asking for
+- `kind` (text, required, default `signup`) — `signup` or `access`; rows from before the column exist read back as `signup`
 - `status` (text, required, default `pending`) — `pending`, `approved` or `denied`
 - `created_at` (timestamptz, required, default now)
 - `reviewed_at` (timestamptz) — when the super-organiser approved or denied it

@@ -1,5 +1,11 @@
 const COURSES = [];
 
+// Courses the signed-in organiser is NOT approved for. They still render on
+// the rail — greyed out, to the right of the organiser's own — so every
+// course is visible, but unlike COURSES they feed none of the stats,
+// budget, attention or auto-allocate panels.
+const LOCKED_COURSES = [];
+
 // course_level is stored as a numeric rank (matches server/routes/tutorApplications.js's
 // LEVEL_RANK) but the organiser picks it from a labelled dropdown, same as tutors do
 // for their own academic_level on modules.html.
@@ -269,13 +275,17 @@ async function fetchCourses() {
     if (!res.ok) throw new Error(rows.error || "Failed to load courses");
 
     COURSES.length = 0;
+    LOCKED_COURSES.length = 0;
     rows.forEach((row) => {
       const course = mapCourseRow(row);
-      // Out-of-scope courses are dropped rather than hidden, so the rail,
-      // stats and every course picker built from COURSES shrink with them.
-      if (!courseScope || courseScope.has(Number(course.id))) {
-        COURSES.push(course);
-      }
+      // Every course shows on the rail — the organiser's own in colour,
+      // the rest greyed with a request-access path. Only accessible courses
+      // go into COURSES, which still feeds the stats, budget, attention
+      // list and auto-allocate panels, so those stay scoped to what this
+      // organiser can actually act on.
+      const accessible = !courseScope || courseScope.has(Number(course.id));
+      course.accessible = accessible;
+      (accessible ? COURSES : LOCKED_COURSES).push(course);
     });
   } catch (err) {
     showToast("Couldn't load courses from the database.");
@@ -567,6 +577,7 @@ function renderCourseList() {
   // shortfall filter, selecting a course).
   const snapshot = JSON.stringify({
     courses: COURSES,
+    locked: LOCKED_COURSES,
     volunteerCounts,
     pendingApplicationCounts,
     pendingVolunteerCounts,
@@ -590,7 +601,7 @@ function renderCourseList() {
 
   courseListEl.innerHTML = "";
 
-  let visible = COURSES.filter(
+  let visible = [...COURSES, ...LOCKED_COURSES].filter(
     (c) =>
       !query ||
       c.code.toLowerCase().includes(query) ||
@@ -603,8 +614,17 @@ function renderCourseList() {
       .sort((a, b) => shortfall(b) - shortfall(a));
   }
 
+  // "Mine to the left": whatever is filtered or sorted above, the courses
+  // this organiser can act on always come before the locked ones. The
+  // partition is stable, so each group's internal order survives it.
+  visible = [
+    ...visible.filter((c) => c.accessible),
+    ...visible.filter((c) => !c.accessible),
+  ];
+
   visible.forEach((course) => {
     const li = document.createElement("li");
+    const locked = !course.accessible;
     const isFull =
       !!course.tutorsNeeded && course.tutorsAssigned >= course.tutorsNeeded;
     const pending = pendingCount(course);
@@ -613,7 +633,9 @@ function renderCourseList() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className =
-      "course-card" + (course.id === activeCourseId ? " active" : "");
+      "course-card" +
+      (course.id === activeCourseId ? " active" : "") +
+      (locked ? " course-card--locked" : "");
     btn.setAttribute("aria-pressed", course.id === activeCourseId);
     // Roving tabindex: only the active card (or the first, if none is active
     // yet) sits in the page's Tab order — Up/Down/Home/End move between the
@@ -621,18 +643,29 @@ function renderCourseList() {
     // every single one to get anywhere else on the page.
     btn.tabIndex = course.id === activeCourseId ? 0 : -1;
     btn.dataset.courseId = String(course.id);
-    // Accent colour comes from the course's position in the full list, so
-    // searching or filtering never reshuffles the boards' hues.
-    btn.style.setProperty(
-      "--accent",
-      BOARD_ACCENTS[COURSES.indexOf(course) % BOARD_ACCENTS.length],
-    );
-    const statusClass = isFull
-      ? "course-card__status--full"
-      : isShort
-        ? "course-card__status--short"
-        : "course-card__status--open";
-    const statusLabel = isFull ? "Staffed" : isShort ? "Needs tutors" : "Open";
+    // Accent colour comes from the course's position in the accessible
+    // list, so searching or filtering never reshuffles the boards' hues.
+    // Locked cards get no accent at all — the grey top bar is the point.
+    if (!locked) {
+      btn.style.setProperty(
+        "--accent",
+        BOARD_ACCENTS[COURSES.indexOf(course) % BOARD_ACCENTS.length],
+      );
+    }
+    const statusClass = locked
+      ? "course-card__status--locked"
+      : isFull
+        ? "course-card__status--full"
+        : isShort
+          ? "course-card__status--short"
+          : "course-card__status--open";
+    const statusLabel = locked
+      ? "No access"
+      : isFull
+        ? "Staffed"
+        : isShort
+          ? "Needs tutors"
+          : "Open";
     btn.innerHTML = `
         <span class="course-card__top">
           <span class="course-card__code">${course.code}</span>
@@ -640,10 +673,10 @@ function renderCourseList() {
         </span>
         <span class="course-card__name">${course.name}</span>
         <span class="course-card__foot">
-          <span class="course-card__meta">${volunteerCounts[course.id] ?? 0} volunteered</span>
+          <span class="course-card__meta">${locked ? "Select to request access" : `${volunteerCounts[course.id] ?? 0} volunteered`}</span>
           <span class="course-card__pills">
             ${pending > 0 ? `<span class="status-pill pending">${pending} to review</span>` : ""}
-            <span class="course-card__fill">${course.tutorsAssigned} / ${course.tutorsNeeded ?? "\u2014"}</span>
+            <span class="course-card__fill">${course.tutorsAssigned} / ${course.tutorsNeeded ?? "—"}</span>
           </span>
         </span>
       `;
@@ -664,7 +697,7 @@ function renderCourseList() {
     cards[0].tabIndex = 0;
   }
 
-  railCountEl.textContent = String(COURSES.length);
+  railCountEl.textContent = String(COURSES.length + LOCKED_COURSES.length);
   courseListEmptyEl.hidden = visible.length > 0;
   lastVisibleCourseCount = visible.length;
   updateRailHint();
@@ -735,7 +768,9 @@ document.addEventListener("keydown", (event) => {
 
   event.preventDefault();
   const targetCourseId = cards[targetIndex].dataset.courseId;
-  const targetCourse = COURSES.find((c) => String(c.id) === targetCourseId);
+  const targetCourse = [...COURSES, ...LOCKED_COURSES].find(
+    (c) => String(c.id) === targetCourseId,
+  );
   if (!targetCourse) return;
 
   selectCourse(targetCourse.id);
@@ -817,6 +852,16 @@ function renderDetail() {
 
   const course = COURSES.find((c) => c.id === activeCourseId);
 
+  if (!course) {
+    // The selected course is one the organiser can see but not manage —
+    // swap the panels for the bare header plus the request-access path.
+    renderLockedDetail(LOCKED_COURSES.find((c) => c.id === activeCourseId));
+    return;
+  }
+
+  courseDetailEl.classList.remove("course-detail--locked");
+  lockedPanelEl.hidden = true;
+
   document.getElementById("dCode").textContent = course.code;
   document.getElementById("dName").textContent = course.name;
   document.getElementById("dSession").textContent = buildSessionSummary(course);
@@ -839,6 +884,122 @@ function renderDetail() {
   renderDiagonals(course);
   renderExcusals(course);
   renderVolunteers(course);
+}
+
+// ---------- locked (no-access) course detail ----------
+
+const lockedPanelEl = document.getElementById("lockedPanel");
+const requestAccessBtn = document.getElementById("requestAccessBtn");
+
+// Latest organiser_requests status per course id ("pending" / "approved" /
+// "denied"), loaded from GET /api/organiser-requests/mine so the button on
+// a locked course reflects the queue instead of offering a duplicate ask.
+const accessRequestByCourse = {};
+
+function renderLockedDetail(course) {
+  if (!course) {
+    emptyStateEl.hidden = false;
+    courseDetailEl.hidden = true;
+    return;
+  }
+
+  courseDetailEl.classList.add("course-detail--locked");
+  lockedPanelEl.hidden = false;
+
+  document.getElementById("dCode").textContent = course.code;
+  document.getElementById("dName").textContent = course.name;
+  document.getElementById("dSession").textContent = buildSessionSummary(course);
+
+  syncRequestAccessButton(course);
+}
+
+function syncRequestAccessButton(course) {
+  const status = accessRequestByCourse[String(course.id)];
+  requestAccessBtn.disabled = status === "pending";
+  requestAccessBtn.textContent =
+    status === "pending"
+      ? "Request pending"
+      : status === "denied"
+        ? "Request again"
+        : status === "approved"
+          ? "Access granted — sign in again"
+          : "Request access";
+}
+
+let accessRequestInFlight = false;
+
+async function requestCourseAccess() {
+  const course = LOCKED_COURSES.find((c) => c.id === activeCourseId);
+  if (!course || accessRequestInFlight) return;
+
+  accessRequestInFlight = true;
+  requestAccessBtn.disabled = true;
+
+  try {
+    const res = await fetch("/api/organiser-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: getSessionUserId(), courseId: course.id }),
+    });
+    const body = await res.json();
+
+    if (res.ok) {
+      accessRequestByCourse[String(course.id)] = "pending";
+      showToast(
+        `Access to ${course.code} requested — the super-organiser will review it.`,
+      );
+      renderDetail();
+    } else if (body.status) {
+      // 409s carry the row's real status — adopt it so the button matches
+      // the queue (e.g. another tab already filed the request).
+      accessRequestByCourse[String(course.id)] = body.status;
+      showToast(body.error || "Couldn't request access.");
+      renderDetail();
+    } else {
+      showToast(body.error || "Couldn't request access.");
+      syncRequestAccessButton(course);
+    }
+  } catch (err) {
+    showToast("Network error — couldn't reach the server.");
+    syncRequestAccessButton(course);
+  } finally {
+    accessRequestInFlight = false;
+  }
+}
+
+requestAccessBtn.addEventListener("click", requestCourseAccess);
+
+// Loads the caller's own organiser_requests rows for the button states
+// above. Only a scoped organiser can have locked courses at all
+// (grandfathered and super organisers see everything), so the call is
+// skipped entirely for them.
+async function fetchMyAccessRequests() {
+  if (!courseScope) return;
+
+  const userId = getSessionUserId();
+  if (!userId || userId === "anon") return;
+
+  try {
+    const res = await fetch(
+      `/api/organiser-requests/mine?userId=${encodeURIComponent(userId)}`,
+    );
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.error || "Failed to load requests");
+
+    Object.keys(accessRequestByCourse).forEach(
+      (key) => delete accessRequestByCourse[key],
+    );
+    (rows || []).forEach((row) => {
+      accessRequestByCourse[String(row.course_id)] = (
+        row.status || "pending"
+      ).toLowerCase();
+    });
+  } catch (err) {
+    // Fails open — a locked card just offers "Request access" again; the
+    // server's 409 catches it if one was actually pending already.
+  }
+
+  if (LOCKED_COURSES.some((c) => c.id === activeCourseId)) renderDetail();
 }
 
 // ---------- applications ----------
@@ -2490,6 +2651,18 @@ autoAllocatePublishBtn.addEventListener("click", async () => {
 // ---------- add / edit course modal ----------
 
 const addCourseBtn = document.getElementById("addCourseBtn");
+
+// Adding a course is super-organiser-only (POST /api/courses enforces it
+// server-side too). The modal stays in the markup because the same dialog
+// is also the edit dialog for courses an organiser already manages.
+const sessionUserForRole = (() => {
+  try {
+    return JSON.parse(sessionStorage.getItem("user") || "null");
+  } catch {
+    return null;
+  }
+})();
+if (sessionUserForRole?.role !== "super_organiser") addCourseBtn.hidden = true;
 const editCourseBtn = document.getElementById("editCourseBtn");
 const deleteCourseBtn = document.getElementById("deleteCourseBtn");
 const deleteCourseModal = document.getElementById("deleteCourseModal");
@@ -2834,6 +3007,10 @@ addCourseForm.addEventListener("submit", async (e) => {
   const labEndTimeValue = document.getElementById("labEndTimeInput").value;
 
   const payload = {
+    // POST /api/courses is super-organiser-only; the id authorises the
+    // create. The same payload shape also drives the edit (PUT), which any
+    // course's organiser may use — the server only checks the id on create.
+    userId: getSessionUserId(),
     course_code: document.getElementById("courseCodeInput").value.trim(),
     course_name: document.getElementById("courseNameInput").value.trim(),
     min_mark: Number(document.getElementById("minMarkInput").value),
@@ -3072,6 +3249,7 @@ async function refreshBoard() {
       fetchPendingApplicationCounts(),
       fetchPendingVolunteerCounts(),
       fetchTutorWorkload(),
+      fetchMyAccessRequests(),
     ]);
     lastSyncedAt = new Date();
     tickSyncStatusLabel();
@@ -3106,16 +3284,20 @@ async function init() {
   fetchPendingApplicationCounts();
   fetchPendingVolunteerCounts();
   fetchTutorWorkload();
+  fetchMyAccessRequests();
   lastSyncedAt = new Date();
   tickSyncStatusLabel();
   startPollingSync();
 
   const params = new URLSearchParams(location.search);
 
-  // Deep link from the universal search box (?course=<id>)
+  // Deep link from the universal search box (?course=<id>) — a locked
+  // course opens in its request-access state rather than being rejected.
   const courseParam = params.get("course");
   if (courseParam) {
-    const course = COURSES.find((c) => String(c.id) === courseParam);
+    const course = [...COURSES, ...LOCKED_COURSES].find(
+      (c) => String(c.id) === courseParam,
+    );
     if (course) selectCourse(course.id);
     else if (courseScope) {
       showToast("That course isn't part of your organiser access.");

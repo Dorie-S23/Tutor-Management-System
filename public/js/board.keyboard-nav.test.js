@@ -31,6 +31,7 @@ const allocationObjectivesJs = fs.readFileSync(
 const testHooks = `
 window.__test = {
   pushCourse: (c) => COURSES.push(c),
+  pushLockedCourse: (c) => LOCKED_COURSES.push(c),
   renderCourseList: () => renderCourseList(),
   getActiveCourseId: () => activeCourseId,
 };
@@ -41,7 +42,7 @@ window.__test = {
 // firing against a torn-down document and leave the Jest process hanging.
 const openDoms = [];
 
-function loadBoard() {
+function loadBoard({ user } = {}) {
   // Each injected script must be byte-identical to the copy run by the
   // sibling suite for that file (allocation-objectives.test.js and
   // board.transcript.test.js) — Jest's v8 coverage merges scripts by URL
@@ -64,6 +65,11 @@ function loadBoard() {
     runScripts: "dangerously",
     pretendToBeVisual: true,
     beforeParse(window) {
+      // board.js gates the "+ Add course" button on the signed-in user's
+      // role, so tests that assert on it seed the session first.
+      if (user) {
+        window.sessionStorage.setItem("user", JSON.stringify(user));
+      }
       // The init IIFE calls fetchCourses() etc. — stub fetch so those
       // resolve to nothing instead of throwing ReferenceError.
       window.fetch = () => Promise.resolve({ ok: true, json: async () => [] });
@@ -214,5 +220,90 @@ describe("board.js keyboard navigation", () => {
 
     expect(event.defaultPrevented).toBe(false);
     expect(window.__test.getActiveCourseId()).toBeNull();
+  });
+
+  test("locked courses render after the organiser's own and open the request-access panel", async () => {
+    const window = loadBoard();
+    await ready();
+
+    window.__test.pushCourse({
+      id: "c1",
+      code: "COMS1000",
+      name: "Intro to Testing",
+      tutorsAssigned: 1,
+      tutorsNeeded: 2,
+      accessible: true,
+    });
+    window.__test.pushLockedCourse({
+      id: "c9",
+      code: "COMS9000",
+      name: "Someone Elses Course",
+      department: "Computer Science",
+      minMark: 60,
+      tutorsAssigned: 0,
+      tutorsNeeded: 1,
+    });
+    window.__test.renderCourseList();
+
+    const cards = Array.from(window.document.querySelectorAll(".course-card"));
+    expect(cards).toHaveLength(2);
+    // Accessible course stays to the left; the locked one is greyed.
+    expect(cards[0].textContent).toContain("Intro to Testing");
+    expect(cards[1].textContent).toContain("Someone Elses Course");
+    expect(cards[1].classList.contains("course-card--locked")).toBe(true);
+    expect(cards[1].textContent).toContain("No access");
+    expect(cards[1].style.getPropertyValue("--accent")).toBe("");
+
+    cards[1].click();
+
+    expect(window.__test.getActiveCourseId()).toBe("c9");
+    expect(
+      window.document
+        .getElementById("courseDetail")
+        .classList.contains("course-detail--locked"),
+    ).toBe(true);
+    expect(window.document.getElementById("lockedPanel").hidden).toBe(false);
+  });
+
+  test("keyboard navigation reaches a locked course too", async () => {
+    const window = loadBoard();
+    await ready();
+    window.__test.pushCourse({
+      id: "c1",
+      code: "COMS1000",
+      name: "Intro to Testing",
+      tutorsAssigned: 1,
+      tutorsNeeded: 2,
+      accessible: true,
+    });
+    window.__test.pushLockedCourse({
+      id: "c9",
+      code: "COMS9000",
+      name: "Someone Elses Course",
+      department: "Computer Science",
+      minMark: 60,
+      tutorsAssigned: 0,
+      tutorsNeeded: 1,
+    });
+    window.__test.renderCourseList();
+
+    press(window, "End");
+
+    expect(window.__test.getActiveCourseId()).toBe("c9");
+    expect(window.document.getElementById("lockedPanel").hidden).toBe(false);
+  });
+
+  test("the add-course button shows only for the super-organiser", async () => {
+    const plain = loadBoard({
+      user: { id: "org1", role: "organiser", courseIds: [1] },
+    });
+    await ready();
+    expect(plain.document.getElementById("addCourseBtn").hidden).toBe(true);
+
+    const superWin = loadBoard({
+      user: { id: "admin1", role: "super_organiser" },
+    });
+    await ready();
+    expect(superWin.document.getElementById("addCourseBtn").hidden).toBe(false);
   });
 });

@@ -22,6 +22,9 @@ function buildApp() {
 
 function validCourse(overrides = {}) {
   return {
+    // POST /api/courses is super-organiser-only; every create test sends the
+    // seeded super-organiser's id unless a case overrides it.
+    userId: "admin1",
     course_code: "COMS2000",
     course_name: "Data Structures",
     department: "Computer Science",
@@ -41,6 +44,7 @@ function validCourse(overrides = {}) {
 
 beforeEach(() => {
   tables = {
+    users: [{ id: "admin1", role: "super_organiser" }],
     courses: [],
     tutor_subject_preference: [],
     course_volunteers: [],
@@ -64,6 +68,25 @@ describe("GET /api/courses", () => {
 });
 
 describe("POST /api/courses", () => {
+  test("rejects a caller who isn't the super-organiser", async () => {
+    tables.users.push({ id: "org1", role: "organiser" });
+
+    const noId = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ userId: undefined }));
+    const organiser = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ userId: "org1" }));
+    const stranger = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ userId: "ghost" }));
+
+    expect(noId.status).toBe(403);
+    expect(organiser.status).toBe(403);
+    expect(stranger.status).toBe(403);
+    expect(tables.courses).toHaveLength(0);
+  });
+
   test("rejects a payload missing course_code, course_name or department", async () => {
     const res = await request(buildApp())
       .post("/api/courses")

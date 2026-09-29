@@ -125,14 +125,15 @@
           <h1>Organiser Requests</h1>
           <p class="page-sub">
             Approve or deny organiser sign-ups — approving one grants access to
-            that organiser's chosen course only.
+            that organiser's chosen course only. Existing organisers' requests
+            for more courses land under Additional access.
           </p>
         </div>
       </header>
 
       <section class="panel" aria-labelledby="requestsHeading">
         <header class="review-toolbar">
-          <h2 id="requestsHeading">Access requests</h2>
+          <h2 id="requestsHeading">Organiser sign-ups</h2>
 
           <div
             class="filter-chips"
@@ -166,6 +167,50 @@
         </ul>
         <p class="empty-copy" id="requestsEmpty" hidden>
           No organiser requests to show for this filter.
+        </p>
+      </section>
+
+      <section class="panel" aria-labelledby="accessRequestsHeading">
+        <header class="review-toolbar">
+          <h2 id="accessRequestsHeading">Additional access</h2>
+
+          <div
+            class="filter-chips"
+            id="accessStatusChips"
+            aria-label="Filter additional access by status"
+          >
+            <button type="button" class="filter-chip" data-status="pending">
+              Pending
+            </button>
+            <button type="button" class="filter-chip" data-status="approved">
+              Approved
+            </button>
+            <button type="button" class="filter-chip" data-status="denied">
+              Denied
+            </button>
+            <button type="button" class="filter-chip" data-status="">
+              All
+            </button>
+          </div>
+
+          <select id="accessStatusFilter" aria-label="Filter by status" hidden>
+            <option value="pending" selected>Pending</option>
+            <option value="approved">Approved</option>
+            <option value="denied">Denied</option>
+            <option value="">All</option>
+          </select>
+        </header>
+
+        <p class="hint">
+          Existing organisers asking for one more course — approving adds it to
+          their access; they pick it up the next time they sign in.
+        </p>
+
+        <ul class="review-list" id="accessRequestList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="accessRequestsEmpty" hidden>
+          No additional-access requests to show for this filter.
         </p>
       </section>
     </main>

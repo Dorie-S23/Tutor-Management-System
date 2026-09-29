@@ -21,6 +21,160 @@ async function loadSuperOrganiser(reviewerId) {
   return data.role === "super_organiser" ? data : null;
 }
 
+// GET /api/organiser-requests/mine?userId=... — the caller's own request
+// rows (course_id + status), so the board can mark a locked course whose
+// access request is already pending instead of offering a duplicate.
+router.get("/mine", async (req, res) => {
+  const userId = req.query.userId;
+
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!user) {
+    return res.status(403).json({ error: "Unknown user" });
+  }
+
+  const { data: rows, error } = await supabase
+    .from("organiser_requests")
+    .select("course_id, status")
+    .eq("user_id", userId);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  res.json(rows || []);
+});
+
+// POST /api/organiser-requests — an existing organiser asks for access to
+// one more course ("additional access"). Filed in the same organiser_requests
+// table as sign-up requests, tagged kind = 'access' so the review page can
+// list the two queues separately. The caller is the requester (this app's
+// routes trust a caller-passed user id — same pattern as the review
+// endpoints below).
+router.post("/", async (req, res) => {
+  const { userId, courseId } = req.body ?? {};
+
+  const { data: user } = userId
+    ? await supabase
+        .from("users")
+        .select("id, name, role")
+        .eq("id", userId)
+        .maybeSingle()
+    : { data: null };
+
+  // Only a plain organiser can ask — the super-organiser already sees every
+  // course, so a request from them would be noise.
+  if (!user || user.role !== "organiser") {
+    return res.status(403).json({
+      error: "Only an organiser can request access to a course",
+    });
+  }
+
+  const courseIdNum = Number(courseId);
+  if (!Number.isInteger(courseIdNum) || courseIdNum <= 0) {
+    return res.status(400).json({ error: "A valid course id is required" });
+  }
+
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("id, course_code")
+    .eq("id", courseIdNum)
+    .maybeSingle();
+
+  if (courseError) return res.status(500).json({ error: courseError.message });
+  if (!course)
+    return res.status(404).json({ error: "That course does not exist" });
+
+  const { data: existingRows, error: rowsError } = await supabase
+    .from("organiser_requests")
+    .select("id, status")
+    .eq("user_id", user.id)
+    .eq("course_id", courseIdNum);
+
+  if (rowsError) return res.status(500).json({ error: rowsError.message });
+
+  const rows = existingRows || [];
+
+  if (rows.some((row) => row.status === "approved")) {
+    return res.status(409).json({
+      error: "You already have access to that course",
+      status: "approved",
+    });
+  }
+
+  if (rows.some((row) => row.status === "pending")) {
+    return res.status(409).json({
+      error: "A request for that course is already awaiting review",
+      status: "pending",
+    });
+  }
+
+  const denied = rows.find((row) => row.status === "denied");
+
+  let row;
+  let created = false;
+
+  if (denied) {
+    // A fresh ask — put the denied row back in the queue rather than
+    // stacking a second request for the same course.
+    const { data, error } = await supabase
+      .from("organiser_requests")
+      .update({
+        status: "pending",
+        kind: "access",
+        created_at: new Date().toISOString(),
+        reviewed_at: null,
+        reviewed_by: null,
+      })
+      .eq("id", denied.id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    row = data;
+  } else {
+    const { data, error } = await supabase
+      .from("organiser_requests")
+      .insert({
+        user_id: user.id,
+        course_id: courseIdNum,
+        status: "pending",
+        kind: "access",
+      })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    row = data;
+    created = true;
+  }
+
+  // Tell every super-organiser there's something new to review —
+  // fire-and-forget, so a notification hiccup can't fail the request.
+  supabase
+    .from("users")
+    .select("id")
+    .eq("role", "super_organiser")
+    .then(({ data: supers }) => {
+      (supers || []).forEach((superRow) =>
+        notify(superRow.id, {
+          type: "organiser_request",
+          message: `${user.name || "An organiser"} requested access to ${course.course_code} (additional access).`,
+          relatedEntity: "organiser_request",
+          relatedId: row.id,
+        }).catch(() => {}),
+      );
+    });
+
+  res.status(created ? 201 : 200).json(row);
+});
+
 // GET /api/organiser-requests?reviewerId=... — the review queue: every
 // request, newest first, with the requester and course stitched on.
 router.get("/", async (req, res) => {
@@ -127,14 +281,24 @@ async function reviewRequest(req, res, status) {
     .eq("id", existing.course_id)
     .maybeSingle();
 
-  const courseLabel = course?.course_code ? ` for ${course.course_code}` : "";
+  const courseCode = course?.course_code || null;
+  const courseLabel = courseCode ? ` for ${courseCode}` : "";
+  const access = existing.kind === "access";
+
+  // Sign-up approvals unblock sign-in; additional-access approvals add a
+  // course to an organiser's scope, which their session picks up next login.
+  const message =
+    status === "approved"
+      ? access
+        ? `Your request for access to ${courseCode || "that course"} was approved — sign in again to pick it up.`
+        : `Your organiser request${courseLabel} was approved — you can now sign in.`
+      : access
+        ? `Your request for access to ${courseCode || "that course"} was denied.`
+        : `Your organiser request${courseLabel} was denied.`;
 
   notify(existing.user_id, {
     type: "organiser_request",
-    message:
-      status === "approved"
-        ? `Your organiser request${courseLabel} was approved — you can now sign in.`
-        : `Your organiser request${courseLabel} was denied.`,
+    message,
     relatedEntity: "organiser_request",
     relatedId: existing.id,
   }).catch(() => {});

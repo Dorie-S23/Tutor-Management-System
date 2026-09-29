@@ -3007,6 +3007,21 @@ html[data-theme="dark"] .course-card.active {
   );
 }
 
+/* Locked cards stay distinguishable from accessible ones: flatter than the
+   raised --surface, never picking up the active card's accent tint. */
+html[data-theme="dark"] .course-card--locked {
+  background: color-mix(in srgb, var(--ink) 4%, var(--page));
+}
+
+html[data-theme="dark"] .course-card--locked.active {
+  background: color-mix(in srgb, var(--ink) 8%, var(--page));
+  box-shadow: 0 0 0 1px var(--faint);
+}
+
+html[data-theme="dark"] .locked-panel {
+  background: color-mix(in srgb, var(--ink) 3%, var(--page));
+}
+
 /* Light-gray chrome becomes a raised dark gray. */
 html[data-theme="dark"]
   :is(
@@ -3598,6 +3613,69 @@ body[data-theme="organiser"] textarea:focus {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Locked (no-access) course cards — shown to organisers who aren't approved
+   for that course: visible, but greyed so "can't act on this" reads at a
+   glance. No accent is set on these cards, so the top bar falls back to
+   the plain --line grey. */
+.course-card--locked {
+  background: color-mix(in srgb, var(--ink) 3%, #fff);
+  cursor: default;
+}
+
+.course-card--locked::before {
+  background: var(--line);
+}
+
+.course-card--locked:hover {
+  border-color: var(--line);
+}
+
+.course-card--locked.active {
+  border-color: var(--faint);
+  background: color-mix(in srgb, var(--ink) 6%, #fff);
+  box-shadow: 0 0 0 1px var(--faint);
+}
+
+.course-card--locked .course-card__code {
+  color: var(--faint);
+}
+
+.course-card__status--locked {
+  color: var(--faint);
+}
+
+/* Locked course detail — everything that manages the course (edit/delete,
+   stats, assignments, applications, excusals, volunteers, diagonals) is
+   hidden; the header plus the locked panel's request-access path remain. */
+.course-detail--locked .detail-head-actions,
+.course-detail--locked .detail-stats,
+.course-detail--locked .assignment-card,
+.course-detail--locked .activity-grid,
+.course-detail--locked .assign-panel {
+  display: none;
+}
+
+.locked-panel {
+  margin-top: 14px;
+  padding: 18px 20px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--ink) 2%, #fff);
+}
+
+.locked-panel h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.locked-panel .hint {
+  margin: 0 0 12px;
+  max-width: 56ch;
 }
 
 /* ---------- Course detail ---------- */

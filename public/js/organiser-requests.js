@@ -1,17 +1,28 @@
-// Super-organiser approvals queue — organiser sign-ups land here pending, and
-// approving one is what grants that organiser access to their chosen course
-// (the login gate that reads this back lives in routes/auth.js and
-// google-callback.html). Page access is guarded by the inline
-// requireRole("super_organiser") module script in organiser-requests.html.
+// Super-organiser approvals queue — two queues, one table:
+//   * sign-up requests (kind 'signup', the default) — filed when someone
+//     registers as an organiser; approving one grants access to their
+//     chosen course and unblocks their sign-in (the gate lives in
+//     routes/auth.js and google-callback.html).
+//   * additional access (kind 'access') — filed from the board by an
+//     existing organiser who selected a course they aren't approved for;
+//     approving adds that course to their scope, picked up next sign-in.
+// Page access is guarded by the inline requireRole("super_organiser") module
+// script in organiser-requests.html.
 
 const requestListEl = document.getElementById("requestList");
 const requestsEmptyEl = document.getElementById("requestsEmpty");
 const statusFilterEl = document.getElementById("statusFilter");
 const statusChipsEl = document.getElementById("statusChips");
 
+const accessRequestListEl = document.getElementById("accessRequestList");
+const accessRequestsEmptyEl = document.getElementById("accessRequestsEmpty");
+const accessStatusFilterEl = document.getElementById("accessStatusFilter");
+const accessStatusChipsEl = document.getElementById("accessStatusChips");
+
 const currentUser = JSON.parse(sessionStorage.getItem("user") || "null");
 
 let allRequests = [];
+let allAccessRequests = [];
 
 // ---------------- helpers ----------------
 
@@ -56,7 +67,7 @@ function makeActionBtn(label, variant, onClick) {
 
 // ---------------- rendering ----------------
 
-function renderRequest(row) {
+function renderRequest(row, listEl) {
   const name = row.user?.name || "Unknown user";
   const status = (row.status || "pending").toLowerCase();
   // There's no .status-pill.denied style — "denied" reuses the rejected
@@ -99,24 +110,36 @@ function renderRequest(row) {
   }
 
   li.appendChild(rowEl);
-  requestListEl.appendChild(li);
+  listEl.appendChild(li);
+}
+
+function renderQueue(rows, filterEl, listEl, emptyEl) {
+  listEl.innerHTML = "";
+  const status = filterEl.value;
+  const visible = rows.filter(
+    (row) => !status || (row.status || "pending").toLowerCase() === status,
+  );
+  emptyEl.hidden = visible.length > 0;
+  visible.forEach((row) => renderRequest(row, listEl));
 }
 
 function renderFiltered() {
-  requestListEl.innerHTML = "";
-  const status = statusFilterEl.value;
-  const visible = allRequests.filter(
-    (row) => !status || (row.status || "pending").toLowerCase() === status,
+  renderQueue(allRequests, statusFilterEl, requestListEl, requestsEmptyEl);
+  renderQueue(
+    allAccessRequests,
+    accessStatusFilterEl,
+    accessRequestListEl,
+    accessRequestsEmptyEl,
   );
-  requestsEmptyEl.hidden = visible.length > 0;
-  visible.forEach(renderRequest);
 }
 
 // ---------------- data loading ----------------
 
 async function loadRequests() {
   requestListEl.innerHTML = "";
+  accessRequestListEl.innerHTML = "";
   requestsEmptyEl.hidden = true;
+  accessRequestsEmptyEl.hidden = true;
 
   try {
     const reviewerId = currentUser?.id || "";
@@ -126,9 +149,15 @@ async function loadRequests() {
     const rows = await res.json();
     if (!res.ok) throw new Error(rows.error || "Failed to load requests");
     // The list is fetched whole and filtered client-side so the chip counts
-    // always reflect every status, not just the visible filter.
-    allRequests = rows;
-    updateChipCounts();
+    // always reflect every status, not just the visible filter. Rows
+    // predate the kind column come back without one — those are sign-ups.
+    allRequests = [];
+    allAccessRequests = [];
+    (rows || []).forEach((row) => {
+      (row.kind === "access" ? allAccessRequests : allRequests).push(row);
+    });
+    updateChipCounts(statusChipsEl, allRequests);
+    updateChipCounts(accessStatusChipsEl, allAccessRequests);
     renderFiltered();
   } catch (err) {
     showToast("Couldn't load organiser requests.");
@@ -147,10 +176,15 @@ async function reviewRequest(row, action, name) {
       showToast(body.error || "Couldn't update that request.");
       return;
     }
+    const access = row.kind === "access";
     showToast(
       action === "approve"
-        ? `${name} now has access to ${courseCode(row)}`
-        : `${name}'s organiser request was denied`,
+        ? access
+          ? `${name} now has access to ${courseCode(row)} — they'll see it on their next sign-in`
+          : `${name} now has access to ${courseCode(row)}`
+        : access
+          ? `${name}'s additional-access request was denied`
+          : `${name}'s organiser request was denied`,
     );
     await loadRequests();
   } catch (err) {
@@ -160,20 +194,17 @@ async function reviewRequest(row, action, name) {
 
 // ---------------- summary + filter chips ----------------
 
-function syncStatusChips() {
-  if (!statusChipsEl) return;
-  statusChipsEl.querySelectorAll(".filter-chip").forEach((chip) => {
-    chip.classList.toggle(
-      "is-active",
-      chip.dataset.status === statusFilterEl.value,
-    );
+function syncStatusChips(chipsEl, filterEl) {
+  if (!chipsEl) return;
+  chipsEl.querySelectorAll(".filter-chip").forEach((chip) => {
+    chip.classList.toggle("is-active", chip.dataset.status === filterEl.value);
   });
 }
 
-function updateChipCounts() {
-  if (!statusChipsEl) return;
+function updateChipCounts(chipsEl, rows) {
+  if (!chipsEl) return;
   const counts = { pending: 0, approved: 0, denied: 0 };
-  allRequests.forEach((row) => {
+  rows.forEach((row) => {
     const status = (row.status || "pending").toLowerCase();
     if (counts[status] != null) counts[status] += 1;
   });
@@ -184,24 +215,31 @@ function updateChipCounts() {
     "": "All",
   };
   const total = counts.pending + counts.approved + counts.denied;
-  statusChipsEl.querySelectorAll(".filter-chip").forEach((chip) => {
+  chipsEl.querySelectorAll(".filter-chip").forEach((chip) => {
     const status = chip.dataset.status;
     const count = status === "" ? total : counts[status] || 0;
     chip.textContent = `${labels[status]} (${count})`;
   });
 }
 
-statusChipsEl?.addEventListener("click", (e) => {
-  const chip = e.target.closest(".filter-chip");
-  if (!chip) return;
-  statusFilterEl.value = chip.dataset.status;
-  syncStatusChips();
-  renderFiltered();
-});
+// One wiring per queue — chips, hidden select and rendered list stay in
+// sync within a queue, and the two queues filter independently.
+[
+  [statusChipsEl, statusFilterEl],
+  [accessStatusChipsEl, accessStatusFilterEl],
+].forEach(([chipsEl, filterEl]) => {
+  chipsEl?.addEventListener("click", (e) => {
+    const chip = e.target.closest(".filter-chip");
+    if (!chip) return;
+    filterEl.value = chip.dataset.status;
+    syncStatusChips(chipsEl, filterEl);
+    renderFiltered();
+  });
 
-statusFilterEl.addEventListener("change", () => {
-  syncStatusChips();
-  renderFiltered();
+  filterEl?.addEventListener("change", () => {
+    syncStatusChips(chipsEl, filterEl);
+    renderFiltered();
+  });
 });
 
 // ---------------- toast ----------------
@@ -215,5 +253,6 @@ function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
-syncStatusChips();
+syncStatusChips(statusChipsEl, statusFilterEl);
+syncStatusChips(accessStatusChipsEl, accessStatusFilterEl);
 loadRequests();

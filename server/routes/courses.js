@@ -450,11 +450,29 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
-// POST /api/courses — add a new course
+// POST /api/courses — add a new course. Creating is super-organiser-only
+// (organisers manage the courses they're approved for, they don't create
+// new ones); the caller passes their user id, same trust model as the rest
+// of this API. Guard sits after payload validation — the form's field rules
+// are public anyway — but before any clash check or write.
 router.post("/", async (req, res) => {
   const { values, error: validationError } = parseCoursePayload(req.body);
   if (validationError) {
     return res.status(400).json({ error: validationError });
+  }
+
+  const { data: caller } = req.body?.userId
+    ? await supabase
+        .from("users")
+        .select("id, role")
+        .eq("id", req.body.userId)
+        .maybeSingle()
+    : { data: null };
+
+  if (!caller || caller.role !== "super_organiser") {
+    return res
+      .status(403)
+      .json({ error: "Only the super-organiser can add courses" });
   }
 
   const clashError = await findVenueClash(values, null);
