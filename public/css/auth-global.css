@@ -367,6 +367,52 @@ svg {
   width: 100%;
 }
 
+/* ------------------------------------------------------------
+   Busy indicator for the Google callback page — the same
+   spinning ring the app's button busy state uses (app.css),
+   recoloured with the auth card's own tokens
+   ------------------------------------------------------------ */
+
+.auth-progress {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+}
+
+.auth-spinner {
+  width: 26px;
+
+  height: 26px;
+
+  border: 2.5px solid var(--line);
+
+  border-top-color: var(--primary);
+
+  border-radius: 50%;
+
+  animation: auth-spin 0.7s linear infinite;
+}
+
+/* Terminal state reached (success / error) — the message alone
+   tells the story, so the spinner steps aside. */
+.auth-progress.is-done .auth-spinner {
+  display: none;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-spinner {
+    animation-duration: 1.6s;
+  }
+}
+
 html[data-theme="dark"] {
   color-scheme: dark;
   --paper: #121815;
