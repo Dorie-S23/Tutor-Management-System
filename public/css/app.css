@@ -3187,6 +3187,75 @@ html[data-theme="dark"] .claim-title-table td {
   color: var(--ink);
 }
 
+/* ---------- Volunteer dark-mode readability (scoped) ----------
+   The volunteer pages carry body[data-theme="volunteer"] purely as a
+   scoping hook — no palette rules attach to it (volunteers keep the
+   default blue accent), so everything below touches only their pages
+   and leaves the tutor/organiser dark styling alone.
+   --blue-dark is a *background* blue (hover fills, selected chips), so
+   the dark theme rightly leaves that token alone — but a handful of
+   volunteer components use it as TEXT on tinted surfaces, which drops
+   to ~1.6:1 against the dark page. Those get explicit light-blue text:
+   #93c5fd on tinted fills, #bfdbfe on plain surfaces, #dbeafe on the
+   navy selected chip. */
+html[data-theme="dark"] body[data-theme="volunteer"] .session-cover-badge {
+  color: #93c5fd;
+  border-color: var(--blue-line);
+}
+
+html[data-theme="dark"]
+  body[data-theme="volunteer"]
+  :is(
+    .status-pill.submitted,
+    .status-pill.logged,
+    .course-chip.is-selected .course-chip__code,
+    .session-chip.is-open .session-chip__note
+  ) {
+  color: #93c5fd;
+}
+
+/* A selected session chip keeps its navy fill — lift its muted time and
+   note text out of the 3:1 zone against it. */
+html[data-theme="dark"]
+  body[data-theme="volunteer"]
+  .session-chip.is-selected
+  :is(.session-chip__time, .session-chip__note) {
+  color: #dbeafe;
+}
+
+/* Imported personal classes: the dark theme already gives these pills a
+   dark surface (see the surface list above), but their blue-dark text
+   stays near-invisible against it — same for their day-view events. */
+html[data-theme="dark"]
+  body[data-theme="volunteer"]
+  :is(.calendar-class-pill, .day-view-event--class) {
+  color: #bfdbfe;
+}
+
+/* Accent-as-text chrome: session-card course codes, the active nav tab,
+   inline links, the "Volunteer" badge and the notification actions all
+   read ~3.2:1 at the default blue on dark surfaces — lift to blue-300. */
+html[data-theme="dark"]
+  body[data-theme="volunteer"]
+  :is(
+    a,
+    .session-code,
+    .tab-nav a.active,
+    .tab-nav a[aria-current="page"],
+    .btn-link,
+    .role-badge,
+    .notif-bell-btn,
+    .notif-mark-all-btn
+  ) {
+  color: #93c5fd;
+}
+
+html[data-theme="dark"]
+  body[data-theme="volunteer"]
+  :is(.tab-nav a.active, .tab-nav a[aria-current="page"]) {
+  border-bottom-color: #93c5fd;
+}
+
 @media print {
   .no-print {
     display: none !important;
