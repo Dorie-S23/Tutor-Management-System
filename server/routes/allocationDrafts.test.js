@@ -27,6 +27,9 @@ beforeEach(() => {
     allocation_drafts: [],
     allocation_draft_assignments: [],
     audit_log: [],
+    // Auto-allocate is super-organiser-only; every test below posts as
+    // "organiser-1", so seed that account with the qualifying role.
+    users: [{ id: "organiser-1", role: "super_organiser" }],
   };
   mockSupabase = fakeSupabase(tables);
 });
@@ -38,6 +41,27 @@ describe("POST /api/allocation-drafts/auto-allocate", () => {
       .send({});
 
     expect(res.status).toBe(400);
+  });
+
+  test("rejects a caller who isn't the super-organiser", async () => {
+    tables.users = [{ id: "organiser-2", role: "organiser" }];
+
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/auto-allocate")
+      .send({ organiserId: "organiser-2" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/super-organiser/i);
+    expect(tables.allocation_drafts).toHaveLength(0);
+  });
+
+  test("rejects an unknown caller id outright", async () => {
+    const res = await request(buildApp())
+      .post("/api/allocation-drafts/auto-allocate")
+      .send({ organiserId: "who-dis" });
+
+    expect(res.status).toBe(403);
+    expect(tables.allocation_drafts).toHaveLength(0);
   });
 
   test("returns no draft when nothing qualifies", async () => {
