@@ -3079,12 +3079,12 @@ body[data-theme="tutor"] textarea:focus {
    specificity for every role (tutor teal, organiser violet, …). */
 
 html[data-theme="dark"] body {
-  --ink: #e2e8f0;
-  --ink-2: #cbd5e1;
-  --ink-3: #aeb9cc;
-  --body-text: #9aa8bd;
-  --muted: #8494ab;
-  --faint: #64748b;
+  --ink: #f5f8fc;
+  --ink-2: #e6ecf5;
+  --ink-3: #cfd9e7;
+  --body-text: #b9c5d8;
+  --muted: #a3b1c7;
+  --faint: #8b9bb4;
   --line: #2b3850;
   --line-soft: rgba(148, 163, 184, 0.24);
   --page: #0a0f1c;
