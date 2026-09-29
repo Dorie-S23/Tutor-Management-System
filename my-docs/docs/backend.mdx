@@ -167,7 +167,7 @@ CI runs on **Gitea Actions** (`.gitea/workflows/`), not GitLab CI — `sdp.ms.wi
 
 - `format.yml` — Prettier check (`npm run format:check`) on every push.
 - `test.yml` — Jest suite (`npm test`) on every push.
-- `deploy.yml` — deploys the app to Cloudflare Workers via `wrangler deploy` on push to `main`.
+- `deploy.yml` — deploys the app to Cloudflare Workers via `wrangler deploy` on push to `main`, and syncs the `GEMINI_API_KEY` secret into the production Worker from the matching Gitea repo secret on every deploy ([External Services](./external-services.mdx) covers why it works this way).
 - `docs-deploy.yml` — builds this documentation site and deploys it to Cloudflare Pages, on push to `main` when something under `my-docs/` changes.
 
 :::danger Open security item

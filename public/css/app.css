@@ -276,7 +276,8 @@ button:focus-visible {
 }
 
 .notif-bell-btn,
-.tour-trigger {
+.tour-trigger,
+.nav-icon-btn {
   position: relative;
   width: 32px;
   height: 32px;
@@ -291,21 +292,30 @@ button:focus-visible {
 }
 
 .notif-bell-btn:hover,
-.tour-trigger:hover {
+.tour-trigger:hover,
+.nav-icon-btn:hover {
   background: rgba(37, 99, 235, 0.16);
 }
 
 .notif-bell-btn svg,
-.tour-trigger svg {
+.tour-trigger svg,
+.nav-icon-btn svg {
   width: 17px;
   height: 17px;
 }
 
-/* The tour trigger also exists as an anchor on pages that route through
-   StudentView.html?tour=1 instead of starting the tour in place. */
-a.tour-trigger {
+/* The tour trigger and history link also exist as anchors (pages that
+   route through StudentView.html?tour=1, and the history page itself). */
+a.tour-trigger,
+a.nav-icon-btn {
   text-decoration: none;
   flex: none;
+}
+
+/* Circular nav links mark the current page with a ring in the role
+   colour — they no longer sit in the tab bar, so no underline. */
+.nav-icon-btn[aria-current="page"] {
+  box-shadow: inset 0 0 0 1.5px currentColor;
 }
 
 .notif-bell-badge {
@@ -675,6 +685,29 @@ a.tour-trigger {
 .btn-primary:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* Busy state for slow actions (e.g. the AI timetable parse): a spinning ring
+   next to the label, driven by the is-loading class from the page script. */
+.btn-primary.is-loading {
+  cursor: progress;
+}
+
+.btn-primary.is-loading::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spinner-spin 0.7s linear infinite;
+}
+
+@keyframes spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .btn-secondary {
@@ -1139,9 +1172,9 @@ textarea {
 }
 
 .file-drop-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--blue);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
 }
 
 .timetable-import-actions {
@@ -1152,6 +1185,11 @@ textarea {
 
 #timetable-status {
   margin-top: 14px;
+  font-size: 13px;
+}
+
+#timetable-status:not(.form-error) {
+  color: var(--muted);
 }
 
 .hours-readout {
@@ -1703,6 +1741,7 @@ td {
   display: flex;
   align-items: center;
   gap: 18px;
+  margin-top: 12px;
   font-size: 12px;
   color: var(--ink-3);
 }
@@ -2944,7 +2983,8 @@ body[data-theme="tutor"] .role-badge {
 }
 
 body[data-theme="tutor"] .notif-bell-btn,
-body[data-theme="tutor"] .tour-trigger {
+body[data-theme="tutor"] .tour-trigger,
+body[data-theme="tutor"] .nav-icon-btn {
   background: rgba(15, 118, 110, 0.09);
   color: rgb(15, 118, 110);
 }
@@ -2959,7 +2999,8 @@ body[data-theme="tutor"] .theme-toggle:hover {
 }
 
 body[data-theme="tutor"] .notif-bell-btn:hover,
-body[data-theme="tutor"] .tour-trigger:hover {
+body[data-theme="tutor"] .tour-trigger:hover,
+body[data-theme="tutor"] .nav-icon-btn:hover {
   background: rgba(15, 118, 110, 0.16);
 }
 
@@ -3504,7 +3545,8 @@ body[data-theme="organiser"] .role-badge {
 }
 
 body[data-theme="organiser"] .notif-bell-btn,
-body[data-theme="organiser"] .tour-trigger {
+body[data-theme="organiser"] .tour-trigger,
+body[data-theme="organiser"] .nav-icon-btn {
   background: rgba(124, 58, 237, 0.08);
   color: rgb(109, 40, 217);
 }
@@ -3519,7 +3561,8 @@ body[data-theme="organiser"] .theme-toggle:hover {
 }
 
 body[data-theme="organiser"] .notif-bell-btn:hover,
-body[data-theme="organiser"] .tour-trigger:hover {
+body[data-theme="organiser"] .tour-trigger:hover,
+body[data-theme="organiser"] .nav-icon-btn:hover {
   background: rgba(124, 58, 237, 0.15);
 }
 

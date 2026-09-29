@@ -125,18 +125,19 @@ All of it lives in `server/routes/timetable.js`, mounted at `/api/timetable`:
 :::info Setup
 
 - **Local:** `GEMINI_API_KEY` in `.env` (see [Getting Started](./getting-started.mdx)) — plus an optional `GEMINI_MODEL` override.
-- **Production (Cloudflare Worker):** `npx wrangler secret put GEMINI_API_KEY` — `.env` isn't read there ([Backend](./backend.mdx) explains the split).
+- **Production (Cloudflare Worker):** `deploy.yml` syncs the key from a **Gitea repo secret** (`GEMINI_API_KEY`) into the production Worker on every main deploy — `.env` isn't read there ([Backend](./backend.mdx) explains the split). To rotate the key, update the repo secret. Don't `wrangler secret put` from a developer laptop: the local wrangler login is a different Cloudflare account that owns a same-named `tutorx` Worker, so the key lands on the wrong one — exactly how the live route ended up answering `503` while local worked.
 - **No key?** The route answers `503` and the calendar page quietly reads PDFs on-device instead — the feature never hard-fails just because AI parsing is unconfigured.
-- **Free-tier limits apply.** The free plan caps each model at ~20 requests/minute and occasionally answers `503 ("high demand")` during spikes; one upload = one request, so normal use stays well under it. The route retries `5xx` spikes twice per model, a rate-limit `429` never retries the same model (a 2-second retry can't outwait a minute-long quota window) but fails over to the next candidate, and if every candidate is unavailable the client still reads the PDF on-device — a busy minute degrades gracefully, it doesn't break the feature.
+- **Free-tier limits apply.** The free plan caps each model at **20 requests/day** (daily, not per-minute), so repeated manual testing can exhaust it; a `429 RESOURCE_EXHAUSTED` that persists for hours is oddly reassuring — it proves the key is valid (invalid keys get `400`). The route retries transient `5xx` twice per model, a `429` never retries the same model but fails over to the next candidate, and if every candidate is unavailable the client still reads the PDF on-device — a busy day degrades gracefully, it doesn't break the feature.
   :::
 
 ## Timetable parsing: a brief history
 
-The feature has changed shape twice, and this page has documented each state:
+The feature has changed shape twice and then needed one production fix; this page has documented each state:
 
 1. **Server-side LLM only** — the original implementation (`server/timetableRoutes.js` + `server/geminiClient.js`, first Anthropic then Gemini, on the `feature/external_api` branch) called the model for everything and had no client-side reader at all.
 2. **Client-side OCR only** — the rewrite that replaced it ran pdf.js + Tesseract.js entirely in the browser, with no server route and no API key anywhere. (This is the pipeline the fallback above still uses.)
-3. **Hybrid (current)** — Gemini is back as the primary reader via the same route, and the OCR pipeline is kept as the automatic fallback. `GEMINI_API_KEY` is read by the code again, so treat it as live config, not a leftover.
+3. **Hybrid** — Gemini is back as the primary reader via the same route, and the OCR pipeline is kept as the automatic fallback. `GEMINI_API_KEY` is read by the code again, so treat it as live config, not a leftover.
+4. **Production fix (current)** — the restored route worked locally but not on the live site: the deployed Worker had no `GEMINI_API_KEY` secret, so it answered `503` and the calendar page silently fell back to OCR, which surfaced to users as "No classes could be recognised in this PDF". Two traps made the diagnosis slow: a same-named `tutorx` Worker in a second Cloudflare account absorbed a manual `wrangler secret put` (the laptop's wrangler login belongs to that other account), and the free tier's per-model **daily** quota made the then-default model look permanently dead. Fixed by having `deploy.yml` push the key into the production Worker from a Gitea repo secret on every deploy, and by the probe-verified multi-model failover cascade described above. Verified working end-to-end against production.
 
 ## Everything else
 

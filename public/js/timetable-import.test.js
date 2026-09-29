@@ -286,4 +286,27 @@ describe("timetable-import.js", () => {
     expect(fileName.hidden).toBe(false);
     expect(fileName.textContent).toBe("Selected: timetable.pdf");
   });
+
+  test("marks the parse button busy while the AI reads the PDF", async () => {
+    const win = loadImport();
+    const doc = win.document;
+    const parseBtn = doc.getElementById("parse-timetable-btn");
+    win.__parseResult = [CLASS_A];
+
+    setFile(win);
+    doc.getElementById("semester-start").value = "2026-09-01";
+    parseBtn.click();
+
+    expect(parseBtn.disabled).toBe(true);
+    expect(parseBtn.classList.contains("is-loading")).toBe(true);
+    expect(parseBtn.getAttribute("aria-busy")).toBe("true");
+    expect(parseBtn.textContent).toBe("Parsing…");
+
+    await flush();
+
+    expect(parseBtn.disabled).toBe(false);
+    expect(parseBtn.classList.contains("is-loading")).toBe(false);
+    expect(parseBtn.hasAttribute("aria-busy")).toBe(false);
+    expect(parseBtn.textContent).toBe("Parse PDF");
+  });
 });

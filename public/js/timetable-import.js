@@ -102,6 +102,9 @@ parseBtn.addEventListener("click", async () => {
 
   reviewSection.hidden = true;
   parseBtn.disabled = true;
+  parseBtn.classList.add("is-loading");
+  parseBtn.setAttribute("aria-busy", "true");
+  parseBtn.textContent = "Parsing…";
   setStatus("Reading PDF…");
 
   try {
@@ -130,6 +133,9 @@ parseBtn.addEventListener("click", async () => {
     setStatus(err.message || "Could not read that PDF.", true);
   } finally {
     parseBtn.disabled = false;
+    parseBtn.classList.remove("is-loading");
+    parseBtn.removeAttribute("aria-busy");
+    parseBtn.textContent = "Parse PDF";
   }
 });
 
