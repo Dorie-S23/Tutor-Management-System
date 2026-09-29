@@ -16,13 +16,16 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # Keep the worker's Gemini secret synced from a repo secret so the key
       # never lives in git. No-op until GEMINI_API_KEY is added under the
-      # repo's Settings -> Secrets.
-      - run: |
-          if [ -n "$GEMINI_API_KEY" ]; then
-            printf '%s' "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY
-          else
-            echo "GEMINI_API_KEY repo secret not set - skipping."
-          fi
+      # repo's Settings -> Secrets. Node (not bash) so it runs on the
+      # Windows runners too.
+      - run: >-
+          node -e "const k=process.env.GEMINI_API_KEY;
+          if(!k){console.log('GEMINI_API_KEY repo secret not set - skipping.');
+          process.exit(0);} const{spawnSync}=require('child_process');
+          const
+          r=spawnSync('npx',['wrangler','secret','put','GEMINI_API_KEY'],
+          {input:k,stdio:['pipe','inherit','inherit'],shell:process.platform==='win32'});
+          process.exit(r.status==null?1:r.status);"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
