@@ -14,3 +14,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Keep the worker's Gemini secret synced from a repo secret so the key
+      # never lives in git. No-op until GEMINI_API_KEY is added under the
+      # repo's Settings -> Secrets.
+      - run: |
+          if [ -n "$GEMINI_API_KEY" ]; then
+            printf '%s' "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY
+          else
+            echo "GEMINI_API_KEY repo secret not set - skipping."
+          fi
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
