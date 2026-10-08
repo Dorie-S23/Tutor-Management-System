@@ -19,8 +19,11 @@ highlightActiveTab();
 
 const listEl = document.getElementById("timesheetList");
 
+// Always a whole number — new entries are already logged in whole hours,
+// but this rounds defensively so any older fractional entry still displays
+// as one too.
 function formatHours(hours) {
-  return `${Number(hours.toFixed(1))}h`;
+  return `${Math.round(hours)}h`;
 }
 
 // "August 2025" — the calendar month a group of entries rolls up to.

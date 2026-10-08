@@ -5,8 +5,9 @@ const router = express.Router();
 
 // Each role's profile table also holds that account's student number — as
 // student_number on tutors, student_no on students — so this route reads
-// and writes it there instead of duplicating it onto `users`. Educators and
-// organisers have neither a student number nor a profile page, hence no
+// and writes it there instead of duplicating it onto `users`. Organisers
+// have no student number at all (table: null) — their profile is just the
+// `users` row (name, cell phone). Educators have no profile page, hence no
 // entry, and get a 403 from both handlers below.
 const ROLE_PROFILES = {
   tutor: {
@@ -18,6 +19,12 @@ const ROLE_PROFILES = {
     table: "students",
     label: "student",
     studentNumberColumn: "student_no",
+  },
+  organiser: { table: null, label: "organiser", studentNumberColumn: null },
+  super_organiser: {
+    table: null,
+    label: "organiser",
+    studentNumberColumn: null,
   },
 };
 
@@ -47,8 +54,13 @@ router.get("/:userId", async (req, res) => {
   const roleProfile = ROLE_PROFILES[user.role];
   if (!roleProfile) {
     return res.status(403).json({
-      error: "Profiles are only available for tutors and student volunteers",
+      error:
+        "Profiles are only available for tutors, student volunteers, and organisers",
     });
+  }
+
+  if (!roleProfile.table) {
+    return res.json(shapeProfile(user, ""));
   }
 
   const { data: roleRow } = await supabase
@@ -87,11 +99,6 @@ router.put("/:userId", async (req, res) => {
     cellPhone: typeof cellPhone === "string" ? cellPhone.trim() : "",
   };
 
-  if (!fields.name || !fields.studentNumber) {
-    return res.status(400).json({
-      error: "Your name and student number are required",
-    });
-  }
   if (fields.cellPhone && !isValidSaCellPhone(fields.cellPhone)) {
     return res.status(400).json({
       error:
@@ -111,34 +118,48 @@ router.put("/:userId", async (req, res) => {
   const roleProfile = ROLE_PROFILES[user.role];
   if (!roleProfile) {
     return res.status(403).json({
-      error: "Profiles are only available for tutors and student volunteers",
+      error:
+        "Profiles are only available for tutors, student volunteers, and organisers",
     });
   }
 
-  // Role table first: the student number's unique constraint lives there,
-  // so a duplicate should abort the save before anything else is written.
-  const { error: roleError } = await supabase
-    .from(roleProfile.table)
-    .update({
-      name: fields.name,
-      [roleProfile.studentNumberColumn]: fields.studentNumber,
-    })
-    .eq("id", user.id)
-    .select(roleProfile.studentNumberColumn)
-    .single();
+  // Organisers have no student number, so only roles with a role table
+  // (tutor, student) require one.
+  if (!fields.name || (roleProfile.table && !fields.studentNumber)) {
+    return res.status(400).json({
+      error: roleProfile.table
+        ? "Your name and student number are required"
+        : "Your name is required",
+    });
+  }
 
-  if (roleError) {
-    if (roleError.code === "23505") {
-      return res.status(409).json({
-        error: "That student number is already used by another account",
-      });
+  // Role table first (when there is one): the student number's unique
+  // constraint lives there, so a duplicate should abort the save before
+  // anything else is written.
+  if (roleProfile.table) {
+    const { error: roleError } = await supabase
+      .from(roleProfile.table)
+      .update({
+        name: fields.name,
+        [roleProfile.studentNumberColumn]: fields.studentNumber,
+      })
+      .eq("id", user.id)
+      .select(roleProfile.studentNumberColumn)
+      .single();
+
+    if (roleError) {
+      if (roleError.code === "23505") {
+        return res.status(409).json({
+          error: "That student number is already used by another account",
+        });
+      }
+      if (roleError.code === "PGRST116") {
+        return res.status(500).json({
+          error: `No ${roleProfile.label} record found for this account`,
+        });
+      }
+      return res.status(500).json({ error: roleError.message });
     }
-    if (roleError.code === "PGRST116") {
-      return res.status(500).json({
-        error: `No ${roleProfile.label} record found for this account`,
-      });
-    }
-    return res.status(500).json({ error: roleError.message });
   }
 
   const { error: profileError } = await supabase

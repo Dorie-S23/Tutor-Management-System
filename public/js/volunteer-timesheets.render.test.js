@@ -36,14 +36,14 @@ const ENTRIES = [
   {
     id: "e2",
     date: "2026-09-01",
-    hours: 1.5,
+    hours: 2,
     taskType: "Peer support",
     subject: "COMS1018A",
   },
   {
     id: "e3",
     date: "2026-09-30",
-    hours: 2.5,
+    hours: 3,
     taskType: "Peer support",
     subject: "APPM2021",
   },
@@ -118,8 +118,8 @@ describe("volunteer timesheets render", () => {
     // entry stays in its own August row rather than joining September.
     expect(rows).toEqual([
       { course: "COMS1018A", month: "August 2026", hours: "2h" },
-      { course: "APPM2021", month: "September 2026", hours: "2.5h" },
-      { course: "COMS1018A", month: "September 2026", hours: "1.5h" },
+      { course: "APPM2021", month: "September 2026", hours: "3h" },
+      { course: "COMS1018A", month: "September 2026", hours: "2h" },
       { course: "COMS1018A", month: "October 2026", hours: "3h" },
     ]);
   });
