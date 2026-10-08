@@ -2,11 +2,11 @@
 
 ![tests](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/actions/workflows/test.yml/badge.svg?branch=main)
 
-| Coverage Target | Badge                                                                                                                 |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Server API      | ![server api coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/server-api.svg) |
-| Client UI       | ![client ui coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/client-ui.svg)   |
-| Overall         | ![coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/coverage.svg)              |
+| Coverage Target | Badge                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Server API      | ![server api coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/server-api.svg?v=2) |
+| Client UI       | ![client ui coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/client-ui.svg?v=2)   |
+| Overall         | ![coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/coverage.svg?v=2)              |
 
 A web app for organising tutor allocations to courses — tracking which courses need tutors, matching tutors against courses, and flagging clashes (marks, timetable, hours remaining).
 
