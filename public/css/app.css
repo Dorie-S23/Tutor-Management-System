@@ -1143,6 +1143,27 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+/* ---------- Date fields (typed dd/mm/yyyy) ---------- */
+/* date-mask.js keeps the native <input type="date"> in the DOM for page
+   scripts, hidden behind the masked text field users actually type into. */
+.date-mask-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.date-mask-input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.date-mask-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--faint);
@@ -3433,6 +3454,10 @@ html[data-theme="dark"]
 
 html[data-theme="dark"] .form-field input[readonly] {
   background: rgba(148, 163, 184, 0.1);
+}
+
+html[data-theme="dark"] .date-mask-input[aria-invalid="true"] {
+  border-color: #f87171;
 }
 
 /* Translucent-white overlays become translucent-dark (or faint light
@@ -5767,7 +5792,7 @@ body[data-theme="organiser"] textarea:focus {
 
 /* ---------- Budget report page ---------- */
 
-.toolbar-date {
+input.toolbar-date {
   width: 150px;
 }
 
