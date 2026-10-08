@@ -119,6 +119,29 @@ describe("POST /api/tutor-applications", () => {
     expect(tables.tutor_subject_preference).toHaveLength(0);
   });
 
+  test("a locked rejection can't be withdrawn past — the surviving row 409s a re-apply", async () => {
+    // The abuse the lock exists for: withdraw the rejected row, re-apply,
+    // get rejected, repeat. With the row locked the DELETE is refused, so
+    // this existing row keeps the POST's duplicate check firing forever.
+    tables.tutor_subject_preference = [
+      {
+        id: "app-1",
+        tutor_id: "tutor-1",
+        course_id: 1,
+        status: "rejected",
+        locked: true,
+      },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/tutor-applications")
+      .send(validApplication());
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("You've already applied to tutor COMS3300.");
+    expect(tables.tutor_subject_preference).toHaveLength(1);
+  });
+
   test("answers 502 when the transcript storage lookup itself fails", async () => {
     mockSupabase.storage.from = () => ({
       list: async () => ({
@@ -1170,6 +1193,18 @@ describe("PATCH /api/tutor-applications/:id/lock", () => {
     expect(tables.tutor_subject_preference[0].locked).toBe(true);
   });
 
+  test("locks a rejected application, closing off withdraw-and-reapply", async () => {
+    tables.tutor_subject_preference[0].status = "rejected";
+
+    const res = await request(buildApp())
+      .patch("/api/tutor-applications/app-1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.locked).toBe(true);
+    expect(tables.tutor_subject_preference[0].locked).toBe(true);
+  });
+
   test("rejects anything other than locked: true", async () => {
     const res = await request(buildApp())
       .patch("/api/tutor-applications/app-1/lock")
@@ -1273,6 +1308,28 @@ describe("DELETE /api/tutor-applications/:id", () => {
 
     expect(res.status).toBe(204);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("a locked application can't be withdrawn — a locked rejection is the reapply block", async () => {
+    tables.tutor_subject_preference = [
+      {
+        id: "app-1",
+        status: "rejected",
+        course_id: 10,
+        tutor_id: "t1",
+        locked: true,
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/tutor-applications/app-1",
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "This application is locked and can't be withdrawn.",
+    );
+    expect(tables.tutor_subject_preference).toHaveLength(1);
   });
 
   test("records a withdrawal in the audit log with the tutor as actor", async () => {

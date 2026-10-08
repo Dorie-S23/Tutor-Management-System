@@ -505,6 +505,24 @@ describe("modules.js", () => {
     );
   });
 
+  test("a locked rejection shows a note instead of the remove button", async () => {
+    const { window, calls } = loadPage({
+      applications: defaultApplications().map((a) =>
+        a.id === "a4" ? { ...a, locked: true } : a,
+      ),
+    });
+    await wait();
+
+    const doc = window.document;
+    const rows = doc.querySelectorAll("#applications-items .application-row");
+    const rejected = rows[2];
+    expect(rejected.querySelector("button.btn-link")).toBeNull();
+    expect(rejected.textContent).toContain(
+      "An organiser has locked this rejection",
+    );
+    expect(calls.find((c) => c.method === "DELETE")).toBeUndefined();
+  });
+
   test("keeps the application and re-enables the button when removal fails", async () => {
     const { window, calls } = loadPage({ applicationDeleteFail: true });
     await wait();

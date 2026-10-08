@@ -350,6 +350,18 @@ describe("PATCH /api/course-volunteers/:id", () => {
     expect(tables.course_volunteers[0].status).toBe("approved");
   });
 
+  test("a locked rejected volunteer can't be reconsidered either", async () => {
+    tables.course_volunteers[0].status = "rejected";
+    tables.course_volunteers[0].locked = true;
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "pending" });
+
+    expect(res.status).toBe(409);
+    expect(tables.course_volunteers[0].status).toBe("rejected");
+  });
+
   // The notification fan-out is fire-and-forget (not awaited before the
   // route responds), so these flush a macrotask after the request resolves
   // to let it land before asserting on the fake table.
@@ -432,6 +444,18 @@ describe("PATCH /api/course-volunteers/:id/lock", () => {
   });
 
   test("locks an approved volunteer", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.locked).toBe(true);
+    expect(tables.course_volunteers[0].locked).toBe(true);
+  });
+
+  test("locks a rejected volunteer, closing off remove-and-revolunteer", async () => {
+    tables.course_volunteers[0].status = "rejected";
+
     const res = await request(buildApp())
       .patch("/api/course-volunteers/1/lock")
       .send({ locked: true });
@@ -823,6 +847,34 @@ describe("course-volunteers audit log", () => {
 
     expect(res.status).toBe(204);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("a locked rejected application can't be withdrawn — that's the reapply block", async () => {
+    // The abuse the lock exists for: remove the rejected row, volunteer
+    // again, get rejected, repeat. With the row locked the DELETE is
+    // refused, so the unique (user, course) constraint keeps blocking a
+    // fresh application for as long as the lock stands.
+    tables.course_volunteers = [
+      {
+        id: "v1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "rejected",
+        mark: 60,
+        locked: true,
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "This application is locked and can't be withdrawn.",
+    );
+    expect(tables.course_volunteers).toHaveLength(1);
+    expect(tables.course_volunteers[0].status).toBe("rejected");
   });
 
   test("releasing an approved claimed session doesn't touch the course's slot count", async () => {

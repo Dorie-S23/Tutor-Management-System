@@ -210,16 +210,25 @@ async function renderCourses(applications) {
 
       // A rejected row also gets a recovery path here — the unique
       // (user, course) constraint blocks a fresh application while the old
-      // one still exists.
+      // one still exists. A locked rejection blocks that path: the organiser
+      // made it final, so the card says so instead of offering a remove
+      // button that would only ever fail.
       if (status === "rejected") {
-        const reapplyBtn = document.createElement("button");
-        reapplyBtn.type = "button";
-        reapplyBtn.className = "btn-link";
-        reapplyBtn.textContent = "Remove & volunteer again";
-        reapplyBtn.addEventListener("click", () =>
-          removeVolunteerApplication(course.id),
-        );
-        article.appendChild(reapplyBtn);
+        if (existingApp.locked) {
+          const lockNote = document.createElement("p");
+          lockNote.className = "session-note";
+          lockNote.textContent = "Reapplication locked by an organiser.";
+          article.appendChild(lockNote);
+        } else {
+          const reapplyBtn = document.createElement("button");
+          reapplyBtn.type = "button";
+          reapplyBtn.className = "btn-link";
+          reapplyBtn.textContent = "Remove & volunteer again";
+          reapplyBtn.addEventListener("click", () =>
+            removeVolunteerApplication(course.id),
+          );
+          article.appendChild(reapplyBtn);
+        }
       }
 
       courseListEl.appendChild(article);
@@ -750,15 +759,35 @@ function renderApplications(applications) {
     // A pending or rejected row also gets a button — otherwise it's a dead
     // end: the student can never clear it to try again, since the same
     // (student, course) pair can't have a second row while this one exists.
-    if (status === "pending" || status === "rejected") {
+    // A locked rejection is the exception: the organiser has made it final,
+    // so the server refuses the DELETE and the card says so instead of
+    // offering a Remove button that would only ever fail.
+    if (status === "pending") {
       const withdrawBtn = document.createElement("button");
       withdrawBtn.type = "button";
       withdrawBtn.className = "btn btn-secondary";
-      withdrawBtn.textContent = status === "rejected" ? "Remove" : "Withdraw";
+      withdrawBtn.textContent = "Withdraw";
       withdrawBtn.addEventListener("click", () =>
         withdrawApplication(app, withdrawBtn),
       );
       article.appendChild(withdrawBtn);
+    } else if (status === "rejected") {
+      if (app.locked) {
+        const lockNote = document.createElement("p");
+        lockNote.className = "session-note";
+        lockNote.textContent =
+          "An organiser has locked this rejection — you can't remove it or volunteer for this course again.";
+        article.appendChild(lockNote);
+      } else {
+        const withdrawBtn = document.createElement("button");
+        withdrawBtn.type = "button";
+        withdrawBtn.className = "btn btn-secondary";
+        withdrawBtn.textContent = "Remove";
+        withdrawBtn.addEventListener("click", () =>
+          withdrawApplication(app, withdrawBtn),
+        );
+        article.appendChild(withdrawBtn);
+      }
     }
 
     pendingListEl.appendChild(article);

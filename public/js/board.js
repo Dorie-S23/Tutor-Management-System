@@ -1335,12 +1335,34 @@ async function renderApplicants(course) {
           }),
         );
       }
-    } else {
-      actionsEl.appendChild(
-        makeApplicantActionBtn("Reconsider", "", () =>
-          setApplicationStatus(course, app, "pending", name),
-        ),
-      );
+    } else if (status === "rejected") {
+      // A locked rejection is final: the tutor can't be reconsidered and
+      // can't withdraw the row to re-apply, so it's shown as a stamp rather
+      // than as actions.
+      if (app.locked) {
+        const lockedStamp = document.createElement("span");
+        lockedStamp.className = "stamp";
+        lockedStamp.textContent = "Locked";
+        actionsEl.appendChild(lockedStamp);
+      } else {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Reconsider", "", () =>
+            setApplicationStatus(course, app, "pending", name),
+          ),
+        );
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Lock", "", () => {
+            if (
+              !confirm(
+                `Lock ${name}'s rejection for ${course.code}? They won't be able to withdraw the application and re-apply for this course. This is permanent — it can't be undone afterwards.`,
+              )
+            ) {
+              return;
+            }
+            setApplicationLock(course, app, name, "rejection");
+          }),
+        );
+      }
     }
 
     // Review whatever the applicant uploaded — transcripts are added on the
@@ -1500,7 +1522,7 @@ async function setApplicationStatus(course, app, status, name, reasons = {}) {
   }
 }
 
-async function setApplicationLock(course, app, name) {
+async function setApplicationLock(course, app, name, noun = "assignment") {
   try {
     const res = await fetch(`/api/tutor-applications/${app.id}/lock`, {
       method: "PATCH",
@@ -1509,11 +1531,11 @@ async function setApplicationLock(course, app, name) {
     });
     const body = await res.json();
     if (!res.ok) {
-      showToast(body.error || "Couldn't lock that assignment.");
+      showToast(body.error || "Couldn't lock that application.");
       if (res.status === 409) await fetchCourses();
       return;
     }
-    showToast(`${name}'s assignment to ${course.code} is now locked.`);
+    showToast(`${name}'s ${noun} for ${course.code} is now locked.`);
     await fetchCourses();
   } catch (err) {
     showToast("Network error — couldn't reach the server.");
@@ -1895,11 +1917,33 @@ async function renderVolunteers(course) {
         );
       }
     } else if (!isOpenSession) {
-      actionsEl.appendChild(
-        makeApplicantActionBtn("Reconsider", "", () =>
-          setVolunteerStatus(course, vol, "pending", name),
-        ),
-      );
+      // A locked rejection is final: the student can't be reconsidered and
+      // can't withdraw the row to volunteer again, so it's shown as a stamp
+      // rather than as actions.
+      if (vol.locked) {
+        const lockedStamp = document.createElement("span");
+        lockedStamp.className = "stamp";
+        lockedStamp.textContent = "Locked";
+        actionsEl.appendChild(lockedStamp);
+      } else {
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Reconsider", "", () =>
+            setVolunteerStatus(course, vol, "pending", name),
+          ),
+        );
+        actionsEl.appendChild(
+          makeApplicantActionBtn("Lock", "", () => {
+            if (
+              !confirm(
+                `Lock ${name}'s rejection for ${course.code}? They won't be able to remove the application and volunteer again for this course. This is permanent — it can't be undone afterwards.`,
+              )
+            ) {
+              return;
+            }
+            setVolunteerLock(course, vol, name, "rejection");
+          }),
+        );
+      }
     }
 
     // Review whatever the volunteer uploaded — transcripts are added on the
@@ -1964,7 +2008,7 @@ async function setVolunteerStatus(course, vol, status, name, reasons = {}) {
   }
 }
 
-async function setVolunteerLock(course, vol, name) {
+async function setVolunteerLock(course, vol, name, noun = "approval") {
   try {
     const res = await fetch(`/api/course-volunteers/${vol.id}/lock`, {
       method: "PATCH",
@@ -1976,7 +2020,7 @@ async function setVolunteerLock(course, vol, name) {
       showToast(body.error || "Couldn't lock that volunteer.");
       return;
     }
-    showToast(`${name}'s approval for ${course.code} is now locked.`);
+    showToast(`${name}'s ${noun} for ${course.code} is now locked.`);
     renderVolunteers(course);
   } catch (err) {
     showToast("Network error — couldn't reach the server.");

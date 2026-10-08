@@ -313,6 +313,19 @@ function renderApplicationsList() {
     `;
 
     if (status === "rejected") {
+      // A locked rejection can't be cleared — the server refuses the
+      // DELETE, so the module stays applied-for instead of offering a
+      // remove button that would only ever fail.
+      if (app.locked) {
+        const lockNote = document.createElement("p");
+        lockNote.className = "hint";
+        lockNote.textContent =
+          "An organiser has locked this rejection — it can't be removed and this module can't be re-applied for.";
+        li.appendChild(lockNote);
+        applicationsItemsEl.appendChild(li);
+        return;
+      }
+
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "btn-link";

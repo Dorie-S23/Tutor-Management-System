@@ -121,6 +121,9 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `course_id` (integer, required, FK → `courses.id`)
 - `mark` (integer)
 - `status` (text, required, default `pending`) — `pending`, `approved` or `rejected`
+- `locked` (bool) — set once an organiser's decision is final: it locks an approval or a rejection. A locked row can't be reconsidered or withdrawn, so a locked rejection stops the student removing it to volunteer for the course again
+- `rejection_reason` (text) — organiser's note written when the application is rejected
+- `approval_reason` (text) — organiser's note written when the application is approved
 - `diagonal` (text) — the diagonal (`A`–`Z`) an approved volunteer is placed in, when the course is split into diagonals; null = unassigned
 - `created_at` (timestamptz, required, default now)
 
@@ -136,7 +139,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `Tutor_name` (text) — denormalised copy of the tutor's name
 - `tutor_mark` (integer) — the mark the tutor scored for the course
 - `Availability` (bool) — whether the tutor is free at the course's scheduled times
-- `locked` (bool, required)
+- `locked` (bool, required) — set once an organiser's decision is final: it locks an approval or a rejection. A locked row can't be reconsidered or withdrawn, so a locked rejection stops the tutor removing it to re-apply
 - `rejection_reason` (text) — organiser's note written when the application is rejected
 - `approval_reason` (text) — organiser's note written when the application is approved
 - `diagonal` (text) — the diagonal (`A`–`Z`) an approved tutor is placed in, when the course is split into diagonals; null = unassigned

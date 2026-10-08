@@ -283,7 +283,7 @@ router.patch("/:id", async (req, res) => {
 
   if (existing.locked) {
     return res.status(409).json({
-      error: "This approval is locked and can't be reconsidered.",
+      error: "This application is locked and can't be reconsidered.",
     });
   }
 
@@ -386,8 +386,11 @@ router.patch("/:id", async (req, res) => {
 });
 
 // PATCH /api/course-volunteers/:id/lock — permanently lock an approved
-// volunteer. This is intentionally one-way: there is no unlock. Once
-// locked, PATCH /:id refuses any status change to this record, forever.
+// volunteer or a rejected application. This is intentionally one-way:
+// there is no unlock. Once locked, PATCH /:id refuses any status change to
+// this record, and DELETE / refuses to withdraw it — a locked rejection
+// therefore can't be cleared, so the student can never volunteer for the
+// course again.
 router.patch("/:id/lock", async (req, res) => {
   const { locked } = req.body ?? {};
   if (locked !== true) {
@@ -407,15 +410,18 @@ router.patch("/:id/lock", async (req, res) => {
   }
 
   if (existing.locked) {
-    return res
-      .status(409)
-      .json({ error: "This approval is already locked and cannot be changed" });
+    return res.status(409).json({
+      error: "This application is already locked and cannot be changed",
+    });
   }
 
-  if (existing.status !== "approved") {
-    return res
-      .status(409)
-      .json({ error: "Only an approved volunteer can be locked" });
+  // A pending application still has an organiser's decision ahead of it —
+  // locking is for recording a decision as final, not for freezing the
+  // queue.
+  if (existing.status !== "approved" && existing.status !== "rejected") {
+    return res.status(409).json({
+      error: "Only an approved or rejected application can be locked",
+    });
   }
 
   const { data, error } = await supabase
@@ -446,7 +452,9 @@ router.patch("/:id/lock", async (req, res) => {
 // the course's assigned-tutor count is freed up too — same as withdrawing
 // an approved tutor application does. A claimed session never bumped that
 // count in the first place (see PATCH /:id above), so withdrawing one
-// doesn't touch it either.
+// doesn't touch it either. A locked record can't be withdrawn at all — an
+// organiser's lock (approval or rejection) is final, and for a rejection
+// that's exactly what stops the student clearing it to volunteer again.
 router.delete("/", async (req, res) => {
   const { userId, courseId } = req.query;
   if (!userId || !courseId) {
@@ -455,13 +463,19 @@ router.delete("/", async (req, res) => {
 
   const { data: existing } = await supabase
     .from("course_volunteers")
-    .select("id, status, session_date")
+    .select("id, status, session_date, locked")
     .eq("user_id", userId)
     .eq("course_id", courseId)
     .maybeSingle();
 
   if (!existing) {
     return res.status(204).end();
+  }
+
+  if (existing.locked) {
+    return res.status(409).json({
+      error: "This application is locked and can't be withdrawn.",
+    });
   }
 
   if (existing.status === "approved" && !existing.session_date) {

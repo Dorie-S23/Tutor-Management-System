@@ -235,6 +235,30 @@ describe("studentview.js — My Applications", () => {
     expect(deleteCall.url).toContain("courseId=3");
   });
 
+  test("a locked rejection shows a note instead of a Remove button", async () => {
+    const { window, calls } = loadPage({
+      applications: [
+        {
+          id: "a3",
+          course_id: 3,
+          mark: 40,
+          status: "rejected",
+          locked: true,
+          rejection_reason: "Mark below the course minimum",
+          courses: { course_code: "COMS3000", course_name: "Advanced Topics" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#pendingList article");
+    expect(card.querySelector("button")).toBeNull();
+    expect(card.textContent).toContain(
+      "An organiser has locked this rejection",
+    );
+    expect(calls.find((c) => c.opts?.method === "DELETE")).toBeUndefined();
+  });
+
   test("clicking Withdraw calls DELETE with the signed-in student's id and the right course", async () => {
     const { window, calls } = loadPage({
       applications: [
@@ -427,6 +451,29 @@ describe("studentview.js — Modules You Can Tutor reflects existing application
     expect(card.querySelector(".volunteer-btn")).toBeNull();
     expect(card.querySelector(".status-pill").textContent).toBe("Rejected");
     expect(card.textContent).toContain("Mark below the course minimum");
+  });
+
+  test("a locked rejection blocks the course card's Remove & volunteer again path", async () => {
+    const { window, calls } = loadPage({
+      courses: [openCourse],
+      applications: [
+        {
+          id: "a1",
+          course_id: 1,
+          mark: 40,
+          status: "rejected",
+          locked: true,
+          rejection_reason: "Mark below the course minimum",
+          courses: { course_code: "COMS1000", course_name: "Intro" },
+        },
+      ],
+    });
+    await wait();
+
+    const card = window.document.querySelector("#courseList article");
+    expect(card.querySelector("button")).toBeNull();
+    expect(card.textContent).toContain("Reapplication locked by an organiser.");
+    expect(calls.find((c) => c.opts?.method === "DELETE")).toBeUndefined();
   });
 });
 

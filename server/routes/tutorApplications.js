@@ -901,7 +901,7 @@ router.patch("/:id", async (req, res) => {
 
   if (application.locked) {
     return res.status(409).json({
-      error: "This assignment is locked and can't be reconsidered.",
+      error: "This application is locked and can't be reconsidered.",
     });
   }
 
@@ -1146,8 +1146,11 @@ router.patch("/:id", async (req, res) => {
 });
 
 // PATCH /api/tutor-applications/:id/lock — permanently lock an approved
-// assignment. This is intentionally one-way: there is no unlock. Once
-// locked, PATCH /:id refuses any status change to this record, forever.
+// assignment or a rejected application. This is intentionally one-way:
+// there is no unlock. Once locked, PATCH /:id refuses any status change to
+// this record, and DELETE /:id refuses to withdraw it — a locked rejection
+// therefore can't be cleared, so the tutor can never re-apply for the
+// course.
 router.patch("/:id/lock", async (req, res) => {
   const { locked } = req.body ?? {};
   if (locked !== true) {
@@ -1168,13 +1171,16 @@ router.patch("/:id/lock", async (req, res) => {
 
   if (application.locked) {
     return res.status(409).json({
-      error: "This assignment is already locked and cannot be changed",
+      error: "This application is already locked and cannot be changed",
     });
   }
 
-  if (application.status !== "approved") {
+  // A pending application still has an organiser's decision ahead of it —
+  // locking is for recording a decision as final, not for freezing the
+  // queue.
+  if (application.status !== "approved" && application.status !== "rejected") {
     return res.status(409).json({
-      error: "Only an approved assignment can be locked",
+      error: "Only an approved or rejected application can be locked",
     });
   }
 
@@ -1182,10 +1188,11 @@ router.patch("/:id/lock", async (req, res) => {
     .from("tutor_subject_preference")
     .update({ locked: true })
     .eq("id", req.params.id)
-    // Atomic guards mirroring the checks above: only an approved,
-    // still-unlocked row is locked — 0 matches is a 409, not a silent no-op.
+    // Atomic guards mirroring the checks above: only an approved or
+    // rejected, still-unlocked row is locked — 0 matches is a 409, not a
+    // silent no-op.
     .eq("locked", false)
-    .eq("status", "approved")
+    .in("status", ["approved", "rejected"])
     .select(
       `
         *,
@@ -1217,15 +1224,24 @@ router.patch("/:id/lock", async (req, res) => {
 
 // DELETE /api/tutor-applications/:id — a tutor withdraws their own application.
 // Keeps the course's no_of_tutors_assigned counter in sync if it was approved.
+// A locked record can't be withdrawn at all — an organiser's lock (approval
+// or rejection) is final, and for a rejection that's exactly what stops the
+// tutor clearing it to re-apply.
 router.delete("/:id", async (req, res) => {
   const { data: application, error: applicationError } = await supabase
     .from("tutor_subject_preference")
-    .select("id, status, course_id")
+    .select("id, status, course_id, locked")
     .eq("id", req.params.id)
     .single();
 
   if (applicationError || !application) {
     return res.status(404).json({ error: "Application not found" });
+  }
+
+  if (application.locked) {
+    return res.status(409).json({
+      error: "This application is locked and can't be withdrawn.",
+    });
   }
 
   if (application.status === "approved") {
