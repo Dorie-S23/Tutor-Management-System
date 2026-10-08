@@ -250,9 +250,10 @@ async function renderClaim() {
     totalHours += Number(entry.hours);
 
     const tr = document.createElement("tr");
+    // The database stores HH:MM:SS; the paper form shows HH:MM.
     const times =
       entry.startTime && entry.endTime
-        ? `${entry.startTime}-${entry.endTime}`
+        ? `${entry.startTime.slice(0, 5)}-${entry.endTime.slice(0, 5)}`
         : "";
     const description = [entry.taskType, entry.subject]
       .filter(Boolean)

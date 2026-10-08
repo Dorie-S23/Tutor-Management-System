@@ -176,6 +176,31 @@
     return String(id).replace(/["\\]/g, "\\$&");
   }
 
+  const CALENDAR_ICON =
+    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="3" y="4.5" width="18" height="16" rx="2"></rect>' +
+    '<path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path></svg>';
+  const CLOCK_ICON =
+    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>';
+
+  // The calendar/clock button beside a typed field, or null where the
+  // browser can't open its picker on demand (typing is then the only way).
+  function buildPickerButton(kind) {
+    if (typeof proto.showPicker !== "function") return null;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "date-mask-picker";
+    // Typing is the keyboard route, so the button stays out of tab order
+    // rather than doubling every date field's tab stops.
+    btn.tabIndex = -1;
+    const noun = kind === "time" ? "time" : kind === "month" ? "month" : "date";
+    btn.setAttribute("aria-label", `Choose ${noun}`);
+    btn.title = `Choose ${noun}`;
+    btn.innerHTML = kind === "time" ? CLOCK_ICON : CALENDAR_ICON;
+    return btn;
+  }
+
   function enhance(input) {
     if (input.dataset.dateMask === "on") return;
     input.dataset.dateMask = "on";
@@ -189,7 +214,7 @@
     const monthOnly = kind === "month";
     const timeOnly = kind === "time";
     const maxDigits = timeOnly ? 4 : monthOnly ? 6 : 8;
-    const state = { prevText: "", prevDigits: "" };
+    const state = { prevText: "", prevDigits: "", dispatching: false };
 
     const visible = document.createElement("input");
     visible.type = "text";
@@ -211,7 +236,18 @@
 
     // The typed field sits directly before the native input, so wrapped
     // labels (the first labelable descendant) and tab order both find it.
-    input.insertAdjacentElement("beforebegin", visible);
+    // Both go in a wrapper with a picker button, which opens the browser's
+    // own calendar/clock on the native input — a picked value flows back
+    // into the typed field below, so either way of entering it works.
+    const wrap = document.createElement("span");
+    wrap.className = "date-mask-field";
+    input.insertAdjacentElement("beforebegin", wrap);
+    wrap.append(visible, input);
+    const pickerBtn = buildPickerButton(kind);
+    if (pickerBtn) {
+      pickerBtn.hidden = input.readOnly || input.disabled;
+      wrap.appendChild(pickerBtn);
+    }
     input.classList.add("date-mask-native");
     input.tabIndex = -1;
     input.setAttribute("aria-hidden", "true");
@@ -324,8 +360,13 @@
       setText(parsed.display);
       if (fromUser && valueDesc.get.call(input) !== parsed.iso) {
         valueDesc.set.call(input, parsed.iso);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
+        state.dispatching = true;
+        try {
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        } finally {
+          state.dispatching = false;
+        }
       }
       refreshValidation(parsed);
     }
@@ -415,6 +456,31 @@
       visible.focus({ preventScroll: true });
     });
 
+    if (pickerBtn) {
+      pickerBtn.addEventListener("click", () => {
+        if (visible.readOnly || visible.disabled) return;
+        try {
+          input.showPicker();
+        } catch {
+          // Some browsers refuse (e.g. no user activation) — typing still
+          // works, so just put the caret there instead.
+          visible.focus();
+        }
+      });
+    }
+
+    // A value chosen in the browser's picker lands on the native input
+    // directly (an event this file didn't dispatch itself) — mirror it
+    // into the typed field so the checks above run on it too. The page's
+    // own listeners already received that same native event.
+    function syncFromPicker(event) {
+      if (state.dispatching) return;
+      loadFromNative();
+      visible.focus({ preventScroll: true });
+    }
+    input.addEventListener("input", syncFromPicker);
+    input.addEventListener("change", syncFromPicker);
+
     // form.reset() can't fire value setters, so re-read the native input
     // once the browser's own reset has finished.
     const form = input.closest("form");
@@ -447,6 +513,7 @@
       }
       visible.readOnly = input.readOnly;
       visible.disabled = input.disabled;
+      if (pickerBtn) pickerBtn.hidden = input.readOnly || input.disabled;
       observer.observe(input, { attributes: true, attributeFilter: observed });
       refreshValidation();
     });

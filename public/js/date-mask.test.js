@@ -31,6 +31,26 @@ function type(window, field, raw) {
   field.dispatchEvent(new window.Event("input", { bubbles: true }));
 }
 
+// jsdom has no native pickers; browsers that do expose showPicker(), which
+// is what makes date-mask add its calendar/clock button. Stub it in before
+// the script runs and record which input it was called on.
+function withPickerDom(bodyHtml, fn) {
+  const dom = new JSDOM(
+    `<body>${bodyHtml}\n<script>${src}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "date-mask.js")).href}</script></body>`,
+    {
+      url: "http://localhost/html/calendar.html",
+      runScripts: "dangerously",
+      beforeParse(window) {
+        window.__pickerOpenedOn = [];
+        window.HTMLInputElement.prototype.showPicker = function showPicker() {
+          window.__pickerOpenedOn.push(this.id);
+        };
+      },
+    },
+  );
+  return fn(dom.window);
+}
+
 function tick(window) {
   return new Promise((resolve) => window.setTimeout(resolve, 0));
 }
@@ -508,6 +528,104 @@ describe("date-mask", () => {
       type(window, field, "14:30");
       expect(field.value).toBe("14:30");
       expect(doc.getElementById("startTime").value).toBe("14:30");
+    });
+  });
+
+  describe("calendar and clock picker", () => {
+    test("adds no picker button where the browser can't open one", () => {
+      withDom('<input type="date" id="date" />', (window) => {
+        expect(window.document.querySelector(".date-mask-picker")).toBeNull();
+        // Typing still works on its own.
+        expect(typed(window.document, "date")).not.toBeNull();
+      });
+    });
+
+    test("puts a calendar button beside a date field and a clock beside a time field", () => {
+      withPickerDom(
+        '<input type="date" id="date" /><input type="time" id="startTime" />',
+        (window) => {
+          const doc = window.document;
+          const buttons = doc.querySelectorAll(".date-mask-picker");
+          expect(buttons).toHaveLength(2);
+          expect(buttons[0].getAttribute("aria-label")).toBe("Choose date");
+          expect(buttons[1].getAttribute("aria-label")).toBe("Choose time");
+          // Typed field, native input and button share one wrapper.
+          const wrap = doc.getElementById("date").parentElement;
+          expect(wrap.classList.contains("date-mask-field")).toBe(true);
+          expect(wrap.contains(typed(doc, "date"))).toBe(true);
+          expect(wrap.contains(buttons[0])).toBe(true);
+        },
+      );
+    });
+
+    test("opens the native picker on the hidden input", () => {
+      withPickerDom('<input type="date" id="date" />', (window) => {
+        window.document.querySelector(".date-mask-picker").click();
+        expect(window.__pickerOpenedOn).toEqual(["date"]);
+      });
+    });
+
+    test("a picked date fills the typed field and reaches page listeners once", () => {
+      withPickerDom('<input type="date" id="date" />', (window) => {
+        const doc = window.document;
+        const native = doc.getElementById("date");
+        let changes = 0;
+        native.addEventListener("change", () => {
+          changes += 1;
+        });
+
+        // What the browser does when a day is picked: write the value
+        // straight onto the native input and fire input + change.
+        Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          "value",
+        ).set.call(native, "2026-09-17");
+        native.dispatchEvent(new window.Event("input", { bubbles: true }));
+        native.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+        expect(typed(doc, "date").value).toBe("17/09/2026");
+        expect(native.value).toBe("2026-09-17");
+        expect(changes).toBe(1);
+      });
+    });
+
+    test("a picked value still goes through the min/max checks", () => {
+      withPickerDom(
+        '<input type="date" id="date" min="2026-09-01" />',
+        (window) => {
+          const doc = window.document;
+          const native = doc.getElementById("date");
+          Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            "value",
+          ).set.call(native, "2026-08-20");
+          native.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+          const field = typed(doc, "date");
+          expect(field.validationMessage).toBe(
+            "The date can't be before 01/09/2026.",
+          );
+          expect(field.getAttribute("aria-invalid")).toBe("true");
+        },
+      );
+    });
+
+    test("hides the button on read-only fields and when they become read-only", async () => {
+      await withPickerDom(
+        '<input type="date" id="a" readonly /><input type="time" id="b" />',
+        async (window) => {
+          const doc = window.document;
+          const [a, b] = doc.querySelectorAll(".date-mask-picker");
+          expect(a.hidden).toBe(true);
+          expect(b.hidden).toBe(false);
+
+          doc.getElementById("b").readOnly = true;
+          await tick(window);
+          expect(b.hidden).toBe(true);
+          b.click();
+          expect(window.__pickerOpenedOn).toEqual([]);
+        },
+      );
     });
   });
 });
