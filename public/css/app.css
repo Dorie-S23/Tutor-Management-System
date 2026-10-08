@@ -1794,6 +1794,15 @@ td {
   color: var(--ink);
 }
 
+/* Lets the 7-day grid scroll sideways instead of squeezing unreadably
+   thin on a narrow phone — same fallback .table-wrap already uses for
+   tables. Harmless above the breakpoint below: nothing overflows until
+   the grid's own min-width kicks in, so this has no effect at normal
+   widths. */
+.calendar-grid-wrap {
+  overflow-x: auto;
+}
+
 .calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2318,6 +2327,16 @@ td {
 
   .calendar-cover-tag {
     display: none;
+  }
+}
+
+/* Below this even the shrunk-down cells above get too cramped to read —
+   hold the grid at a sane width and let .calendar-grid-wrap scroll
+   sideways instead. */
+@media (max-width: 480px) {
+  .calendar-weekdays,
+  .calendar-grid {
+    min-width: 480px;
   }
 }
 
@@ -5283,6 +5302,11 @@ body[data-theme="organiser"] textarea:focus {
   border-radius: var(--radius-card);
   padding: 14px 14px 10px;
   box-shadow: var(--shadow-card);
+  /* Lets the 7-day grid scroll sideways instead of squeezing unreadably
+     thin on a narrow phone — same fallback .table-wrap already uses for
+     tables. Harmless above the breakpoint below: nothing overflows until
+     the grid's own min-width kicks in. */
+  overflow-x: auto;
 }
 
 .timetable-grid {
@@ -5715,5 +5739,14 @@ body[data-theme="organiser"] textarea:focus {
 
   .workload-row {
     grid-template-columns: 110px minmax(0, 1fr) auto;
+  }
+}
+
+/* Below this the timetable's 7 day columns get too cramped to read —
+   hold the grid at a sane width and let .timetable-shell scroll
+   sideways instead. */
+@media (max-width: 480px) {
+  .timetable-grid {
+    min-width: 480px;
   }
 }
