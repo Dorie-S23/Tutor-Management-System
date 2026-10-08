@@ -418,9 +418,11 @@ html[data-theme="dark"] {
   --paper: #121815;
   --panel: #1c2621;
   --ink: #f4f9f5;
-  --ink-soft: #ccd7cf;
-  --ink-faint: #a6b5ab;
+  --ink-soft: #dbe5de;
+  --ink-muted: #bccabf;
+  --ink-faint: #b4c3b9;
   --line: #3b4a42;
+  --line-strong: #4f6157;
   --line-soft: #2b3630;
   --navy: #9ac7d3;
   --navy-bg: #20363a;
@@ -433,6 +435,9 @@ html[data-theme="dark"] {
   --red: #f1a79a;
   --red-bg: #432822;
   --red-line: #8a4c40;
+  /* Status + brand colours used as TEXT need lighter shades on dark */
+  --error: #f87171;
+  --success: #4ade80;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.14);
 }
 
@@ -470,4 +475,39 @@ html[data-theme="dark"] {
     top: 12px;
     right: 12px;
   }
+}
+
+/* ------------------------------------------------------------
+   Dark-mode legibility
+   --primary (blue 600) is a fill colour — white button text sits on
+   it fine — but as TEXT on the dark card it is only ~3.3:1. Links and
+   the eyebrow use the existing light --primary-soft instead.
+   ------------------------------------------------------------ */
+
+html[data-theme="dark"] a,
+html[data-theme="dark"] .eyebrow {
+  color: var(--primary-soft);
+}
+
+html[data-theme="dark"] .auth-page {
+  background-image: radial-gradient(
+    circle at 100% 0,
+    rgba(96, 165, 250, 0.12),
+    rgba(0, 0, 0, 0) 34%
+  );
+}
+
+html[data-theme="dark"] .form-group input,
+html[data-theme="dark"] .form-group select {
+  border-color: var(--line-strong);
+}
+
+html[data-theme="dark"] .form-group input::placeholder {
+  color: var(--ink-faint);
+}
+
+html[data-theme="dark"] .form-group input:focus,
+html[data-theme="dark"] .form-group select:focus {
+  border-color: var(--primary-soft);
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.22);
 }

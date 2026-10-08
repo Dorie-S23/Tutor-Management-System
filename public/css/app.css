@@ -5706,3 +5706,303 @@ body[data-theme="organiser"] textarea:focus {
     grid-template-columns: 110px minmax(0, 1fr) auto;
   }
 }
+
+/* ============================================================
+   Dark-mode legibility pass (all roles).
+
+   The dark theme above flips surfaces and neutral text, but many
+   components still carried LIGHT-theme colours: accent blues / teals /
+   violets used as text (≈2–4:1 on the dark page), saturated 600–700
+   reds, greens and ambers, and opaque pastel card backgrounds that sit
+   under near-white --ink text (≈1.1:1). Volunteer pages got their own
+   fix further up; this block covers tutor, organiser and shared
+   components. It lives at the end of the sheet so it wins ties.
+   ============================================================ */
+
+/* Accent text: a lightened version of whichever role accent is active
+   (blue / tutor teal / organiser violet). --blue itself stays as-is
+   because it is also used for fills. */
+html[data-theme="dark"] body {
+  --accent-text: color-mix(in srgb, var(--blue) 45%, #fff);
+}
+
+/* 1. Accent-as-text (var(--blue) / var(--blue-dark) / var(--navy)) */
+/* Plain links only: :where() keeps this at the same specificity as the
+   base `a` rule, so button-styled anchors and any class-coloured link
+   (white-on-blue .btn-primary, etc.) are left alone. */
+:where(html[data-theme="dark"]) a {
+  color: var(--accent-text);
+}
+
+html[data-theme="dark"]
+  :is(
+    .tab-nav a.active,
+    .tab-nav a[aria-current="page"],
+    .role-badge,
+    .notif-bell-btn,
+    .tour-trigger,
+    .nav-icon-btn,
+    .theme-toggle,
+    .notif-mark-all-btn,
+    .session-code,
+    .btn-link,
+    .timetable-import-icon,
+    .file-drop-icon,
+    .side-card__icon,
+    .dash-course__code,
+    .stat-value__frac,
+    .dash-notif-icon--info,
+    .session-cover-badge,
+    .status-pill.submitted,
+    .status-pill.logged,
+    .course-chip.is-selected .course-chip__code,
+    .session-chip.is-open:not(.is-selected) .session-chip__note,
+    .info-bar,
+    .calendar-class-pill,
+    .day-view-event--class,
+    .day-view-extra-chip,
+    .btn-soft,
+    .detail-code,
+    .avatar,
+    .universal-search-results a:hover,
+    .tutor-rate-badge,
+    .filter-chip:not(.is-active):hover,
+    .cost-row--total
+  ) {
+  color: var(--accent-text);
+}
+
+html[data-theme="dark"] .tab-nav a.active,
+html[data-theme="dark"] .tab-nav a[aria-current="page"] {
+  border-bottom-color: var(--accent-text);
+}
+
+html[data-theme="dark"] .course-card__code {
+  color: color-mix(in srgb, var(--accent, var(--blue)) 45%, #fff);
+}
+
+html[data-theme="dark"] .timesheet-hours {
+  color: var(--ink);
+}
+
+/* 2. Fixed-colour icon / code accents */
+html[data-theme="dark"]
+  :is(.chip-icon--blue, .module-card--blue .module-card__icon, .module-card--blue .module-card__code) {
+  color: #93c5fd;
+}
+
+html[data-theme="dark"]
+  :is(.chip-icon--violet, .module-card--violet .module-card__icon, .module-card--violet .module-card__code, .activity-col--apps .activity-col__title, .verify-card--violet .verify-card__icon) {
+  color: #c4b5fd;
+}
+
+html[data-theme="dark"]
+  :is(.chip-icon--teal, .dash-notif-icon--check, .submitted-chip svg, .verify-card--teal .verify-card__icon, .side-card--mint .side-card__icon) {
+  color: #5eead4;
+}
+
+html[data-theme="dark"]
+  :is(.chip-icon--amber, .module-card--amber .module-card__icon, .module-card--amber .module-card__code) {
+  color: #fbbf24;
+}
+
+html[data-theme="dark"]
+  :is(.module-card--rose .module-card__icon, .module-card--rose .module-card__code) {
+  color: #fb7185;
+}
+
+html[data-theme="dark"] .side-card--violet .side-card__icon {
+  color: #a5b4fc;
+}
+
+html[data-theme="dark"] .side-card--mint .side-card__label,
+html[data-theme="dark"] .dash-panel--capacity .dash-panel__title,
+html[data-theme="dark"] .capacity-caption,
+html[data-theme="dark"] .capacity-max {
+  color: #6ee7b7;
+}
+
+html[data-theme="dark"] :is(.dash-panel--notif, .dash-panel--courses) .dash-panel__title {
+  color: #a5b4fc;
+}
+
+/* 3. Pastel cards: opaque light fills -> dark tints with light text */
+html[data-theme="dark"] .stat-card--blue {
+  background: rgba(96, 165, 250, 0.14);
+  border-color: rgba(96, 165, 250, 0.38);
+  color: #93c5fd;
+}
+
+html[data-theme="dark"] .stat-card--indigo,
+html[data-theme="dark"] .stat-card--periwinkle {
+  background: rgba(129, 140, 248, 0.15);
+  border-color: rgba(129, 140, 248, 0.38);
+  color: #a5b4fc;
+}
+
+html[data-theme="dark"] .stat-card--teal,
+html[data-theme="dark"] .stat-card--mint {
+  background: rgba(45, 212, 191, 0.13);
+  border-color: rgba(45, 212, 191, 0.36);
+  color: #5eead4;
+}
+
+html[data-theme="dark"] .stat-card--violet,
+html[data-theme="dark"] .stat-card--lavender {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.38);
+  color: #c4b5fd;
+}
+
+html[data-theme="dark"] .side-card--blue {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+html[data-theme="dark"] .side-card--violet {
+  background: rgba(129, 140, 248, 0.11);
+  border-color: rgba(129, 140, 248, 0.3);
+}
+
+html[data-theme="dark"] .side-card--mint {
+  background: rgba(45, 212, 191, 0.1);
+  border-color: rgba(45, 212, 191, 0.3);
+}
+
+html[data-theme="dark"] :is(.dash-panel--notif, .dash-panel--courses) {
+  background: rgba(129, 140, 248, 0.1);
+  border-color: rgba(129, 140, 248, 0.28);
+}
+
+html[data-theme="dark"] .dash-panel--capacity {
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+html[data-theme="dark"] .activity-col--apps {
+  background: rgba(167, 139, 250, 0.1);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+html[data-theme="dark"] .activity-col--excusals {
+  background: rgba(251, 191, 36, 0.09);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+html[data-theme="dark"] :is(.activity-col--volunteers, .assignment-card.filled) {
+  background: rgba(74, 222, 128, 0.09);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+html[data-theme="dark"] .verify-card--violet {
+  background: rgba(167, 139, 250, 0.1);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+html[data-theme="dark"] .verify-card--teal {
+  background: rgba(45, 212, 191, 0.1);
+  border-color: rgba(45, 212, 191, 0.3);
+}
+
+html[data-theme="dark"] .profile-avatar,
+html[data-theme="dark"] .profile-role {
+  background: color-mix(in srgb, rgb(45, 212, 191) 16%, var(--surface));
+  color: #5eead4;
+}
+
+/* 4. Status colours: 600–700 shades -> 300–400 shades */
+html[data-theme="dark"]
+  :is(
+    .calendar-class-pill--cancelled,
+    .day-view-event--cancelled,
+    .ts-row__dispute,
+    .btn-link--danger,
+    .dash-notif-icon--alert,
+    .stat-value--attention,
+    .course-card__status--short,
+    .budget-row__value--over,
+    .stat-sublabel--danger,
+    .stamp.blocked
+  ) {
+  color: #f87171;
+}
+
+html[data-theme="dark"] .timetable-session.clash {
+  color: #f87171 !important;
+}
+
+html[data-theme="dark"] .stamp.blocked {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+html[data-theme="dark"]
+  :is(
+    .claimed-pill,
+    .badge--eligible,
+    .excused-note,
+    .excusal-cover--found,
+    .transcript-status--ok,
+    .slots-done,
+    .activity-col--volunteers .activity-col__title,
+    .stamp.ok,
+    .attention-list li.is-clear svg,
+    .course-card__status--full
+  ) {
+  color: #4ade80;
+}
+
+html[data-theme="dark"] :is(.claimed-pill, .badge--eligible, .stamp.ok) {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+html[data-theme="dark"]
+  :is(
+    .swap-pending,
+    .excusal-cover--pending,
+    .slots-open,
+    .activity-col--excusals .activity-col__title,
+    .stamp.warn,
+    .btn-small.override,
+    .timetable-unscheduled
+  ) {
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] :is(.stamp.warn, .btn-small.override) {
+  background: rgba(245, 158, 11, 0.13);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+html[data-theme="dark"] .field-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(251, 191, 36, 0.32);
+  color: #fcd34d;
+}
+
+html[data-theme="dark"] .legend-swatch.clash {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+/* 5. Hover rows and the deep-link flash were near-white fills */
+html[data-theme="dark"] .data-table tbody tr:hover,
+html[data-theme="dark"] .tutors-table tbody tr:hover,
+html[data-theme="dark"] .report-course summary:hover {
+  background: rgba(148, 163, 184, 0.09);
+}
+
+@keyframes search-flash-dark {
+  0% {
+    background-color: rgba(251, 191, 36, 0.28);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+html[data-theme="dark"] .search-highlight {
+  animation-name: search-flash-dark;
+  border-color: rgba(251, 191, 36, 0.5) !important;
+}
