@@ -7,6 +7,9 @@
 
 const MAX_TIMETABLE_BYTES = 5 * 1024 * 1024;
 
+const NOT_UPLOADED_MESSAGE =
+  "You haven't uploaded a timetable yet — upload your class timetable PDF to keep it on your profile.";
+
 function megabytesOf(bytes) {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
@@ -48,7 +51,7 @@ export async function initProfileTimetable(userId) {
       removeBtn.hidden = false;
       uploadBtn.textContent = "Replace timetable";
     } else {
-      statusEl.textContent = "No timetable saved yet.";
+      statusEl.textContent = NOT_UPLOADED_MESSAGE;
       statusEl.classList.remove("transcript-status--ok");
       viewBtn.hidden = true;
       removeBtn.hidden = true;

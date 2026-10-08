@@ -9,11 +9,16 @@ const router = express.Router();
 // have no student number at all (table: null) — their profile is just the
 // `users` row (name, cell phone). Educators have no profile page, hence no
 // entry, and get a 403 from both handlers below.
+// Tutors also carry an academic_level (set from their application or by an
+// organiser), which fixes their pay rate. It's read-only here: GET exposes
+// it as yearOfStudy so the timesheet claim can show — and lock — it, but
+// PUT never writes it.
 const ROLE_PROFILES = {
   tutor: {
     table: "tutors",
     label: "tutor",
     studentNumberColumn: "student_number",
+    yearOfStudyColumn: "academic_level",
   },
   student: {
     table: "students",
@@ -63,13 +68,24 @@ router.get("/:userId", async (req, res) => {
     return res.json(shapeProfile(user, ""));
   }
 
+  const columns = [
+    roleProfile.studentNumberColumn,
+    roleProfile.yearOfStudyColumn,
+  ].filter(Boolean);
   const { data: roleRow } = await supabase
     .from(roleProfile.table)
-    .select(roleProfile.studentNumberColumn)
+    .select(columns.join(", "))
     .eq("id", user.id)
     .single();
 
-  res.json(shapeProfile(user, roleRow?.[roleProfile.studentNumberColumn]));
+  const profile = shapeProfile(
+    user,
+    roleRow?.[roleProfile.studentNumberColumn],
+  );
+  if (roleProfile.yearOfStudyColumn) {
+    profile.yearOfStudy = roleRow?.[roleProfile.yearOfStudyColumn] || "";
+  }
+  res.json(profile);
 });
 
 // South African cell numbers, in the shapes people actually write them:

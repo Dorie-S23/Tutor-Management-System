@@ -1,9 +1,9 @@
 // timesheets.js treats the Profile page as the source of truth for the
 // claim form's identity fields (name, student number, email, cell phone):
 // non-empty Profile values overwrite the locally saved copies, lock the
-// corresponding fields, and feed the rendered claim. Fields the Profile
-// page doesn't hold (year of study, payroll number) stay editable and
-// locally sourced, and a missing/failing profile fetch leaves the old
+// corresponding fields, and feed the rendered claim. Year of study locks
+// the same way from the tutor's academic_level (served as yearOfStudy);
+// payroll number stays editable and locally sourced, and a missing/failing profile fetch leaves the old
 // local-only behaviour untouched. Loads the real storage.js + timesheets.js
 // sources into jsdom, the same way volunteer-timesheets.render.test.js does,
 // stubbing only the network, nav and dialog bits.
@@ -53,6 +53,7 @@ const SERVER_PROFILE = {
   email: "adah@students.wits.ac.za",
   studentNumber: "1234567",
   cellPhone: "082 123 4567",
+  yearOfStudy: "masters",
   role: "tutor",
 };
 
@@ -68,6 +69,7 @@ const PAGE_HTML = `<!doctype html><html><body>
       <option value="masters">Masters</option>
       <option value="phd">PhD</option>
     </select>
+    <p class="hint" id="year-of-study-hint" hidden></p>
     <input type="text" id="payrollNumber" />
   </form>
   <p class="hint" id="details-sync-hint" hidden>
@@ -224,9 +226,16 @@ describe("timesheets profile sync", () => {
       "profile.html",
     );
 
-    // Fields the Profile page doesn't hold stay editable and locally sourced.
-    expect(doc.getElementById("yearOfStudy").value).toBe("honours");
+    // Year of study comes from the tutor record (overriding the local
+    // "honours") and is locked, with its own hint.
+    expect(doc.getElementById("yearOfStudy").value).toBe("masters");
+    expect(doc.getElementById("yearOfStudy").disabled).toBe(true);
+    expect(doc.getElementById("yearOfStudy").title).toContain("organiser");
+    expect(doc.getElementById("year-of-study-hint").hidden).toBe(false);
+
+    // Payroll number isn't held anywhere else: editable, locally sourced.
     expect(doc.getElementById("payrollNumber").value).toBe("P-100");
+    expect(doc.getElementById("payrollNumber").readOnly).toBe(false);
 
     // The claim renders the Profile page's values, not the local copies.
     expect(doc.getElementById("claimWrapper").hidden).toBe(false);
@@ -237,7 +246,25 @@ describe("timesheets profile sync", () => {
     );
     expect(doc.getElementById("cCellPhone").textContent).toBe("082 123 4567");
     expect(doc.getElementById("cPayrollNo").textContent).toBe("P-100");
-    expect(doc.getElementById("cYearOfStudy").textContent).toBe("Honours");
+    expect(doc.getElementById("cYearOfStudy").textContent).toBe("Masters");
+  });
+
+  test("year of study stays editable when no recognised level is on record", async () => {
+    for (const yearOfStudy of [undefined, "", "first_year"]) {
+      const window = renderPage({
+        serverProfile: { ...SERVER_PROFILE, yearOfStudy },
+      });
+      await flush();
+
+      const doc = window.document;
+      expect(doc.getElementById("yearOfStudy").disabled).toBe(false);
+      expect(doc.getElementById("yearOfStudy").getAttribute("title")).toBe(
+        null,
+      );
+      expect(doc.getElementById("yearOfStudy").value).toBe("honours");
+      expect(doc.getElementById("year-of-study-hint").hidden).toBe(true);
+      expect(doc.getElementById("cYearOfStudy").textContent).toBe("Honours");
+    }
   });
 
   test("fields the Profile page leaves empty stay editable and fall back to local values", async () => {
@@ -278,6 +305,8 @@ describe("timesheets profile sync", () => {
       expect(doc.getElementById(id).readOnly).toBe(false);
     }
     expect(doc.getElementById("details-sync-hint").hidden).toBe(true);
+    expect(doc.getElementById("yearOfStudy").disabled).toBe(false);
+    expect(doc.getElementById("year-of-study-hint").hidden).toBe(true);
 
     expect(doc.getElementById("fullName").value).toBe("Local Tutor");
     expect(doc.getElementById("cFullName").textContent).toBe("Local Tutor");
@@ -319,9 +348,10 @@ describe("timesheets profile sync", () => {
     expect(saved.studentNumber).toBe("1234567");
     expect(saved.email).toBe("adah@students.wits.ac.za");
     expect(saved.cellPhone).toBe("082 123 4567");
-    // …and the editable fields update as before.
+    // The disabled year-of-study select still saves the locked level…
+    expect(saved.yearOfStudy).toBe("masters");
+    // …and the editable field updates as before.
     expect(saved.payrollNumber).toBe("P-200");
-    expect(saved.yearOfStudy).toBe("honours");
     // The removed fields don't survive a save.
     expect(saved.hourlyRate).toBeUndefined();
     expect(saved.headOfSchool).toBeUndefined();

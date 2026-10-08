@@ -100,7 +100,7 @@ describe("profile timetable card", () => {
     await window.initProfileTimetable("user-1");
 
     expect(byId(window, "profile-timetable-status").textContent).toBe(
-      "No timetable saved yet.",
+      "You haven't uploaded a timetable yet — upload your class timetable PDF to keep it on your profile.",
     );
     expect(byId(window, "profile-timetable-view-btn").hidden).toBe(true);
     expect(byId(window, "profile-timetable-remove-btn").hidden).toBe(true);
@@ -227,7 +227,7 @@ describe("profile timetable card", () => {
       "That file doesn't look like a PDF.",
     );
     expect(byId(window, "profile-timetable-status").textContent).toBe(
-      "No timetable saved yet.",
+      "You haven't uploaded a timetable yet — upload your class timetable PDF to keep it on your profile.",
     );
   });
 
@@ -273,7 +273,7 @@ describe("profile timetable card", () => {
     expect(url).toBe("/api/profile/user-1/timetable");
     expect(options.method).toBe("DELETE");
     expect(byId(window, "profile-timetable-status").textContent).toBe(
-      "No timetable saved yet.",
+      "You haven't uploaded a timetable yet — upload your class timetable PDF to keep it on your profile.",
     );
     expect(byId(window, "profile-timetable-remove-btn").hidden).toBe(true);
   });

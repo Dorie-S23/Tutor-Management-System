@@ -56,7 +56,14 @@ beforeEach(() => {
         role: "educator",
       },
     ],
-    tutors: [{ id: TUTOR_ID, name: "Ada", student_number: "1234567" }],
+    tutors: [
+      {
+        id: TUTOR_ID,
+        name: "Ada",
+        student_number: "1234567",
+        academic_level: "honours",
+      },
+    ],
     students: [{ id: STUDENT_ID, name: "Sam", student_no: "7654321" }],
   };
   mockSupabase = fakeSupabase(tables, {
@@ -66,7 +73,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/profile/:userId", () => {
-  test("returns a tutor's profile with the student number from their tutor row", async () => {
+  test("returns a tutor's profile with the student number and year of study from their tutor row", async () => {
     const res = await request(buildApp()).get(`/api/profile/${TUTOR_ID}`);
 
     expect(res.status).toBe(200);
@@ -76,8 +83,17 @@ describe("GET /api/profile/:userId", () => {
       email: "ada@wits.ac.za",
       studentNumber: "1234567",
       cellPhone: "082 123 4567",
+      yearOfStudy: "honours",
       role: "tutor",
     });
+  });
+
+  test("reports an empty year of study for a tutor with no academic level", async () => {
+    tables.tutors[0].academic_level = null;
+
+    const res = await request(buildApp()).get(`/api/profile/${TUTOR_ID}`);
+
+    expect(res.body.yearOfStudy).toBe("");
   });
 
   test("returns a student volunteer's profile from the students table", async () => {
@@ -88,6 +104,8 @@ describe("GET /api/profile/:userId", () => {
     // A null cell_phone comes back as an empty string, not null, so the
     // form can prefill an empty input directly.
     expect(res.body.cellPhone).toBe("");
+    // Year of study is a tutor-only (pay rate) field.
+    expect(res.body).not.toHaveProperty("yearOfStudy");
   });
 
   test("404s for an unknown user", async () => {
@@ -181,6 +199,18 @@ describe("PUT /api/profile/:userId", () => {
     expect(tables.users.find((u) => u.id === TUTOR_ID).email).toBe(
       "ada@wits.ac.za",
     );
+  });
+
+  test("does not change a tutor's year of study (pay rate) even if one is sent", async () => {
+    const res = await request(buildApp()).put(`/api/profile/${TUTOR_ID}`).send({
+      name: "Ada",
+      studentNumber: "1234567",
+      yearOfStudy: "phd",
+      academic_level: "phd",
+    });
+
+    expect(res.status).toBe(200);
+    expect(tables.tutors[0].academic_level).toBe("honours");
   });
 
   test("updates the students table for a student volunteer", async () => {

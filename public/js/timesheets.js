@@ -38,8 +38,10 @@ const payrollNumberField = document.getElementById("payrollNumber");
 // The Profile page (profile.html) is the source of truth for the claim
 // form's identity fields. When it has a value for one of them, that value
 // wins over any locally saved copy and the field locks here — the only way
-// to change it is on the Profile page. The remaining fields (year of
-// study, payroll number) exist only on this page and stay editable.
+// to change it is on the Profile page. Year of study is locked the same
+// way, but from the tutor's academic_level, which sets their pay rate and
+// only an organiser can change. Payroll number exists only on this page
+// and stays editable.
 let accountProfile = null;
 
 const PROFILE_SYNCED_FIELDS = [
@@ -60,7 +62,14 @@ function profileDetails() {
     studentNumber: account.studentNumber || local.studentNumber || "",
     email: account.email || local.email || "",
     cellPhone: account.cellPhone || local.cellPhone || "",
+    yearOfStudy: lockedYearOfStudy() || local.yearOfStudy || "",
   };
+}
+
+// The year of study on record, when it's one the form can show.
+function lockedYearOfStudy() {
+  const level = accountProfile?.yearOfStudy;
+  return Object.hasOwn(YEAR_OF_STUDY_LABELS, level ?? "") ? level : "";
 }
 
 async function loadAccountProfile() {
@@ -91,6 +100,18 @@ function applyProfileLocks() {
     }
   }
   document.getElementById("details-sync-hint").hidden = locked === 0;
+
+  // A <select> has no readOnly, so it's disabled instead — its value still
+  // reads normally when the form is saved.
+  const yearLocked = lockedYearOfStudy() !== "";
+  yearOfStudyField.disabled = yearLocked;
+  if (yearLocked) {
+    yearOfStudyField.title =
+      "Set from your tutor record — ask an organiser to change it.";
+  } else {
+    yearOfStudyField.removeAttribute("title");
+  }
+  document.getElementById("year-of-study-hint").hidden = !yearLocked;
 }
 
 const rangeFromField = document.getElementById("rangeFrom");
