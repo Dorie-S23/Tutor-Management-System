@@ -23,6 +23,7 @@ function buildApp() {
 const TUTOR_ID = "11111111-1111-1111-1111-111111111111";
 const STUDENT_ID = "22222222-2222-2222-2222-222222222222";
 const ORGANISER_ID = "33333333-3333-3333-3333-333333333333";
+const EDUCATOR_ID = "44444444-4444-4444-4444-444444444444";
 
 beforeEach(() => {
   tables = {
@@ -45,7 +46,14 @@ beforeEach(() => {
         id: ORGANISER_ID,
         name: "Org",
         email: "org@wits.ac.za",
+        cell_phone: null,
         role: "organiser",
+      },
+      {
+        id: EDUCATOR_ID,
+        name: "Ed",
+        email: "ed@wits.ac.za",
+        role: "educator",
       },
     ],
     tutors: [{ id: TUTOR_ID, name: "Ada", student_number: "1234567" }],
@@ -89,8 +97,22 @@ describe("GET /api/profile/:userId", () => {
     expect(res.body.error).toBe("User not found");
   });
 
-  test("403s a role that has no profile page (organiser)", async () => {
+  test("returns an organiser's profile with no student number", async () => {
     const res = await request(buildApp()).get(`/api/profile/${ORGANISER_ID}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      id: ORGANISER_ID,
+      name: "Org",
+      email: "org@wits.ac.za",
+      studentNumber: "",
+      cellPhone: "",
+      role: "organiser",
+    });
+  });
+
+  test("403s a role that has no profile page (educator)", async () => {
+    const res = await request(buildApp()).get(`/api/profile/${EDUCATOR_ID}`);
 
     expect(res.status).toBe(403);
   });
@@ -254,11 +276,38 @@ describe("PUT /api/profile/:userId", () => {
     expect(res.status).toBe(404);
   });
 
-  test("403s a role that has no profile page (organiser)", async () => {
+  test("saves an organiser's name and cell phone without needing a student number", async () => {
     const res = await request(buildApp())
       .put(`/api/profile/${ORGANISER_ID}`)
       .send({
-        name: "Org",
+        name: "Organ Iser",
+        cellPhone: "082 123 4567",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      name: "Organ Iser",
+      studentNumber: "",
+      cellPhone: "082 123 4567",
+    });
+    const user = tables.users.find((u) => u.id === ORGANISER_ID);
+    expect(user.name).toBe("Organ Iser");
+    expect(user.cell_phone).toBe("082 123 4567");
+  });
+
+  test("400s an organiser save with a blank name, but doesn't require a student number", async () => {
+    const res = await request(buildApp())
+      .put(`/api/profile/${ORGANISER_ID}`)
+      .send({ name: "  " });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("403s a role that has no profile page (educator)", async () => {
+    const res = await request(buildApp())
+      .put(`/api/profile/${EDUCATOR_ID}`)
+      .send({
+        name: "Ed",
         studentNumber: "1",
       });
 

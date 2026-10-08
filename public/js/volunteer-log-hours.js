@@ -96,19 +96,29 @@ function sessionFromExcusal(row) {
 
 // ---------- logged duration (sidebar) ----------
 
+// Rounded to a whole hour, same convention as the tutor Log Hours page —
+// minutes don't count either way, so a session is always credited as a
+// whole number of hours, never a decimal.
 function computeHours() {
   const start = startTimeField.value;
   const end = endTimeField.value;
   if (!start || !end) return null;
   const [startH, startM] = start.split(":").map(Number);
   const [endH, endM] = end.split(":").map(Number);
-  const hours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
-  return hours > 0 ? hours : null;
+  const diffMinutes = endH * 60 + endM - (startH * 60 + startM);
+  if (diffMinutes <= 0) return null;
+  return Math.round(diffMinutes / 60);
 }
 
 function updateDuration() {
   const hours = computeHours();
-  durationValueEl.textContent = hours ? `${Number(hours.toFixed(1))}h` : "—";
+  if (hours === null) {
+    durationValueEl.textContent = "—";
+  } else if (hours === 0) {
+    durationValueEl.textContent = "Rounds to 0h";
+  } else {
+    durationValueEl.textContent = `${hours}h`;
+  }
 }
 
 startTimeField.addEventListener("input", updateDuration);
@@ -258,12 +268,12 @@ form.addEventListener("submit", async (event) => {
   }
 
   const hours = computeHours();
-  if (!hours) {
+  if (hours === null) {
     formError.textContent = "The ending time must be after the starting time.";
     formError.hidden = false;
     return;
   }
-  if (hours < 0.5) {
+  if (hours === 0) {
     formError.textContent =
       "That's under 30 minutes — double-check the times before submitting.";
     formError.hidden = false;
@@ -272,7 +282,7 @@ form.addEventListener("submit", async (event) => {
 
   const payload = {
     date: dateStr,
-    hours: Number(hours.toFixed(1)),
+    hours,
     startTime: startTimeField.value,
     endTime: endTimeField.value,
     taskType: "Peer support",

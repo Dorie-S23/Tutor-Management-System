@@ -815,3 +815,89 @@ html[data-theme="dark"] .form-group input:focus,
 html[data-theme="dark"] .form-group select:focus {
   background: var(--auth-field);
 }
+
+/* ------------------------------------------------------------
+   Dark-mode legibility
+   The base rules above hard-code light colours (white card, white
+   social button, light-blue shell gradient, blue link text) that the
+   dark block never overrode — so the card stayed white while its
+   headings, labels and subtitle switched to near-white text.
+   ------------------------------------------------------------ */
+
+html[data-theme="dark"] .auth-shell {
+  background-color: var(--paper);
+  background-image: radial-gradient(
+    circle at 100% 0,
+    rgba(96, 165, 250, 0.12),
+    rgba(0, 0, 0, 0) 34%
+  );
+}
+
+/* The card was #ffffff */
+html[data-theme="dark"] .auth-card {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+/* Fields: distinct from the card, not the same colour as it */
+html[data-theme="dark"] .form-group input,
+html[data-theme="dark"] .form-group select {
+  background: var(--auth-field);
+}
+
+/* Browser autofill paints its own pale background with dark text */
+html[data-theme="dark"] .form-group input:-webkit-autofill,
+html[data-theme="dark"] .form-group input:-webkit-autofill:hover {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  box-shadow: 0 0 0 1000px var(--auth-field) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+html[data-theme="dark"] .form-group input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  box-shadow:
+    0 0 0 1000px var(--auth-field) inset,
+    0 0 0 3px rgba(147, 197, 253, 0.22);
+}
+
+/* "Continue with Google" button was white with grey-blue text */
+html[data-theme="dark"] .auth-social {
+  background: var(--auth-field);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .auth-social:hover {
+  background: #27342e;
+  border-color: var(--ink-faint);
+}
+
+/* Blue 600 as link text is ~3.3:1 on the dark card */
+html[data-theme="dark"] .forgot-link,
+html[data-theme="dark"] .auth-switch a {
+  color: var(--primary-soft);
+}
+
+html[data-theme="dark"] .auth-card-head > p,
+html[data-theme="dark"] .auth-switch {
+  color: var(--ink-soft);
+}
+
+/* Password eye: hover used --ink-muted, which is dimmer than its resting colour */
+html[data-theme="dark"] .password-toggle:hover {
+  color: var(--ink);
+}
+
+/* Brand panel is dark in both themes; lift its smallest, faintest text */
+html[data-theme="dark"] .auth-brand-caption {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="dark"] .auth-brand-points li {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+html[data-theme="dark"] .auth-role-text span {
+  color: rgba(255, 255, 255, 0.82);
+}

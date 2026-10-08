@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profile | TutorX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
+  </head>
+
+  <body data-theme="organiser" data-page-role="organiser,super_organiser">
+    <header class="app-navbar">
+      <a class="brand-mark" href="board.html">
+        <span class="brand-mark-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3 5.5 6.7 12 10.4l6.5-3.7L12 3Z" />
+            <path d="m7.5 9 4.5 2.6L16.5 9v5L12 16.6 7.5 14V9Z" />
+            <path d="M18.5 7v5" />
+          </svg>
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
+
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="board.html">Courses</a>
+        <a href="tutors.html">Manage Tutors</a>
+        <a href="timetable.html">Timetable</a>
+        <a href="timesheet-review.html">Timesheets</a>
+        <a href="hours-budget-report.html">Budget Report</a>
+        <!-- Revealed by user-badge.js for the super-organiser only. -->
+        <a href="organiser-requests.html" data-super-only hidden>
+          Organiser Requests
+        </a>
+        <a href="organiser-profile.html" aria-current="page">Profile</a>
+      </nav>
+
+      <div class="navbar-right">
+        <a
+          href="allocation-history.html"
+          class="nav-icon-btn"
+          aria-label="History"
+          title="History"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M12 7v5l4 2" />
+          </svg>
+        </a>
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
+        </div>
+
+        <div class="user-pill">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Organiser</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <h1>My Profile</h1>
+          <p class="page-sub">Your personal details on record with CSAM.</p>
+        </div>
+      </div>
+
+      <section class="card profile-card" aria-label="Your details">
+        <div class="profile-banner" aria-hidden="true"></div>
+        <div class="profile-card-body">
+          <div class="profile-identity">
+            <span
+              class="profile-avatar"
+              id="profile-avatar-initials"
+              aria-hidden="true"
+            ></span>
+            <div class="profile-identity-text">
+              <h2 id="profile-display-name">Your name</h2>
+              <p class="profile-meta">
+                <span class="profile-role">Organiser</span>
+                <span id="profile-display-student-number"></span>
+              </p>
+            </div>
+          </div>
+
+          <p class="card-hint">
+            Keep these up to date — tutors and volunteers may need to reach you.
+            Your email is tied to your login and can't be changed here; ask
+            another organiser if it needs updating.
+          </p>
+
+          <form id="profile-form">
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="profile-first-name">First name</label>
+                <input
+                  type="text"
+                  id="profile-first-name"
+                  autocomplete="given-name"
+                  required
+                />
+              </div>
+              <div class="form-field">
+                <label for="profile-last-name">Last name</label>
+                <input
+                  type="text"
+                  id="profile-last-name"
+                  autocomplete="family-name"
+                />
+              </div>
+              <div class="form-field">
+                <label for="profile-email">Email address</label>
+                <input type="email" id="profile-email" readonly />
+              </div>
+              <!-- Organisers have no student number — the field stays in the
+                   DOM (profile.js reads it unconditionally) but hidden, and
+                   the server doesn't require it for this role. -->
+              <div class="form-field" hidden>
+                <label for="profile-student-number">Student number</label>
+                <input type="text" id="profile-student-number" />
+              </div>
+              <div class="form-field">
+                <label for="profile-cell-phone">Cell phone number</label>
+                <input
+                  type="tel"
+                  id="profile-cell-phone"
+                  autocomplete="tel"
+                  placeholder="e.g. 082 123 4567 or +27 82 123 4567"
+                />
+              </div>
+              <div class="form-actions">
+                <button
+                  type="submit"
+                  class="btn-primary"
+                  id="profile-save-btn"
+                  disabled
+                >
+                  Save profile
+                </button>
+              </div>
+            </div>
+            <p class="field-error" id="profile-error" hidden></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="../js/user-badge.js"></script>
+    <script type="module" src="../js/profile.js"></script>
+    <script src="../js/notifications.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
+</html>

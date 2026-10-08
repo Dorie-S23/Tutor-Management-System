@@ -8,7 +8,9 @@ import { requireRole } from "./storage.js";
 import { highlightActiveTab } from "./nav.js";
 import { initProfileTimetable } from "./profile-timetable.js";
 
-const pageRole = document.body.dataset.pageRole || "tutor";
+// A comma-separated list covers pages shared between roles (the organiser
+// profile also serves the super-organiser account, same as board.html).
+const pageRole = (document.body.dataset.pageRole || "tutor").split(",");
 const currentUser = requireRole(pageRole);
 if (!currentUser) {
   throw new Error("Not authorized");
