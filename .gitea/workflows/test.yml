@@ -7,7 +7,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: dorsa-temp-runner
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
