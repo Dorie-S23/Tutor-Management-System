@@ -24,17 +24,19 @@ const organiserHtml = fs.readFileSync(
 const profileSrc = fs
   .readFileSync(path.join(__dirname, "profile.js"), "utf8")
   .replace(
-    /^import \{[^}]*\} from ".\/(?:storage|nav|profile-timetable)\.js";$/gm,
+    /^import \{[^}]*\} from ".\/(?:storage|nav|profile-timetable|transcript-upload)\.js";$/gm,
     "",
   );
 
-// The timetable card has its own tests (profile-timetable.test.js), so it's
+// The timetable and transcript cards have their own tests
+// (profile-timetable.test.js, profile-transcript.test.js), so they're
 // stubbed out here to keep these focused on the details form.
 function makeStubs(user) {
   return `
 function requireRole() { return ${JSON.stringify(user)}; }
 function highlightActiveTab() {}
 function initProfileTimetable() {}
+function initTranscriptUpload() {}
 `;
 }
 

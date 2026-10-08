@@ -21,8 +21,12 @@ const STUBS = `
 function addScheduleClasses(classes) {
   window.__addedClasses = classes;
 }
+function getCurrentUser() {
+  return window.__user || null;
+}
 function parseTimetablePdf(file, onProgress) {
   window.__parseCalls = (window.__parseCalls || 0) + 1;
+  window.__parsedFile = file;
   if (window.__parseResult instanceof Error) {
     return Promise.reject(window.__parseResult);
   }
@@ -38,6 +42,7 @@ function firstOccurrenceOnOrAfter(startDateStr, dayOfWeek) {
 const PAGE = `
   <input type="file" id="timetable-file">
   <p id="timetable-file-name" hidden></p>
+  <p id="timetable-profile-note" hidden></p>
   <input type="date" id="semester-start">
   <input type="date" id="semester-end">
   <button id="parse-timetable-btn"></button>
@@ -69,7 +74,9 @@ const CLASS_B = {
   venue: "WSS1",
 };
 
-function loadImport({ withToast = true } = {}) {
+// `user` and `fetch` are installed before the page script runs, since it
+// checks for a profile timetable as soon as it loads.
+function loadImport({ withToast = true, user = null, fetch = null } = {}) {
   const importJs = rawImportJs
     .replace(/import\s*{[^}]*}\s*from\s*["']\.\/storage\.js["'];?/, "")
     .replace(
@@ -79,7 +86,14 @@ function loadImport({ withToast = true } = {}) {
 
   const dom = new JSDOM(
     `<!doctype html><html><body>${withToast ? '<div id="toast"></div>' : ""}${PAGE}<script>${importJs}\n${STUBS}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "timetable-import.js")).href}</script></body></html>`,
-    { url: "http://localhost/timetable.html", runScripts: "dangerously" },
+    {
+      url: "http://localhost/timetable.html",
+      runScripts: "dangerously",
+      beforeParse(window) {
+        window.__user = user;
+        if (fetch) window.fetch = fetch;
+      },
+    },
   );
 
   return dom.window;
@@ -310,5 +324,103 @@ describe("timetable-import.js", () => {
     expect(parseBtn.classList.contains("is-loading")).toBe(false);
     expect(parseBtn.hasAttribute("aria-busy")).toBe(false);
     expect(parseBtn.textContent).toBe("Parse PDF");
+  });
+
+  describe("timetable saved on the profile", () => {
+    const PROFILE_STATUS = {
+      ok: true,
+      json: async () => ({
+        uploaded: true,
+        fileName: "timetable.pdf",
+        updatedAt: "2026-10-08T09:00:00.000Z",
+      }),
+    };
+
+    test("says it will use the profile copy until a file is chosen", async () => {
+      const fetchMock = jest.fn().mockResolvedValue(PROFILE_STATUS);
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      await flush();
+
+      const note = win.document.getElementById("timetable-profile-note");
+      expect(fetchMock).toHaveBeenCalledWith("/api/profile/tutor-1/timetable");
+      expect(note.hidden).toBe(false);
+      expect(note.textContent).toMatch(
+        /^Using the timetable saved on your profile \(uploaded .*2026\)/,
+      );
+
+      setFile(win);
+      win.document
+        .getElementById("timetable-file")
+        .dispatchEvent(new win.Event("change"));
+      expect(note.hidden).toBe(true);
+    });
+
+    test("parses the profile copy without a file being chosen", async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce(PROFILE_STATUS)
+        .mockResolvedValueOnce({
+          ok: true,
+          blob: async () => new win.Blob(["%PDF-1.4"]),
+        });
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      win.__parseResult = [CLASS_A];
+      win.__firstDate = "2026-09-07";
+      await flush();
+
+      win.document.getElementById("semester-start").value = "2026-09-01";
+      win.document.getElementById("parse-timetable-btn").click();
+      await flush();
+      await flush();
+
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        "/api/profile/tutor-1/timetable/file",
+      );
+      expect(win.__parseCalls).toBe(1);
+      expect(win.__parsedFile.name).toBe("timetable.pdf");
+      expect(win.__parsedFile.type).toBe("application/pdf");
+      expect(win.document.getElementById("timetable-review").hidden).toBe(
+        false,
+      );
+    });
+
+    test("shows the server error when the profile copy can't be loaded", async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce(PROFILE_STATUS)
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: "No timetable on file." }),
+        });
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      await flush();
+
+      win.document.getElementById("semester-start").value = "2026-09-01";
+      win.document.getElementById("parse-timetable-btn").click();
+      await flush();
+      await flush();
+
+      const status = win.document.getElementById("timetable-status");
+      expect(status.textContent).toBe("No timetable on file.");
+      expect(status.classList.contains("form-error")).toBe(true);
+      expect(win.__parseCalls).toBeUndefined();
+    });
+
+    test("falls back to asking for a file when nothing is on the profile", async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ uploaded: false }),
+      });
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      await flush();
+
+      expect(win.document.getElementById("timetable-profile-note").hidden).toBe(
+        true,
+      );
+      win.document.getElementById("parse-timetable-btn").click();
+      expect(win.document.getElementById("timetable-status").textContent).toBe(
+        "Choose a PDF file first.",
+      );
+    });
   });
 });

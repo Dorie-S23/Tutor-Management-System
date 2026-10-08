@@ -1090,10 +1090,20 @@ a.nav-icon-btn {
 }
 
 /* Session-locked fields (tutor Log Hours): the date and times are set by
-   the picked session, never typed in. */
-.form-field input[readonly] {
-  background: rgba(15, 23, 42, 0.045);
+   the picked session, never typed in. A locked <select> (Timesheets' year
+   of study) can't be readonly, so it's disabled — styled the same, with the
+   browser's faded disabled text put back to normal ink and its dropdown
+   arrow hidden, since there's nothing to pick. */
+.form-field input[readonly],
+.form-field select:disabled {
+  background-color: rgba(15, 23, 42, 0.045);
   cursor: default;
+}
+
+.form-field select:disabled {
+  color: var(--ink-2);
+  opacity: 1;
+  appearance: none;
 }
 
 /* A lone checkbox in a form-grid row (calendar "Repeat weekly"): sits level
@@ -1274,6 +1284,12 @@ textarea {
   font-size: 13px;
   font-weight: 500;
   color: var(--ink-2);
+}
+
+/* "Using the timetable saved on your profile" — set by timetable-import.js
+   when the profile already has a timetable PDF on file. */
+.file-drop-name--profile {
+  color: rgb(4, 120, 87);
 }
 
 .timetable-import-actions {
@@ -3431,8 +3447,9 @@ html[data-theme="dark"]
   color: var(--ink-2);
 }
 
-html[data-theme="dark"] .form-field input[readonly] {
-  background: rgba(148, 163, 184, 0.1);
+html[data-theme="dark"]
+  :is(.form-field input[readonly], .form-field select:disabled) {
+  background-color: rgba(148, 163, 184, 0.1);
 }
 
 /* Translucent-white overlays become translucent-dark (or faint light
@@ -6143,6 +6160,7 @@ html[data-theme="dark"]
     .excused-note,
     .excusal-cover--found,
     .transcript-status--ok,
+    .file-drop-name--profile,
     .slots-done,
     .activity-col--volunteers .activity-col__title,
     .stamp.ok,

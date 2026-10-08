@@ -179,6 +179,50 @@ describe("GET /api/profile/:userId/timetable/signed-url", () => {
   });
 });
 
+describe("GET /api/profile/:userId/timetable/file", () => {
+  test("serves back the PDF that was uploaded", async () => {
+    const app = buildApp();
+    await request(app)
+      .post("/api/profile/user-1/timetable")
+      .set("Content-Type", "application/pdf")
+      .send(PDF_BYTES);
+
+    const res = await request(app)
+      .get("/api/profile/user-1/timetable/file")
+      .buffer(true)
+      .parse((r, done) => {
+        const chunks = [];
+        r.on("data", (c) => chunks.push(c));
+        r.on("end", () => done(null, Buffer.concat(chunks)));
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^application\/pdf/);
+    expect(Buffer.compare(res.body, PDF_BYTES)).toBe(0);
+  });
+
+  test("answers 404 when no timetable is on file", async () => {
+    const res = await request(buildApp()).get(
+      "/api/profile/user-1/timetable/file",
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("No timetable on file.");
+  });
+
+  test("answers 404 when the bucket is missing", async () => {
+    mockSupabase = fakeSupabase({}, {}, { transcripts: undefined });
+
+    const res = await request(buildApp()).get(
+      "/api/profile/user-1/timetable/file",
+    );
+
+    // Real Storage lists a missing bucket as empty, so there's nothing to
+    // serve rather than a storage error.
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("DELETE /api/profile/:userId/timetable", () => {
   test("removes only the timetable", async () => {
     storageFiles.transcripts.push(

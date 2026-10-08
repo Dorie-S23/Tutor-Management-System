@@ -268,6 +268,52 @@
         />
         <p class="field-error" id="profile-timetable-error" hidden></p>
       </section>
+
+      <section
+        class="card profile-transcript-card"
+        id="transcript-panel"
+        aria-labelledby="transcript-heading"
+      >
+        <h2 id="transcript-heading">My transcript</h2>
+        <p class="card-hint">
+          Keep your academic transcript on file here. It's the same transcript
+          organisers review when you apply, so you need one before you can
+          apply. PDF, PNG, or JPEG, up to 5&nbsp;MB.
+        </p>
+        <div class="transcript-panel__row">
+          <span
+            class="transcript-status"
+            id="transcript-status"
+            aria-live="polite"
+          >
+            Checking&hellip;
+          </span>
+          <div class="transcript-panel__actions">
+            <button
+              class="btn-secondary"
+              id="transcript-view-btn"
+              type="button"
+              hidden
+            >
+              View transcript
+            </button>
+            <button
+              class="btn-primary"
+              id="transcript-upload-btn"
+              type="button"
+            >
+              Upload transcript
+            </button>
+          </div>
+        </div>
+        <input
+          type="file"
+          id="transcript-input"
+          accept="application/pdf,image/png,image/jpeg"
+          hidden
+        />
+        <p class="field-error" id="transcript-error" hidden></p>
+      </section>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
