@@ -125,10 +125,8 @@ function courseScheduleSummary(course) {
 
 async function renderHoursVolunteered() {
   const entries = await getEntries();
-  hoursVolunteeredEl.textContent = entries.reduce(
-    (sum, entry) => sum + Number(entry.hours),
-    0,
-  );
+  const hours = entries.reduce((sum, entry) => sum + Number(entry.hours), 0);
+  hoursVolunteeredEl.textContent = Math.round(hours);
 }
 
 // ---------- hours this month ----------
@@ -143,7 +141,7 @@ async function renderHoursMonth() {
     const hours = entries
       .filter((entry) => (entry.date || "").startsWith(monthPrefix))
       .reduce((sum, entry) => sum + Number(entry.hours), 0);
-    el.textContent = `${Number(hours.toFixed(1))}h`;
+    el.textContent = `${Math.round(hours)}h`;
   } catch {
     el.textContent = "0h";
   }
