@@ -678,7 +678,6 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
   const box = document.createElement("div");
   box.className = "card occurrence-modal";
   Object.assign(box.style, {
-    background: "#fff",
     maxWidth: "440px",
     width: "92%",
     maxHeight: "90vh",
