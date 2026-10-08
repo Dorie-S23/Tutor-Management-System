@@ -249,7 +249,8 @@
         <h2>Manually add a class</h2>
         <p class="card-hint">
           Pick a date, then fill in the details below. It'll be added just to
-          that day on the calendar.
+          that day, or tick "Repeat weekly" to add it every week until a date
+          you choose.
         </p>
         <form id="add-class-form">
           <div class="form-grid">
@@ -277,6 +278,16 @@
             <div class="form-field">
               <label for="add-class-venue">Venue</label>
               <input type="text" id="add-class-venue" placeholder="e.g. FNB1" />
+            </div>
+            <div class="form-field form-field--checkbox">
+              <label class="field-checkbox" for="add-class-repeat">
+                <input type="checkbox" id="add-class-repeat" />
+                Repeat weekly
+              </label>
+            </div>
+            <div class="form-field" id="add-class-repeat-until-field" hidden>
+              <label for="add-class-repeat-until">Repeat weekly until</label>
+              <input type="date" id="add-class-repeat-until" />
             </div>
             <div class="form-actions">
               <button type="submit" class="btn-primary">Add class</button>

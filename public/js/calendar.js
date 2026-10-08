@@ -2,6 +2,7 @@ import { highlightActiveTab, renderWelcomeHeading } from "./nav.js";
 import {
   requireRole,
   getEntriesForDate,
+  loadSchedule,
   getScheduleForDate,
   addScheduleClasses,
   getCancelledOccurrencesForDate,
@@ -288,6 +289,13 @@ const addClassSubjectInput = document.getElementById("add-class-subject");
 const addClassStartInput = document.getElementById("add-class-start");
 const addClassEndInput = document.getElementById("add-class-end");
 const addClassVenueInput = document.getElementById("add-class-venue");
+const addClassRepeatInput = document.getElementById("add-class-repeat");
+const addClassRepeatUntilField = document.getElementById(
+  "add-class-repeat-until-field",
+);
+const addClassRepeatUntilInput = document.getElementById(
+  "add-class-repeat-until",
+);
 const cancelAddClassBtn = document.getElementById("cancel-add-class-btn");
 
 // ---------- toast ----------
@@ -343,10 +351,27 @@ function showConfirm(message, confirmLabel = "Confirm") {
   });
 }
 
+// Every class change is saved to the server before the calendar shows it.
+// Runs `save`, then re-renders with a success toast — or, if the save
+// failed, leaves the calendar as it was and says why. Resolves to whether
+// it worked.
+async function saveScheduleChange(save, successMessage, toastType) {
+  try {
+    await save();
+  } catch (err) {
+    showToast(err.message || "Couldn't save that change.", "danger");
+    return false;
+  }
+  render();
+  showToast(successMessage, toastType);
+  return true;
+}
+
 function openAddClassForm(dateStr, startTime) {
   addClassDateInput.value = dateStr || todayStr();
   addClassStartInput.value = startTime || "";
   addClassEndInput.value = startTime ? oneHourLater(startTime) : "";
+  syncRepeatFields();
   addClassCard.hidden = false;
   addClassCard.scrollIntoView({ behavior: "smooth", block: "center" });
   addClassSubjectInput.focus();
@@ -361,35 +386,55 @@ function oneHourLater(timeStr) {
 function closeAddClassForm() {
   addClassCard.hidden = true;
   addClassForm.reset();
+  syncRepeatFields();
+}
+
+// "Repeat weekly" reveals the until-date and makes it required, with the
+// class's own date as its earliest allowed value, so the browser's form
+// validation rejects an empty or backwards range before submit runs.
+function syncRepeatFields() {
+  const repeating = addClassRepeatInput.checked;
+  addClassRepeatUntilField.hidden = !repeating;
+  addClassRepeatUntilInput.required = repeating;
+  addClassRepeatUntilInput.min = addClassDateInput.value || "";
 }
 
 if (canManageSchedule) {
   addClassBtn.addEventListener("click", () => openAddClassForm(todayStr()));
   cancelAddClassBtn.addEventListener("click", closeAddClassForm);
+  addClassRepeatInput.addEventListener("change", syncRepeatFields);
+  addClassDateInput.addEventListener("change", syncRepeatFields);
 
-  addClassForm.addEventListener("submit", (e) => {
+  addClassForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const date = addClassDateInput.value;
     const [y, m, d] = date.split("-").map(Number);
     const dayOfWeek = new Date(y, m - 1, d).getDay();
+    const repeating = addClassRepeatInput.checked;
+    // Same weekly-series shape the timetable import saves: one class on
+    // dayOfWeek, every week from firstDate through endDate.
+    const endDate = repeating ? addClassRepeatUntilInput.value : date;
 
-    addScheduleClasses([
-      {
-        title: addClassSubjectInput.value.trim(),
-        dayOfWeek,
-        firstDate: date,
-        endDate: date,
-        startTime: addClassStartInput.value,
-        endTime: addClassEndInput.value,
-        venue: addClassVenueInput.value.trim(),
-      },
-    ]);
+    const newClass = {
+      title: addClassSubjectInput.value.trim(),
+      dayOfWeek,
+      firstDate: date,
+      endDate,
+      startTime: addClassStartInput.value,
+      endTime: addClassEndInput.value,
+      venue: addClassVenueInput.value.trim(),
+    };
 
+    // The form stays open (with what was typed) if the save fails.
+    const saved = await saveScheduleChange(
+      () => addScheduleClasses([newClass]),
+      repeating ? "Weekly class added." : "Class added.",
+    );
+    if (!saved) return;
     closeAddClassForm();
     viewYear = y;
     viewMonth = m - 1;
     render();
-    showToast("Class added.");
   });
 }
 
@@ -671,10 +716,11 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     restoreBtn.className = "btn-primary";
     restoreBtn.textContent = "Restore this class";
     restoreBtn.addEventListener("click", () => {
-      clearScheduleException(cls.id, dateStr);
       closeModal();
-      render();
-      showToast("Class restored.");
+      saveScheduleChange(
+        () => clearScheduleException(cls.id, dateStr),
+        "Class restored.",
+      );
     });
     actions.appendChild(restoreBtn);
 
@@ -781,15 +827,17 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     saveOccBtn.className = "btn-primary";
     saveOccBtn.textContent = "Save for this day only";
     saveOccBtn.addEventListener("click", () => {
-      modifyScheduleOccurrence(cls.id, dateStr, {
+      const overrides = {
         title: subjectInput.value.trim() || cls.title,
         startTime: startInput.value || cls.startTime,
         endTime: endInput.value || cls.endTime,
         venue: venueInput.value,
-      });
+      };
       closeModal();
-      render();
-      showToast("Saved for this day.");
+      saveScheduleChange(
+        () => modifyScheduleOccurrence(cls.id, dateStr, overrides),
+        "Saved for this day.",
+      );
     });
     occActions.appendChild(saveOccBtn);
 
@@ -798,10 +846,12 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     cancelOccBtn.className = "btn-danger";
     cancelOccBtn.textContent = "Cancel class for this day";
     cancelOccBtn.addEventListener("click", () => {
-      cancelScheduleOccurrence(cls.id, dateStr);
       closeModal();
-      render();
-      showToast("Class cancelled for this day.", "danger");
+      saveScheduleChange(
+        () => cancelScheduleOccurrence(cls.id, dateStr),
+        "Class cancelled for this day.",
+        "danger",
+      );
     });
     occActions.appendChild(cancelOccBtn);
 
@@ -811,10 +861,11 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
       revertBtn.className = "btn-secondary";
       revertBtn.textContent = "Revert to default";
       revertBtn.addEventListener("click", () => {
-        clearScheduleException(cls.id, dateStr);
         closeModal();
-        render();
-        showToast("Reverted to the recurring default.");
+        saveScheduleChange(
+          () => clearScheduleException(cls.id, dateStr),
+          "Reverted to the recurring default.",
+        );
       });
       occActions.appendChild(revertBtn);
     }
@@ -842,15 +893,17 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     saveSeriesBtn.className = "btn-primary";
     saveSeriesBtn.textContent = "Update all future classes";
     saveSeriesBtn.addEventListener("click", () => {
-      updateScheduleClass(cls.id, {
+      const changes = {
         title: subjectInput.value.trim() || cls.title,
         startTime: startInput.value || cls.startTime,
         endTime: endInput.value || cls.endTime,
         venue: venueInput.value,
-      });
+      };
       closeModal();
-      render();
-      showToast("Recurring class updated.");
+      saveScheduleChange(
+        () => updateScheduleClass(cls.id, changes),
+        "Recurring class updated.",
+      );
     });
     seriesActions.appendChild(saveSeriesBtn);
 
@@ -865,10 +918,12 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
           "Delete",
         )
       ) {
-        deleteScheduleClass(cls.id);
         closeModal();
-        render();
-        showToast("Recurring class deleted.", "danger");
+        saveScheduleChange(
+          () => deleteScheduleClass(cls.id),
+          "Recurring class deleted.",
+          "danger",
+        );
       }
     });
     seriesActions.appendChild(deleteSeriesBtn);
@@ -1288,9 +1343,7 @@ clearClassesBtn.addEventListener("click", async () => {
     ))
   )
     return;
-  clearSchedule();
-  render();
-  showToast("All class times cleared.", "danger");
+  saveScheduleChange(clearSchedule, "All class times cleared.", "danger");
 });
 
 window.renderCalendar = render;
@@ -1302,5 +1355,15 @@ window.jumpToCalendarDate = (dateStr) => {
   render();
 };
 
+// Classes come from the server (see loadSchedule in storage.js); the grid
+// draws straight away and fills in once they and the course sessions land.
+async function loadClasses() {
+  try {
+    await loadSchedule();
+  } catch (err) {
+    showToast(err.message || "Couldn't load your classes.", "danger");
+  }
+}
+
 render();
-fetchCourseSessions().then(render);
+Promise.all([loadClasses(), fetchCourseSessions()]).then(render);

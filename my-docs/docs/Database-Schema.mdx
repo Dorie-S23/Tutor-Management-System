@@ -217,16 +217,17 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `tutor_busy_times`
 
-- Recurring busy blocks from a tutor's imported class timetable, used for clash checks when assigning courses.
+- The classes on a user's calendar (added manually or imported from a timetable PDF), each recurring weekly. This is the only copy — the calendar loads them from here and keeps nothing in the browser — and the organiser board reads them for clash checks when assigning courses.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
-- `tutor_id` (uuid, required, FK → `tutors.id`)
+- `tutor_id` (uuid, required, FK → `users.id`) — despite the name, any calendar user: student volunteers keep classes here too
 - `title` (text) — e.g. the class name
 - `day_of_week` (smallint, required, 0 = Sunday through 6 = Saturday)
 - `start_time`, `end_time` (time, required)
 - `first_date`, `end_date` (date) — the block's active range
 - `venue` (text)
+- `exceptions` (jsonb, required, default `[]`) — per-day changes to the recurring class, at most one per date: `{ date, type: "cancelled" }` or `{ date, type: "modified", overrides: { title?, startTime?, endTime?, venue? } }`
 - `source` (text, required)
 - `created_at` (timestamptz, required, default now)
 

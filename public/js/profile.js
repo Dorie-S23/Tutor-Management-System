@@ -6,6 +6,7 @@
 // surrounding chrome differs.
 import { requireRole } from "./storage.js";
 import { highlightActiveTab } from "./nav.js";
+import { initProfileTimetable } from "./profile-timetable.js";
 
 const pageRole = document.body.dataset.pageRole || "tutor";
 const currentUser = requireRole(pageRole);
@@ -172,3 +173,4 @@ form.addEventListener("submit", async (event) => {
 });
 
 loadProfile();
+initProfileTimetable(currentUser.id);

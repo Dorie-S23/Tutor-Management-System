@@ -20,6 +20,7 @@ const notificationsRoutes = require("./server/routes/notifications");
 const auditLogRoutes = require("./server/routes/auditLog");
 const allocationDraftsRoutes = require("./server/routes/allocationDrafts");
 const profileRoutes = require("./server/routes/profile");
+const profileTimetableRoutes = require("./server/routes/profileTimetable");
 const timetableRoutes = require("./server/routes/timetable");
 const transcriptRoutes = require("./server/routes/transcripts");
 
@@ -117,5 +118,7 @@ app.use("/api/allocation-drafts", allocationDraftsRoutes);
 
 // Self-service profile for tutors and student volunteers
 app.use("/api/profile", profileRoutes);
+// The timetable PDF kept on that profile page (Supabase Storage)
+app.use("/api/profile/:userId/timetable", profileTimetableRoutes);
 
 module.exports = app;

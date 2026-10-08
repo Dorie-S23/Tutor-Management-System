@@ -22,13 +22,22 @@ const GEMINI_ENDPOINT =
 // FAILOVER_GEMINI_STATUSES) instead of depending on one model staying
 // healthy. GEMINI_MODEL pins a single model (no failover) for testing or
 // emergencies.
+// Re-probed 2026-10-08 with a real Wits grid export: 3.7-flash was still
+// saturated — each 503 took up to ~18 s to come back and a success took
+// ~39 s — while 3.5-flash-lite parsed the same PDF correctly in ~2 s. With
+// 3.7 first, its retries ate the whole request budget before a lite model
+// was ever tried, so the lite models lead and 3.7 is the last resort.
 const DEFAULT_GEMINI_MODELS = Object.freeze([
-  "gemini-3.7-flash",
   "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
   "gemini-3-flash-preview",
+  "gemini-3.7-flash",
 ]);
 const GEMINI_TIMEOUT_MS = 90_000;
+// A saturated model can also just hang rather than answer 503. Each attempt
+// gets its own cap so one slow model fails over to the next candidate
+// instead of spending the whole GEMINI_TIMEOUT_MS budget by itself.
+const GEMINI_ATTEMPT_TIMEOUT_MS = 20_000;
 
 // The flash models answer 503 ("This model is currently experiencing high
 // demand") in short bursts — observed live on this project's own key, where
@@ -42,10 +51,12 @@ const GEMINI_TIMEOUT_MS = 90_000;
 // so once a model's own retries are exhausted they move the route on to the
 // next candidate rather than straight to the 502 that triggers the client's
 // on-device OCR fallback. 404 joins that failover set because a retired
-// model name should not block the remaining candidates. Other 4xx means the
-// request itself was rejected, which would fail identically everywhere.
+// model name should not block the remaining candidates, and 504 because a
+// gateway timeout (or our own per-attempt cap) is the same capacity problem.
+// Other 4xx means the request itself was rejected, which would fail
+// identically everywhere.
 const TRANSIENT_GEMINI_STATUSES = new Set([500, 502, 503, 504]);
-const FAILOVER_GEMINI_STATUSES = new Set([404, 429, 503]);
+const FAILOVER_GEMINI_STATUSES = new Set([404, 429, 503, 504]);
 const GEMINI_RETRY_DELAYS_MS = [700, 1600];
 
 const EXTRACT_PROMPT = `This PDF is a university student's weekly class timetable. Layouts vary between exports — it may be plain text rows, or a colored grid table with day-of-week columns and time-of-day rows. Extract every distinct weekly class session shown.
@@ -105,7 +116,35 @@ function isPdfBuffer(body) {
   return body.subarray(0, 1024).includes("%PDF-");
 }
 
-function fetchGemini(apiKey, model, pdfBase64, signal) {
+// Stands in for a Gemini response when a single attempt runs past
+// GEMINI_ATTEMPT_TIMEOUT_MS — 504 keeps it in both the retry and failover
+// paths below like any other capacity failure.
+const ATTEMPT_TIMED_OUT = Object.freeze({
+  ok: false,
+  status: 504,
+  text: async () => "attempt timed out",
+});
+
+// One generateContent call, bounded by both the per-attempt cap and the
+// request-wide deadline. Only the per-attempt cap turns into a timed-out
+// response; hitting the deadline (or a network error) still throws.
+async function fetchGemini(apiKey, model, pdfBase64, deadline) {
+  const attempt = new AbortController();
+  const abortAttempt = () => attempt.abort();
+  const timer = setTimeout(abortAttempt, GEMINI_ATTEMPT_TIMEOUT_MS);
+  deadline.addEventListener("abort", abortAttempt);
+  try {
+    return await requestGemini(apiKey, model, pdfBase64, attempt.signal);
+  } catch (err) {
+    if (attempt.signal.aborted && !deadline.aborted) return ATTEMPT_TIMED_OUT;
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    deadline.removeEventListener("abort", abortAttempt);
+  }
+}
+
+function requestGemini(apiKey, model, pdfBase64, signal) {
   return fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
     method: "POST",
     headers: {
@@ -209,6 +248,9 @@ router.post(
         );
         for (const delay of GEMINI_RETRY_DELAYS_MS) {
           if (!TRANSIENT_GEMINI_STATUSES.has(attempt.status)) break;
+          // Retrying a model that just hung would cost another full
+          // attempt cap — move straight on to the next candidate instead.
+          if (attempt === ATTEMPT_TIMED_OUT) break;
           await attempt.text().catch(() => "");
           await new Promise((resolve) => setTimeout(resolve, delay));
           attempt = await fetchGemini(
