@@ -7,6 +7,7 @@
 import { requireRole } from "./storage.js";
 import { highlightActiveTab } from "./nav.js";
 import { initProfileTimetable } from "./profile-timetable.js";
+import { initTranscriptUpload } from "./transcript-upload.js";
 
 // A comma-separated list covers pages shared between roles (the organiser
 // profile also serves the super-organiser account, same as board.html).
@@ -176,3 +177,6 @@ form.addEventListener("submit", async (event) => {
 
 loadProfile();
 initProfileTimetable(currentUser.id);
+// The same transcript the application pages upload — organiser-profile.html
+// has no #transcript-panel, so this is a no-op there.
+initTranscriptUpload(currentUser.id);

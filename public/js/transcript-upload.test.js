@@ -64,15 +64,21 @@ describe("transcript upload panel", () => {
     const window = renderPanel();
     window.fetch = () =>
       Promise.resolve(
-        jsonResponse({ uploaded: true, fileName: "transcript.pdf" }),
+        jsonResponse({
+          uploaded: true,
+          fileName: "transcript.pdf",
+          updatedAt: "2026-10-08T09:00:00.000Z",
+        }),
       );
 
     await window.transcriptUpload("user-1");
 
+    // Same transcript the profile pages upload, so one uploaded there reads
+    // as on file here, with its upload date.
     const doc = window.document;
-    expect(doc.getElementById("transcript-status").textContent).toBe(
-      "On file: transcript.pdf",
-    );
+    const status = doc.getElementById("transcript-status").textContent;
+    expect(status).toMatch(/^Transcript on file \(uploaded .*2026\)/);
+    expect(status).toContain("you're ready to apply");
     expect(doc.getElementById("transcript-view-btn").hidden).toBe(false);
     expect(doc.getElementById("transcript-upload-btn").textContent).toBe(
       "Replace transcript",
@@ -130,7 +136,7 @@ describe("transcript upload panel", () => {
     expect(options.body).toBe(file);
     expect(
       window.document.getElementById("transcript-status").textContent,
-    ).toBe("On file: transcript.pdf");
+    ).toBe("Transcript on file — you're ready to apply.");
   });
 
   test("rejects a file that isn't a PDF, PNG, or JPEG without calling the server", async () => {

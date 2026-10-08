@@ -14,6 +14,20 @@ function megabytesOf(bytes) {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
+// One transcript per user, shared by every page that shows this panel (the
+// profile pages included), so one uploaded anywhere reads as on file here.
+function describeOnFile(updatedAt) {
+  const date = updatedAt ? new Date(updatedAt) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return "Transcript on file — you're ready to apply.";
+  }
+  return `Transcript on file (uploaded ${date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}) — you're ready to apply.`;
+}
+
 export async function initTranscriptUpload(userId) {
   const panel = document.getElementById("transcript-panel");
   if (!panel || !userId) return;
@@ -29,10 +43,10 @@ export async function initTranscriptUpload(userId) {
     errorEl.hidden = false;
   }
 
-  function renderState(uploaded, fileName) {
+  function renderState(uploaded, updatedAt) {
     errorEl.hidden = true;
     if (uploaded) {
-      statusEl.textContent = `On file: ${fileName}`;
+      statusEl.textContent = describeOnFile(updatedAt);
       statusEl.classList.add("transcript-status--ok");
       viewBtn.hidden = false;
       uploadBtn.textContent = "Replace transcript";
@@ -56,7 +70,7 @@ export async function initTranscriptUpload(userId) {
           body.error || "Couldn't check your transcript right now.";
         return;
       }
-      renderState(body.uploaded, body.fileName);
+      renderState(body.uploaded, body.updatedAt);
     } catch {
       statusEl.textContent =
         "Network error — couldn't check your transcript right now.";
@@ -84,7 +98,7 @@ export async function initTranscriptUpload(userId) {
         showError(body.error || "Couldn't upload that file — try again.");
         return;
       }
-      renderState(true, body.fileName);
+      renderState(true, body.updatedAt);
     } catch {
       statusEl.textContent = previousStatus;
       showError("Network error — couldn't reach the server.");

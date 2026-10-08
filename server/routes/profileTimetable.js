@@ -122,6 +122,26 @@ router.get("/signed-url", async (req, res) => {
   res.json({ url: data.signedUrl, expiresIn: SIGNED_URL_EXPIRY_SECONDS });
 });
 
+// GET /api/profile/:userId/timetable/file — the stored PDF itself, so the
+// calendar's Import timetable card can parse the profile copy without the
+// user picking the file again. Served from this origin (not a signed URL)
+// so the browser can read the bytes without depending on Storage's CORS.
+router.get("/file", async (req, res) => {
+  const { file, error } = await findTimetable(req.params.userId);
+  if (error) return storageFailure(res, error);
+  if (!file) return res.status(404).json({ error: "No timetable on file." });
+
+  const { data, error: downloadError } = await supabase.storage
+    .from(BUCKET)
+    .download(storagePath(req.params.userId));
+  if (downloadError) return storageFailure(res, downloadError);
+
+  const bytes = Buffer.from(await data.arrayBuffer());
+  res.set("Content-Type", "application/pdf");
+  res.set("Cache-Control", "no-store");
+  res.send(bytes);
+});
+
 // DELETE /api/profile/:userId/timetable — remove the stored timetable.
 // Idempotent: deleting when nothing is on file still answers 200.
 router.delete("/", async (req, res) => {

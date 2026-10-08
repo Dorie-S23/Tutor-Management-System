@@ -1,4 +1,4 @@
-import { addScheduleClasses } from "./storage.js";
+import { addScheduleClasses, getCurrentUser } from "./storage.js";
 import {
   parseTimetablePdf,
   firstOccurrenceOnOrAfter,
@@ -14,12 +14,74 @@ const reviewBody = document.getElementById("timetable-review-body");
 const saveBtn = document.getElementById("save-timetable-btn");
 const cancelBtn = document.getElementById("cancel-timetable-btn");
 const fileNameEl = document.getElementById("timetable-file-name");
+const profileNoteEl = document.getElementById("timetable-profile-note");
+
+// The timetable PDF saved on the user's profile page (see
+// profile-timetable.js), if any. When there is one, Parse PDF uses it
+// without the user picking the file again; choosing a PDF here overrides it.
+let profileTimetable = null;
+
+function profileTimetableUrl() {
+  const user = getCurrentUser();
+  return user?.id
+    ? `/api/profile/${encodeURIComponent(user.id)}/timetable`
+    : null;
+}
+
+function describeProfileUpload(updatedAt) {
+  const date = updatedAt ? new Date(updatedAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return ` (uploaded ${date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })})`;
+}
+
+function renderProfileNote() {
+  if (!profileNoteEl) return;
+  const show = Boolean(profileTimetable) && !fileInput.files[0];
+  profileNoteEl.hidden = !show;
+  profileNoteEl.textContent = show
+    ? `Using the timetable saved on your profile${describeProfileUpload(profileTimetable.updatedAt)} — pick your dates and press Parse PDF, or choose a different PDF above.`
+    : "";
+}
+
+async function loadProfileTimetable() {
+  const url = profileTimetableUrl();
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    const body = await res.json().catch(() => ({}));
+    profileTimetable = res.ok && body.uploaded ? body : null;
+  } catch {
+    // No profile copy to offer — the file picker still works as before.
+    profileTimetable = null;
+  }
+  renderProfileNote();
+}
+
+async function fetchProfileTimetableFile() {
+  const res = await fetch(`${profileTimetableUrl()}/file`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(
+      body.error ||
+        "Couldn't load the timetable saved on your profile — choose the PDF instead.",
+    );
+  }
+  const blob = await res.blob();
+  return new File([blob], "timetable.pdf", { type: "application/pdf" });
+}
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   fileNameEl.hidden = !file;
   fileNameEl.textContent = file ? `Selected: ${file.name}` : "";
+  renderProfileNote();
 });
+
+loadProfileTimetable();
 
 let parsedClasses = [];
 
@@ -87,8 +149,8 @@ function renderReview() {
 }
 
 parseBtn.addEventListener("click", async () => {
-  const file = fileInput.files[0];
-  if (!file) {
+  const chosenFile = fileInput.files[0];
+  if (!chosenFile && !profileTimetable) {
     setStatus("Choose a PDF file first.", true);
     return;
   }
@@ -105,9 +167,12 @@ parseBtn.addEventListener("click", async () => {
   parseBtn.classList.add("is-loading");
   parseBtn.setAttribute("aria-busy", "true");
   parseBtn.textContent = "Parsing…";
-  setStatus("Reading PDF…");
+  setStatus(
+    chosenFile ? "Reading PDF…" : "Loading the timetable from your profile…",
+  );
 
   try {
+    const file = chosenFile || (await fetchProfileTimetableFile());
     const classes = await parseTimetablePdf(file, (message) =>
       setStatus(message),
     );

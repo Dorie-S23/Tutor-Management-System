@@ -71,6 +71,7 @@ function fakeSupabase(
             upload: async () => ({ data: null, error: notFound }),
             remove: async () => ({ data: null, error: notFound }),
             createSignedUrl: async () => ({ data: null, error: notFound }),
+            download: async () => ({ data: null, error: notFound }),
           };
         }
 
@@ -105,6 +106,7 @@ function fakeSupabase(
             );
             const entry = {
               name: path,
+              body,
               updatedAt: new Date().toISOString(),
               metadata: {
                 size: body?.length ?? 0,
@@ -137,6 +139,21 @@ function fakeSupabase(
               data: {
                 signedUrl: `https://fake-supabase.test/storage/v1/object/sign/${bucketName}/${path}?token=fake-token&expiresIn=${expiresIn}`,
               },
+              error: null,
+            };
+          },
+          // Like the real client, answers a Blob of the stored bytes. Seeded
+          // entries without a `body` come back as an empty file.
+          download: async (path) => {
+            const item = bucket.find((entry) => asEntry(entry).name === path);
+            if (!item) {
+              return { data: null, error: { message: "Object not found" } };
+            }
+            const entry = asEntry(item);
+            return {
+              data: new Blob([entry.body ?? Buffer.alloc(0)], {
+                type: entry.metadata?.mimetype ?? "application/octet-stream",
+              }),
               error: null,
             };
           },

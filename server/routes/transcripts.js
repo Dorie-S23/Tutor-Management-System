@@ -122,6 +122,7 @@ router.post(
       fileName,
       size: req.body.length,
       contentType,
+      updatedAt: new Date().toISOString(),
     });
   },
 );
