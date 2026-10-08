@@ -956,6 +956,13 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
 
   overlay.appendChild(box);
   document.body.appendChild(overlay);
+
+  // The start/end time fields above are rebuilt every time this editor
+  // opens, so they get masked now that they're in the document (the guard
+  // keeps unit-test DOMs, which never load date-mask.js, working).
+  if (typeof window.enhanceDateInputs === "function") {
+    window.enhanceDateInputs(box);
+  }
 }
 
 // ---------- day view ----------

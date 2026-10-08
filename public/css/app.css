@@ -1153,6 +1153,27 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+/* ---------- Date fields (typed dd/mm/yyyy) ---------- */
+/* date-mask.js keeps the native <input type="date"> in the DOM for page
+   scripts, hidden behind the masked text field users actually type into. */
+.date-mask-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.date-mask-input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.date-mask-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--faint);
@@ -3450,6 +3471,10 @@ html[data-theme="dark"]
 html[data-theme="dark"]
   :is(.form-field input[readonly], .form-field select:disabled) {
   background-color: rgba(148, 163, 184, 0.1);
+}
+
+html[data-theme="dark"] .date-mask-input[aria-invalid="true"] {
+  border-color: #f87171;
 }
 
 /* Translucent-white overlays become translucent-dark (or faint light
@@ -5784,7 +5809,7 @@ body[data-theme="organiser"] textarea:focus {
 
 /* ---------- Budget report page ---------- */
 
-.toolbar-date {
+input.toolbar-date {
   width: 150px;
 }
 
@@ -6223,4 +6248,123 @@ html[data-theme="dark"] .report-course summary:hover {
 html[data-theme="dark"] .search-highlight {
   animation-name: search-flash-dark;
   border-color: rgba(251, 191, 36, 0.5) !important;
+}
+
+/* ---------- Status filter chips (timesheet review) ---------- */
+
+/* A compact pill variant of the course-chip family: quiet until the
+   status is selected, then the blue tint + border marks the active
+   filter the same way .course-chip.is-selected does. */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.filter-chip:hover {
+  border-color: var(--blue-line);
+  color: var(--ink-3);
+}
+
+.filter-chip.is-active {
+  background: var(--blue-tint);
+  border-color: var(--blue);
+  color: var(--blue-dark);
+  font-weight: 600;
+}
+
+/* ---------- Guided tour (onboarding.js) ---------- */
+
+/* The tour's spotlight UI. Geometry (ring position/size, tooltip
+   placement, the clip-path hole) is measured per step in JS; everything
+   static lives here so the tour inherits the page's tokens — including
+   the per-role --blue accent and the shared .btn-primary/.btn-secondary
+   used by its Next/Back controls. */
+.onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.onboarding-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  cursor: default;
+}
+
+.onboarding-ring {
+  position: fixed;
+  z-index: 1001;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 5px var(--blue);
+  pointer-events: none;
+}
+
+.onboarding-tooltip {
+  position: fixed;
+  z-index: 1002;
+  width: min(420px, calc(100vw - 28px));
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.28),
+    0 4px 14px rgba(15, 23, 42, 0.12);
+  padding: 25px 28px;
+  font-family: inherit;
+}
+
+.onboarding-step-count {
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.onboarding-title {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.onboarding-body {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--body-text);
+}
+
+.onboarding-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.onboarding-nav {
+  display: flex;
+  gap: 8px;
 }

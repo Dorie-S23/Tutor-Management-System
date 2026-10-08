@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
-      - run: npm test -- --coverage
+      - run: npm test -- --coverage --maxWorkers=2
 
       - name: Generate coverage badges (overall, server API, client UI)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/coverage/integrate-code-coverage'
