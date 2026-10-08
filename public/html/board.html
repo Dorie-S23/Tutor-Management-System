@@ -179,6 +179,9 @@
         <button class="btn-secondary" id="autoAllocateBtn" type="button">
           Auto-allocate whole school
         </button>
+        <button class="btn-secondary" id="draftsBtn" type="button">
+          Allocation drafts
+        </button>
       </div>
 
       <section class="org-stats" aria-label="Overview">
@@ -1014,6 +1017,52 @@
               type="button"
             >
               Publish selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <dialog
+      class="modal modal-xwide"
+      id="allocationDraftsModal"
+      aria-labelledby="allocationDraftsHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="allocationDraftsHeading">Allocation drafts</h2>
+          <button
+            class="modal-close"
+            id="draftsCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="draftsHint"></p>
+
+        <div class="drafts-layout">
+          <ul class="drafts-rail" id="draftsList" aria-label="Open drafts">
+            <!-- injected -->
+          </ul>
+
+          <div class="drafts-compare">
+            <div class="drafts-columns" id="draftsColumns" hidden>
+              <!-- injected -->
+            </div>
+            <p class="empty-copy" id="draftsEmpty">
+              Tick drafts on the left to open them side by side — picks that
+              differ between drafts are flagged.
+            </p>
+          </div>
+        </div>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn btn-ghost" id="draftsCancelBtn" type="button">
+              Close
             </button>
           </li>
         </menu>
