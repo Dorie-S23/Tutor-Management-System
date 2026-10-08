@@ -357,7 +357,7 @@ function renderApplicationsList() {
 
     const cancelBtn = document.createElement("button");
     cancelBtn.type = "button";
-    cancelBtn.className = "btn-danger";
+    cancelBtn.className = "btn-secondary";
     cancelBtn.textContent = "Cancel";
     cancelBtn.addEventListener("click", async () => {
       if (

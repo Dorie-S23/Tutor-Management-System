@@ -409,7 +409,7 @@ describe("modules.js", () => {
 
     const pending = rows[0];
     expect(pending.querySelector(".status-pill").textContent).toBe("pending");
-    expect(pending.querySelector("button.btn-danger").textContent).toBe(
+    expect(pending.querySelector("button.btn-secondary").textContent).toBe(
       "Cancel",
     );
 
@@ -443,7 +443,7 @@ describe("modules.js", () => {
 
     const doc = window.document;
     const cancelBtn = doc.querySelector(
-      "#applications-items .application-row button.btn-danger",
+      "#applications-items .application-row button.btn-secondary",
     );
     cancelBtn.click();
     await wait();
