@@ -3276,6 +3276,9 @@ html[data-theme="dark"] body {
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px rgba(0, 0, 0, 0.3);
   --surface: #111a2c;
   --surface-2: #18223a;
+  /* Native controls (select popups, date pickers, checkboxes, scroll
+     bars) render with the UA's dark variants. */
+  color-scheme: dark;
 
   background-color: #0a0f1c;
   background-image: linear-gradient(
@@ -6349,4 +6352,48 @@ html[data-theme="dark"] .search-highlight {
 .onboarding-nav {
   display: flex;
   gap: 8px;
+}
+
+/* 6. Toasts: the light toast is var(--ink) (near-black) with white
+      text, but --ink flips to near-white in dark mode — white on white.
+      Give the base toast the raised dark surface instead.
+      (.toast--danger keeps its fixed red background, which reads in
+      both themes.) */
+html[data-theme="dark"] .toast {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* 7. Form fields: white fields kept their near-white token text —
+      unreadable on the dark cards they sit on. Raise them off the card
+      surface and flip the text. */
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background-color: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--muted);
+}
+
+/* 8. Guided tour tooltip: hard-coded white card that kept a bright
+      panel on dark pages while its token text flipped pale. */
+html[data-theme="dark"] .onboarding-tooltip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* Hover borders on the white-surface buttons hard-code a light slate;
+   on the dark surface it reads as a bright ring. */
+html[data-theme="dark"] :is(.btn-secondary:hover, .btn-logout:hover) {
+  border-color: var(--faint);
 }
