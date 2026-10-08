@@ -260,43 +260,69 @@
           <div class="claim-form" id="claimForm">
             <table class="claim-title-table">
               <tr>
-                <td>
-                  <strong
-                    >School of Computer Sciences &amp; Applied
-                    Mathematics</strong
-                  >
+                <td class="claim-title-text">
+                  <div>
+                    School of Computer Sciences &amp; Applied Mathematics
+                  </div>
                   <div>Tutor Claim Form</div>
                   <div id="cYear"></div>
+                </td>
+                <td class="claim-title-crest">
+                  <span
+                    class="claim-crest"
+                    role="img"
+                    aria-label="Wits University crest"
+                  ></span>
                 </td>
               </tr>
             </table>
 
             <table class="claim-info-table">
+              <colgroup>
+                <col class="claim-col-label" />
+                <col span="4" />
+                <col class="claim-col-label2" />
+                <col class="claim-col-value2" />
+              </colgroup>
               <tr>
                 <th>FULL<br />Name of Tutor:</th>
-                <td colspan="3" id="cFullName"></td>
+                <td colspan="6" id="cFullName"></td>
               </tr>
               <tr>
                 <th>Student No.:</th>
-                <td id="cStudentNo"></td>
-                <th>Payroll No:</th>
+                <td colspan="4" id="cStudentNo"></td>
+                <th class="claim-th-strong">Payroll No:</th>
                 <td id="cPayrollNo"></td>
               </tr>
               <tr>
                 <th>Email Address:</th>
-                <td colspan="3" id="cEmail"></td>
+                <td colspan="6" id="cEmail"></td>
               </tr>
               <tr>
-                <th>Year of Study:</th>
-                <td colspan="3">
-                  <span id="cYearOfStudy"></span>
-                  &nbsp;&nbsp;&nbsp; Cell phone No:
-                  <span id="cCellPhone"></span>
+                <th>
+                  Year of Study:
+                  <span class="visually-hidden" id="cYearOfStudy"></span>
+                </th>
+                <td class="claim-year-option" data-year="third_year">
+                  3<sup>rd</sup> Year
                 </td>
+                <td class="claim-year-option" data-year="honours">Honours</td>
+                <td class="claim-year-option" data-year="masters">Masters</td>
+                <td class="claim-year-option" data-year="phd">PhD</td>
+                <th>Cell phone No:</th>
+                <td id="cCellPhone"></td>
               </tr>
             </table>
 
             <table class="claim-tasks-table">
+              <colgroup>
+                <col class="claim-col-date" />
+                <col class="claim-col-times" />
+                <col class="claim-col-duration" />
+                <col class="claim-col-description" />
+                <col class="claim-col-supervisor" />
+                <col class="claim-col-signature" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Date of Task</th>
@@ -318,20 +344,29 @@
                 <th>Student Signature</th>
                 <td></td>
                 <th>Date:</th>
-                <td id="cSignDate"></td>
+                <td class="claim-footer-value" id="cSignDate"></td>
               </tr>
+            </table>
+
+            <table class="claim-footer-table">
               <tr>
                 <th>Total Number of Hours:</th>
-                <td id="cTotalHours"></td>
+                <td class="claim-footer-value" id="cTotalHours"></td>
                 <th>Total Amount:</th>
-                <td id="cTotalAmount"></td>
+                <td class="claim-footer-value" id="cTotalAmount"></td>
               </tr>
             </table>
 
             <table class="claim-hos-table">
+              <colgroup>
+                <col class="claim-col-hos-label" />
+                <col class="claim-col-hos-name" />
+                <col class="claim-col-hos-signature" />
+                <col />
+              </colgroup>
               <tr>
                 <th rowspan="2">Head of School:</th>
-                <td id="cHeadOfSchool"></td>
+                <td class="claim-hos-name" id="cHeadOfSchool">Prof R Klein</td>
                 <td></td>
                 <td></td>
               </tr>

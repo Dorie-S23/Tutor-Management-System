@@ -27,6 +27,8 @@ const YEAR_OF_STUDY_LABELS = {
   phd: "PhD",
 };
 
+const CLAIM_MIN_ROWS = 15;
+
 const profileForm = document.getElementById("profile-form");
 const fullNameField = document.getElementById("fullName");
 const studentNumberField = document.getElementById("studentNumber");
@@ -224,6 +226,14 @@ async function renderClaim() {
   document.getElementById("cEmail").textContent = profile.email;
   document.getElementById("cYearOfStudy").textContent =
     YEAR_OF_STUDY_LABELS[profile.yearOfStudy] || "";
+  // The paper form lists all four options and the tutor strikes through
+  // theirs — mirror that by marking the matching box.
+  document.querySelectorAll(".claim-year-option").forEach((cell) => {
+    cell.classList.toggle(
+      "is-selected",
+      cell.dataset.year === profile.yearOfStudy,
+    );
+  });
   document.getElementById("cCellPhone").textContent = profile.cellPhone || "";
 
   const from = rangeFromField.value;
@@ -264,12 +274,23 @@ async function renderClaim() {
     claimRowsEl.appendChild(tr);
   }
 
+  // The printed Wits form always has room for 15 tasks; blank rows keep the
+  // same shape when fewer were logged.
+  for (let i = entries.length; i < CLAIM_MIN_ROWS; i++) {
+    const tr = document.createElement("tr");
+    tr.className = "claim-blank-row";
+    for (let col = 0; col < 6; col++) {
+      tr.appendChild(document.createElement("td"));
+    }
+    claimRowsEl.appendChild(tr);
+  }
+
   document.getElementById("cSignDate").textContent = toDisplayDate(
     to || todayStr(),
   );
   document.getElementById("cTotalHours").textContent = totalHours;
-  // Total Amount (and the Head of School block above) are left blank for
-  // payroll to complete on the printed claim — tutors no longer enter a
+  // Total Amount (and the Head of School signature and date) are left blank
+  // for payroll to complete on the printed claim — tutors no longer enter a
   // rate here.
 }
 

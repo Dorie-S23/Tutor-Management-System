@@ -3212,61 +3212,223 @@ body[data-theme="tutor"] textarea:focus {
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
 }
 
-/* ---------- Tutor claim form + print (timesheets) ---------- */
+/* ---------- Tutor claim form + print (timesheets) ----------
+   Laid out to match the School's printed Word form ("Tutor Claim Form"):
+   a white sheet in both themes, Calibri-style grey label cells, Times rows
+   for the logged tasks, and separate boxed tables for the signature,
+   totals and Head of School blocks. */
 
 .claim-preview[hidden] {
   display: none;
 }
 
+/* On a phone the sheet keeps its paper proportions and scrolls sideways
+   rather than squeezing seven columns into the screen. */
+.claim-preview {
+  overflow-x: auto;
+}
+
 .claim-form {
-  font-size: 0.85rem;
+  --claim-label-bg: #d9d9d9;
+  --claim-line: #000;
+  --claim-sans: Calibri, Carlito, "Segoe UI", Arial, sans-serif;
+  --claim-serif: "Times New Roman", Times, serif;
+  min-width: 640px;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 36px 40px;
+  background: #fff;
   color: #000;
+  font-family: var(--claim-sans);
+  font-size: 14px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  /* Keep the grey label cells and the crest when printed. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .claim-form table {
   width: 100%;
-  margin-bottom: 0.75rem;
+  margin-bottom: 18px;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .claim-form th,
 .claim-form td {
-  padding: 0.4rem 0.5rem;
-  border: 1px solid #333;
-  font-size: 0.8rem;
+  padding: 4px 6px;
+  border: 1px solid var(--claim-line);
+  color: #000;
+  font-family: var(--claim-sans);
+  font-size: 14px;
+  line-height: 1.25;
   text-align: left;
   vertical-align: top;
-  color: #000;
+  overflow-wrap: anywhere;
 }
 
 .claim-form th {
-  background: #f5f6f8;
-  font-weight: 600;
+  background: var(--claim-label-bg);
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: normal;
   text-transform: none;
 }
 
-.claim-title-table td {
-  padding: 0.75rem;
-  border: 2px solid #333;
-  text-align: center;
-  line-height: 1.4;
+.claim-form .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
-.claim-title-table strong {
-  font-size: 1.05rem;
+/* Title box: three bold lines on the left, the Wits crest on the right. */
+.claim-title-table td {
+  vertical-align: middle;
+}
+
+/* .claim-form-scoped so it outranks the generic .claim-form td size. */
+.claim-form .claim-title-text {
+  padding: 8px 10px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.claim-title-crest {
+  width: 80px;
+  text-align: center;
+}
+
+/* Wits.png is the crest above the "WITS UNIVERSITY" wordmark; the form
+   shows only the crest, so the background is cropped to it. */
+.claim-crest {
+  display: inline-block;
+  width: 34px;
+  height: 62px;
+  background: url("../images/Wits.png") no-repeat -36px -2px / 106px auto;
+}
+
+.claim-info-table .claim-col-label {
+  width: 17%;
+}
+
+.claim-info-table .claim-col-label2 {
+  width: 16%;
+}
+
+.claim-info-table .claim-col-value2 {
+  width: 28%;
 }
 
 .claim-info-table th {
-  width: 160px;
+  vertical-align: middle;
+}
+
+.claim-info-table .claim-th-strong {
+  font-size: 14px;
+}
+
+.claim-year-option {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* The tutor's own year is struck through, as on the paper form. */
+.claim-year-option.is-selected {
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.75px),
+    #000 calc(50% - 0.75px),
+    #000 calc(50% + 0.75px),
+    transparent calc(50% + 0.75px)
+  );
+}
+
+.claim-tasks-table .claim-col-date {
+  width: 11%;
+}
+
+.claim-tasks-table .claim-col-times {
+  width: 10%;
+}
+
+.claim-tasks-table .claim-col-duration {
+  width: 10%;
+}
+
+.claim-tasks-table .claim-col-description {
+  width: 33%;
+}
+
+.claim-tasks-table .claim-col-supervisor {
+  width: 18%;
 }
 
 .claim-tasks-table th {
-  font-size: 0.72rem;
+  text-align: center;
+  vertical-align: top;
+}
+
+.claim-tasks-table td {
+  padding: 2px 4px;
+  font-family: var(--claim-serif);
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+/* Filled and blank rows share one height, like the paper form's grid. */
+.claim-tasks-table tbody td {
+  height: 31px;
 }
 
 .claim-footer-table th {
-  width: 200px;
+  width: 25%;
+  vertical-align: middle;
+}
+
+.claim-footer-table th:nth-of-type(2) {
+  width: 13%;
+}
+
+.claim-footer-table th,
+.claim-footer-table td {
+  height: 52px;
+  vertical-align: middle;
+}
+
+.claim-footer-table .claim-footer-value {
+  font-family: var(--claim-serif);
+  text-align: center;
+}
+
+.claim-hos-table .claim-col-hos-label {
+  width: 25%;
+}
+
+.claim-hos-table .claim-col-hos-name {
+  width: 27%;
+}
+
+.claim-hos-table .claim-col-hos-signature {
+  width: 32%;
+}
+
+.claim-hos-table th[rowspan] {
+  vertical-align: middle;
+}
+
+.claim-hos-table td {
+  height: 52px;
+  vertical-align: middle;
+}
+
+.claim-form .claim-hos-name {
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* ---------- Dark theme (light/dark toggle, see js/theme.js) ----------
@@ -3523,23 +3685,22 @@ html[data-theme="dark"]
   border-color: rgba(248, 113, 113, 0.3);
 }
 
-/* The printable claim form stays readable on screen in dark mode; the
-   @media print rules below restore real paper colors for printing. */
+/* The claim form is a sheet of paper in both themes (it mirrors the
+   School's printed form), so dark mode keeps its white page and black
+   lines instead of picking up the dark table colours. */
 html[data-theme="dark"] .claim-form {
-  color: #d7e0ec;
+  background: #fff;
+  color: #000;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 html[data-theme="dark"] :is(.claim-form th, .claim-form td) {
-  border-color: #3f4c63;
-  color: #d7e0ec;
+  border-color: #000;
+  color: #000;
 }
 
 html[data-theme="dark"] .claim-form th {
-  background: #16203a;
-}
-
-html[data-theme="dark"] .claim-title-table td {
-  border-color: #3f4c63;
+  background: #d9d9d9;
 }
 
 /* The toggle button the theme script injects — global.css styles the
@@ -3654,20 +3815,6 @@ html[data-theme="dark"]
     background: #fff;
   }
 
-  html[data-theme="dark"] .claim-form {
-    color: #000;
-  }
-
-  html[data-theme="dark"] .claim-form th,
-  html[data-theme="dark"] .claim-form td {
-    border-color: #333;
-    color: #000;
-  }
-
-  html[data-theme="dark"] .claim-form th {
-    background: #f5f6f8;
-  }
-
   .app-main {
     max-width: none;
     padding: 0;
@@ -3677,6 +3824,15 @@ html[data-theme="dark"]
     padding: 0;
     margin: 0;
     border: none;
+    box-shadow: none;
+  }
+
+  /* The page margins stand in for the on-screen sheet's padding. */
+  .claim-form,
+  html[data-theme="dark"] .claim-form {
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
     box-shadow: none;
   }
 }
