@@ -1185,6 +1185,153 @@ input[type="search"]:focus-visible {
   width: min(640px, 94vw);
 }
 
+.modal-xwide {
+  width: min(1180px, 96vw);
+}
+
+/* Allocation drafts workspace: a rail of open drafts on the left, one
+   column per ticked draft on the right so candidates can be compared side
+   by side. Picks not shared by every column are flagged (draft-diff). */
+.drafts-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.drafts-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 0 0;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(560px, 62vh);
+  overflow-y: auto;
+}
+
+.draft-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draft-card.selected {
+  border-color: var(--navy);
+  background: var(--navy-bg);
+}
+
+.draft-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.draft-card-head .name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.draft-meta {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.draft-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-small.neutral {
+  color: var(--ink-soft);
+  border-color: var(--line);
+}
+.btn-small.neutral:hover {
+  background: var(--line-soft);
+}
+
+.draft-rename-input {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border: 1px solid var(--navy);
+  border-radius: 4px;
+}
+
+.drafts-columns {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+/* An author display rule beats the UA's [hidden] rule, so without this
+   the columns container would stay visible while "hidden". */
+.drafts-columns[hidden] {
+  display: none;
+}
+
+.draft-column {
+  flex: 1 1 0;
+  min-width: 230px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draft-column-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.draft-column-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.draft-pick-list {
+  max-height: min(380px, 46vh);
+}
+
+.tutor-row.draft-diff {
+  border-style: dashed;
+  border-color: var(--navy);
+}
+
+.tutor-row.draft-staged {
+  opacity: 0.55;
+}
+
+.draft-diff-badge {
+  margin-left: auto;
+}
+
+.draft-column-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
 .obvious-fill-course-head {
   font-family: "Space Grotesk", sans-serif;
   font-size: 12.5px;
@@ -3429,8 +3576,8 @@ html[data-theme="dark"] {
   --paper: #121815;
   --panel: #1c2621;
   --ink: #f4f9f5;
-  --ink-soft: #ccd7cf;
-  --ink-faint: #a6b5ab;
+  --ink-soft: #dbe5de;
+  --ink-faint: #bccabf;
   --line: #3b4a42;
   --line-soft: #2b3630;
   --navy: #9ac7d3;
@@ -3449,7 +3596,7 @@ html[data-theme="dark"] {
   --ta-surface: #1d2630;
   --ta-border: #3c4957;
   --ta-text: #eff3f8;
-  --ta-text-muted: #b8c2ce;
+  --ta-text-muted: #cbd5e0;
   --ta-primary: #9cb3ff;
   --ta-primary-hover: #bac9ff;
   --ta-danger: #f29a9a;
@@ -3523,4 +3670,169 @@ html[data-theme="dark"] .tutor-app .claim-hos-table th {
     padding: 7px 10px;
     font-size: 12px;
   }
+}
+
+/* ============================================================
+   Dark-mode legibility fixes.
+   In dark mode the accent tokens (--navy, --red, --ta-primary, --ink …)
+   become LIGHT colours, so anything that paired them with white text, or
+   that hard-coded a dark text colour / light background, lost contrast.
+   ============================================================ */
+
+/* Light accent fills -> dark text */
+html[data-theme="dark"] .avatar,
+html[data-theme="dark"] .preset-btn.active,
+html[data-theme="dark"] .btn-primary,
+html[data-theme="dark"] .btn-small-primary,
+html[data-theme="dark"] .notif-bell-badge,
+html[data-theme="dark"] .calendar-session-pill,
+html[data-theme="dark"] .tutor-app #logout-button:hover,
+html[data-theme="dark"] .tutor-app .btn-danger:hover,
+html[data-theme="dark"] .workload-pct:not(.workload-pct--outside),
+html[data-theme="dark"] body:not(.tutor-app) .btn-danger,
+html[data-theme="dark"] body:not(.student-app) .toast {
+  color: #0f1a1d;
+}
+
+/* Welcome banner: gradient is light in dark mode */
+html[data-theme="dark"] .tutor-app .card--welcome h2 {
+  color: #0f1a1d;
+}
+
+html[data-theme="dark"] .tutor-app .card--welcome p {
+  color: rgba(15, 26, 29, 0.85);
+}
+
+/* Profile avatar / role chip had a hard-coded light background */
+html[data-theme="dark"] .profile-avatar,
+html[data-theme="dark"] .profile-role {
+  background: #202e45;
+  color: var(--ta-primary);
+}
+
+/* Hard-coded dark text colours -> theme colours */
+html[data-theme="dark"] .tutor-app .excused-note {
+  color: var(--red);
+}
+
+html[data-theme="dark"] .tutor-app .excusal-cover--found {
+  color: var(--green);
+}
+
+html[data-theme="dark"] .tutor-app .excusal-cover--pending {
+  color: var(--amber);
+}
+
+/* ---------- student pages (body.student-app) ----------
+   These pages hard-code a light palette, while the shared calendar/form
+   rules they also use switch to light-on-dark text. Theme them fully so
+   text is never light-on-light. */
+
+html[data-theme="dark"] body.student-app {
+  background: var(--ta-bg);
+  color: var(--ta-text);
+}
+
+html[data-theme="dark"] .student-app > header,
+html[data-theme="dark"] .student-app > footer,
+html[data-theme="dark"] .student-app .card,
+html[data-theme="dark"] .student-app main > section:nth-child(2) article,
+html[data-theme="dark"] .student-app main > section:nth-child(3),
+html[data-theme="dark"] .student-app main > section:last-child {
+  background: var(--ta-surface);
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .student-app > header h1,
+html[data-theme="dark"] .student-app main > section:nth-child(2) article h3 {
+  color: var(--ta-primary);
+}
+
+html[data-theme="dark"] .student-app nav a {
+  color: var(--ta-text-muted);
+}
+
+html[data-theme="dark"] .student-app nav a[aria-current="page"] {
+  background: #202e45;
+  color: var(--ta-primary);
+}
+
+html[data-theme="dark"] .student-app main > section:first-child p,
+html[data-theme="dark"] .student-app section > header p,
+html[data-theme="dark"] .student-app main > section:nth-child(2) article p,
+html[data-theme="dark"] .student-app main > section:nth-child(3) article p,
+html[data-theme="dark"] .student-app main > section:last-child article p,
+html[data-theme="dark"] .student-app .session-list article p,
+html[data-theme="dark"] .student-app .session-meta,
+html[data-theme="dark"] .student-app .empty-state,
+html[data-theme="dark"] .student-app > footer p,
+html[data-theme="dark"] .student-app .form-field label {
+  color: var(--ta-text-muted);
+}
+
+html[data-theme="dark"] .student-app main > section:nth-child(3) article,
+html[data-theme="dark"] .student-app main > section:last-child article,
+html[data-theme="dark"] .student-app .session-list article,
+html[data-theme="dark"] .student-app .swap-select,
+html[data-theme="dark"] .student-app .form-field textarea {
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .student-app .swap-label,
+html[data-theme="dark"] .student-app .checkbox-row label {
+  color: var(--ta-text);
+}
+
+html[data-theme="dark"] .student-app .swap-select,
+html[data-theme="dark"] .student-app .form-field textarea,
+html[data-theme="dark"] .student-app .swap-buttons .btn-secondary,
+html[data-theme="dark"] .student-app .btn-cancel {
+  background: var(--ta-bg);
+}
+
+html[data-theme="dark"] .student-app .swap-buttons .btn-secondary {
+  color: var(--ta-text);
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .student-app .swap-buttons .btn-secondary:hover {
+  background: var(--ta-surface);
+}
+
+html[data-theme="dark"] .student-app .btn-cancel {
+  color: var(--ta-danger);
+  border-color: var(--ta-danger);
+}
+
+html[data-theme="dark"] .student-app .btn-cancel:hover {
+  background: var(--ta-danger);
+  color: #0f1a1d;
+}
+
+html[data-theme="dark"] .student-app .session-list article.session-cover {
+  background: #202e45;
+}
+
+html[data-theme="dark"] .student-app .session-list article .session-cover-badge {
+  color: var(--ta-primary);
+}
+
+html[data-theme="dark"] .student-app .session-list article.session-swap-request {
+  background: var(--amber-bg);
+}
+
+html[data-theme="dark"] .student-app .session-swap-request .session-cover-badge,
+html[data-theme="dark"] .student-app .session-list article .swap-pending {
+  color: var(--amber);
+}
+
+html[data-theme="dark"] .student-app strong,
+html[data-theme="dark"] .student-app .status-pill.completed {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+html[data-theme="dark"] .student-app .status-pill.missed {
+  background: var(--red-bg);
+  color: var(--red);
 }

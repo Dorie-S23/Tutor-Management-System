@@ -223,30 +223,40 @@ describe("DELETE /api/tutors/:id", () => {
   });
 });
 
-describe("PUT /api/tutors/:id/busy-times", () => {
-  test("requires classes to be an array", async () => {
-    const res = await request(buildApp())
-      .put(`/api/tutors/${TUTOR_ID}/busy-times`)
-      .send({ classes: "not-an-array" });
-
-    expect(res.status).toBe(400);
+describe("/api/tutors/:id/busy-times", () => {
+  const busyTime = (fields) => ({
+    tutor_id: TUTOR_ID,
+    title: "COMS2011A",
+    day_of_week: 1,
+    start_time: "09:00",
+    end_time: "10:00",
+    first_date: "2026-01-05",
+    end_date: "2026-06-01",
+    venue: "FNB1",
+    exceptions: [],
+    ...fields,
   });
 
-  test("fully replaces the tutor's previous busy times with the new list", async () => {
+  test("GET lists only this user's classes", async () => {
     tables.tutor_busy_times = [
-      {
-        id: 1,
-        tutor_id: TUTOR_ID,
-        title: "Old class",
-        day_of_week: 1,
-        start_time: "09:00",
-        end_time: "10:00",
-      },
-      { id: 2, tutor_id: "someone-else", day_of_week: 2 },
+      busyTime({ id: 2, title: "Second" }),
+      busyTime({ id: 1, title: "First" }),
+      busyTime({ id: 3, tutor_id: "someone-else" }),
     ];
 
+    const res = await request(buildApp()).get(
+      `/api/tutors/${TUTOR_ID}/busy-times`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((b) => b.title)).toEqual(["First", "Second"]);
+  });
+
+  test("POST adds every class for this user", async () => {
+    tables.tutor_busy_times = [busyTime({ id: 1 })];
+
     const res = await request(buildApp())
-      .put(`/api/tutors/${TUTOR_ID}/busy-times`)
+      .post(`/api/tutors/${TUTOR_ID}/busy-times`)
       .send({
         classes: [
           {
@@ -254,34 +264,133 @@ describe("PUT /api/tutors/:id/busy-times", () => {
             dayOfWeek: 3,
             startTime: "11:00",
             endTime: "12:00",
+            firstDate: "2026-01-07",
+            endDate: "2026-05-27",
+            venue: "",
+          },
+          {
+            title: "Another",
+            dayOfWeek: 4,
+            startTime: "08:00",
+            endTime: "09:00",
           },
         ],
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-
-    const remaining = tables.tutor_busy_times.filter(
-      (b) => b.tutor_id === TUTOR_ID,
-    );
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].title).toBe("New class");
-    // Another tutor's busy times are untouched.
-    expect(
-      tables.tutor_busy_times.some((b) => b.tutor_id === "someone-else"),
-    ).toBe(true);
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0]).toMatchObject({
+      tutor_id: TUTOR_ID,
+      title: "New class",
+      day_of_week: 3,
+      start_time: "11:00",
+      end_time: "12:00",
+      first_date: "2026-01-07",
+      end_date: "2026-05-27",
+      venue: null,
+    });
+    // exceptions is left to the column default, so adding works even
+    // before that column exists.
+    expect(res.body[0]).not.toHaveProperty("exceptions");
+    // The existing class is kept — adding never replaces.
+    expect(tables.tutor_busy_times).toHaveLength(3);
   });
 
-  test("an empty list just clears the tutor's busy times", async () => {
-    tables.tutor_busy_times = [{ id: 1, tutor_id: TUTOR_ID, day_of_week: 1 }];
+  test("POST rejects an empty list or a class without a valid day and times", async () => {
+    const app = buildApp();
+    const url = `/api/tutors/${TUTOR_ID}/busy-times`;
+
+    expect((await request(app).post(url).send({ classes: [] })).status).toBe(
+      400,
+    );
+    expect(
+      (
+        await request(app)
+          .post(url)
+          .send({
+            classes: [{ dayOfWeek: 7, startTime: "09:00", endTime: "10:00" }],
+          })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post(url)
+          .send({ classes: [{ dayOfWeek: 2 }] })
+      ).status,
+    ).toBe(400);
+  });
+
+  test("PATCH updates only the fields sent, including per-day exceptions", async () => {
+    tables.tutor_busy_times = [busyTime({ id: 1 })];
+    const exceptions = [{ date: "2026-01-12", type: "cancelled" }];
 
     const res = await request(buildApp())
-      .put(`/api/tutors/${TUTOR_ID}/busy-times`)
-      .send({ classes: [] });
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({ venue: "WSS", exceptions });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
-    expect(tables.tutor_busy_times).toHaveLength(0);
+    expect(res.body).toMatchObject({
+      title: "COMS2011A",
+      venue: "WSS",
+      exceptions,
+    });
+    expect(tables.tutor_busy_times[0].exceptions).toEqual(exceptions);
+  });
+
+  test("PATCH 404s for another user's class and 400s with nothing to change", async () => {
+    tables.tutor_busy_times = [busyTime({ id: 1, tutor_id: "someone-else" })];
+    const app = buildApp();
+
+    const notMine = await request(app)
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({ venue: "WSS" });
+    expect(notMine.status).toBe(404);
+    expect(tables.tutor_busy_times[0].venue).toBe("FNB1");
+
+    const empty = await request(app)
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({});
+    expect(empty.status).toBe(400);
+
+    const badExceptions = await request(app)
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({ exceptions: "nope" });
+    expect(badExceptions.status).toBe(400);
+  });
+
+  test("DELETE one class leaves the rest, and never touches another user's", async () => {
+    tables.tutor_busy_times = [
+      busyTime({ id: 1 }),
+      busyTime({ id: 2 }),
+      busyTime({ id: 3, tutor_id: "someone-else" }),
+    ];
+    const app = buildApp();
+
+    expect(
+      (await request(app).delete(`/api/tutors/${TUTOR_ID}/busy-times/1`))
+        .status,
+    ).toBe(204);
+    expect(
+      (await request(app).delete(`/api/tutors/${TUTOR_ID}/busy-times/3`))
+        .status,
+    ).toBe(204);
+
+    expect(tables.tutor_busy_times.map((b) => b.id)).toEqual([2, 3]);
+  });
+
+  test("DELETE without an id clears all of this user's classes only", async () => {
+    tables.tutor_busy_times = [
+      busyTime({ id: 1 }),
+      busyTime({ id: 2, tutor_id: "someone-else" }),
+    ];
+
+    const res = await request(buildApp()).delete(
+      `/api/tutors/${TUTOR_ID}/busy-times`,
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.tutor_busy_times.map((b) => b.id)).toEqual([2]);
   });
 });
 

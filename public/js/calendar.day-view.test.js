@@ -59,7 +59,14 @@ function getEntriesForDate() {
     },
   ]);
 }
-function addScheduleClasses() {}
+function addScheduleClasses(classes) {
+  if (window.__addFails) return Promise.reject(new Error("database is down"));
+  window.__addedClasses = (window.__addedClasses || []).concat(classes);
+  return Promise.resolve(classes);
+}
+function loadSchedule() {
+  return Promise.resolve([]);
+}
 function cancelScheduleOccurrence() {}
 function modifyScheduleOccurrence() {}
 function clearScheduleException() {}
@@ -225,6 +232,103 @@ describe("calendar.js day view", () => {
     expect(doc.querySelector(".day-view-overlay")).toBeNull();
     expect(doc.querySelector(".occurrence-modal-overlay")).not.toBeNull();
     expect(doc.getElementById("add-class-card").hidden).toBe(true);
+  });
+
+  describe("manual add-class form", () => {
+    // Submitting shows a toast with a 2.6s hide timer; closing the window
+    // clears it so the worker can exit (after letting submit's render settle).
+    let openWindow = null;
+    afterEach(async () => {
+      await ready();
+      openWindow?.close();
+      openWindow = null;
+    });
+
+    async function openForm() {
+      const window = loadCalendar();
+      openWindow = window;
+      await ready();
+      await ready();
+      const doc = window.document;
+      doc.getElementById("add-class-btn").click();
+      doc.getElementById("add-class-date").value = "2026-01-15"; // a Thursday
+      doc.getElementById("add-class-subject").value = "COMS2011A";
+      doc.getElementById("add-class-start").value = "09:00";
+      doc.getElementById("add-class-end").value = "10:00";
+      doc.getElementById("add-class-venue").value = "FNB1";
+      return { window, doc };
+    }
+
+    async function submit(window, doc) {
+      doc
+        .getElementById("add-class-form")
+        .dispatchEvent(
+          new window.Event("submit", { bubbles: true, cancelable: true }),
+        );
+      await ready(); // the save waits on the server
+    }
+
+    test("without repeat, the class is added to just that one day", async () => {
+      const { window, doc } = await openForm();
+      expect(doc.getElementById("add-class-repeat-until-field").hidden).toBe(
+        true,
+      );
+
+      await submit(window, doc);
+
+      expect(window.__addedClasses).toEqual([
+        expect.objectContaining({
+          title: "COMS2011A",
+          dayOfWeek: 4,
+          firstDate: "2026-01-15",
+          endDate: "2026-01-15",
+          startTime: "09:00",
+          endTime: "10:00",
+          venue: "FNB1",
+        }),
+      ]);
+    });
+
+    test("ticking repeat reveals a required until-date and adds a weekly series through it", async () => {
+      const { window, doc } = await openForm();
+      const repeat = doc.getElementById("add-class-repeat");
+      const untilField = doc.getElementById("add-class-repeat-until-field");
+      const until = doc.getElementById("add-class-repeat-until");
+
+      repeat.checked = true;
+      repeat.dispatchEvent(new window.Event("change", { bubbles: true }));
+      expect(untilField.hidden).toBe(false);
+      expect(until.required).toBe(true);
+      expect(until.min).toBe("2026-01-15");
+
+      until.value = "2026-05-28";
+      await submit(window, doc);
+
+      expect(window.__addedClasses).toEqual([
+        expect.objectContaining({
+          dayOfWeek: 4,
+          firstDate: "2026-01-15",
+          endDate: "2026-05-28",
+        }),
+      ]);
+      // The form resets on close, hiding the until-date again.
+      expect(repeat.checked).toBe(false);
+      expect(untilField.hidden).toBe(true);
+      expect(until.required).toBe(false);
+    });
+
+    test("if the server rejects the class, the form stays open with what was typed", async () => {
+      const { window, doc } = await openForm();
+      window.__addFails = true;
+
+      await submit(window, doc);
+
+      expect(doc.getElementById("add-class-card").hidden).toBe(false);
+      expect(doc.getElementById("add-class-subject").value).toBe("COMS2011A");
+      const toast = doc.getElementById("toast");
+      expect(toast.textContent).toBe("database is down");
+      expect(toast.classList.contains("toast--danger")).toBe(true);
+    });
   });
 
   test("Escape closes the day view", async () => {

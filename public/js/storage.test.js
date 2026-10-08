@@ -34,6 +34,7 @@ const EXPORTED_NAMES = [
   "todayStr",
   "getProfile",
   "saveProfile",
+  "loadSchedule",
   "getSchedule",
   "addScheduleClasses",
   "deleteScheduleClass",
@@ -226,7 +227,7 @@ describe("requireRole", () => {
 });
 
 // Regression coverage for the bug where a fixed localStorage key (e.g.
-// "tutorHours.schedule") leaked one signed-in user's profile/schedule to
+// "tutorHours.profile") leaked one signed-in user's profile to
 // whoever was signed in next on the same browser.
 describe("per-user data isolation", () => {
   test("saveProfile/getProfile don't leak between different signed-in users", () => {
@@ -244,57 +245,217 @@ describe("per-user data isolation", () => {
     setCurrentUser(window, { id: "tutor-A", role: "tutor" });
     expect(window.__storage.getProfile()).toEqual({ fullName: "Alice" });
   });
+});
 
-  test("a class added by one user doesn't show up on another user's schedule", () => {
+// A stand-in for /api/tutors/:id/busy-times backed by a plain array, so the
+// schedule functions' real requests round-trip through something that
+// behaves like the server (snake_case rows, numeric ids, per-user scoping).
+function fakeBusyTimesApi(rows = []) {
+  let nextId = rows.reduce((max, r) => Math.max(max, r.id), 0);
+  const json = (body, status = 200) =>
+    Promise.resolve({
+      ok: status < 400,
+      status,
+      json: async () => body,
+    });
+
+  function fetch(url, options = {}) {
+    const method = options.method || "GET";
+    const body = options.body ? JSON.parse(options.body) : null;
+    const [, userId, busyId] = url.match(
+      /^\/api\/tutors\/([^/]+)\/busy-times(?:\/(\d+))?$/,
+    );
+    const mine = (r) => r.tutor_id === userId;
+
+    if (method === "GET") return json(rows.filter(mine));
+    if (method === "POST") {
+      const added = body.classes.map((c) => ({
+        id: ++nextId,
+        tutor_id: userId,
+        title: c.title,
+        day_of_week: c.dayOfWeek,
+        start_time: `${c.startTime}:00`,
+        end_time: `${c.endTime}:00`,
+        first_date: c.firstDate,
+        end_date: c.endDate,
+        venue: c.venue,
+        exceptions: [],
+      }));
+      rows.push(...added);
+      return json(added, 201);
+    }
+    if (method === "PATCH") {
+      const row = rows.find((r) => mine(r) && r.id === Number(busyId));
+      if (!row) return json({ error: "Class not found" }, 404);
+      if (body.exceptions) row.exceptions = body.exceptions;
+      if (body.venue !== undefined) row.venue = body.venue;
+      return json({ ...row });
+    }
+    if (method === "DELETE") {
+      for (let i = rows.length - 1; i >= 0; i -= 1) {
+        if (mine(rows[i]) && (!busyId || rows[i].id === Number(busyId))) {
+          rows.splice(i, 1);
+        }
+      }
+      return json(null, 204);
+    }
+    throw new Error(`unexpected ${method} ${url}`);
+  }
+
+  return { fetch, rows };
+}
+
+const MONDAY_CLASS = {
+  title: "COMS2011A",
+  dayOfWeek: 1,
+  firstDate: "2026-01-01",
+  endDate: "2026-12-31",
+  startTime: "10:00",
+  endTime: "11:00",
+  venue: "FNB1",
+};
+
+describe("class schedule (server-backed)", () => {
+  test("nothing about the schedule is written to the browser's storage", async () => {
     const window = loadStorage();
-
+    const api = fakeBusyTimesApi();
+    window.fetch = api.fetch;
     setCurrentUser(window, { id: "tutor-A", role: "tutor" });
-    window.__storage.addScheduleClasses([
+
+    const [added] = await window.__storage.addScheduleClasses([MONDAY_CLASS]);
+    await window.__storage.cancelScheduleOccurrence(added.id, "2026-01-05");
+
+    expect(window.localStorage.length).toBe(0);
+    expect(api.rows).toHaveLength(1);
+    expect(api.rows[0].exceptions).toEqual([
+      { date: "2026-01-05", type: "cancelled" },
+    ]);
+  });
+
+  test("loadSchedule brings back classes saved elsewhere, times trimmed to HH:MM", async () => {
+    const window = loadStorage();
+    const api = fakeBusyTimesApi([
       {
-        title: "COMS2011A",
-        dayOfWeek: 1,
-        firstDate: "2026-01-01",
-        endDate: "2026-12-31",
-        startTime: "10:00",
-        endTime: "11:00",
-        venue: "FNB1",
+        id: 7,
+        tutor_id: "tutor-A",
+        title: "STAT2012A",
+        day_of_week: 2,
+        start_time: "12:30:00",
+        end_time: "14:15:00",
+        first_date: "2026-01-06",
+        end_date: "2026-06-30",
+        venue: null,
+        exceptions: [
+          {
+            date: "2026-01-13",
+            type: "modified",
+            overrides: { venue: "WSS" },
+          },
+        ],
       },
     ]);
+    window.fetch = api.fetch;
+    setCurrentUser(window, { id: "tutor-A", role: "tutor" });
+
+    expect(window.__storage.getSchedule()).toEqual([]);
+    await window.__storage.loadSchedule();
+
+    const [cls] = window.__storage.getScheduleForDate("2026-01-06");
+    expect(cls).toMatchObject({
+      id: 7,
+      startTime: "12:30",
+      endTime: "14:15",
+      venue: "",
+    });
+    const [moved] = window.__storage.getScheduleForDate("2026-01-13");
+    expect(moved).toMatchObject({ venue: "WSS", isModifiedOccurrence: true });
+  });
+
+  test("cancel, modify and restore an occurrence; delete and clear classes", async () => {
+    const window = loadStorage();
+    const api = fakeBusyTimesApi();
+    window.fetch = api.fetch;
+    setCurrentUser(window, { id: "tutor-A", role: "tutor" });
+    const s = window.__storage;
+
+    const [a, b] = await s.addScheduleClasses([
+      MONDAY_CLASS,
+      { ...MONDAY_CLASS, title: "MATH2016A" },
+    ]);
+    expect(s.getScheduleForDate("2026-01-05")).toHaveLength(2);
+
+    await s.cancelScheduleOccurrence(a.id, "2026-01-05");
+    expect(s.getScheduleForDate("2026-01-05").map((c) => c.title)).toEqual([
+      "MATH2016A",
+    ]);
+    expect(s.getCancelledOccurrencesForDate("2026-01-05")).toHaveLength(1);
+    expect(s.getScheduleExceptions()).toEqual([
+      { classId: a.id, date: "2026-01-05", type: "cancelled" },
+    ]);
+    // Other weeks are untouched.
+    expect(s.getScheduleForDate("2026-01-12")).toHaveLength(2);
+
+    // Replacing the exception for the same date keeps one per date.
+    await s.modifyScheduleOccurrence(a.id, "2026-01-05", { venue: "WSS" });
+    expect(api.rows[0].exceptions).toHaveLength(1);
+    expect(s.getCancelledOccurrencesForDate("2026-01-05")).toHaveLength(0);
+
+    await s.clearScheduleException(a.id, "2026-01-05");
+    expect(api.rows[0].exceptions).toEqual([]);
+
+    await s.updateScheduleClass(a.id, { venue: "OLS" });
+    expect(s.getSchedule()[0].venue).toBe("OLS");
+
+    await s.deleteScheduleClass(b.id);
+    expect(s.getSchedule().map((c) => c.title)).toEqual(["COMS2011A"]);
+    expect(api.rows).toHaveLength(1);
+
+    await s.clearSchedule();
+    expect(s.getSchedule()).toEqual([]);
+    expect(api.rows).toHaveLength(0);
+  });
+
+  test("a failed save leaves the cached schedule unchanged and reports why", async () => {
+    const window = loadStorage();
+    const api = fakeBusyTimesApi();
+    window.fetch = api.fetch;
+    setCurrentUser(window, { id: "tutor-A", role: "tutor" });
+    const [added] = await window.__storage.addScheduleClasses([MONDAY_CLASS]);
+
+    window.fetch = () =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: "database is down" }),
+      });
+
+    await expect(
+      window.__storage.cancelScheduleOccurrence(added.id, "2026-01-05"),
+    ).rejects.toThrow("database is down");
+    await expect(
+      window.__storage.deleteScheduleClass(added.id),
+    ).rejects.toThrow("database is down");
+    expect(window.__storage.getScheduleForDate("2026-01-05")).toHaveLength(1);
+  });
+
+  test("one user's classes never show for another user signed in after them", async () => {
+    const window = loadStorage();
+    const api = fakeBusyTimesApi();
+    window.fetch = api.fetch;
+
+    setCurrentUser(window, { id: "tutor-A", role: "tutor" });
+    await window.__storage.addScheduleClasses([MONDAY_CLASS]);
     expect(window.__storage.getSchedule()).toHaveLength(1);
 
     setCurrentUser(window, { id: "tutor-B", role: "tutor" });
     expect(window.__storage.getSchedule()).toHaveLength(0);
     expect(window.__storage.getScheduleForDate("2026-01-05")).toEqual([]);
+    await window.__storage.loadSchedule();
+    expect(window.__storage.getSchedule()).toHaveLength(0);
 
     setCurrentUser(window, { id: "tutor-A", role: "tutor" });
-    expect(window.__storage.getSchedule()).toHaveLength(1);
+    await window.__storage.loadSchedule();
     expect(window.__storage.getScheduleForDate("2026-01-05")).toHaveLength(1);
-  });
-
-  test("schedule exceptions (cancel/modify) also don't leak between users", () => {
-    const window = loadStorage();
-
-    setCurrentUser(window, { id: "tutor-A", role: "tutor" });
-    const [added] = window.__storage.addScheduleClasses([
-      {
-        title: "COMS2011A",
-        dayOfWeek: 1,
-        firstDate: "2026-01-01",
-        endDate: "2026-12-31",
-        startTime: "10:00",
-        endTime: "11:00",
-        venue: "FNB1",
-      },
-    ]);
-    window.__storage.cancelScheduleOccurrence(added.id, "2026-01-05");
-    expect(
-      window.__storage.getCancelledOccurrencesForDate("2026-01-05"),
-    ).toHaveLength(1);
-
-    setCurrentUser(window, { id: "tutor-B", role: "tutor" });
-    expect(
-      window.__storage.getCancelledOccurrencesForDate("2026-01-05"),
-    ).toHaveLength(0);
   });
 });
 

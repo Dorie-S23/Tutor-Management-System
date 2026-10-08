@@ -150,6 +150,60 @@
           </form>
         </div>
       </div>
+
+      <section
+        class="card profile-timetable-card"
+        id="profile-timetable"
+        aria-labelledby="profile-timetable-heading"
+      >
+        <h2 id="profile-timetable-heading">My timetable</h2>
+        <p class="card-hint">
+          Keep a copy of your class timetable PDF here so it's always on hand.
+          To add the classes to your calendar, use Import timetable on the
+          calendar page. PDF only, up to 5&nbsp;MB.
+        </p>
+        <div class="transcript-panel__row">
+          <span
+            class="transcript-status"
+            id="profile-timetable-status"
+            aria-live="polite"
+          >
+            Checking&hellip;
+          </span>
+          <div class="transcript-panel__actions">
+            <button
+              class="btn-secondary"
+              id="profile-timetable-remove-btn"
+              type="button"
+              hidden
+            >
+              Remove
+            </button>
+            <button
+              class="btn-secondary"
+              id="profile-timetable-view-btn"
+              type="button"
+              hidden
+            >
+              View timetable
+            </button>
+            <button
+              class="btn-primary"
+              id="profile-timetable-upload-btn"
+              type="button"
+            >
+              Upload timetable
+            </button>
+          </div>
+        </div>
+        <input
+          type="file"
+          id="profile-timetable-input"
+          accept="application/pdf"
+          hidden
+        />
+        <p class="field-error" id="profile-timetable-error" hidden></p>
+      </section>
     </main>
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>

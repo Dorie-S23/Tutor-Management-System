@@ -6,6 +6,7 @@
 // surrounding chrome differs.
 import { requireRole } from "./storage.js";
 import { highlightActiveTab } from "./nav.js";
+import { initProfileTimetable } from "./profile-timetable.js";
 
 // A comma-separated list covers pages shared between roles (the organiser
 // profile also serves the super-organiser account, same as board.html).
@@ -174,3 +175,4 @@ form.addEventListener("submit", async (event) => {
 });
 
 loadProfile();
+initProfileTimetable(currentUser.id);

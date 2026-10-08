@@ -159,6 +159,7 @@ describe("timetable-import.js", () => {
 
     doc.getElementById("semester-end").value = "2026-11-30";
     doc.getElementById("save-timetable-btn").click();
+    await flush(); // the save waits on the server
 
     expect(win.__addedClasses).toEqual([
       {
@@ -221,6 +222,7 @@ describe("timetable-import.js", () => {
       cb.checked = true;
     });
     doc.getElementById("save-timetable-btn").click();
+    await flush(); // the save waits on the server
 
     expect(win.__addedClasses).toHaveLength(2);
     expect(win.__addedClasses[1].title).toBe("PHYS3000");

@@ -201,7 +201,7 @@ describe("POST /api/timetable/parse", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, options] = global.fetch.mock.calls[0];
     expect(url).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
     );
     expect(options.method).toBe("POST");
     expect(options.headers["x-goog-api-key"]).toBe("test-key");
@@ -322,6 +322,40 @@ describe("POST /api/timetable/parse", () => {
     expect(global.fetch.mock.calls[1][0]).toContain(
       `models/${DEFAULT_GEMINI_MODELS[1]}:generateContent`,
     );
+  });
+
+  test("fails over without retrying when a model hangs past its attempt cap", async () => {
+    jest.useFakeTimers({ doNotFake: ["nextTick", "setImmediate"] });
+    try {
+      global.fetch
+        .mockImplementationOnce(
+          (url, { signal }) =>
+            new Promise((resolve, reject) => {
+              signal.addEventListener("abort", () =>
+                reject(new Error("aborted")),
+              );
+            }),
+        )
+        .mockResolvedValueOnce(geminiOk([validClass()]));
+
+      const pending = postPdf(buildApp()).then((res) => res);
+      while (global.fetch.mock.calls.length === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      await jest.advanceTimersByTimeAsync(20_000);
+      const res = await pending;
+
+      expect(res.status).toBe(200);
+      expect(res.body.classes).toHaveLength(1);
+      // The hung model is abandoned after one attempt — no same-model
+      // retries — and the next candidate answers.
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch.mock.calls[1][0]).toContain(
+        `models/${DEFAULT_GEMINI_MODELS[1]}:generateContent`,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("gives up with 502 when every model stays saturated", async () => {

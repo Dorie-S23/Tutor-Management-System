@@ -40,6 +40,9 @@ function getCancelledOccurrencesForDate() {
   return [];
 }
 function addScheduleClasses() {}
+function loadSchedule() {
+  return Promise.resolve([]);
+}
 function cancelScheduleOccurrence() {}
 function modifyScheduleOccurrence() {}
 function clearScheduleException() {}

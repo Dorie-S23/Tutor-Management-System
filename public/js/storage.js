@@ -247,184 +247,184 @@ export function saveProfile(profile) {
   localStorage.setItem(profileKey(), JSON.stringify(profile));
 }
 
-// ---------- recurring class schedule (imported from a timetable PDF) ----------
+// ---------- recurring class schedule (added manually or from a timetable PDF) ----------
 // Each class recurs weekly on the same weekday from firstDate through endDate,
 // separate from logged hours so it never affects hours-worked totals.
+//
+// The server (tutor_busy_times, via /api/tutors/:id/busy-times) is the only
+// copy — nothing is kept in the browser's storage, so a user's classes follow
+// them to any browser or device. loadSchedule() fetches them into the
+// in-memory cache below, which the synchronous date lookups the calendar
+// renders from read; each change is written to the server first and only
+// then applied to the cache.
 
-// Namespaced by user id for the same reason as profileKey() above — without
-// this, a tutor's added/imported classes show up on whichever account is
-// signed in next on the same browser (this is what caused a volunteer to
-// see a different tutor's course sessions on their calendar).
-function scheduleKey() {
-  const user = getCurrentUser();
-  return `tutorHours.schedule.${user ? user.id : "anon"}`;
+let scheduleCache = [];
+// Whose classes are cached, so a different signed-in user never sees them.
+let scheduleUserId = null;
+
+function fromApiBusyTime(row) {
+  return {
+    id: row.id,
+    title: row.title || "",
+    dayOfWeek: row.day_of_week,
+    startTime: (row.start_time || "").slice(0, 5),
+    endTime: (row.end_time || "").slice(0, 5),
+    firstDate: row.first_date || "",
+    endDate: row.end_date || "",
+    venue: row.venue || "",
+    exceptions: Array.isArray(row.exceptions) ? row.exceptions : [],
+  };
 }
 
-function readSchedule() {
-  const raw = localStorage.getItem(scheduleKey());
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+function busyTimesUrl(suffix = "") {
+  const user = getCurrentUser();
+  if (!user) throw new Error("Not signed in");
+  return `/api/tutors/${encodeURIComponent(user.id)}/busy-times${suffix}`;
+}
+
+async function expectOk(response, failureMessage) {
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || failureMessage);
   }
 }
 
-function writeSchedule(classes) {
-  localStorage.setItem(scheduleKey(), JSON.stringify(classes));
+function readSchedule() {
+  const user = getCurrentUser();
+  return user && user.id === scheduleUserId ? scheduleCache : [];
+}
+
+function replaceCachedClass(updated) {
+  scheduleCache = scheduleCache.map((c) => (c.id === updated.id ? updated : c));
+}
+
+export async function loadSchedule() {
+  const user = getCurrentUser();
+  if (!user) return [];
+  const res = await fetch(busyTimesUrl());
+  const rows = await readJson(res, "Failed to load your classes");
+  scheduleCache = rows.map(fromApiBusyTime);
+  scheduleUserId = user.id;
+  return getSchedule();
 }
 
 export function getSchedule() {
-  return readSchedule();
+  return [...readSchedule()];
 }
 
-// Mirrors the local schedule to the server as tutor_busy_times, so the
-// organiser board can run live timetable-clash checks. Best-effort: the
-// local calendar (source of truth for the tutor's own view) already
-// succeeded by the time this runs, so a network failure here shouldn't
-// block anything — just log it.
-function syncScheduleToServer() {
-  const user = getCurrentUser();
-  if (!user) return;
-  fetch(`/api/tutors/${user.id}/busy-times`, {
-    method: "PUT",
+export async function addScheduleClasses(classes) {
+  const res = await fetch(busyTimesUrl(), {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ classes: readSchedule() }),
-  }).catch((err) => console.warn("Failed to sync schedule to server:", err));
+    body: JSON.stringify({ classes }),
+  });
+  const rows = await readJson(res, "Failed to add class");
+  const added = rows.map(fromApiBusyTime);
+  scheduleCache = [...readSchedule(), ...added];
+  scheduleUserId = getCurrentUser().id;
+  return added;
 }
 
-export function addScheduleClasses(classes) {
-  const now = new Date().toISOString();
-  const withIds = classes.map((c) => ({
-    id: crypto.randomUUID(),
-    createdAt: now,
-    ...c,
-  }));
-  writeSchedule([...readSchedule(), ...withIds]);
-  syncScheduleToServer();
-  return withIds;
+async function patchScheduleClass(id, changes) {
+  const res = await fetch(busyTimesUrl(`/${encodeURIComponent(id)}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  });
+  const updated = fromApiBusyTime(
+    await readJson(res, "Failed to update class"),
+  );
+  replaceCachedClass(updated);
+  return updated;
 }
 
-export function deleteScheduleClass(id) {
-  writeSchedule(readSchedule().filter((c) => c.id !== id));
-  writeExceptions(readExceptions().filter((e) => e.classId !== id));
-  syncScheduleToServer();
+export async function deleteScheduleClass(id) {
+  const res = await fetch(busyTimesUrl(`/${encodeURIComponent(id)}`), {
+    method: "DELETE",
+  });
+  await expectOk(res, "Failed to delete class");
+  scheduleCache = scheduleCache.filter((c) => c.id !== id);
 }
 
 // Updates the base fields of a recurring class (title, dayOfWeek, startTime,
 // endTime, venue, firstDate, endDate). Affects every future occurrence that
 // hasn't been individually overridden.
 export function updateScheduleClass(id, changes) {
-  const schedule = readSchedule().map((c) =>
-    c.id === id ? { ...c, ...changes } : c,
-  );
-  writeSchedule(schedule);
-  syncScheduleToServer();
+  return patchScheduleClass(id, changes);
 }
 
-export function clearSchedule() {
-  writeSchedule([]);
-  writeExceptions([]);
-  syncScheduleToServer();
+export async function clearSchedule() {
+  const res = await fetch(busyTimesUrl(), { method: "DELETE" });
+  await expectOk(res, "Failed to clear classes");
+  scheduleCache = [];
 }
 
 // ---------- exceptions to the recurring schedule ----------
 // A single occurrence of a recurring class can be cancelled (e.g. a public
 // holiday) or modified (e.g. moved to a different time/venue for one week)
-// without touching the recurrence rule itself. Keyed by (classId, date) so
-// there's at most one exception per class per day.
-
-function scheduleExceptionsKey() {
-  const user = getCurrentUser();
-  return `tutorHours.scheduleExceptions.${user ? user.id : "anon"}`;
-}
-
-function readExceptions() {
-  const raw = localStorage.getItem(scheduleExceptionsKey());
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeExceptions(exceptions) {
-  localStorage.setItem(scheduleExceptionsKey(), JSON.stringify(exceptions));
-}
+// without touching the recurrence rule itself. Each class carries its own
+// list ({ date, type, overrides }), at most one per date, saved with it on
+// the server.
 
 export function getScheduleExceptions() {
-  return readExceptions();
+  return readSchedule().flatMap((c) =>
+    c.exceptions.map((e) => ({ classId: c.id, ...e })),
+  );
+}
+
+function findException(cls, dateStr) {
+  return cls.exceptions.find((e) => e.date === dateStr);
+}
+
+// Swaps this class's exception for dateStr (if any) for `exception`, or just
+// drops it when `exception` is null, and saves the new list.
+function setException(classId, dateStr, exception) {
+  const cls = readSchedule().find((c) => c.id === classId);
+  if (!cls) return Promise.reject(new Error("Class not found"));
+  const exceptions = cls.exceptions.filter((e) => e.date !== dateStr);
+  if (exception) exceptions.push({ date: dateStr, ...exception });
+  return patchScheduleClass(classId, { exceptions });
 }
 
 // Cancels a single occurrence of a recurring class on the given date.
 export function cancelScheduleOccurrence(classId, dateStr) {
-  const exceptions = readExceptions().filter(
-    (e) => !(e.classId === classId && e.date === dateStr),
-  );
-  exceptions.push({ classId, date: dateStr, type: "cancelled" });
-  writeExceptions(exceptions);
+  return setException(classId, dateStr, { type: "cancelled" });
 }
 
 // Overrides one or more fields (startTime, endTime, venue, title) for a
 // single occurrence, leaving every other occurrence untouched.
 export function modifyScheduleOccurrence(classId, dateStr, overrides) {
-  const exceptions = readExceptions().filter(
-    (e) => !(e.classId === classId && e.date === dateStr),
-  );
-  exceptions.push({ classId, date: dateStr, type: "modified", overrides });
-  writeExceptions(exceptions);
+  return setException(classId, dateStr, { type: "modified", overrides });
 }
 
 // Removes any exception for this occurrence, reverting it back to the
 // normal recurring class.
 export function clearScheduleException(classId, dateStr) {
-  writeExceptions(
-    readExceptions().filter(
-      (e) => !(e.classId === classId && e.date === dateStr),
-    ),
-  );
+  return setException(classId, dateStr, null);
 }
 
 // getScheduleForDate hides cancelled occurrences entirely, so the calendar
 // UI needs a separate lookup to show *something* clickable in their place
 // (otherwise a cancelled class silently vanishes with no way to undo it).
 export function getCancelledOccurrencesForDate(dateStr) {
-  const exceptions = readExceptions().filter(
-    (e) => e.date === dateStr && e.type === "cancelled",
+  return classesOnDate(dateStr).filter(
+    (c) => findException(c, dateStr)?.type === "cancelled",
   );
-  if (exceptions.length === 0) return [];
+}
 
+function classesOnDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const weekday = new Date(y, m - 1, d).getDay();
-  const classes = readSchedule().filter(
+  return readSchedule().filter(
     (c) =>
       c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate,
   );
-
-  return exceptions
-    .map((e) => classes.find((c) => c.id === e.classId))
-    .filter(Boolean);
 }
 
 export function getScheduleForDate(dateStr) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const weekday = new Date(y, m - 1, d).getDay();
-  const classes = readSchedule().filter(
-    (c) =>
-      c.dayOfWeek === weekday && dateStr >= c.firstDate && dateStr <= c.endDate,
-  );
-
-  const exceptions = readExceptions();
-  if (exceptions.length === 0) return classes;
-
-  return classes
+  return classesOnDate(dateStr)
     .map((c) => {
-      const exception = exceptions.find(
-        (e) => e.classId === c.id && e.date === dateStr,
-      );
+      const exception = findException(c, dateStr);
       if (!exception) return c;
       if (exception.type === "cancelled") return null;
       if (exception.type === "modified") {

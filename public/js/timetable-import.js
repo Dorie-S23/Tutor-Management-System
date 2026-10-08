@@ -139,7 +139,7 @@ parseBtn.addEventListener("click", async () => {
   }
 });
 
-saveBtn.addEventListener("click", () => {
+saveBtn.addEventListener("click", async () => {
   const endDate = semesterEndInput.value;
   if (!endDate) {
     setStatus('Pick a "repeat weekly until" date first.', true);
@@ -156,17 +156,25 @@ saveBtn.addEventListener("click", () => {
     return;
   }
 
-  addScheduleClasses(
-    selected.map((cls) => ({
-      title: cls.title,
-      dayOfWeek: cls.dayOfWeek,
-      firstDate: cls.firstDate,
-      endDate,
-      startTime: cls.startTime,
-      endTime: cls.endTime,
-      venue: cls.venue,
-    })),
-  );
+  saveBtn.disabled = true;
+  try {
+    await addScheduleClasses(
+      selected.map((cls) => ({
+        title: cls.title,
+        dayOfWeek: cls.dayOfWeek,
+        firstDate: cls.firstDate,
+        endDate,
+        startTime: cls.startTime,
+        endTime: cls.endTime,
+        venue: cls.venue,
+      })),
+    );
+  } catch (err) {
+    setStatus(err.message || "Couldn't add those classes.", true);
+    return;
+  } finally {
+    saveBtn.disabled = false;
+  }
 
   setStatus(
     `Added ${selected.length} class${selected.length === 1 ? "" : "es"} to your calendar.`,

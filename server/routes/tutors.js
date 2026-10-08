@@ -380,33 +380,82 @@ router.delete("/:id", async (req, res) => {
   res.status(204).end();
 });
 
-// PUT /api/tutors/:id/busy-times — replace a tutor's whole imported timetable.
-// Full-replace (rather than diffing individual classes) avoids reconciling
-// client-generated ids with server-generated ones.
-router.put("/:id/busy-times", async (req, res) => {
+// ---------- busy times (the calendar's added/imported classes) ----------
+// The database is the only copy of these: the calendar reads them from here
+// on load and writes each change straight back, and the organiser board's
+// clash checks read the same rows. :id is the user's id — student
+// volunteers keep classes here too, despite the "tutor" naming.
+
+// Calendar field name -> column, for the fields a class can be created or
+// updated with. `exceptions` holds per-day cancellations/edits (see
+// server/migrations/2026-10-08-busy-times-calendar.sql).
+const BUSY_TIME_FIELDS = {
+  title: "title",
+  dayOfWeek: "day_of_week",
+  startTime: "start_time",
+  endTime: "end_time",
+  firstDate: "first_date",
+  endDate: "end_date",
+  venue: "venue",
+  exceptions: "exceptions",
+};
+
+// Builds a row update from just the fields present on `body`, so a PATCH
+// only touches what it sends. Empty strings become null, like the original
+// import did.
+function busyTimeColumns(body) {
+  const columns = {};
+  for (const [field, column] of Object.entries(BUSY_TIME_FIELDS)) {
+    if (body[field] === undefined) continue;
+    columns[column] = body[field] === "" ? null : body[field];
+  }
+  return columns;
+}
+
+function validateBusyTime(c, { partial }) {
+  if (!partial || c.dayOfWeek !== undefined) {
+    if (!Number.isInteger(c.dayOfWeek) || c.dayOfWeek < 0 || c.dayOfWeek > 6) {
+      return "dayOfWeek must be an integer from 0 (Sunday) to 6 (Saturday)";
+    }
+  }
+  if (!partial && (!c.startTime || !c.endTime)) {
+    return "startTime and endTime are required";
+  }
+  if (c.exceptions !== undefined && !Array.isArray(c.exceptions)) {
+    return "exceptions must be an array";
+  }
+  return null;
+}
+
+// GET /api/tutors/:id/busy-times — this user's classes, oldest first.
+router.get("/:id/busy-times", async (req, res) => {
+  const { data, error } = await supabase
+    .from("tutor_busy_times")
+    .select("*")
+    .eq("tutor_id", req.params.id)
+    .order("id");
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// POST /api/tutors/:id/busy-times — add one or more classes
+// ({ classes: [...] }, the timetable import adds several at once).
+router.post("/:id/busy-times", async (req, res) => {
   const { classes } = req.body ?? {};
-  if (!Array.isArray(classes)) {
-    return res.status(400).json({ error: "classes must be an array" });
+  if (!Array.isArray(classes) || classes.length === 0) {
+    return res.status(400).json({ error: "classes must be a non-empty array" });
+  }
+  for (const c of classes) {
+    const problem = validateBusyTime(c ?? {}, { partial: false });
+    if (problem) return res.status(400).json({ error: problem });
   }
 
-  const { error: deleteError } = await supabase
-    .from("tutor_busy_times")
-    .delete()
-    .eq("tutor_id", req.params.id);
-
-  if (deleteError) return res.status(500).json({ error: deleteError.message });
-
-  if (classes.length === 0) return res.json([]);
-
+  // A new class has no per-day exceptions; the column's own default ([])
+  // covers that, so adding classes doesn't depend on it being sent.
   const rows = classes.map((c) => ({
+    ...busyTimeColumns(c),
     tutor_id: req.params.id,
-    title: c.title || null,
-    day_of_week: c.dayOfWeek,
-    start_time: c.startTime,
-    end_time: c.endTime,
-    first_date: c.firstDate || null,
-    end_date: c.endDate || null,
-    venue: c.venue || null,
   }));
 
   const { data, error } = await supabase
@@ -415,7 +464,57 @@ router.put("/:id/busy-times", async (req, res) => {
     .select();
 
   if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+// PATCH /api/tutors/:id/busy-times/:busyTimeId — change some fields of one
+// class (including its per-day exceptions).
+router.patch("/:id/busy-times/:busyTimeId", async (req, res) => {
+  const body = req.body ?? {};
+  const problem = validateBusyTime(body, { partial: true });
+  if (problem) return res.status(400).json({ error: problem });
+
+  const columns = busyTimeColumns(body);
+  if (Object.keys(columns).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  const { data, error } = await supabase
+    .from("tutor_busy_times")
+    .update(columns)
+    .eq("id", Number(req.params.busyTimeId))
+    .eq("tutor_id", req.params.id)
+    .select()
+    .single();
+
+  if (error?.code === "PGRST116") {
+    return res.status(404).json({ error: "Class not found" });
+  }
+  if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// DELETE /api/tutors/:id/busy-times/:busyTimeId — remove one class.
+router.delete("/:id/busy-times/:busyTimeId", async (req, res) => {
+  const { error } = await supabase
+    .from("tutor_busy_times")
+    .delete()
+    .eq("id", Number(req.params.busyTimeId))
+    .eq("tutor_id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
+});
+
+// DELETE /api/tutors/:id/busy-times — remove all of this user's classes.
+router.delete("/:id/busy-times", async (req, res) => {
+  const { error } = await supabase
+    .from("tutor_busy_times")
+    .delete()
+    .eq("tutor_id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
 });
 
 // GET /api/tutors/:id/assignment-check?courseId=X — timetable clashes and
