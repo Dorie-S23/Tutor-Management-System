@@ -1627,6 +1627,65 @@ input[type="search"]:focus-visible {
   background: var(--line-soft);
 }
 
+/* ---------- Hamburger nav menu (mounted by js/nav-menu.js) ----------
+   Replaces the row of nav links in .header-actions with one menu button
+   that reveals them as a dropdown — the notif bell stays outside it,
+   always visible. Same page-agnostic approach as .notif-bell-btn above,
+   whose circular icon-button look this reuses directly. */
+.nav-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nav-menu-toggle.is-open {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.nav-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 220px;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  z-index: 40;
+}
+
+/* The moved links keep their .btn.btn-ghost classes (same elements, just
+   relocated) — flatten that pill-button look back into plain menu rows. */
+.nav-menu-panel a {
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-weight: 500;
+  white-space: normal;
+}
+
+.nav-menu-panel a:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.nav-menu-panel a[aria-current="page"] {
+  background: var(--navy-bg);
+  color: var(--navy);
+  font-weight: 600;
+}
+
 .notif-item--unread {
   background: var(--navy-bg);
 }
@@ -3813,11 +3872,18 @@ html[data-theme="dark"] .student-app .session-list article.session-cover {
   background: #202e45;
 }
 
-html[data-theme="dark"] .student-app .session-list article .session-cover-badge {
+html[data-theme="dark"]
+  .student-app
+  .session-list
+  article
+  .session-cover-badge {
   color: var(--ta-primary);
 }
 
-html[data-theme="dark"] .student-app .session-list article.session-swap-request {
+html[data-theme="dark"]
+  .student-app
+  .session-list
+  article.session-swap-request {
   background: var(--amber-bg);
 }
 

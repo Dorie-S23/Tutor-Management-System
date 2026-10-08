@@ -217,6 +217,81 @@ button:focus-visible {
   margin: 0 8px;
 }
 
+/* ---------- Hamburger nav menu (mounted by js/nav-menu.js) ----------
+   Replaces the always-visible row of top links with one menu button that
+   reveals them as a dropdown. .nav-icon-btn already gives the button the
+   right circular, role-tinted look (teal on tutor pages, violet on
+   organiser pages, etc. via the body[data-theme] overrides further down) —
+   this just adds the dropdown panel and an "open" state on top of it. */
+.nav-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  align-self: center;
+}
+
+.nav-menu-toggle.is-open {
+  background: var(--blue);
+  color: #fff;
+}
+
+.tab-nav.nav-menu-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  height: auto;
+  min-width: 220px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.tab-nav.nav-menu-panel a {
+  flex: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border-bottom: none;
+  white-space: normal;
+}
+
+.tab-nav.nav-menu-panel a:hover {
+  background: var(--page);
+  color: var(--ink-2);
+}
+
+.tab-nav.nav-menu-panel a.active,
+.tab-nav.nav-menu-panel a[aria-current="page"] {
+  background: rgba(37, 99, 235, 0.08);
+  border-bottom: none;
+}
+
+html[data-theme="dark"] .tab-nav.nav-menu-panel {
+  background-color: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme="dark"] .tab-nav.nav-menu-panel a:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .tab-nav.nav-menu-panel a.active,
+html[data-theme="dark"] .tab-nav.nav-menu-panel a[aria-current="page"] {
+  background: rgba(96, 165, 250, 0.16);
+}
+
 .user-pill {
   display: inline-flex;
   align-items: center;
@@ -885,6 +960,10 @@ a.nav-icon-btn {
   overflow: hidden;
 }
 
+/* Follows each role's accent (--blue, redefined per body[data-theme] —
+   violet for organiser, teal/green for tutor, the default blue for
+   volunteer) instead of a fixed colour, so the banner/avatar/role pill
+   actually matches whichever role's profile page it's on. */
 .profile-banner {
   height: 104px;
   background:
@@ -893,12 +972,7 @@ a.nav-icon-btn {
       rgba(255, 255, 255, 0.28),
       transparent 55%
     ),
-    linear-gradient(
-      115deg,
-      rgb(17, 128, 115),
-      rgb(13, 148, 136) 55%,
-      rgb(5, 150, 105)
-    );
+    linear-gradient(115deg, var(--blue), var(--blue-dark));
 }
 
 .profile-card-body {
@@ -924,8 +998,8 @@ a.nav-icon-btn {
   place-items: center;
   border-radius: 50%;
   border: 4px solid #fff;
-  background: color-mix(in srgb, rgb(13, 148, 136) 13%, #ffffff);
-  color: rgb(13, 148, 136);
+  background: color-mix(in srgb, var(--blue) 13%, #ffffff);
+  color: var(--blue);
   font-family: var(--font-display);
   font-size: 24px;
   font-weight: 600;
@@ -958,8 +1032,8 @@ a.nav-icon-btn {
 .profile-role {
   padding: 2px 9px;
   border-radius: 999px;
-  background: color-mix(in srgb, rgb(13, 148, 136) 12%, #ffffff);
-  color: rgb(13, 148, 136);
+  background: color-mix(in srgb, var(--blue) 12%, #ffffff);
+  color: var(--blue);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.4px;
@@ -6032,8 +6106,8 @@ html[data-theme="dark"] .verify-card--teal {
 
 html[data-theme="dark"] .profile-avatar,
 html[data-theme="dark"] .profile-role {
-  background: color-mix(in srgb, rgb(45, 212, 191) 16%, var(--surface));
-  color: #5eead4;
+  background: color-mix(in srgb, var(--blue) 16%, var(--surface));
+  color: var(--accent-text);
 }
 
 /* 4. Status colours: 600–700 shades -> 300–400 shades */
