@@ -54,7 +54,8 @@ router.get("/:userId", async (req, res) => {
   const roleProfile = ROLE_PROFILES[user.role];
   if (!roleProfile) {
     return res.status(403).json({
-      error: "Profiles are only available for tutors, student volunteers, and organisers",
+      error:
+        "Profiles are only available for tutors, student volunteers, and organisers",
     });
   }
 
@@ -117,7 +118,8 @@ router.put("/:userId", async (req, res) => {
   const roleProfile = ROLE_PROFILES[user.role];
   if (!roleProfile) {
     return res.status(403).json({
-      error: "Profiles are only available for tutors, student volunteers, and organisers",
+      error:
+        "Profiles are only available for tutors, student volunteers, and organisers",
     });
   }
 

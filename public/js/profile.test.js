@@ -305,9 +305,9 @@ describe("profile.js — organiser page", () => {
     // The field still exists (profile.js reads it unconditionally) but the
     // page hides it — organisers have no student number.
     expect(
-      window.document.getElementById("profile-student-number").closest(
-        ".form-field",
-      ).hidden,
+      window.document
+        .getElementById("profile-student-number")
+        .closest(".form-field").hidden,
     ).toBe(true);
     expect(window.document.getElementById("profile-save-btn").disabled).toBe(
       false,
@@ -321,8 +321,7 @@ describe("profile.js — organiser page", () => {
     });
     await wait();
 
-    window.document.getElementById("profile-cell-phone").value =
-      "083 999 0000";
+    window.document.getElementById("profile-cell-phone").value = "083 999 0000";
 
     window.document
       .getElementById("profile-form")
