@@ -25,23 +25,23 @@ const NL = String.fromCharCode(10);
 // Stand-ins for nav.js/storage.js. getScheduleForDate and getEntriesForDate
 // return one class (10:00-12:00) and one logged-hours entry (14:00-16:00)
 // for every date, which is all the day view needs to have something to draw.
+// Tests that need a class with repeat dates swap it in via window.__scheduleClass.
 const stubs = `
 function highlightActiveTab() {}
 function renderWelcomeHeading() {}
 function requireRole() {
   return { id: "tutor-1", role: "tutor" };
 }
+const __defaultClass = {
+  id: "class-1",
+  title: "COMS2000 Lecture",
+  dayOfWeek: 4,
+  startTime: "10:00",
+  endTime: "12:00",
+  venue: "FNB1",
+};
 function getScheduleForDate() {
-  return [
-    {
-      id: "class-1",
-      title: "COMS2000 Lecture",
-      dayOfWeek: 4,
-      startTime: "10:00",
-      endTime: "12:00",
-      venue: "FNB1",
-    },
-  ];
+  return [window.__scheduleClass || __defaultClass];
 }
 function getCancelledOccurrencesForDate() {
   return [];
@@ -70,7 +70,12 @@ function loadSchedule() {
 function cancelScheduleOccurrence() {}
 function modifyScheduleOccurrence() {}
 function clearScheduleException() {}
-function updateScheduleClass() {}
+function updateScheduleClass(id, changes) {
+  window.__updatedClasses = (window.__updatedClasses || []).concat([
+    { id, changes },
+  ]);
+  return Promise.resolve();
+}
 function deleteScheduleClass() {}
 function clearSchedule() {}
 function todayStr() {
@@ -136,10 +141,14 @@ function ready() {
 
 // Loads the page (letting its own renders settle), then clicks the cell for
 // the 10th of the current month and returns everything the assertions need.
-async function openDayViewForTest() {
+async function openDayViewForTest(scheduleClass) {
   const window = loadCalendar();
   await ready();
   await ready();
+
+  // A test-supplied class must be in place before the day view reads the
+  // schedule; the load-time render above only draws month pills.
+  if (scheduleClass) window.__scheduleClass = scheduleClass;
 
   const doc = window.document;
   const gridEl = doc.getElementById("calendar-grid");
@@ -337,5 +346,145 @@ describe("calendar.js day view", () => {
     expect(doc.querySelector(".day-view-overlay")).not.toBeNull();
     doc.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape" }));
     expect(doc.querySelector(".day-view-overlay")).toBeNull();
+  });
+});
+
+// The occurrence editor's weekly-repeat controls: a saved class (one-off or
+// series) can be given a repeat range from a start date to an end date from
+// the edit dialog, and an existing repeat can be extended or stopped there.
+describe("occurrence editor weekly repeat", () => {
+  // Saving shows a toast with a 2.6s hide timer; closing the window clears it
+  // so the worker can exit (after letting the save's render settle).
+  let openWindow = null;
+  afterEach(async () => {
+    await ready();
+    openWindow?.close();
+    openWindow = null;
+  });
+
+  async function openEditor(scheduleClass) {
+    const { window, doc, dateStr } = await openDayViewForTest(scheduleClass);
+    openWindow = window;
+    doc
+      .querySelector(".day-view-event--class")
+      .dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    return { window, doc, dateStr };
+  }
+
+  function findSaveButton(doc) {
+    return Array.from(doc.querySelectorAll(".occurrence-modal button")).find(
+      (btn) => btn.textContent === "Update all future classes",
+    );
+  }
+
+  function classRepeatingThisMonth() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    return {
+      id: "class-1",
+      title: "COMS2000 Lecture",
+      dayOfWeek: 4,
+      startTime: "10:00",
+      endTime: "12:00",
+      venue: "FNB1",
+      firstDate: `${y}-${m}-01`,
+      endDate: `${y}-${m}-28`,
+    };
+  }
+
+  test("a saved one-off class can be made to repeat weekly from the editor", async () => {
+    const { window, doc, dateStr } = await openEditor();
+    const repeat = doc.getElementById("occurrence-repeat");
+    const range = doc.getElementById("occurrence-repeat-range");
+    expect(repeat.checked).toBe(false);
+    expect(range.hidden).toBe(true);
+
+    repeat.checked = true;
+    repeat.dispatchEvent(new window.Event("change", { bubbles: true }));
+    expect(range.hidden).toBe(false);
+    // The range prefills with the class's own date.
+    expect(doc.getElementById("occurrence-repeat-from").value).toBe(dateStr);
+
+    const from = doc.getElementById("occurrence-repeat-from");
+    from.value = "2026-01-15"; // a Thursday
+    from.dispatchEvent(new window.Event("change", { bubbles: true }));
+    expect(doc.getElementById("occurrence-repeat-until").min).toBe(
+      "2026-01-15",
+    );
+    doc.getElementById("occurrence-repeat-until").value = "2026-05-28";
+
+    findSaveButton(doc).click();
+    await ready();
+
+    expect(window.__updatedClasses).toEqual([
+      {
+        id: "class-1",
+        changes: expect.objectContaining({
+          firstDate: "2026-01-15",
+          endDate: "2026-05-28",
+          dayOfWeek: 4,
+        }),
+      },
+    ]);
+    expect(doc.querySelector(".occurrence-modal-overlay")).toBeNull();
+  });
+
+  test("an incomplete or backwards range is rejected without saving", async () => {
+    const { window, doc } = await openEditor();
+    const repeat = doc.getElementById("occurrence-repeat");
+    repeat.checked = true;
+    repeat.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+    // Repeat until is required once the box is ticked.
+    findSaveButton(doc).click();
+    await ready();
+    let toast = doc.getElementById("toast");
+    expect(window.__updatedClasses).toBeUndefined();
+    expect(toast.textContent).toBe("Pick the date the weekly repeat ends.");
+    expect(doc.querySelector(".occurrence-modal-overlay")).not.toBeNull();
+
+    // And the range can't run backwards.
+    const from = doc.getElementById("occurrence-repeat-from");
+    from.value = "2026-05-28";
+    from.dispatchEvent(new window.Event("change", { bubbles: true }));
+    doc.getElementById("occurrence-repeat-until").value = "2026-01-15";
+    findSaveButton(doc).click();
+    await ready();
+    toast = doc.getElementById("toast");
+    expect(window.__updatedClasses).toBeUndefined();
+    expect(toast.textContent).toBe("The repeat can't end before it starts.");
+    expect(toast.classList.contains("toast--danger")).toBe(true);
+  });
+
+  test("a weekly class prefills its range, and unticking stops it after the opened day", async () => {
+    const cls = classRepeatingThisMonth();
+    const { window, doc, dateStr } = await openEditor(cls);
+
+    const repeat = doc.getElementById("occurrence-repeat");
+    expect(repeat.checked).toBe(true);
+    expect(doc.getElementById("occurrence-repeat-from").value).toBe(
+      cls.firstDate,
+    );
+    expect(doc.getElementById("occurrence-repeat-until").value).toBe(
+      cls.endDate,
+    );
+    const note = doc.getElementById("occurrence-repeat-note");
+    expect(note.hidden).toBe(true);
+
+    repeat.checked = false;
+    repeat.dispatchEvent(new window.Event("change", { bubbles: true }));
+    expect(doc.getElementById("occurrence-repeat-range").hidden).toBe(true);
+    expect(note.hidden).toBe(false);
+
+    findSaveButton(doc).click();
+    await ready();
+
+    expect(window.__updatedClasses).toEqual([
+      {
+        id: "class-1",
+        changes: expect.objectContaining({ endDate: dateStr }),
+      },
+    ]);
   });
 });

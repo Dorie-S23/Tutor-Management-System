@@ -660,6 +660,20 @@ const DAY_INDEX_TO_NAME = [
   "Saturday",
 ];
 
+// "2026-01-15" → 4 (Thursday), matching Date#getDay(); null when there's no
+// usable date.
+function weekdayFromDateStr(dateStr) {
+  const [y, m, d] = (dateStr || "").split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d).getDay();
+}
+
+// A class repeats weekly when its range spans more than its first day — the
+// shape both the add-class form and the timetable import save series in.
+function isRepeatingClass(cls) {
+  return Boolean(cls.firstDate && cls.endDate && cls.endDate > cls.firstDate);
+}
+
 function openOccurrenceModal(cls, dateStr, isCancelled) {
   const overlay = document.createElement("div");
   overlay.className = "occurrence-modal-overlay";
@@ -878,11 +892,87 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
     seriesSection.style.borderTop = "1px solid #e0e0e0";
     seriesSection.style.paddingTop = "12px";
 
+    const wasRepeating = isRepeatingClass(cls);
+
     const seriesHint = document.createElement("p");
     seriesHint.className = "card-hint";
     seriesHint.textContent =
-      "Changes below update the recurring class itself — this and all future weeks will reflect the new details.";
+      "Changes below update the class itself — tick Repeat weekly to run it every week from a start date through an end date, and the details above apply to every week in that range.";
     seriesSection.appendChild(seriesHint);
+
+    // Unlike the add-class form (which creates a one-off or a weekly series
+    // outright), this can also turn an already-saved class into a weekly
+    // series — or extend, shorten or stop an existing one.
+    const repeatLabel = document.createElement("label");
+    repeatLabel.className = "field-checkbox";
+    repeatLabel.htmlFor = "occurrence-repeat";
+    const repeatInput = document.createElement("input");
+    repeatInput.type = "checkbox";
+    repeatInput.id = "occurrence-repeat";
+    repeatInput.checked = wasRepeating;
+    repeatLabel.append(repeatInput, "Repeat weekly");
+    seriesSection.appendChild(repeatLabel);
+
+    const repeatRange = document.createElement("div");
+    repeatRange.className = "form-grid";
+    repeatRange.id = "occurrence-repeat-range";
+
+    const repeatFromField = document.createElement("div");
+    repeatFromField.className = "form-field";
+    const repeatFromLabel = document.createElement("label");
+    repeatFromLabel.htmlFor = "occurrence-repeat-from";
+    repeatFromLabel.textContent = "Repeat from";
+    const repeatFromInput = document.createElement("input");
+    repeatFromInput.type = "date";
+    repeatFromInput.id = "occurrence-repeat-from";
+    repeatFromInput.value = cls.firstDate || dateStr;
+    repeatFromField.append(repeatFromLabel, repeatFromInput);
+
+    const repeatUntilField = document.createElement("div");
+    repeatUntilField.className = "form-field";
+    const repeatUntilLabel = document.createElement("label");
+    repeatUntilLabel.htmlFor = "occurrence-repeat-until";
+    repeatUntilLabel.textContent = "Repeat until";
+    const repeatUntilInput = document.createElement("input");
+    repeatUntilInput.type = "date";
+    repeatUntilInput.id = "occurrence-repeat-until";
+    repeatUntilInput.value = wasRepeating ? cls.endDate : "";
+    repeatUntilField.append(repeatUntilLabel, repeatUntilInput);
+
+    repeatRange.append(repeatFromField, repeatUntilField);
+    seriesSection.appendChild(repeatRange);
+
+    // Only shown when the user unticks an existing repeat — saving then ends
+    // the series at the day that was opened.
+    const repeatNote = document.createElement("p");
+    repeatNote.className = "card-hint";
+    repeatNote.id = "occurrence-repeat-note";
+    repeatNote.hidden = true;
+    repeatNote.textContent = `Saving now stops the repeat after ${new Date(
+      dateStr + "T00:00:00",
+    ).toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+    })} — earlier weeks stay as they are.`;
+    seriesSection.appendChild(repeatNote);
+
+    // The weekly series follows its start date: changing that date moves the
+    // class to that weekday (the same rule the add form uses), so the
+    // read-only Day row above shows what saving will do.
+    function syncSeriesRepeatFields() {
+      const repeating = repeatInput.checked;
+      repeatRange.hidden = !repeating;
+      repeatNote.hidden = repeating || !wasRepeating;
+      repeatUntilInput.min = repeatFromInput.value || "";
+      const weekday = weekdayFromDateStr(repeatFromInput.value);
+      dayCell.textContent =
+        (repeating && weekday !== null
+          ? DAY_INDEX_TO_NAME[weekday]
+          : DAY_INDEX_TO_NAME[cls.dayOfWeek]) || "";
+    }
+    repeatInput.addEventListener("change", syncSeriesRepeatFields);
+    repeatFromInput.addEventListener("change", syncSeriesRepeatFields);
+    syncSeriesRepeatFields();
 
     const seriesActions = document.createElement("div");
     seriesActions.className = "form-actions";
@@ -898,10 +988,45 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
         endTime: endInput.value || cls.endTime,
         venue: venueInput.value,
       };
+      let successMessage = wasRepeating
+        ? "Recurring class updated."
+        : "Class updated.";
+
+      if (repeatInput.checked) {
+        const fromDate = repeatFromInput.value;
+        const untilDate = repeatUntilInput.value;
+        const dayOfWeek = weekdayFromDateStr(fromDate);
+        if (dayOfWeek === null) {
+          showToast("Pick the date the weekly repeat starts.", "danger");
+          return;
+        }
+        if (!untilDate) {
+          showToast("Pick the date the weekly repeat ends.", "danger");
+          return;
+        }
+        if (untilDate < fromDate) {
+          showToast("The repeat can't end before it starts.", "danger");
+          return;
+        }
+        changes.firstDate = fromDate;
+        changes.endDate = untilDate;
+        // The repeat follows its start date — its weekday becomes the
+        // class's day, exactly like the add form derives it from the date.
+        changes.dayOfWeek = dayOfWeek;
+        successMessage = wasRepeating
+          ? "Recurring class updated."
+          : "Class now repeats weekly.";
+      } else if (wasRepeating) {
+        // Unticking stops the series after the day being edited; earlier
+        // weeks stay on the calendar.
+        changes.endDate = dateStr;
+        successMessage = "Weekly repeat stopped.";
+      }
+
       closeModal();
       saveScheduleChange(
         () => updateScheduleClass(cls.id, changes),
-        "Recurring class updated.",
+        successMessage,
       );
     });
     seriesActions.appendChild(saveSeriesBtn);

@@ -5432,9 +5432,12 @@ body[data-theme="organiser"] textarea:focus {
   background: rgb(239, 68, 68);
 }
 
-.row-actions {
-  display: flex;
-  gap: 6px;
+/* The roster's actions <td>. The buttons are spaced with a sibling margin
+   instead of flex gap: display:flex on the td knocks the cell out of the
+   table-cell layout, so its borders and height stop matching the rest of
+   the row and every divider line renders staggered. */
+.row-actions .btn-small + .btn-small {
+  margin-left: 6px;
 }
 
 .tutor-rate-badge {

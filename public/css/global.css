@@ -2182,10 +2182,11 @@ input[type="search"]:focus-visible {
   color: var(--ink);
 }
 
-.row-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+/* Same lesson as app.css's .row-actions: never display:flex the td
+   itself — it breaks the table-cell layout. Space the buttons with a
+   sibling margin instead. */
+.row-actions .btn-small + .btn-small {
+  margin-left: 8px;
 }
 
 .btn-small-neutral {
