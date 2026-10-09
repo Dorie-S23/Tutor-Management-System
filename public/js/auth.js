@@ -187,19 +187,6 @@ if (registerForm) {
     const message = document.getElementById("register-message");
 
     /* -------------------------
-           Validate Wits email
-           ------------------------- */
-
-    if (
-      !email.toLowerCase().endsWith("@wits.ac.za") &&
-      !email.toLowerCase().endsWith("@students.wits.ac.za")
-    ) {
-      setMessage(message, "Please use a Wits email address.", "error");
-
-      return;
-    }
-
-    /* -------------------------
            Check passwords
            ------------------------- */
 

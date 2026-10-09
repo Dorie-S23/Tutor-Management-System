@@ -2,15 +2,11 @@
 // getElementById + addEventListener at load time), so — as with
 // board.keyboard-nav.test.js — we load the real register.html + auth.js
 // into an actual jsdom document and drive the real form submit event,
-// rather than re-implementing the validation logic in the test.
+// rather than re-implementing the registration logic in the test.
 //
-// This suite exists because of a real production bug: `!email.toLowerCase
-// .endsWith(...)` (missing the call parens on the first toLowerCase) threw
-// `TypeError: email.toLowerCase.endsWith is not a function` on submit —
-// but only for emails that reach that second check at all, i.e. anything
-// *not* ending in plain "@wits.ac.za" (like the "@students.wits.ac.za"
-// addresses students actually register with), which is exactly why it
-// slipped through onto a form that "worked" for some emails and not others.
+// Signup accepts any email domain (e.g. gmail.com) — these tests lock that
+// in by driving the real form with non-Wits addresses and asserting the
+// registration request reaches the API.
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
@@ -43,7 +39,7 @@ function loadRegisterPage() {
   return { window: dom.window, fetchMock };
 }
 
-function fillAndSubmit(window, { email = "someone@students.wits.ac.za" } = {}) {
+function fillAndSubmit(window, { email = "someone@gmail.com" } = {}) {
   const doc = window.document;
   doc.getElementById("name").value = "Test User";
   doc.getElementById("email").value = email;
@@ -62,10 +58,10 @@ function ready() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-describe("registration Wits-email validation", () => {
-  test("a @students.wits.ac.za address is accepted (the exact case the toLowerCase typo broke)", async () => {
+describe("registration email acceptance", () => {
+  test("a @gmail.com address is accepted and sent to the API", async () => {
     const { window, fetchMock } = loadRegisterPage();
-    fillAndSubmit(window, { email: "someone@students.wits.ac.za" });
+    fillAndSubmit(window, { email: "someone@gmail.com" });
     await ready();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -73,40 +69,19 @@ describe("registration Wits-email validation", () => {
     expect(message.textContent).toBe("Creating your account...");
   });
 
-  test("a plain @wits.ac.za address is accepted", async () => {
+  test("a @students.wits.ac.za address is still accepted", async () => {
+    const { window, fetchMock } = loadRegisterPage();
+    fillAndSubmit(window, { email: "someone@students.wits.ac.za" });
+    await ready();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("a plain @wits.ac.za address is still accepted", async () => {
     const { window, fetchMock } = loadRegisterPage();
     fillAndSubmit(window, { email: "staff.member@wits.ac.za" });
     await ready();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  test("matching is case-insensitive", async () => {
-    const { window, fetchMock } = loadRegisterPage();
-    fillAndSubmit(window, { email: "Someone@STUDENTS.WITS.AC.ZA" });
-    await ready();
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  test("a non-Wits address is rejected without ever calling the API", async () => {
-    const { window, fetchMock } = loadRegisterPage();
-    fillAndSubmit(window, { email: "someone@gmail.com" });
-    await ready();
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    const message = window.document.getElementById("register-message");
-    expect(message.textContent).toBe("Please use a Wits email address.");
-    expect(message.classList.contains("is-error")).toBe(true);
-  });
-
-  test("an address merely containing 'wits.ac.za' outside the domain is still rejected", async () => {
-    const { window, fetchMock } = loadRegisterPage();
-    fillAndSubmit(window, { email: "wits.ac.za@evil-example.com" });
-    await ready();
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    const message = window.document.getElementById("register-message");
-    expect(message.textContent).toBe("Please use a Wits email address.");
   });
 });

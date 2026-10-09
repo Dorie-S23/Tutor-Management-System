@@ -69,19 +69,6 @@ router.post("/register", async (req, res) => {
     }
 
     /* =====================================================
-           Validate Wits email
-           ===================================================== */
-
-    if (
-      !email.toLowerCase().endsWith("@wits.ac.za") &&
-      !email.toLowerCase().endsWith("@students.wits.ac.za")
-    ) {
-      return res.status(400).json({
-        error: "You must use a Wits email address",
-      });
-    }
-
-    /* =====================================================
            Validate role
            ===================================================== */
 
@@ -515,20 +502,6 @@ router.post("/google/register", async (req, res) => {
     const userId = authenticatedUser.id;
 
     const email = authenticatedUser.email;
-
-    /* =====================================================
-           Validate Wits email
-           ===================================================== */
-
-    if (
-      !email ||
-      (!email.toLowerCase().endsWith("@wits.ac.za") &&
-        !email.toLowerCase().endsWith("@students.wits.ac.za"))
-    ) {
-      return res.status(400).json({
-        error: "You must use a Wits email address",
-      });
-    }
 
     /* =====================================================
            Validate organiser course
