@@ -119,6 +119,7 @@ All endpoints are mounted under `/api` by `app.js`. The full data model behind t
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `GET/POST /api/hour-entries`, `PUT /api/hour-entries/:id`, `DELETE /api/hour-entries/:id`     | Logged tutoring hours (tutor sessions and volunteer covers: only during the session + 10-minute grace window). |
 | `GET /api/hour-entries/report`                                                                | Hours-budget report per course (only entries linked to a course).                                              |
+| `GET /api/attendance-verification`, `PATCH /api/attendance-verification/:id`                  | Organiser verifies or flags logged session attendance; both sides are notified.                                |
 | `GET/POST /api/timesheets`                                                                    | A tutor's monthly submissions; the organiser's review queue.                                                   |
 | `PATCH /api/timesheets/:userId/:weekStart`                                                    | Organiser approves/rejects a submitted month.                                                                  |
 | `GET /api/timesheets/payroll-export`                                                          | CSV of every approved timesheet with tutor identity, rate and amount owed.                                     |
