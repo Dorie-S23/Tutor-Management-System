@@ -383,3 +383,33 @@ if (loginForm) {
     }
   });
 }
+
+/* =========================
+   GOOGLE SIGN-IN FAILURE
+   ========================= */
+
+// google-callback.html sends a failed Google sign-in back here with the
+// reason in ?authError=, so show it in the login card and then drop the
+// param (replaceState, no reload) — refreshing shouldn't repeat a message
+// that belongs to a sign-in attempt that's already over.
+const loginMessage = document.getElementById("login-message");
+
+if (loginMessage) {
+  const loginParams = new URLSearchParams(window.location.search);
+
+  const authError = loginParams.get("authError");
+
+  if (authError) {
+    setMessage(loginMessage, authError, "error");
+
+    loginParams.delete("authError");
+
+    const query = loginParams.toString();
+
+    history.replaceState(
+      null,
+      "",
+      window.location.pathname + (query ? `?${query}` : ""),
+    );
+  }
+}

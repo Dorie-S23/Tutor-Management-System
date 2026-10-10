@@ -79,6 +79,21 @@
       }
 
       /*
+       * Every failure ends here: the message is shown on this page in
+       * case navigation is slow or blocked, then the person is sent back
+       * to login.html with the reason in ?authError= (consumed by
+       * public/js/auth.js) so they're never stranded on this spinner.
+       */
+
+      function failBackToLogin(message) {
+        setStatus(message, "error");
+
+        const params = new URLSearchParams({ authError: message });
+
+        window.location.href = `/html/login.html?${params.toString()}`;
+      }
+
+      /*
        * Map a user's role to the page they should
        * land on, matching the routes used by
        * public/js/auth.js's password-login flow.
@@ -135,7 +150,7 @@
             if (error) {
               console.error("Code exchange error:", error);
 
-              setStatus("Could not complete Google sign-in.", "error");
+              failBackToLogin("Could not complete Google sign-in.");
 
               return;
             }
@@ -153,7 +168,7 @@
           if (error) {
             console.error("Session error:", error);
 
-            setStatus("Could not retrieve your login session.", "error");
+            failBackToLogin("Could not retrieve your login session.");
 
             return;
           }
@@ -170,7 +185,7 @@
           if (!session || !session.user) {
             console.error("No Supabase session found.");
 
-            setStatus("No authenticated user was found.", "error");
+            failBackToLogin("No authenticated user was found.");
 
             return;
           }
@@ -195,7 +210,7 @@
           if (profileError) {
             console.error("Profile lookup error:", profileError);
 
-            setStatus("Could not check your account.", "error");
+            failBackToLogin("Could not check your account.");
 
             return;
           }
@@ -284,7 +299,7 @@
             if (requestsError) {
               console.error("Organiser request lookup error:", requestsError);
 
-              setStatus("Could not check your organiser request.", "error");
+              failBackToLogin("Could not check your organiser request.");
 
               return;
             }
@@ -299,11 +314,10 @@
               } else {
                 await supabaseClient.auth.signOut();
 
-                setStatus(
+                failBackToLogin(
                   rows.some((row) => row.status === "pending")
                     ? "Your organiser request is still awaiting approval — you can sign in once the super-organiser approves it."
                     : "Your organiser request was denied.",
-                  "error",
                 );
 
                 return;
@@ -346,7 +360,7 @@
         } catch (error) {
           console.error("Google callback error:", error);
 
-          setStatus("An unexpected error occurred.", "error");
+          failBackToLogin("An unexpected error occurred.");
         }
       }
 
