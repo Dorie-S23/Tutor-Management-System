@@ -139,6 +139,8 @@ body {
 
   justify-content: center;
 
+  overflow: hidden;
+
   border-radius: 11px;
 
   background: linear-gradient(145deg, rgb(96, 165, 250), rgb(129, 140, 248));
@@ -148,10 +150,14 @@ body {
   color: #ffffff;
 }
 
-.brand-mark-badge svg {
-  width: 22px;
+.brand-mark-badge img {
+  width: 100%;
 
-  height: 22px;
+  height: 100%;
+
+  object-fit: cover;
+
+  display: block;
 }
 
 .brand-mark-name {
@@ -516,10 +522,14 @@ body {
   box-shadow: none;
 }
 
-.auth-card-head .brand-mark-badge svg {
-  width: 17px;
+.auth-card-head .brand-mark-badge img {
+  width: 100%;
 
-  height: 17px;
+  height: 100%;
+
+  object-fit: cover;
+
+  display: block;
 }
 
 .auth-card-head .brand-mark-name {

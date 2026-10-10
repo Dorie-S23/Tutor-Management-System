@@ -121,14 +121,17 @@ button:focus-visible {
   height: 30px;
   display: grid;
   place-items: center;
+  overflow: hidden;
   border-radius: 9px;
   color: #fff;
   background: linear-gradient(145deg, rgb(37, 99, 235), rgb(79, 70, 229));
 }
 
-.brand-mark-badge svg {
-  width: 16px;
-  height: 16px;
+.brand-mark-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .brand-mark-name {
@@ -3218,6 +3221,12 @@ body[data-theme="tutor"] .brand-mark-badge {
   background: linear-gradient(145deg, rgb(13, 148, 136), rgb(15, 118, 110));
 }
 
+/* Role-tinted logo: CSS `content` swaps a replaced element's image, the
+   same way the tile gradient above is swapped per role. */
+body[data-theme="tutor"] .brand-mark-badge img {
+  content: url("../images/tutorx-logo-teal.png");
+}
+
 body[data-theme="tutor"] .role-badge {
   background: rgba(15, 118, 110, 0.094);
   color: rgb(15, 118, 110);
@@ -3967,6 +3976,12 @@ body[data-theme="organiser"] {
 
 body[data-theme="organiser"] .brand-mark-badge {
   background: linear-gradient(145deg, rgb(139, 92, 246), rgb(109, 40, 217));
+}
+
+/* Role-tinted logo: CSS `content` swaps a replaced element's image, the
+   same way the tile gradient above is swapped per role. */
+body[data-theme="organiser"] .brand-mark-badge img {
+  content: url("../images/tutorx-logo-purple.png");
 }
 
 body[data-theme="organiser"] .role-badge {
