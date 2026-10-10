@@ -8,12 +8,14 @@
 // per-month table — intact.
 
 import { highlightActiveTab, renderWelcomeHeading } from "./nav.js";
+import { consumeQueryParam, scrollAndHighlight } from "./highlightTarget.js";
 import {
   requireRole,
   addEntry,
   updateEntry,
   deleteEntry,
   findDuplicateEntry,
+  getEntries,
   getMonthStart,
   addMonths,
   getEntriesForMonth,
@@ -150,6 +152,26 @@ function formatDate(date) {
 function formatEntryDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   return formatDate(new Date(y, m - 1, d));
+}
+
+// The organiser's attendance-verification state for an entry, as a pill in
+// the month table — quietly "Pending" until an organiser for the entry's
+// course decides (see server/routes/attendanceVerification.js). A flagged
+// entry's note (why it was disputed) rides along as a tooltip.
+const VERIFICATION_PILLS = {
+  pending: { className: "pending", label: "Pending" },
+  verified: { className: "approved", label: "Verified" },
+  flagged: { className: "rejected", label: "Flagged" },
+};
+
+function verificationPill(entry) {
+  const info =
+    VERIFICATION_PILLS[entry.verificationStatus] || VERIFICATION_PILLS.pending;
+  const pill = document.createElement("span");
+  pill.className = `status-pill ${info.className}`;
+  pill.textContent = info.label;
+  if (entry.verificationNote) pill.title = entry.verificationNote;
+  return pill;
 }
 
 // The next few occurrences of a course's weekly Tutorial/Lab, soonest
@@ -579,6 +601,7 @@ async function render() {
 
   for (const entry of entries) {
     const row = document.createElement("tr");
+    row.dataset.entryId = String(entry.id);
 
     const cells = [
       formatEntryDate(entry.date),
@@ -592,6 +615,10 @@ async function render() {
       td.textContent = value || "";
       row.appendChild(td);
     }
+
+    const statusTd = document.createElement("td");
+    statusTd.appendChild(verificationPill(entry));
+    row.appendChild(statusTd);
 
     const actionsTd = document.createElement("td");
     actionsTd.className = "actions";
@@ -726,7 +753,27 @@ nextMonthBtn.addEventListener("click", async () => {
   await render();
 });
 
+// A notification click ("your session was verified/flagged") lands here with
+// ?highlightEntry=<id>. The entry may live in an older month than the one
+// showing, so jump to its month first, then scroll its row into view and
+// flash it — the shared notification-deep-link behaviour, see
+// highlightTarget.js.
+async function focusHighlightedEntry() {
+  const highlightId = consumeQueryParam("highlightEntry");
+  if (!highlightId) return;
+  const entry = (await getEntries()).find(
+    (item) => String(item.id) === highlightId,
+  );
+  if (!entry) return;
+  currentMonthStart = getMonthStart(entry.date);
+  await render();
+  scrollAndHighlight(
+    entriesBody.querySelector(`tr[data-entry-id="${highlightId}"]`),
+  );
+}
+
 await render();
+await focusHighlightedEntry();
 
 // ---------- init: load the tutor's approved modules ----------
 

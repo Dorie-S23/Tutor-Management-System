@@ -16,4 +16,17 @@ async function notify(userId, { type, message, relatedEntity, relatedId }) {
   if (error) throw error;
 }
 
-module.exports = { notify };
+// "6 Oct 2026" — how attendance notifications name a session date (see
+// hourEntries.js and attendanceVerification.js). UTC throughout so the day
+// never shifts with the server's timezone.
+function formatShortDate(dateStr) {
+  const [y, m, d] = String(dateStr).slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+module.exports = { notify, formatShortDate };

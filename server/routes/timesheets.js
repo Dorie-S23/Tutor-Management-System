@@ -83,7 +83,9 @@ router.post("/", async (req, res) => {
 
   const { data: entries, error: entriesError } = await supabase
     .from("hour_entries")
-    .select("date, hours, start_time, end_time, task_type, subject, notes")
+    .select(
+      "date, hours, start_time, end_time, task_type, subject, notes, verification_status",
+    )
     .eq("user_id", tutorId)
     .gte("date", monthStart)
     .lte("date", monthEnd)

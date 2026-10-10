@@ -206,6 +206,19 @@ function renderSubmission(sub) {
   submissionListEl.appendChild(li);
 }
 
+// Each snapshot entry carries the attendance-verification call made on that
+// session (see server/routes/attendanceVerification.js) — whoever weighs a
+// timesheet should see which sessions were confirmed. Snapshots taken
+// before verification existed read as Pending.
+function verificationPill(status) {
+  const info =
+    {
+      verified: { className: "approved", label: "Verified" },
+      flagged: { className: "rejected", label: "Flagged" },
+    }[status] || { className: "pending", label: "Pending" };
+  return `<span class="status-pill ${info.className}">${info.label}</span>`;
+}
+
 function toggleDetail(li, sub) {
   const existing = li.querySelector(".submission-detail");
   if (existing) {
@@ -219,7 +232,7 @@ function toggleDetail(li, sub) {
   detail.innerHTML = `
     <table class="tutors-table">
       <thead>
-        <tr><th>Date</th><th>Hours</th><th>Task</th><th>Subject</th><th>Notes</th></tr>
+        <tr><th>Date</th><th>Hours</th><th>Task</th><th>Subject</th><th>Status</th><th>Notes</th></tr>
       </thead>
       <tbody>
         ${entries
@@ -230,6 +243,7 @@ function toggleDetail(li, sub) {
             <td>${e.hours}</td>
             <td>${e.task_type || ""}</td>
             <td>${e.subject || ""}</td>
+            <td>${verificationPill(e.verification_status)}</td>
             <td>${e.notes || ""}</td>
           </tr>
         `,

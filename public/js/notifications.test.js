@@ -54,9 +54,11 @@ function loadNotifications({
 } = {}) {
   // Clicking an unread item ends in `window.location.href = ...`, which
   // jsdom reports as "Not implemented: navigation" — swallow that through a
-  // quiet virtual console so the suite output stays clean.
+  // quiet virtual console so the suite output stays clean, but keep the
+  // attempts so tests can count which clicks resolved a destination.
   const virtualConsole = new VirtualConsole();
-  virtualConsole.on("jsdomError", () => {});
+  const navErrors = [];
+  virtualConsole.on("jsdomError", (err) => navErrors.push(err));
 
   const calls = [];
   const state = { respond };
@@ -78,7 +80,7 @@ function loadNotifications({
     },
   );
 
-  return { win: dom.window, calls, state };
+  return { win: dom.window, calls, state, navErrors };
 }
 
 describe("notifications.js", () => {
@@ -212,6 +214,82 @@ describe("notifications.js", () => {
     lis[1].click();
     await flush();
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(2);
+
+    win.close();
+  });
+
+  test("routes attendance notifications to the role's verification page", async () => {
+    const items = [
+      notification({
+        id: "n1",
+        type: "attendance_logged",
+        related_id: "e5",
+        read: true,
+      }),
+      notification({
+        id: "n2",
+        type: "attendance_verified",
+        related_id: "e6",
+        read: true,
+      }),
+      notification({
+        id: "n3",
+        type: "attendance_flagged",
+        related_id: "e7",
+        read: true,
+      }),
+    ];
+
+    const { win, navErrors } = loadNotifications({
+      storedUser: JSON.stringify({ id: "o1", role: "organiser" }),
+      respond: () => jsonResponse(items),
+    });
+    await flush();
+
+    // The organiser navigates for the logged-session ping only — the
+    // verified/flagged types are for the entry's tutor or volunteer, not
+    // the reviewer who sent them.
+    const lis = [...win.document.querySelectorAll("#notifList li")];
+    lis.forEach((li) => li.click());
+    await flush();
+    expect(navErrors).toHaveLength(1);
+
+    win.close();
+  });
+
+  test("sends a tutor's verified and flagged sessions down the deep-link", async () => {
+    const items = [
+      notification({
+        id: "n1",
+        type: "attendance_verified",
+        related_id: "e6",
+        read: true,
+      }),
+      notification({
+        id: "n2",
+        type: "attendance_flagged",
+        related_id: "e7",
+        read: true,
+      }),
+      notification({
+        id: "n3",
+        type: "attendance_logged",
+        related_id: "e5",
+        read: true,
+      }),
+    ];
+
+    const { win, navErrors } = loadNotifications({
+      respond: () => jsonResponse(items),
+    });
+    await flush();
+
+    // Default storedUser is a tutor: verified + flagged resolve to
+    // log-hours.html; attendance_logged has no tutor destination.
+    const lis = [...win.document.querySelectorAll("#notifList li")];
+    lis.forEach((li) => li.click());
+    await flush();
+    expect(navErrors).toHaveLength(2);
 
     win.close();
   });

@@ -60,6 +60,10 @@ function fromApiEntry(row) {
     subject: row.subject || "",
     notes: row.notes || "",
     courseId: row.course_id ?? null,
+    // Attendance verification by an organiser for the entry's course —
+    // 'pending' until decided, then 'verified' or 'flagged' (with a note).
+    verificationStatus: row.verification_status || "pending",
+    verificationNote: row.verification_note || "",
   };
 }
 

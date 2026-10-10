@@ -117,6 +117,24 @@ function getCurrentUser() {
       param: "highlightExcusal",
       tutor: "dashboard.html",
     },
+    // Attendance verification: logging a session pings the organiser, whose
+    // verify/flag call pings the tutor or volunteer back (see
+    // server/routes/attendanceVerification.js).
+    attendance_logged: {
+      param: "highlightEntry",
+      organiser: "verify-attendance.html",
+      super_organiser: "verify-attendance.html",
+    },
+    attendance_verified: {
+      param: "highlightEntry",
+      tutor: "log-hours.html",
+      volunteer: "volunteer-timesheets.html",
+    },
+    attendance_flagged: {
+      param: "highlightEntry",
+      tutor: "log-hours.html",
+      volunteer: "volunteer-timesheets.html",
+    },
   };
 
   function destinationFor(n) {
@@ -145,6 +163,8 @@ function getCurrentUser() {
     cover_cancelled: "alert",
     swap_declined: "alert",
     swap_withdrawn: "alert",
+    attendance_verified: "check",
+    attendance_flagged: "alert",
   };
 
   async function markRead(id) {

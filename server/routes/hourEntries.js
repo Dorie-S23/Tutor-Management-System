@@ -1,8 +1,10 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
-const { DAY_NAMES } = require("../dayNames");
 const { GRACE_MINUTES, isWithinLoggingWindow } = require("../loggingWindow");
+const { sliceTime, matchingSlotTypes } = require("./sessionSlots");
+const { organiserIdsForCourse } = require("./organiserScope");
+const { notify, formatShortDate } = require("./notificationHelpers");
 
 const router = express.Router();
 
@@ -38,40 +40,9 @@ async function resolveCourse(courseId) {
 //     tutor can't attend (session_excusals.cover_user_id) — nothing else.
 // `requireWindow` is only relaxed for edits, so fixing an older entry
 // doesn't require deleting and re-logging it.
-
-function sliceTime(value) {
-  return value == null ? "" : String(value).slice(0, 5);
-}
-
-// Which of the course's two weekly slots the submitted time range matches:
-// its tutorial (Day_of_tut / tutor_*) or its lab (Day_of_lab / lab_*), or
-// an empty array when it matches neither. Day names are stored the same way
-// DAY_NAMES spells them.
-function matchingSlotTypes(course, date, startTime, endTime) {
-  if (!date || !startTime || !endTime) return [];
-  const [y, m, d] = String(date).split("-").map(Number);
-  if (!y || !m || !d) return [];
-  const weekday = DAY_NAMES[new Date(y, m - 1, d).getDay()];
-  const start = sliceTime(startTime);
-  const end = sliceTime(endTime);
-  return [
-    [
-      "tutorial",
-      course.Day_of_tut,
-      course.tutor_start_time,
-      course.tutor_end_time,
-    ],
-    ["lab", course.Day_of_lab, course.lab_start_time, course.lab_end_time],
-  ]
-    .filter(
-      ([, day, slotStart, slotEnd]) =>
-        Boolean(day) &&
-        day === weekday &&
-        sliceTime(slotStart) === start &&
-        sliceTime(slotEnd) === end,
-    )
-    .map(([type]) => type);
-}
+// The slot-matching helpers (sliceTime, matchingSlotTypes) live in
+// ./sessionSlots so the attendance verification queue can label entries
+// Tutorial/Lab the same way.
 
 // True when this user is the assigned cover for one of those slots on that
 // date — the volunteer side of the rules.
@@ -156,6 +127,46 @@ async function sessionRulesError(
   return null;
 }
 
+// Fire-and-forget: tell every organiser responsible for this course that a
+// session was logged and is waiting for their attendance verification. The
+// caller .catch()es — a notification hiccup must never fail the entry.
+async function notifyOrganisersOfEntry(entry, course) {
+  const organiserIds = await organiserIdsForCourse(course.id);
+  if (organiserIds.length === 0) return;
+
+  const { data: owner } = await supabase
+    .from("users")
+    .select("name")
+    .eq("id", entry.user_id)
+    .maybeSingle();
+
+  const [slotType] = matchingSlotTypes(
+    course,
+    entry.date,
+    sliceTime(entry.start_time),
+    sliceTime(entry.end_time),
+  );
+  const sessionLabel =
+    slotType === "tutorial"
+      ? "Tutorial"
+      : slotType === "lab"
+        ? "Lab"
+        : "Session";
+
+  const message = `${owner?.name || "A tutor or volunteer"} logged ${Number(entry.hours)}h for ${course.course_code} (${sessionLabel}) on ${formatShortDate(entry.date)} — verify their attendance.`;
+
+  await Promise.all(
+    organiserIds.map((userId) =>
+      notify(userId, {
+        type: "attendance_logged",
+        message,
+        relatedEntity: "hour_entry",
+        relatedId: entry.id,
+      }).catch(() => {}),
+    ),
+  );
+}
+
 // GET /api/hour-entries?userId=...
 router.get("/", async (req, res) => {
   const { userId } = req.query;
@@ -207,6 +218,9 @@ router.post("/", async (req, res) => {
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+  notifyOrganisersOfEntry(data, course).catch((err) =>
+    console.warn("Failed to notify organisers of logged session:", err),
+  );
   res.status(201).json(data);
 });
 
@@ -229,8 +243,9 @@ router.put("/:id", async (req, res) => {
     .select("*")
     .eq("id", req.params.id)
     .maybeSingle();
+  let structureChanged = false;
   if (stored) {
-    const structureChanged =
+    structureChanged =
       String(stored.date) !== String(date) ||
       sliceTime(stored.start_time) !== sliceTime(startTime) ||
       sliceTime(stored.end_time) !== sliceTime(endTime) ||
@@ -248,6 +263,15 @@ router.put("/:id", async (req, res) => {
     }
   }
 
+  // A structural edit points the entry at a different session, so an
+  // earlier verification no longer describes it — reset it to pending and
+  // notify the organisers that it needs another look.
+  const verificationReset =
+    Boolean(stored) &&
+    structureChanged &&
+    stored.verification_status &&
+    stored.verification_status !== "pending";
+
   const { data, error } = await supabase
     .from("hour_entries")
     .update({
@@ -260,12 +284,25 @@ router.put("/:id", async (req, res) => {
       notes: notes || "",
       course_id: course.id,
       updated_at: new Date().toISOString(),
+      ...(verificationReset
+        ? {
+            verification_status: "pending",
+            verified_by: null,
+            verified_at: null,
+            verification_note: null,
+          }
+        : {}),
     })
     .eq("id", req.params.id)
     .select()
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+  if (verificationReset) {
+    notifyOrganisersOfEntry(data, course).catch((err) =>
+      console.warn("Failed to notify organisers of re-logged session:", err),
+    );
+  }
   res.json(data);
 });
 

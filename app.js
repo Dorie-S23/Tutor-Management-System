@@ -10,6 +10,7 @@ const publicApiRoutes = require("./server/routes/publicApi");
 const courseDiagonalsRoutes = require("./server/routes/courseDiagonals");
 const tutorsRoutes = require("./server/routes/tutors");
 const hourEntriesRoutes = require("./server/routes/hourEntries");
+const attendanceVerificationRoutes = require("./server/routes/attendanceVerification");
 const courseVolunteersRoutes = require("./server/routes/courseVolunteers");
 const tutorApplicationsRoutes = require("./server/routes/tutorApplications");
 const timesheetsRoutes = require("./server/routes/timesheets");
@@ -84,6 +85,10 @@ app.use("/api/tutors", tutorsRoutes);
 
 // Student volunteer hour logging + course volunteering
 app.use("/api/hour-entries", hourEntriesRoutes);
+
+// Organiser verification of logged session attendance (tutorials/labs)
+app.use("/api/attendance-verification", attendanceVerificationRoutes);
+
 app.use("/api/course-volunteers", courseVolunteersRoutes);
 
 // Tutor applications (tutor_subject_preference)

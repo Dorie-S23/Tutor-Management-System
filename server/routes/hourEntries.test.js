@@ -858,3 +858,174 @@ describe("volunteer cover logging rules", () => {
     expect(tables.hour_entries[0].date).toBe(TODAY);
   });
 });
+
+describe("attendance verification notifications", () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  // A volunteer covering today's tutorial while its window is open — the
+  // same shape as the POST fixtures above.
+  function seedLoggableSession() {
+    tables.courses = [
+      {
+        id: 5,
+        course_code: "COMS1018",
+        Day_of_tut: weekdayOf(TODAY),
+        tutor_start_time: "00:00:00",
+        tutor_end_time: "23:59:00",
+      },
+    ];
+    tables.session_excusals = [
+      {
+        id: "x1",
+        cover_user_id: "vol1",
+        course_id: 5,
+        session_date: TODAY,
+        session_type: "tutorial",
+      },
+    ];
+  }
+
+  // org2 is approved for the course being logged, org9 only for a
+  // different one, and org4 has no request rows at all — grandfathered, so
+  // it hears about every course.
+  function seedOrganisers() {
+    tables.users = [
+      {
+        id: "vol1",
+        name: "Naledi Mokoena",
+        email: "n@wits.ac.za",
+        role: "volunteer",
+      },
+      { id: "admin1", name: "Admin", email: "a@wits.ac.za", role: "super_organiser" },
+      { id: "org2", name: "Org Two", email: "o2@wits.ac.za", role: "organiser" },
+      { id: "org9", name: "Org Nine", email: "o9@wits.ac.za", role: "organiser" },
+      { id: "org4", name: "Org Four", email: "o4@wits.ac.za", role: "organiser" },
+    ];
+    tables.organiser_requests = [
+      { id: 1, user_id: "org2", course_id: 5, status: "approved", kind: "signup" },
+      { id: 2, user_id: "org9", course_id: 9, status: "approved", kind: "signup" },
+    ];
+    tables.notifications = [];
+  }
+
+  test("logging a session notifies that course's organisers only", async () => {
+    seedLoggableSession();
+    seedOrganisers();
+
+    const res = await request(buildApp()).post("/api/hour-entries").send({
+      userId: "vol1",
+      date: TODAY,
+      hours: 2,
+      startTime: "00:00",
+      endTime: "23:59",
+      courseId: 5,
+    });
+    expect(res.status).toBe(201);
+
+    await flush();
+    expect(tables.notifications.map((n) => n.user_id).sort()).toEqual([
+      "admin1",
+      "org2",
+      "org4",
+    ]);
+    tables.notifications.forEach((n) => {
+      expect(n.type).toBe("attendance_logged");
+      expect(n.message).toMatch(
+        /Naledi Mokoena logged 2h for COMS1018 \(Tutorial\)/,
+      );
+      expect(n.message).toMatch(/verify their attendance/);
+      expect(n.related_id).toBe(String(res.body.id));
+    });
+  });
+
+  test("a notes-only edit keeps the earlier verification", async () => {
+    seedLoggableSession();
+    seedOrganisers();
+    tables.hour_entries = [
+      {
+        id: "e30",
+        user_id: "vol1",
+        date: TODAY,
+        hours: 2,
+        course_id: 5,
+        start_time: "00:00:00",
+        end_time: "23:59:00",
+        task_type: "Peer support",
+        notes: "",
+        verification_status: "verified",
+        verified_by: "org2",
+        verified_at: "2026-10-07T09:00:00.000Z",
+      },
+    ];
+
+    const res = await request(buildApp()).put("/api/hour-entries/e30").send({
+      date: TODAY,
+      hours: 2,
+      startTime: "00:00",
+      endTime: "23:59",
+      taskType: "Peer support",
+      notes: "fixed a typo",
+      courseId: 5,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.verification_status).toBe("verified");
+    await flush();
+    expect(tables.notifications).toHaveLength(0);
+  });
+
+  test("moving a decided entry resets it to pending and re-notifies", async () => {
+    seedLoggableSession();
+    // A cover for next week's occurrence too, so the move is allowed.
+    tables.session_excusals.push({
+      id: "x2",
+      cover_user_id: "vol1",
+      course_id: 5,
+      session_date: addDays(TODAY, 7),
+      session_type: "tutorial",
+    });
+    seedOrganisers();
+    tables.hour_entries = [
+      {
+        id: "e31",
+        user_id: "vol1",
+        date: TODAY,
+        hours: 2,
+        course_id: 5,
+        start_time: "00:00:00",
+        end_time: "23:59:00",
+        verification_status: "flagged",
+        verified_by: "org2",
+        verified_at: "2026-10-07T09:00:00.000Z",
+        verification_note: "wrong week",
+      },
+    ];
+
+    const res = await request(buildApp())
+      .put("/api/hour-entries/e31")
+      .send({
+        date: addDays(TODAY, 7),
+        hours: 2,
+        startTime: "00:00",
+        endTime: "23:59",
+        taskType: "Peer support",
+        courseId: 5,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      verification_status: "pending",
+      verified_by: null,
+      verified_at: null,
+      verification_note: null,
+    });
+
+    await flush();
+    expect(tables.notifications.map((n) => n.user_id).sort()).toEqual([
+      "admin1",
+      "org2",
+      "org4",
+    ]);
+    expect(tables.notifications[0].type).toBe("attendance_logged");
+  });
+});

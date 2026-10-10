@@ -2,11 +2,12 @@
 // modules the tutor is approved to tutor (as chips and select options),
 // lets them pick one of that module's upcoming scheduled sessions — which
 // locks the date and times to that slot — and rolls every logged entry up
-// into the month table below. The real nav.js/storage.js/sessionTiming.js
-// imports can't load here (they fetch the API or redirect), so all three
-// import statements are stripped and their functions are replaced by stubs
-// appended after the real source — in the one eval scope, the later
-// function declarations win (and hoist above the page's top-level guard).
+// into the month table below. The real nav.js/highlightTarget.js/storage.js/
+// sessionTiming.js imports can't load here (they fetch the API or redirect),
+// so all four import statements are stripped and their functions are
+// replaced by stubs appended after the real source — in the one eval scope,
+// the later function declarations win (and hoist above the page's top-level
+// guard).
 // Everything else (role guard, module loading, session chips, hours-from-
 // times math, the confirm dialog wrapper, month navigation, and the whole
 // submit/edit/delete flow) is the real code running inside jsdom, with the
@@ -91,6 +92,23 @@ function windowNote() {
 }
 function windowBlockMessage() {
   return window.__blockMessage;
+}
+// highlightTarget.js — the notification deep-link helpers. consumeQueryParam
+// answers with whatever the test parked under window.__queryParams;
+// scrollAndHighlight records which row it was handed and marks it the way
+// the real one flashes it.
+function consumeQueryParam(param) {
+  return window.__queryParams[param] ?? null;
+}
+function scrollAndHighlight(el) {
+  if (!el) return;
+  window.__highlighted = el.dataset.entryId || null;
+  el.classList.add("highlight-flash");
+}
+// storage.js getEntries() — the highlight lookup reads the tutor's full
+// entry list (getEntriesForMonth above only serves the month table).
+function getEntries() {
+  return Promise.resolve(window.__entries);
 }
 `;
 
@@ -223,6 +241,7 @@ function loadLogHours({
   user = { id: "tutor-1", name: "Tutor One", role: "tutor" },
   entries = [],
   applicationsRespond = () => jsonResponse(APPLICATIONS),
+  highlightEntry = null,
 } = {}) {
   // The redirect on the not-logged-in path is jsdom's "Not implemented:
   // navigation" — swallow it through a quiet virtual console.
@@ -231,11 +250,15 @@ function loadLogHours({
 
   const logHoursJs = rawLogHoursJs
     .replace(/import\s*{[^}]*}\s*from\s*["']\.\/nav\.js["'];?/, "")
+    .replace(
+      /import\s*{[^}]*}\s*from\s*["']\.\/highlightTarget\.js["'];?/,
+      "",
+    )
     .replace(/import\s*{[\s\S]*?}\s*from\s*["']\.\/storage\.js["'];?/, "")
     .replace(/import\s*{[\s\S]*?}\s*from\s*["']\.\/sessionTiming\.js["'];?/, "")
     // Top-level await only works in a module; a classic script (which is
-    // what jsdom executes) needs the bare call — the page has exactly one.
-    .replace("\nawait render();", "\nrender();");
+    // what jsdom executes) needs the bare calls — the page has two.
+    .replace(/\nawait ([a-zA-Z]+)\(\);/g, "\n$1();");
 
   const fetches = [];
 
@@ -270,6 +293,8 @@ function loadLogHours({
       window.__monthQueries = [];
       window.__duplicateQueries = [];
       window.__scrollIntoViewCalls = [];
+      window.__queryParams = highlightEntry ? { highlightEntry } : {};
+      window.__highlighted = null;
       window.fetch = (url) => {
         fetches.push(String(url));
         return applicationsRespond(String(url));
@@ -632,6 +657,59 @@ describe("log-hours.js", () => {
       "2026-10-01",
     ]);
     expect(doc.getElementById("month-label").textContent).not.toBe("");
+    win.close();
+  });
+
+  test("shows each entry's attendance-verification state in the month table", async () => {
+    const { win } = loadLogHours({
+      entries: [
+        { ...ENTRY_E1, verificationStatus: "verified" },
+        {
+          ...ENTRY_E2,
+          verificationStatus: "flagged",
+          verificationNote: "The tutorial slot was covered by someone else",
+        },
+      ],
+    });
+    await flush();
+
+    const pills = [...win.document.querySelectorAll("#entries-body tr")].map(
+      (row) => row.querySelector(".status-pill"),
+    );
+
+    expect(pills[0].classList.contains("approved")).toBe(true);
+    expect(pills[0].textContent).toBe("Verified");
+    expect(pills[1].classList.contains("rejected")).toBe(true);
+    expect(pills[1].textContent).toBe("Flagged");
+    // The organiser's reason for flagging rides along as the pill's tooltip.
+    expect(pills[1].title).toBe("The tutorial slot was covered by someone else");
+    win.close();
+  });
+
+  test("defaults entries logged before verification existed to Pending", async () => {
+    const { win } = loadLogHours({ entries: [ENTRY_E1] });
+    await flush();
+
+    const pill = win.document.querySelector("#entries-body .status-pill");
+    expect(pill.classList.contains("pending")).toBe(true);
+    expect(pill.textContent).toBe("Pending");
+    win.close();
+  });
+
+  test("jumps to a highlighted entry's month and flashes its row", async () => {
+    const august = { ...ENTRY_E1, id: "e3", date: "2026-08-12" };
+    const { win } = loadLogHours({
+      entries: [ENTRY_E1, august],
+      highlightEntry: "e3",
+    });
+    await flush();
+
+    const row = win.document.querySelector('tr[data-entry-id="e3"]');
+    expect(row).not.toBeNull();
+    expect(row.classList.contains("highlight-flash")).toBe(true);
+    expect(win.__highlighted).toBe("e3");
+    // The page jumped from the current month to the entry's own month first.
+    expect(win.__monthQueries).toEqual(["2026-09-01", "2026-08-01"]);
     win.close();
   });
 });
