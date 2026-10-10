@@ -120,7 +120,15 @@ describe("GET /api/attendance-verification", () => {
       session_type: "Tutorial",
       venue: "MSL004,005",
       user: { name: "Naledi Mokoena" },
-      course: { course_code: "COMS1018" },
+      course: {
+        course_code: "COMS1018",
+        // The slot fields ride along so the verify page can compute a
+        // course's upcoming sessions without a second fetch.
+        Day_of_tut: weekdayOf(SESSION_DATE),
+        tutor_start_time: TUT_START,
+        tutor_end_time: TUT_END,
+        venues: "MSL004,005",
+      },
     });
   });
 

@@ -253,7 +253,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `verification_status` (text, required, default `pending`) — the organiser's attendance-verification call on the logged session: `pending`, `verified` or `flagged`. Rows that predate the feature backfill to `pending`, and a structural edit by the entry's owner resets a decided entry back to `pending`
 - `verified_by` (uuid, FK → `users.id`) — the organiser who made the call; null while pending
 - `verified_at` (timestamptz)
-- `verification_note` (text) — required when flagging, optional when verifying
+- `verification_note` (text) — the organiser's explanation when they flag a logged session (required); verifying is a one-click call and writes no note
 
 #### `timesheets`
 

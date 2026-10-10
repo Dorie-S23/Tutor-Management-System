@@ -28,18 +28,37 @@
 
       <nav class="tab-nav" aria-label="Main navigation">
         <a href="board.html">Courses</a>
-        <a href="tutors.html">Manage Tutors</a>
+        <a href="tutors.html">Tutors</a>
         <a href="timetable.html">Timetable</a>
         <a href="timesheet-review.html">Timesheets</a>
-        <a href="hours-budget-report.html">Budget Report</a>
+        <a href="hours-budget-report.html">Budget</a>
         <!-- Revealed by user-badge.js for the super-organiser only. -->
-        <a href="organiser-requests.html" data-super-only hidden>
-          Organiser Requests
-        </a>
+        <a href="organiser-requests.html" data-super-only hidden> Requests </a>
         <a href="organiser-profile.html">Profile</a>
       </nav>
 
       <div class="navbar-right">
+        <button
+          type="button"
+          id="tour-link"
+          class="tour-trigger"
+          aria-label="Take a tour"
+          title="Take a tour"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <path d="M12 17h.01" />
+          </svg>
+        </button>
         <a
           href="allocation-history.html"
           class="nav-icon-btn"
@@ -125,18 +144,6 @@
         </div>
 
         <div class="user-pill">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
           <span id="user-name">Account</span>
           <span class="role-badge" id="user-role-badge">Organiser</span>
         </div>
@@ -150,8 +157,9 @@
         <div>
           <h1>Verify Sessions</h1>
           <p class="page-sub">
-            Confirm that tutors and volunteers attended the sessions they logged
-            — tutorial or lab — before the hours count towards a timesheet.
+            Pick one of your modules to see its upcoming tutorial and lab
+            sessions, then confirm the hours tutors and volunteers logged for
+            the ones that already ran.
           </p>
         </div>
       </header>
@@ -227,9 +235,29 @@
         </article>
       </section>
 
+      <section class="log-step" aria-labelledby="courses-step-label">
+        <p class="step-label" id="courses-step-label">1. Your modules</p>
+        <div class="chip-row" id="courseChips">
+          <!-- rendered by verify-attendance.js -->
+        </div>
+      </section>
+
+      <section
+        class="log-step"
+        id="upcomingStep"
+        aria-labelledby="upcoming-step-label"
+        hidden
+      >
+        <p class="step-label" id="upcoming-step-label">2. Upcoming sessions</p>
+        <div class="chip-row" id="sessionChips">
+          <!-- rendered by verify-attendance.js -->
+        </div>
+      </section>
+
       <section class="panel" aria-labelledby="sessionsHeading">
+        <p class="step-label">3. Past sessions</p>
         <header class="review-toolbar">
-          <h2 id="sessionsHeading">Logged sessions</h2>
+          <h2 id="sessionsHeading">Logged hours to verify</h2>
 
           <div
             class="filter-chips"
@@ -306,6 +334,7 @@
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
     <script src="../js/user-badge.js"></script>
+    <script src="../js/onboarding.js"></script>
     <script src="../js/verify-attendance.js"></script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>

@@ -1433,6 +1433,22 @@ textarea {
   color: var(--muted);
 }
 
+/* Pending-verification count on the organiser's module chips (see the
+   verify-attendance page) — the Pending pill's amber, as a compact badge. */
+.course-chip__badge {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .chip-row > .empty-state {
   flex: 1 1 100%;
 }
@@ -1554,6 +1570,17 @@ textarea {
 
 .session-chip.is-selected .session-chip__note {
   color: rgba(255, 255, 255, 0.85);
+}
+
+/* Read-only preview on the organiser's verify page — those chips only show
+   what's coming for a module; there's nothing to pick, so no pointer and no
+   hover affordance. */
+.session-chip--static {
+  cursor: default;
+}
+
+.session-chip--static:hover {
+  border-color: var(--line);
 }
 
 .step-label {
@@ -3612,6 +3639,13 @@ html[data-theme="dark"] .course-card.active {
     var(--accent, var(--blue)) 14%,
     var(--surface)
   );
+}
+
+/* The module chips' pending badges keep their amber accent on the dark
+   surface, brightened so the count stays readable. */
+html[data-theme="dark"] .course-chip__badge {
+  background: rgba(217, 119, 6, 0.24);
+  color: #fbbf24;
 }
 
 /* Locked cards stay distinguishable from accessible ones: flatter than the
@@ -5710,6 +5744,37 @@ body[data-theme="organiser"] textarea:focus {
   margin: -4px 4px 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* ---------- Verify page: past sessions grouped by occurrence ---------- */
+
+.session-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 2px 2px 8px;
+}
+
+.session-group__when {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.session-group__count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+}
+
+.session-group__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
 }
 
 /* ---------- Timetable ---------- */

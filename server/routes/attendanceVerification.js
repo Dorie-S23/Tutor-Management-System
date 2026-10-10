@@ -151,7 +151,22 @@ router.get("/", async (req, res) => {
         ...entry,
         user: usersById[entry.user_id] || null,
         course: course
-          ? { course_code: course.course_code, course_name: course.course_name }
+          ? {
+              course_code: course.course_code,
+              course_name: course.course_name,
+              // The weekly slot fields ride along so the verify page can lay
+              // out a course's upcoming sessions even for a course the
+              // organiser's module list doesn't include (a grandfathered
+              // organiser, or a course row that has since disappeared).
+              Day_of_tut: course.Day_of_tut,
+              tutor_start_time: course.tutor_start_time,
+              tutor_end_time: course.tutor_end_time,
+              venues: course.venues,
+              Day_of_lab: course.Day_of_lab,
+              lab_start_time: course.lab_start_time,
+              lab_end_time: course.lab_end_time,
+              lab_venues: course.lab_venues,
+            }
           : null,
         session_type: sessionType,
         venue: venue || null,
