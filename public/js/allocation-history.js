@@ -340,3 +340,34 @@ async function renderHistory() {
 }
 
 Promise.all([renderDrafts(), renderHistory()]);
+
+// ---------- guided tour ----------
+// The "?" navbar button walks the two history lists. getSessionUserId is
+// the shared helper at the top of this file, so tour progress is keyed per
+// user like the board tour.
+const HISTORY_TOUR_STEPS = [
+  {
+    selector: "#draftsList",
+    title: "Past allocation runs",
+    body: "Every whole-school auto-allocation run. Compare an unpublished run against today's state before publishing it; restoring a published run reverts its approvals and frees the slots again.",
+    placement: "top",
+  },
+  {
+    selector: "#historyList",
+    title: "Full change history",
+    body: "Every approve, reject, claim and withdraw across tutor applications and volunteer sessions, newest first.",
+    placement: "top",
+  },
+];
+
+const tourLinkEl = document.getElementById("tour-link");
+if (tourLinkEl) {
+  tourLinkEl.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.Onboarding?.start(HISTORY_TOUR_STEPS, {
+      tourId: "organiser-history",
+      userId: getSessionUserId(),
+      force: true,
+    });
+  });
+}

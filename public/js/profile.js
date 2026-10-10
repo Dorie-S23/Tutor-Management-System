@@ -180,3 +180,36 @@ initProfileTimetable(currentUser.id);
 // The same transcript the application pages upload — organiser-profile.html
 // has no #transcript-panel, so this is a no-op there.
 initTranscriptUpload(currentUser.id);
+
+// ---------- guided tour (organiser profile only) ----------
+// student-profile.html keeps its bounce link to the volunteer tour; this
+// page walks its own two steps off the "?" navbar button instead. Onboarding
+// is optional-chained because student-profile.html never loads onboarding.js.
+if (window.location.pathname.includes("organiser-profile")) {
+  const PROFILE_TOUR_STEPS = [
+    {
+      selector: ".profile-card",
+      title: "Your details",
+      body: "Your name and contact details on record with CSAM.",
+      placement: "bottom",
+    },
+    {
+      selector: "#profile-form",
+      title: "Keep them current",
+      body: "Update your name and cell number any time. Your email is tied to your login — ask another organiser if it needs changing.",
+      placement: "top",
+    },
+  ];
+
+  const tourLinkEl = document.getElementById("tour-link");
+  if (tourLinkEl) {
+    tourLinkEl.addEventListener("click", (e) => {
+      e.preventDefault();
+      window.Onboarding?.start(PROFILE_TOUR_STEPS, {
+        tourId: "organiser-profile",
+        userId: currentUser?.id || "anon",
+        force: true,
+      });
+    });
+  }
+}

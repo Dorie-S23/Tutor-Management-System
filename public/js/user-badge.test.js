@@ -59,7 +59,7 @@ describe("user badge", () => {
       (window) => {
         expect(
           window.document.getElementById("user-role-badge").textContent,
-        ).toBe("Super organiser");
+        ).toBe("Super");
       },
     );
   });

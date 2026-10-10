@@ -247,3 +247,54 @@ function showToast(message) {
 }
 
 loadReport();
+
+// ---------- guided tour ----------
+// The "?" navbar button walks the report's main regions. Same sessionStorage
+// "user" key as the board tour, so progress is keyed per user here too.
+function getSessionUserId() {
+  try {
+    const raw = sessionStorage.getItem("user");
+    return raw ? JSON.parse(raw).id : "anon";
+  } catch {
+    return "anon";
+  }
+}
+
+const BUDGET_TOUR_STEPS = [
+  {
+    selector: ".org-stats",
+    title: "Report totals",
+    body: "Hours logged, total cost, budget used and how many courses are over budget — all for the date range you've selected.",
+    placement: "bottom",
+  },
+  {
+    selector: ".org-toolbar",
+    title: "Pick a date range",
+    body: "Set a from/to range and apply it, or leave both blank to include every logged hour on record.",
+    placement: "bottom",
+  },
+  {
+    selector: "#budgetBars",
+    title: "Budget allocation",
+    body: "Each course's budget against what logged hours have already committed.",
+    placement: "top",
+  },
+  {
+    selector: "#reportSections",
+    title: "Cost breakdown",
+    body: "Per-course sections list the logged hours and costs behind the totals above.",
+    placement: "top",
+  },
+];
+
+const tourLinkEl = document.getElementById("tour-link");
+if (tourLinkEl) {
+  tourLinkEl.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.Onboarding?.start(BUDGET_TOUR_STEPS, {
+      tourId: "organiser-budget",
+      userId: getSessionUserId(),
+      force: true,
+    });
+  });
+}

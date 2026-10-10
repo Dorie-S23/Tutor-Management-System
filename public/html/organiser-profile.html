@@ -28,18 +28,37 @@
 
       <nav class="tab-nav" aria-label="Main navigation">
         <a href="board.html">Courses</a>
-        <a href="tutors.html">Manage Tutors</a>
+        <a href="tutors.html">Tutors</a>
         <a href="timetable.html">Timetable</a>
         <a href="timesheet-review.html">Timesheets</a>
-        <a href="hours-budget-report.html">Budget Report</a>
+        <a href="hours-budget-report.html">Budget</a>
         <!-- Revealed by user-badge.js for the super-organiser only. -->
-        <a href="organiser-requests.html" data-super-only hidden>
-          Organiser Requests
-        </a>
+        <a href="organiser-requests.html" data-super-only hidden> Requests </a>
         <a href="organiser-profile.html" aria-current="page">Profile</a>
       </nav>
 
       <div class="navbar-right">
+        <button
+          type="button"
+          id="tour-link"
+          class="tour-trigger"
+          aria-label="Take a tour"
+          title="Take a tour"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <path d="M12 17h.01" />
+          </svg>
+        </button>
         <a
           href="allocation-history.html"
           class="nav-icon-btn"
@@ -124,18 +143,6 @@
         </div>
 
         <div class="user-pill">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
           <span id="user-name">Account</span>
           <span class="role-badge" id="user-role-badge">Organiser</span>
         </div>
@@ -235,6 +242,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/user-badge.js"></script>
+    <script src="../js/onboarding.js"></script>
     <script type="module" src="../js/profile.js"></script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>

@@ -22,8 +22,10 @@
     // Accounts created before the Volunteer rename were stored with role
     // "student" — show them as volunteers here too.
     let label = role === "student" ? "volunteer" : role;
-    // The admin role's technical name reads poorly in a badge.
-    if (label === "super_organiser") label = "Super organiser";
+    // The admin role's technical name reads poorly in a badge, and its
+    // full title is too wide for the crowded navbar — "Super" keeps it
+    // recognisable at a glance.
+    if (label === "super_organiser") label = "Super";
     roleEl.textContent = label
       ? label.charAt(0).toUpperCase() + label.slice(1)
       : "Member";

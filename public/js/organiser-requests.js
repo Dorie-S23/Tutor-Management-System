@@ -256,3 +256,48 @@ function showToast(message) {
 syncStatusChips(statusChipsEl, statusFilterEl);
 syncStatusChips(accessStatusChipsEl, accessStatusFilterEl);
 loadRequests();
+
+// ---------- guided tour ----------
+// The "?" navbar button walks the two request lists. Same sessionStorage
+// "user" key as the board tour, so progress is keyed per user here too.
+function getSessionUserId() {
+  try {
+    const raw = sessionStorage.getItem("user");
+    return raw ? JSON.parse(raw).id : "anon";
+  } catch {
+    return "anon";
+  }
+}
+
+const REQUESTS_TOUR_STEPS = [
+  {
+    selector: "#statusChips",
+    title: "Filter sign-ups",
+    body: "Pending, approved and denied organiser sign-ups — pick a chip to narrow the list.",
+    placement: "bottom",
+  },
+  {
+    selector: "#requestList",
+    title: "Decide each sign-up",
+    body: "Approve or deny from the row. Approving grants access to that organiser's chosen course only.",
+    placement: "top",
+  },
+  {
+    selector: "#accessStatusChips",
+    title: "Additional access",
+    body: "Organisers who already run courses can ask for more — those requests land in the second list.",
+    placement: "top",
+  },
+];
+
+const tourLinkEl = document.getElementById("tour-link");
+if (tourLinkEl) {
+  tourLinkEl.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.Onboarding?.start(REQUESTS_TOUR_STEPS, {
+      tourId: "organiser-requests",
+      userId: getSessionUserId(),
+      force: true,
+    });
+  });
+}

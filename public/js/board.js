@@ -1118,53 +1118,6 @@ function buildParetoStamp(app, applicantCount) {
   return `<span class="stamp ok" title="No other applicant is better than them on every objective, whatever the weighting.">No better all-round option</span>`;
 }
 
-// The second line on an applicant row: one mini gauge per objective (filled
-// to the normalised 0-1 score) plus, when the active balance pulls against
-// merit-first, the trade-off note explaining how far they moved.
-function buildBalanceMeta(app) {
-  const objectives = app.ranking?.objectives;
-  if (!objectives) return null;
-
-  const meta = document.createElement("div");
-  meta.className = "balance-meta";
-
-  const bars = document.createElement("div");
-  bars.className = "objective-bars";
-
-  Object.entries(objectives).forEach(([name, value]) => {
-    if (!Number.isFinite(value)) return;
-
-    const objective = window.AllocationObjectives?.OBJECTIVES?.[name];
-    const label = objective ? objective.label : name;
-    const hint = objective ? ` (${objective.hint})` : "";
-    const percent = Math.round(value * 100);
-
-    const item = document.createElement("span");
-    item.className = "objective-bar";
-    item.title = `${label}${hint}: ${percent}%`;
-    item.setAttribute("aria-label", `${label}: ${percent}%`);
-
-    const fill = document.createElement("span");
-    fill.className = "objective-bar-fill";
-    fill.style.setProperty("--value", `${percent}%`);
-
-    item.appendChild(fill);
-    item.appendChild(document.createTextNode(label));
-    bars.appendChild(item);
-  });
-
-  meta.appendChild(bars);
-
-  if (app.ranking.tradeoff) {
-    const note = document.createElement("p");
-    note.className = "balance-note";
-    note.textContent = app.ranking.tradeoff;
-    meta.appendChild(note);
-  }
-
-  return meta;
-}
-
 let lastApplicantsSnapshot = null; // most recent `${courseId}:${preset}:${rowsJson}` rendered
 
 async function renderApplicants(course) {
@@ -1374,9 +1327,6 @@ async function renderApplicants(course) {
     );
 
     li.appendChild(row);
-
-    const balanceMeta = buildBalanceMeta(app);
-    if (balanceMeta) li.appendChild(balanceMeta);
 
     applicantListEl.appendChild(li);
   });
@@ -3782,7 +3732,13 @@ const ORGANISER_TOUR_STEPS = [
   {
     selector: ".tab-nav",
     title: "Get around",
-    body: "Jump between courses, tutors, the timetable, timesheet review, and the budget report from here.",
+    body: "Courses, Tutors, Timetable, Timesheets and Budget are one click away, with your Profile at the far end. Super-organisers also get a Requests tab for organiser sign-ups.",
+    placement: "bottom",
+  },
+  {
+    selector: ".navbar-right",
+    title: "Quick tools",
+    body: "This button replays the tour any time. Beside it sit the allocation History, the Verify sessions page, and Notifications — then your account, Log out and the light/dark switch.",
     placement: "bottom",
   },
 ];
