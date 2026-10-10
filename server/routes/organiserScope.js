@@ -36,8 +36,7 @@ async function hasCourseAccess(userId, courseId) {
     if (rows.length === 0) return true; // grandfathered organiser
     return rows.some(
       (row) =>
-        row.status === "approved" &&
-        Number(row.course_id) === Number(courseId),
+        row.status === "approved" && Number(row.course_id) === Number(courseId),
     );
   } catch {
     return false;
@@ -80,8 +79,7 @@ async function organiserIdsForCourse(courseId) {
     const theirs = rowsByUser.get(userId) || [];
     const approvedForCourse = theirs.some(
       (row) =>
-        row.status === "approved" &&
-        Number(row.course_id) === Number(courseId),
+        row.status === "approved" && Number(row.course_id) === Number(courseId),
     );
     if (theirs.length === 0 || approvedForCourse) ids.push(userId);
   });
@@ -111,4 +109,8 @@ async function courseScopeForOrganiser(userId) {
     .map((row) => Number(row.course_id));
 }
 
-module.exports = { hasCourseAccess, organiserIdsForCourse, courseScopeForOrganiser };
+module.exports = {
+  hasCourseAccess,
+  organiserIdsForCourse,
+  courseScopeForOrganiser,
+};

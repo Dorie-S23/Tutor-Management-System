@@ -896,14 +896,46 @@ describe("attendance verification notifications", () => {
         email: "n@wits.ac.za",
         role: "volunteer",
       },
-      { id: "admin1", name: "Admin", email: "a@wits.ac.za", role: "super_organiser" },
-      { id: "org2", name: "Org Two", email: "o2@wits.ac.za", role: "organiser" },
-      { id: "org9", name: "Org Nine", email: "o9@wits.ac.za", role: "organiser" },
-      { id: "org4", name: "Org Four", email: "o4@wits.ac.za", role: "organiser" },
+      {
+        id: "admin1",
+        name: "Admin",
+        email: "a@wits.ac.za",
+        role: "super_organiser",
+      },
+      {
+        id: "org2",
+        name: "Org Two",
+        email: "o2@wits.ac.za",
+        role: "organiser",
+      },
+      {
+        id: "org9",
+        name: "Org Nine",
+        email: "o9@wits.ac.za",
+        role: "organiser",
+      },
+      {
+        id: "org4",
+        name: "Org Four",
+        email: "o4@wits.ac.za",
+        role: "organiser",
+      },
     ];
     tables.organiser_requests = [
-      { id: 1, user_id: "org2", course_id: 5, status: "approved", kind: "signup" },
-      { id: 2, user_id: "org9", course_id: 9, status: "approved", kind: "signup" },
+      {
+        id: 1,
+        user_id: "org2",
+        course_id: 5,
+        status: "approved",
+        kind: "signup",
+      },
+      {
+        id: 2,
+        user_id: "org9",
+        course_id: 9,
+        status: "approved",
+        kind: "signup",
+      },
     ];
     tables.notifications = [];
   }

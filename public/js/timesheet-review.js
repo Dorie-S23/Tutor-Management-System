@@ -211,11 +211,10 @@ function renderSubmission(sub) {
 // timesheet should see which sessions were confirmed. Snapshots taken
 // before verification existed read as Pending.
 function verificationPill(status) {
-  const info =
-    {
-      verified: { className: "approved", label: "Verified" },
-      flagged: { className: "rejected", label: "Flagged" },
-    }[status] || { className: "pending", label: "Pending" };
+  const info = {
+    verified: { className: "approved", label: "Verified" },
+    flagged: { className: "rejected", label: "Flagged" },
+  }[status] || { className: "pending", label: "Pending" };
   return `<span class="status-pill ${info.className}">${info.label}</span>`;
 }
 

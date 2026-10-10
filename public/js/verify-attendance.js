@@ -97,7 +97,8 @@ async function loadQueue() {
       `/api/attendance-verification?${scope}${status ? `&status=${status}` : ""}`,
     );
     rows = await res.json();
-    if (!res.ok) throw new Error(rows.error || "Failed to load logged sessions");
+    if (!res.ok)
+      throw new Error(rows.error || "Failed to load logged sessions");
   } catch (err) {
     showToast("Couldn't load logged sessions.");
     return;
@@ -159,7 +160,9 @@ function renderRow(entry) {
 
   const actionsEl = row.querySelector(".applicant-actions");
   actionsEl.appendChild(
-    makeActionBtn("Details", "btn-small-neutral", () => toggleDetail(li, entry)),
+    makeActionBtn("Details", "btn-small-neutral", () =>
+      toggleDetail(li, entry),
+    ),
   );
 
   const verifyBtn = () =>
@@ -190,9 +193,7 @@ function renderRow(entry) {
     actionsEl.appendChild(flagBtn());
   } else {
     actionsEl.appendChild(
-      makeActionBtn("Reconsider", "", () =>
-        setStatus(entry, "pending", name),
-      ),
+      makeActionBtn("Reconsider", "", () => setStatus(entry, "pending", name)),
     );
     // The other call stays available so a change of mind is two clicks.
     actionsEl.appendChild(status === "verified" ? flagBtn() : verifyBtn());

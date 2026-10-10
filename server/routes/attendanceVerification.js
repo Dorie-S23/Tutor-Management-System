@@ -1,7 +1,10 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { matchingSlotTypes } = require("./sessionSlots");
-const { hasCourseAccess, courseScopeForOrganiser } = require("./organiserScope");
+const {
+  hasCourseAccess,
+  courseScopeForOrganiser,
+} = require("./organiserScope");
 const { notify, formatShortDate } = require("./notificationHelpers");
 
 const router = express.Router();
@@ -108,7 +111,8 @@ router.get("/", async (req, res) => {
           .in("id", courseIds)
       : { data: [] },
   ]);
-  if (usersRes.error) return res.status(500).json({ error: usersRes.error.message });
+  if (usersRes.error)
+    return res.status(500).json({ error: usersRes.error.message });
   if (coursesRes.error) {
     return res.status(500).json({ error: coursesRes.error.message });
   }
@@ -132,7 +136,11 @@ router.get("/", async (req, res) => {
           )
         : [];
       const sessionType =
-        slotType === "tutorial" ? "Tutorial" : slotType === "lab" ? "Lab" : null;
+        slotType === "tutorial"
+          ? "Tutorial"
+          : slotType === "lab"
+            ? "Lab"
+            : null;
       const venue =
         slotType === "tutorial"
           ? course.venues

@@ -250,10 +250,7 @@ function loadLogHours({
 
   const logHoursJs = rawLogHoursJs
     .replace(/import\s*{[^}]*}\s*from\s*["']\.\/nav\.js["'];?/, "")
-    .replace(
-      /import\s*{[^}]*}\s*from\s*["']\.\/highlightTarget\.js["'];?/,
-      "",
-    )
+    .replace(/import\s*{[^}]*}\s*from\s*["']\.\/highlightTarget\.js["'];?/, "")
     .replace(/import\s*{[\s\S]*?}\s*from\s*["']\.\/storage\.js["'];?/, "")
     .replace(/import\s*{[\s\S]*?}\s*from\s*["']\.\/sessionTiming\.js["'];?/, "")
     // Top-level await only works in a module; a classic script (which is
@@ -682,7 +679,9 @@ describe("log-hours.js", () => {
     expect(pills[1].classList.contains("rejected")).toBe(true);
     expect(pills[1].textContent).toBe("Flagged");
     // The organiser's reason for flagging rides along as the pill's tooltip.
-    expect(pills[1].title).toBe("The tutorial slot was covered by someone else");
+    expect(pills[1].title).toBe(
+      "The tutorial slot was covered by someone else",
+    );
     win.close();
   });
 

@@ -83,7 +83,12 @@ function seedCourse() {
 
 function seedLogger() {
   tables.users = [
-    { id: "vol1", name: "Naledi Mokoena", email: "n@wits.ac.za", role: "volunteer" },
+    {
+      id: "vol1",
+      name: "Naledi Mokoena",
+      email: "n@wits.ac.za",
+      role: "volunteer",
+    },
   ];
 }
 
@@ -137,9 +142,7 @@ describe("GET /api/attendance-verification", () => {
   });
 
   test("orders newest sessions first", async () => {
-    tables.hour_entries.push(
-      tutorialEntry({ id: "e0", date: "2026-09-29" }),
-    );
+    tables.hour_entries.push(tutorialEntry({ id: "e0", date: "2026-09-29" }));
 
     const res = await request(buildApp()).get("/api/attendance-verification");
 
@@ -147,12 +150,27 @@ describe("GET /api/attendance-verification", () => {
   });
 
   test("scopes a plain organiser to their approved courses", async () => {
-    tables.users.push(
-      { id: "org1", name: "Org One", email: "o1@wits.ac.za", role: "organiser" },
-    );
+    tables.users.push({
+      id: "org1",
+      name: "Org One",
+      email: "o1@wits.ac.za",
+      role: "organiser",
+    });
     tables.organiser_requests = [
-      { id: 1, user_id: "org1", course_id: 5, status: "approved", kind: "signup" },
-      { id: 2, user_id: "org1", course_id: 9, status: "pending", kind: "access" },
+      {
+        id: 1,
+        user_id: "org1",
+        course_id: 5,
+        status: "approved",
+        kind: "signup",
+      },
+      {
+        id: 2,
+        user_id: "org1",
+        course_id: 9,
+        status: "pending",
+        kind: "access",
+      },
     ];
     // A course-9 entry the scoped organiser must not see.
     seedCourse();
@@ -180,11 +198,20 @@ describe("GET /api/attendance-verification", () => {
   });
 
   test("an organiser with no approved courses gets an empty queue", async () => {
-    tables.users.push(
-      { id: "org2", name: "Org Two", email: "o2@wits.ac.za", role: "organiser" },
-    );
+    tables.users.push({
+      id: "org2",
+      name: "Org Two",
+      email: "o2@wits.ac.za",
+      role: "organiser",
+    });
     tables.organiser_requests = [
-      { id: 1, user_id: "org2", course_id: 5, status: "denied", kind: "signup" },
+      {
+        id: 1,
+        user_id: "org2",
+        course_id: 5,
+        status: "denied",
+        kind: "signup",
+      },
     ];
 
     const res = await request(buildApp()).get(
@@ -197,8 +224,18 @@ describe("GET /api/attendance-verification", () => {
 
   test("a grandfathered organiser and the super-organiser see every course", async () => {
     tables.users.push(
-      { id: "org3", name: "Org Three", email: "o3@wits.ac.za", role: "organiser" },
-      { id: "admin1", name: "Admin", email: "a@wits.ac.za", role: "super_organiser" },
+      {
+        id: "org3",
+        name: "Org Three",
+        email: "o3@wits.ac.za",
+        role: "organiser",
+      },
+      {
+        id: "admin1",
+        name: "Admin",
+        email: "a@wits.ac.za",
+        role: "super_organiser",
+      },
     );
 
     const grandfathered = await request(buildApp()).get(
@@ -233,11 +270,20 @@ describe("PATCH /api/attendance-verification/:id", () => {
     seedCourse();
     seedLogger();
     tables.hour_entries = [tutorialEntry()];
-    tables.users.push(
-      { id: "org1", name: "Org One", email: "o1@wits.ac.za", role: "organiser" },
-    );
+    tables.users.push({
+      id: "org1",
+      name: "Org One",
+      email: "o1@wits.ac.za",
+      role: "organiser",
+    });
     tables.organiser_requests = [
-      { id: 1, user_id: "org1", course_id: 5, status: "approved", kind: "signup" },
+      {
+        id: 1,
+        user_id: "org1",
+        course_id: 5,
+        status: "approved",
+        kind: "signup",
+      },
     ];
   });
 
