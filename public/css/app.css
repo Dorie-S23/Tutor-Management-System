@@ -6044,6 +6044,14 @@ input.toolbar-date {
   width: 150px;
 }
 
+/* The date-mask wrapper is display:block/width:100% for stacked forms;
+   inside the flex toolbar that would stretch it across the whole row,
+   parking its picker button far from the typed field. */
+.org-toolbar .date-mask-field {
+  width: auto;
+  flex: none;
+}
+
 .budget-row__value--over {
   font-weight: 600;
   color: rgb(220, 38, 38);
