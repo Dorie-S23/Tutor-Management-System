@@ -83,9 +83,11 @@ describe("timetable grid", () => {
     expect(blocks[0].textContent).toContain("Tutorial · 10:00–11:00");
     expect(blocks[1].textContent).toContain("CS2001");
     expect(blocks[1].textContent).toContain("Lab · 14:00–16:00");
-    // Each block links to its course on the board.
-    expect(blocks[0].href).toContain("board.html?edit=1");
-    expect(blocks[1].href).toContain("board.html?edit=2");
+    // Each block links to its course on the board — selected, not straight
+    // into the edit modal (board.html's ?course= deep link, same as the
+    // universal search box uses).
+    expect(blocks[0].href).toContain("board.html?course=1");
+    expect(blocks[1].href).toContain("board.html?course=2");
   });
 
   test("flags a venue clash when two sessions share a room and overlap", async () => {
