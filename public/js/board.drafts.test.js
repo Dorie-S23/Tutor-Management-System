@@ -6,6 +6,13 @@ const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
 
+// Every test pays a cold-start cost: the real board.html is parsed and the
+// full board.js evaluated inline in jsdom. On the self-hosted CI runner the
+// job runs in a container whose workspace is the /mnt/c mount, where the
+// default 5s per-test budget is too tight — same fix as
+// board.transcript.test.js.
+jest.setTimeout(15000);
+
 const boardHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "board.html"),
   "utf8",

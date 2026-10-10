@@ -14,6 +14,12 @@ const boardHtml = fs.readFileSync(
 const boardJs = fs.readFileSync(path.join(__dirname, "board.js"), "utf8");
 const boardJsUrl = pathToFileURL(path.join(__dirname, "board.js")).href;
 
+// Every test pays a cold-start cost: parse board.html and evaluate the
+// full board.js inline in jsdom. On slow CI mounts (the self-hosted
+// runner under WSL on /mnt/c) the first test can blow the default 5s
+// budget, so the file gets a roomier ceiling.
+jest.setTimeout(15000);
+
 // Appended to board.js's own script text so it shares board.js's top-level
 // scope without board.js having to export anything for tests.
 const testHooks = `
