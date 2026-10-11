@@ -34,7 +34,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `id` (uuid, PK, FK → `users.id`)
 - `name` (varchar, required)
 - `email` (text)
-- `student_no` (text, required, unique)
+- `student_no` (text, required, unique) — five to seven digits, numbers only; checked at registration and on the profile page
 - `degree` (varchar)
 
 #### `tutors`
@@ -43,7 +43,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - **Primary key**: `id`
 - **Fields**:
 - `id` (uuid, PK, FK → `users.id`)
-- `student_number` (text, required, unique)
+- `student_number` (text, required, unique) — five to seven digits, numbers only; checked on registration, the tutors page and the profile page
 - `email` (text, required)
 - `name` (text)
 - `academic_level` (text) — `third_year`, `honours`, `masters` or `phd`; looks up the tutor's pay rate in `academic_level_rates` and is checked against a course's `course_level`

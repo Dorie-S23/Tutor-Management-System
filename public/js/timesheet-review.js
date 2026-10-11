@@ -19,6 +19,10 @@ let openDisputesByKey = new Map();
 // action (the map above is keyed for per-row lookups only).
 let openDisputeList = [];
 
+// What the queue currently shows (filter + rows + disputes) — the background
+// poll skips its DOM rebuild when a fetch lands on an unchanged snapshot.
+let lastQueueSnapshot = null;
+
 function submissionKey(userId, weekStart) {
   return `${userId}_${weekStart}`;
 }
@@ -112,10 +116,11 @@ async function loadOpenDisputes() {
   updateDisputeCard();
 }
 
-async function loadSubmissions() {
-  submissionListEl.innerHTML = "";
-  submissionsEmptyEl.hidden = true;
-
+// `quiet` marks the background sync's calls: a failing tick runs every few
+// seconds and must not toast, while a user-initiated load still reports.
+// Returns false when the fetch failed, so the poller can skip its "synced"
+// stamp for a refresh that never landed.
+async function loadSubmissions({ quiet = false } = {}) {
   let rows = [];
   try {
     const status = statusFilterEl.value;
@@ -125,20 +130,36 @@ async function loadSubmissions() {
     rows = await res.json();
     if (!res.ok) throw new Error(rows.error || "Failed to load timesheets");
   } catch (err) {
-    showToast("Couldn't load timesheets.");
-    return;
+    if (!quiet) showToast("Couldn't load timesheets.");
+    return false;
   }
 
   await loadOpenDisputes();
 
+  // Everything this list's output depends on — when a poll tick lands on
+  // unchanged data, skip the rebuild entirely so the queue doesn't flash
+  // (or collapse an open Details) every few seconds; a real change — a new
+  // submission, another organiser's decision — still re-renders at once.
+  const snapshot = JSON.stringify({
+    status: statusFilterEl.value,
+    rows,
+    disputes: openDisputeList,
+  });
+  if (snapshot === lastQueueSnapshot) return true;
+  lastQueueSnapshot = snapshot;
+
+  submissionListEl.innerHTML = "";
+  submissionsEmptyEl.hidden = true;
+
   if (rows.length === 0) {
     submissionsEmptyEl.hidden = false;
-    return;
+    return true;
   }
 
   rows.forEach((sub) => renderSubmission(sub));
 
   applyHighlight();
+  return true;
 }
 
 function applyHighlight() {
@@ -856,7 +877,7 @@ async function exportPayroll() {
   }
 }
 
-statusFilterEl.addEventListener("change", loadSubmissions);
+statusFilterEl.addEventListener("change", () => loadSubmissions());
 exportPayrollBtn.addEventListener("click", exportPayroll);
 
 // A search deep-link's target row might not be "pending" — default to
@@ -865,6 +886,99 @@ if (new URLSearchParams(window.location.search).get("highlight")) {
   statusFilterEl.value = "";
 }
 
+// ---------- background sync (mirrors board.html's polling) ----------
+
+const syncStatusEl = document.getElementById("syncStatus");
+
+function syncSecondsSince(date) {
+  return Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+}
+
+// The stamp only surfaces in the icon's hover text (title/aria-label), so
+// it steps up through units instead of counting raw seconds forever:
+// seconds while fresh, then minutes, hours, days.
+function formatSyncStatus(date) {
+  const seconds = syncSecondsSince(date);
+  if (seconds < 3) return "Synced just now";
+  if (seconds < 60) return `Synced ${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `Synced ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Synced ${hours}h ago`;
+  return `Synced ${Math.floor(hours / 24)}d ago`;
+}
+
+let lastSyncedAt = null;
+
+function tickSyncStatusLabel() {
+  if (syncStatusEl && lastSyncedAt) {
+    const label = formatSyncStatus(lastSyncedAt);
+    syncStatusEl.title = label;
+    syncStatusEl.setAttribute("aria-label", label);
+  }
+}
+
+// The icon stays transparent-ish in the header and only comes forward for
+// a moment each time a sync lands — a quiet "just refreshed" pulse.
+let syncFlashTimer = null;
+
+function flashSyncIcon() {
+  if (!syncStatusEl) return;
+  syncStatusEl.classList.add("is-flashing");
+  clearTimeout(syncFlashTimer);
+  // Another sync inside the window just extends the flash, not stack timers.
+  syncFlashTimer = setTimeout(() => {
+    syncStatusEl.classList.remove("is-flashing");
+  }, 1500);
+}
+
+let refreshInFlight = false;
+
+// Re-fetches everything this page shows. The snapshot check inside
+// loadSubmissions keeps an unchanged queue pixel-identical, and an open
+// modal or an in-flight refresh pauses the tick entirely so it can't yank
+// the page out from under a decision in progress.
+async function refreshReviewQueue() {
+  if (refreshInFlight || reasonModal.open || disputeModal.open) return;
+
+  refreshInFlight = true;
+  try {
+    const ok = await loadSubmissions({ quiet: true });
+    await loadReviewSummary();
+    if (ok) {
+      lastSyncedAt = new Date();
+      tickSyncStatusLabel();
+      flashSyncIcon();
+    }
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+const POLL_INTERVAL_MS = 8000;
+
+function startPollingSync() {
+  setInterval(() => {
+    if (!document.hidden) refreshReviewQueue();
+  }, POLL_INTERVAL_MS);
+
+  setInterval(tickSyncStatusLabel, 1000); // keeps the hover label + fade state current
+
+  // Catch up immediately when the tab regains focus.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshReviewQueue();
+  });
+}
+
 syncStatusChips();
-loadReviewSummary();
-loadSubmissions();
+
+// Initial load, then the same background sync board.html runs: poll every
+// 8s (skipped while the tab is hidden) and catch up on refocus, so the
+// queue reflects other organisers' decisions and new submissions without a
+// manual refresh.
+(async function init() {
+  await Promise.all([loadSubmissions(), loadReviewSummary()]);
+  lastSyncedAt = new Date();
+  tickSyncStatusLabel();
+  startPollingSync();
+})();

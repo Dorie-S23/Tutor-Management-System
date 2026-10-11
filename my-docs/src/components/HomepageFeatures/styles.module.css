@@ -1,6 +1,6 @@
 /**
- * TutorX feature cards — flat panels with navy ink icon tiles,
- * echoing the app icon from the brand sheet.
+ * TutorX feature cards — flat panels with deep-blue icon tiles that echo the
+ * TutorX app icon: white strokes on ink, azure accents.
  */
 
 .features {
@@ -21,7 +21,7 @@
 }
 
 .featureCard:hover {
-  border-color: var(--tutorx-pink);
+  border-color: var(--tutorx-sky);
 }
 
 .featureIcon {
@@ -29,10 +29,14 @@
   height: 56px;
   margin-bottom: 1.25rem;
   border-radius: 14px;
-  background: var(--tutorx-navy-ink);
+  background: var(--tutorx-ink-deep);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+[data-theme="dark"] .featureIcon {
+  background: var(--tutorx-blue-deep);
 }
 
 .featureIcon svg {
@@ -41,11 +45,11 @@
 }
 
 .iconStroke {
-  stroke: var(--tutorx-cream);
+  stroke: var(--tutorx-ice);
 }
 
 .iconAccent {
-  stroke: var(--tutorx-gold);
+  stroke: var(--tutorx-sky);
 }
 
 .featureTitle {

@@ -16,6 +16,15 @@ const normaliseRole = (role) =>
   ROLE_ALIASES[String(role).toLowerCase()] || String(role).toLowerCase();
 
 /* =========================================================
+   STUDENT NUMBER FORMAT
+
+   Volunteers and tutors must give a student number that is
+   five to seven digits with no other characters.
+   ========================================================= */
+
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+
+/* =========================================================
    GENERATE STAFF ID
 
    Organisers don't choose their own staff ID - we assign
@@ -91,6 +100,18 @@ router.post("/register", async (req, res) => {
     if ((userRole === "volunteer" || userRole === "tutor") && !studentNumber) {
       return res.status(400).json({
         error: "Student number is required for volunteers and tutors",
+      });
+    }
+
+    const trimmedStudentNumber =
+      studentNumber == null ? "" : String(studentNumber).trim();
+
+    if (
+      (userRole === "volunteer" || userRole === "tutor") &&
+      !STUDENT_NUMBER_RE.test(trimmedStudentNumber)
+    ) {
+      return res.status(400).json({
+        error: "Student number must be 5–7 digits",
       });
     }
 
@@ -216,7 +237,7 @@ router.post("/register", async (req, res) => {
           id: userId,
           name: name,
           email: email,
-          student_no: studentNumber,
+          student_no: trimmedStudentNumber,
         });
 
       if (studentError) {
@@ -246,7 +267,7 @@ router.post("/register", async (req, res) => {
     else if (userRole === "tutor") {
       const { error: tutorError } = await req.supabase.from("tutors").insert({
         id: userId,
-        student_number: studentNumber,
+        student_number: trimmedStudentNumber,
         email: email,
         name: name,
       });
@@ -460,6 +481,18 @@ router.post("/google/register", async (req, res) => {
       });
     }
 
+    const trimmedStudentNumber =
+      studentNumber == null ? "" : String(studentNumber).trim();
+
+    if (
+      (userRole === "volunteer" || userRole === "tutor") &&
+      !STUDENT_NUMBER_RE.test(trimmedStudentNumber)
+    ) {
+      return res.status(400).json({
+        error: "Student number must be 5–7 digits",
+      });
+    }
+
     /* =====================================================
            Verify the Google/Supabase user
            
@@ -605,7 +638,7 @@ router.post("/google/register", async (req, res) => {
           id: userId,
           name: name,
           email: email,
-          student_no: studentNumber,
+          student_no: trimmedStudentNumber,
         });
 
       if (studentError) {
@@ -628,7 +661,7 @@ router.post("/google/register", async (req, res) => {
         .from("tutors")
         .insert({
           id: userId,
-          student_number: studentNumber,
+          student_number: trimmedStudentNumber,
           email: email,
           name: name,
         });

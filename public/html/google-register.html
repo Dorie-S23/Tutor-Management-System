@@ -90,6 +90,8 @@
               id="student-number"
               name="student-number"
               placeholder="e.g. 1234567"
+              maxlength="7"
+              inputmode="numeric"
             />
           </div>
 
@@ -249,6 +251,10 @@
          FORM SUBMISSION
          ================================================ */
 
+      // Five to seven digits, numbers only — the server enforces the
+      // same rule.
+      const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+
       const form = document.getElementById("google-register-form");
 
       form.addEventListener("submit", async (event) => {
@@ -269,6 +275,14 @@
 
         if (role === "organiser" && !courseId) {
           setMessage("Choose the course you want to organise.", "error");
+          return;
+        }
+
+        if (
+          (role === "volunteer" || role === "tutor") &&
+          !STUDENT_NUMBER_RE.test(studentNumber)
+        ) {
+          setMessage("Student number must be 5–7 digits.", "error");
           return;
         }
 

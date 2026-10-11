@@ -252,6 +252,22 @@ describe("PUT /api/profile/:userId", () => {
     expect(missingStudentNumber.status).toBe(400);
   });
 
+  test("400s a student number that isn't 5–7 plain digits", async () => {
+    for (const studentNumber of ["123", "12345678", "12345a7"]) {
+      const res = await request(buildApp())
+        .put(`/api/profile/${TUTOR_ID}`)
+        .send({ name: "Ada", studentNumber });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Student number must be 5–7 digits");
+    }
+    // The save aborted before touching either table.
+    expect(tables.tutors.find((t) => t.id === TUTOR_ID).student_number).toBe(
+      "1234567",
+    );
+    expect(tables.users.find((u) => u.id === TUTOR_ID).name).toBe("Ada");
+  });
+
   test("rejects numbers that aren't valid South African cell numbers", async () => {
     const invalidNumbers = [
       "call me maybe",

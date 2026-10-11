@@ -1,19 +1,24 @@
 /**
- * TutorX homepage — mirrors the brand sheet: a flat lockup panel on paper.
+ * TutorX homepage — the hero band echoes the app icon: a bluish-grey sky
+ * with a soft azure glow behind the lockup, like light off the cube facets.
  */
 
 .heroBanner {
-  padding: 4rem 0 2.5rem;
+  padding: 4.5rem 0 3rem;
+  background: linear-gradient(180deg, #e6edf4 0%, var(--tutorx-mist) 100%);
+  border-bottom: 1px solid var(--tutorx-border);
 }
 
 .heroPanel {
   max-width: 44rem;
   margin: 0 auto;
-  padding: 4rem 2rem 3.5rem;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--tutorx-border);
-  border-radius: 4px;
+  padding: 3rem 2rem 0.5rem;
   text-align: center;
+  background: radial-gradient(
+    circle at 50% 38%,
+    rgba(33, 118, 199, 0.1),
+    rgba(33, 118, 199, 0) 62%
+  );
 }
 
 .lockup {
@@ -30,26 +35,30 @@
   flex-shrink: 0;
 }
 
-/* Mark strokes (theme-aware) */
+/* Mark strokes (theme-aware): deep blue diagonal with azure breaks */
 .markEcho {
-  stroke: var(--tutorx-pink);
-  opacity: 0.55;
+  stroke: var(--tutorx-sky);
+  opacity: 0.6;
 }
 
 .markNavy {
-  stroke: var(--tutorx-navy);
+  stroke: var(--tutorx-blue-deep);
 }
 
 .markAccent {
-  stroke: var(--tutorx-gold);
+  stroke: var(--tutorx-blue);
 }
 
 [data-theme="dark"] .markNavy {
-  stroke: var(--tutorx-cream);
+  stroke: var(--tutorx-ice);
+}
+
+[data-theme="dark"] .markAccent {
+  stroke: var(--tutorx-sky);
 }
 
 [data-theme="dark"] .markEcho {
-  opacity: 0.35;
+  opacity: 0.4;
 }
 
 .heroTitle {
@@ -61,8 +70,12 @@
 }
 
 .heroTitleAccent {
-  color: var(--tutorx-gold);
+  color: var(--tutorx-blue);
   font-weight: 700;
+}
+
+[data-theme="dark"] .heroTitleAccent {
+  color: var(--tutorx-sky);
 }
 
 .heroTagline {
@@ -85,13 +98,29 @@
   border-radius: 4px;
 }
 
+[data-theme="dark"] .heroBanner {
+  background: linear-gradient(
+    180deg,
+    #0c1620 0%,
+    var(--ifm-background-color) 100%
+  );
+}
+
+[data-theme="dark"] .heroPanel {
+  background: radial-gradient(
+    circle at 50% 38%,
+    rgba(140, 199, 242, 0.12),
+    rgba(140, 199, 242, 0) 62%
+  );
+}
+
 @media screen and (max-width: 996px) {
   .heroBanner {
-    padding: 2rem 0 1.5rem;
+    padding: 2.5rem 0 2rem;
   }
 
   .heroPanel {
-    padding: 2.5rem 1.5rem 2.25rem;
+    padding: 2rem 1.5rem 0;
   }
 
   .heroMark {

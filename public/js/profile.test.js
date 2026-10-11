@@ -249,6 +249,21 @@ describe("profile.js — student volunteer page", () => {
     );
   });
 
+  test("rejects a student number that isn't 5–7 digits before calling the API", async () => {
+    const { window, calls } = loadPage();
+    await wait();
+
+    window.document.getElementById("profile-student-number").value = "12345678";
+
+    submitForm(window);
+    await wait();
+
+    const errorEl = window.document.getElementById("profile-error");
+    expect(errorEl.hidden).toBe(false);
+    expect(errorEl.textContent).toContain("Student number must be 5–7 digits");
+    expect(calls.find((c) => c.opts?.method === "PUT")).toBeUndefined();
+  });
+
   test("a failed load shows the error and keeps the form locked", async () => {
     const { window } = loadPage({ loadError: "User not found" });
     await wait();

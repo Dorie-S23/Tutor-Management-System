@@ -1,9 +1,10 @@
 /**
  * TutorX documentation theme.
  *
- * Palette and typography mirror the TutorX identity: navy ink surfaces,
- * magenta accents, pink highlights, a paper background, Space Grotesk type,
- * and flat panels with 4px corners and warm hairline borders.
+ * Palette mirrors the TutorX app icon — a faceted azure-blue cube with a
+ * white graduation cap on ink — so the site leans on azure blues, bluish-grey
+ * surfaces, and icy highlights, with Space Grotesk type, flat panels with
+ * 4px corners, and cool hairline borders.
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
@@ -13,14 +14,15 @@
  * ------------------------------------------------------------------------ */
 
 :root {
-  --tutorx-navy: #4a1d6e;
-  --tutorx-navy-ink: #2b0f42;
-  --tutorx-gold: #d6247e;
-  --tutorx-pink: #f2a6c9;
-  --tutorx-paper: #fbf7fa;
-  --tutorx-slate: #8a719e;
-  --tutorx-cream: #f3f0e8;
-  --tutorx-border: #e7e2d8;
+  --tutorx-blue: #2176c7; /* primary azure, mid cube facet */
+  --tutorx-blue-deep: #164f86; /* shaded facet */
+  --tutorx-sky: #8ec7f2; /* pale facet highlight */
+  --tutorx-ink: #14273a; /* blue-grey ink for text */
+  --tutorx-ink-deep: #0e1c2b; /* deepest surface, echoes the icon backdrop */
+  --tutorx-mist: #f2f5f8; /* bluish-grey paper */
+  --tutorx-slate: #5b7186; /* muted bluish grey */
+  --tutorx-ice: #eaf2f9; /* icy white for strokes on ink */
+  --tutorx-border: #d8e0e8;
 }
 
 /* --------------------------------------------------------------------------
@@ -28,19 +30,19 @@
  * ------------------------------------------------------------------------ */
 
 :root {
-  --ifm-color-primary: #d6247e;
-  --ifm-color-primary-dark: #c22071;
-  --ifm-color-primary-darker: #b61e6a;
-  --ifm-color-primary-darkest: #921a53;
-  --ifm-color-primary-light: #da3a8b;
-  --ifm-color-primary-lighter: #dc4490;
-  --ifm-color-primary-lightest: #e567a4;
+  --ifm-color-primary: #2176c7;
+  --ifm-color-primary-dark: #1d68b0;
+  --ifm-color-primary-darker: #1b61a5;
+  --ifm-color-primary-darkest: #164f86;
+  --ifm-color-primary-light: #3d87d1;
+  --ifm-color-primary-lighter: #5595d8;
+  --ifm-color-primary-lightest: #85b5e5;
 
-  --ifm-background-color: var(--tutorx-paper);
+  --ifm-background-color: var(--tutorx-mist);
   --ifm-background-surface-color: #ffffff;
 
-  --ifm-font-color-base: var(--tutorx-navy-ink);
-  --ifm-heading-color: var(--tutorx-navy-ink);
+  --ifm-font-color-base: var(--tutorx-ink);
+  --ifm-heading-color: var(--tutorx-ink);
 
   --ifm-font-family-base:
     "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -56,27 +58,27 @@
   --ifm-link-hover-color: var(--ifm-color-primary-darker);
 
   --ifm-navbar-background-color: #ffffff;
-  --ifm-navbar-link-color: var(--tutorx-navy-ink);
+  --ifm-navbar-link-color: var(--tutorx-ink);
   --ifm-navbar-link-hover-color: var(--ifm-color-primary);
   --ifm-navbar-shadow: none;
 
   --ifm-menu-color-active: var(--ifm-color-primary);
-  --ifm-menu-color-background-active: rgba(214, 36, 126, 0.08);
-  --ifm-menu-color-background-hover: rgba(74, 29, 110, 0.06);
+  --ifm-menu-color-background-active: rgba(33, 118, 199, 0.08);
+  --ifm-menu-color-background-hover: rgba(20, 39, 58, 0.06);
 
   --ifm-toc-border-color: var(--tutorx-border);
   --ifm-table-border-color: var(--tutorx-border);
 
-  --ifm-footer-background-color: var(--tutorx-navy-ink);
-  --ifm-footer-color: var(--tutorx-cream);
-  --ifm-footer-title-color: var(--tutorx-cream);
-  --ifm-footer-link-color: var(--tutorx-pink);
+  --ifm-footer-background-color: var(--tutorx-ink-deep);
+  --ifm-footer-color: #c5d5e2;
+  --ifm-footer-title-color: var(--tutorx-ice);
+  --ifm-footer-link-color: var(--tutorx-sky);
   --ifm-footer-link-hover-color: #ffffff;
 
   --ifm-code-font-size: 95%;
-  --ifm-code-background: rgba(74, 29, 110, 0.08);
+  --ifm-code-background: rgba(33, 118, 199, 0.08);
 
-  --docusaurus-highlighted-code-line-bg: rgba(214, 36, 126, 0.12);
+  --docusaurus-highlighted-code-line-bg: rgba(33, 118, 199, 0.12);
 }
 
 /* --------------------------------------------------------------------------
@@ -84,42 +86,42 @@
  * ------------------------------------------------------------------------ */
 
 [data-theme="dark"] {
-  --tutorx-slate: #b9a1cd;
-  --tutorx-border: #41205d;
+  --tutorx-slate: #93a9bd;
+  --tutorx-border: #2a4359;
 
-  --ifm-color-primary: #f2a6c9;
-  --ifm-color-primary-dark: #ef9bc1;
-  --ifm-color-primary-darker: #ee95bd;
-  --ifm-color-primary-darkest: #e97fae;
-  --ifm-color-primary-light: #f3b0d0;
-  --ifm-color-primary-lighter: #f4b4d2;
-  --ifm-color-primary-lightest: #f7c3dd;
+  --ifm-color-primary: #8ec7f2;
+  --ifm-color-primary-dark: #7cbdee;
+  --ifm-color-primary-darker: #74b8ec;
+  --ifm-color-primary-darkest: #56a5e5;
+  --ifm-color-primary-light: #9ccff4;
+  --ifm-color-primary-lighter: #aad6f6;
+  --ifm-color-primary-lightest: #c8e3f9;
 
-  --ifm-background-color: #190a2a;
-  --ifm-background-surface-color: var(--tutorx-navy-ink);
+  --ifm-background-color: #0f1a24;
+  --ifm-background-surface-color: #152430;
 
-  --ifm-font-color-base: var(--tutorx-cream);
-  --ifm-heading-color: var(--tutorx-cream);
-  --ifm-font-color-base-inverse: var(--tutorx-navy-ink);
+  --ifm-font-color-base: var(--tutorx-ice);
+  --ifm-heading-color: var(--tutorx-ice);
+  --ifm-font-color-base-inverse: var(--tutorx-ink-deep);
 
-  --ifm-link-color: var(--tutorx-pink);
+  --ifm-link-color: var(--tutorx-sky);
   --ifm-link-hover-color: #ffffff;
 
-  --ifm-navbar-background-color: var(--tutorx-navy-ink);
-  --ifm-navbar-link-color: var(--tutorx-cream);
-  --ifm-navbar-link-hover-color: var(--tutorx-pink);
+  --ifm-navbar-background-color: #152430;
+  --ifm-navbar-link-color: var(--tutorx-ice);
+  --ifm-navbar-link-hover-color: var(--tutorx-sky);
 
-  --ifm-menu-color-active: var(--tutorx-pink);
-  --ifm-menu-color-background-active: rgba(242, 166, 201, 0.12);
-  --ifm-menu-color-background-hover: rgba(242, 166, 201, 0.07);
+  --ifm-menu-color-active: var(--tutorx-sky);
+  --ifm-menu-color-background-active: rgba(140, 199, 242, 0.12);
+  --ifm-menu-color-background-hover: rgba(140, 199, 242, 0.07);
 
-  --ifm-footer-background-color: #160826;
-  --ifm-footer-color: #d9cde3;
-  --ifm-footer-link-color: var(--tutorx-pink);
+  --ifm-footer-background-color: #0b141d;
+  --ifm-footer-color: #a9bccd;
+  --ifm-footer-link-color: var(--tutorx-sky);
 
-  --ifm-code-background: rgba(242, 166, 201, 0.14);
+  --ifm-code-background: rgba(140, 199, 242, 0.14);
 
-  --docusaurus-highlighted-code-line-bg: rgba(242, 166, 201, 0.16);
+  --docusaurus-highlighted-code-line-bg: rgba(140, 199, 242, 0.16);
 }
 
 /* --------------------------------------------------------------------------
@@ -140,7 +142,7 @@ h6 {
   letter-spacing: -0.005em;
 }
 
-/* Flat panel navbar with a warm hairline instead of the default shadow */
+/* Flat panel navbar with a cool hairline instead of the default shadow */
 .navbar {
   border-bottom: 1px solid var(--tutorx-border);
 }
@@ -165,7 +167,7 @@ div[class*="codeBlockContainer"] {
 }
 
 .markdown blockquote {
-  border-color: var(--tutorx-pink);
+  border-color: var(--tutorx-sky);
 }
 
 .pagination-nav__link {
@@ -176,5 +178,10 @@ div[class*="codeBlockContainer"] {
 }
 
 .pagination-nav__link:hover {
-  border-color: var(--tutorx-pink);
+  border-color: var(--tutorx-sky);
+}
+
+/* The pale azure primary needs dark ink labels in dark mode for contrast */
+[data-theme="dark"] .button--primary {
+  color: var(--tutorx-ink-deep);
 }
