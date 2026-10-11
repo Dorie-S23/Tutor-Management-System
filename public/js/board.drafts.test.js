@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 // Every test pays a cold-start cost: the real board.html is parsed and the
 // full board.js evaluated inline in jsdom. On the self-hosted CI runner the
@@ -69,14 +70,17 @@ function draftDetail(id) {
 }
 
 function loadBoard() {
+  // sourceURL attribution so this suite's inlined source lands on board.js's
+  // coverage numbers — same line layout as board.keyboard-nav.test.js so the
+  // suites' copies merge (see board.flows.test.js).
   const html = boardHtml
     .replace(
       '<script src="../js/allocation-objectives.js"></script>',
-      `<script>\n${allocationObjectivesJs}\n</script>`,
+      `<script>${allocationObjectivesJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "allocation-objectives.js")).href}</script>`,
     )
     .replace(
       '<script src="../js/board.js"></script>',
-      `<script>\n${boardJs}\n</script>`,
+      `<script>${boardJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "board.js")).href}\n</script>`,
     )
     .replace('<script src="../js/logout.js"></script>', "")
     .replace('<script src="../js/onboarding.js"></script>', "");
