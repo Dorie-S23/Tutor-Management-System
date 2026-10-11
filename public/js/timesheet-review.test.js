@@ -106,6 +106,8 @@ function respondWith({
   };
 }
 
+let currentDom = null;
+
 function loadPage(respond) {
   // Inline the script under test (with its real sourceURL so coverage
   // attribution matches the other jsdom suites); the page's other scripts
@@ -152,6 +154,8 @@ function loadPage(respond) {
     },
   });
 
+  currentDom = dom;
+
   return { window: dom.window, calls, printed, opened };
 }
 
@@ -170,6 +174,13 @@ function clickPdf(window) {
   button.click();
   return button;
 }
+
+// Boot now starts the page's background-sync intervals — close each test's
+// window so they don't fire against a torn-down document and hang the runner.
+afterEach(() => {
+  currentDom?.window.close();
+  currentDom = null;
+});
 
 describe("timesheet-review page — Details shows the tutor's claim form", () => {
   test("Details renders the claim built from the frozen snapshot", async () => {
