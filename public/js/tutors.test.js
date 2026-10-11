@@ -56,6 +56,7 @@ function loadPage({
   tutorsFail = false,
   ratesFail = false,
   storedCap = null,
+  user = null,
   url = "http://localhost/tutors.html",
 } = {}) {
   // tutors.js is the end-of-body page script; the page's other scripts
@@ -76,6 +77,9 @@ function loadPage({
     runScripts: "dangerously",
     pretendToBeVisual: true,
     beforeParse(window) {
+      if (user) {
+        window.sessionStorage.setItem("user", JSON.stringify(user));
+      }
       if (storedCap !== null) {
         window.localStorage.setItem("tms_global_weekly_cap", String(storedCap));
       }
@@ -443,5 +447,40 @@ describe("tutors.js", () => {
 
     const row = document.querySelector('tr[data-tutor-id="t2"]');
     expect(row.classList.contains("search-highlight")).toBe(true);
+  });
+
+  test("a course-scoped organiser's fetches carry their organiserId and the empty states explain the scope", async () => {
+    const { document, calls } = loadPage({
+      tutors: [],
+      workload: [],
+      user: { id: "org-9", role: "organiser", courseIds: [7] },
+    });
+    await wait();
+
+    // Both lists are fetched with the organiserId the server scopes on.
+    expect(calls.some((c) => c.url === "/api/tutors?organiserId=org-9")).toBe(
+      true,
+    );
+    expect(
+      calls.some((c) => c.url === "/api/tutors/workload?organiserId=org-9"),
+    ).toBe(true);
+
+    // With nothing in scope yet, the empty states explain the scope rather
+    // than suggesting no tutors exist at all.
+    expect(document.getElementById("emptyCopy").textContent).toBe(
+      "No tutors are assigned to your approved courses yet.",
+    );
+    expect(document.getElementById("workloadEmpty").textContent).toBe(
+      "No tutors are assigned to your approved courses yet.",
+    );
+  });
+
+  test("an unscoped session fetches both lists without an organiserId", async () => {
+    const { calls } = loadPage();
+    await wait();
+
+    expect(calls.some((c) => c.url === "/api/tutors")).toBe(true);
+    expect(calls.some((c) => c.url === "/api/tutors/workload")).toBe(true);
+    expect(calls.some((c) => c.url.includes("organiserId="))).toBe(false);
   });
 });

@@ -3,6 +3,7 @@ const express = require("express");
 const supabase = require("../supabaseClient");
 const { DAY_NAMES } = require("../dayNames");
 const { getRatesMap } = require("./academicLevelRates");
+const { courseScopeForOrganiser } = require("./organiserScope");
 
 const router = express.Router();
 
@@ -17,8 +18,32 @@ function overlaps(startA, endA, startB, endB) {
   return startA < endB && startB < endA;
 }
 
-// GET /api/tutors — list all tutors
+// Resolves the ?organiserId= scope shared by the list and workload views —
+// the same contract as the attendance queue. undefined means the caller
+// isn't an organiser at all (a 403), null means they see everything (the
+// super-organiser, or a grandfathered organiser with no request rows), and
+// an array holds the only course ids they may look at. Without an
+// organiserId the view isn't scoped, matching the rest of this API's
+// trust model.
+async function scopeFor(req) {
+  const { organiserId } = req.query;
+  if (!organiserId) return null;
+  return courseScopeForOrganiser(organiserId);
+}
+
+// GET /api/tutors?organiserId=... — list tutors, rates stitched on. A
+// course-scoped organiser only gets tutors assigned (approved) to their
+// courses — someone they could never have allocated has no business on
+// this page.
 router.get("/", async (req, res) => {
+  const scopeCourseIds = await scopeFor(req);
+  if (scopeCourseIds === undefined) {
+    return res.status(403).json({ error: "Only organisers can list tutors" });
+  }
+  if (Array.isArray(scopeCourseIds) && scopeCourseIds.length === 0) {
+    return res.json([]);
+  }
+
   const { data, error } = await supabase
     .from("tutors")
     .select("*")
@@ -26,11 +51,26 @@ router.get("/", async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
 
+  let tutors = data || [];
+  if (Array.isArray(scopeCourseIds)) {
+    const { data: assignments, error: assignError } = await supabase
+      .from("tutor_subject_preference")
+      .select("tutor_id")
+      .eq("status", "approved")
+      .in("course_id", scopeCourseIds);
+    if (assignError) {
+      return res.status(500).json({ error: assignError.message });
+    }
+
+    const inScope = new Set((assignments || []).map((a) => a.tutor_id));
+    tutors = tutors.filter((t) => inScope.has(t.id));
+  }
+
   const { ratesMap, error: ratesError } = await getRatesMap();
   if (ratesError) return res.status(500).json({ error: ratesError.message });
 
   res.json(
-    data.map((t) => ({
+    tutors.map((t) => ({
       ...t,
       hourly_rate:
         t.academic_level != null ? (ratesMap[t.academic_level] ?? null) : null,
@@ -43,6 +83,18 @@ router.get("/", async (req, res) => {
 // view. Registered before /:id so "workload" isn't swallowed as a tutor id.
 router.get("/workload", async (req, res) => {
   try {
+    // Same scope contract as the list: a course-scoped organiser sees the
+    // tutors assigned inside their courses, and only those courses count
+    // toward the hours — nothing from a module they can't see leaks into
+    // the bars or the per-course tooltip.
+    const scopeCourseIds = await scopeFor(req);
+    if (scopeCourseIds === undefined) {
+      return res.status(403).json({ error: "Only organisers can list tutors" });
+    }
+    if (Array.isArray(scopeCourseIds) && scopeCourseIds.length === 0) {
+      return res.json([]);
+    }
+
     const { data: tutors, error: tutorsError } = await supabase
       .from("tutors")
       .select("id, name, weekly_hour_cap")
@@ -55,7 +107,9 @@ router.get("/workload", async (req, res) => {
 
     const { data: approvals, error: approvalsError } = await supabase
       .from("tutor_subject_preference")
-      .select("tutor_id, courses(course_code, course_name, hours_per_week)")
+      .select(
+        "tutor_id, course_id, courses(course_code, course_name, hours_per_week)",
+      )
       .eq("status", "approved");
 
     if (approvalsError) {
@@ -63,8 +117,16 @@ router.get("/workload", async (req, res) => {
       return res.status(500).json({ error: approvalsError.message });
     }
 
+    // Outside-scope assignments drop out before anything is summed, so the
+    // numbers describe exactly the courses shown.
+    const assignments = (approvals || []).filter(
+      (a) =>
+        !Array.isArray(scopeCourseIds) ||
+        scopeCourseIds.includes(Number(a.course_id)),
+    );
+
     const coursesByTutor = {};
-    (approvals || []).forEach((a) => {
+    assignments.forEach((a) => {
       // The embedded course can come back as a single object or (depending
       // on how the foreign key is set up) an array with one entry — handle
       // both instead of assuming one shape.
@@ -78,16 +140,22 @@ router.get("/workload", async (req, res) => {
       });
     });
 
-    const workload = (tutors || []).map((t) => {
-      const courses = coursesByTutor[t.id] || [];
-      return {
-        id: t.id,
-        name: t.name,
-        weeklyHourCap: t.weekly_hour_cap,
-        assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
-        courses,
-      };
-    });
+    const workload = (tutors || [])
+      .filter(
+        (t) =>
+          !Array.isArray(scopeCourseIds) ||
+          (coursesByTutor[t.id] || []).length > 0,
+      )
+      .map((t) => {
+        const courses = coursesByTutor[t.id] || [];
+        return {
+          id: t.id,
+          name: t.name,
+          weeklyHourCap: t.weekly_hour_cap,
+          assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
+          courses,
+        };
+      });
 
     res.json(workload);
   } catch (err) {

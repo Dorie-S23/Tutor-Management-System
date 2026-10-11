@@ -31,6 +31,7 @@ beforeEach(() => {
     tutor_busy_times: [],
     courses: [],
     users: [],
+    organiser_requests: [],
     academic_level_rates: [],
   };
   mockSupabase = fakeSupabase(tables);
@@ -175,6 +176,159 @@ describe("GET /api/tutors/rates", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ honours: 150, phd: 200 });
+  });
+});
+
+describe("GET /api/tutors — organiser scoping", () => {
+  // org1 is approved for course 5 and still waiting on course 7; the two
+  // tutors between them cover an in-scope assignment, an out-of-scope one,
+  // and a pending one that must never count.
+  function seedScope() {
+    tables.users.push(
+      {
+        id: "org1",
+        name: "Org One",
+        email: "org1@wits.ac.za",
+        role: "organiser",
+      },
+      {
+        id: "org2",
+        name: "Org Two",
+        email: "org2@wits.ac.za",
+        role: "organiser",
+      },
+      {
+        id: "super1",
+        name: "Super",
+        email: "super@wits.ac.za",
+        role: "super_organiser",
+      },
+      { id: "t-in", name: "Ada In", email: "ada@wits.ac.za", role: "tutor" },
+      { id: "t-out", name: "Bob Out", email: "bob@wits.ac.za", role: "tutor" },
+    );
+    tables.organiser_requests = [
+      { id: 1, user_id: "org1", course_id: 5, status: "approved" },
+      { id: 2, user_id: "org1", course_id: 7, status: "pending" },
+      { id: 3, user_id: "org2", course_id: 9, status: "pending" },
+    ];
+    tables.tutors = [
+      { id: "t-in", name: "Ada In", academic_level: "honours" },
+      { id: "t-out", name: "Bob Out", academic_level: "phd" },
+    ];
+    tables.courses = [
+      {
+        id: 5,
+        course_code: "COMS1016A",
+        course_name: "Intro to CS",
+        hours_per_week: 3,
+      },
+      {
+        id: 7,
+        course_code: "COMS2000",
+        course_name: "Data Structures",
+        hours_per_week: 6,
+      },
+    ];
+    // fakeSupabase doesn't join — the embedded course rides on the row.
+    tables.tutor_subject_preference = [
+      {
+        tutor_id: "t-in",
+        course_id: 5,
+        status: "approved",
+        courses: {
+          course_code: "COMS1016A",
+          course_name: "Intro to CS",
+          hours_per_week: 3,
+        },
+      },
+      { tutor_id: "t-in", course_id: 7, status: "pending" },
+      {
+        tutor_id: "t-out",
+        course_id: 7,
+        status: "approved",
+        courses: {
+          course_code: "COMS2000",
+          course_name: "Data Structures",
+          hours_per_week: 6,
+        },
+      },
+    ];
+  }
+
+  test("without an organiserId the list stays unscoped", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t) => t.name)).toEqual(["Ada In", "Bob Out"]);
+  });
+
+  test("a course-scoped organiser only sees tutors approved for their courses", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=org1");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t) => t.id)).toEqual(["t-in"]);
+  });
+
+  test("the super-organiser sees every tutor", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=super1");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+
+  test("an organiser with no approved courses yet gets an empty list", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=org2");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  test("a caller id that isn't an organiser is rejected", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=t-in");
+
+    expect(res.status).toBe(403);
+  });
+
+  test("the workload keeps only in-scope tutors and their in-scope hours", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get(
+      "/api/tutors/workload?organiserId=org1",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].id).toBe("t-in");
+    // Only the approved course-5 assignment counts — the pending course-7
+    // row and Bob's out-of-scope course never reach the totals.
+    expect(res.body[0].assignedHours).toBe(3);
+    expect(res.body[0].courses).toEqual([
+      {
+        course_code: "COMS1016A",
+        course_name: "Intro to CS",
+        hours_per_week: 3,
+      },
+    ]);
+  });
+
+  test("the workload without an organiserId stays unscoped", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors/workload");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t) => t.id)).toEqual(["t-in", "t-out"]);
+    expect(res.body.map((t) => t.assignedHours)).toEqual([3, 6]);
   });
 });
 
