@@ -53,6 +53,10 @@ function isValidSaCellPhone(value) {
   return /^(?:\+27|0)[6-8][0-9]{8}$/.test(cleaned);
 }
 
+// Mirrors the server's student number rule: five to seven digits, numbers
+// only.
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+
 // The stored profile keeps one full-name string; the form edits it as
 // first/last. Split at the FIRST space so multi-word surnames ("Mary Jane
 // van der Berg") round-trip exactly, and joining drops the empty half for
@@ -141,6 +145,12 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const studentNumber = studentNumberField.value.trim();
+  if (studentNumber && !STUDENT_NUMBER_RE.test(studentNumber)) {
+    showError("Student number must be 5–7 digits.");
+    return;
+  }
+
   saveBtn.disabled = true;
   saveBtn.textContent = "Saving…";
 
@@ -152,7 +162,7 @@ form.addEventListener("submit", async (event) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: joinName(firstNameField.value, lastNameField.value),
-          studentNumber: studentNumberField.value,
+          studentNumber,
           cellPhone: cellPhoneField.value,
         }),
       },

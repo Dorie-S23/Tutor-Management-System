@@ -268,7 +268,27 @@ describe("tutors.js", () => {
         email: "v@wits.ac.za",
         level: "honours",
       },
-      "Student number must be 5–10 digits.",
+      "Student number must be 5–7 digits.",
+    ],
+    [
+      "an 8-digit student number is too long",
+      {
+        name: "Valid Tutor",
+        studentNumber: "12345678",
+        email: "v@wits.ac.za",
+        level: "honours",
+      },
+      "Student number must be 5–7 digits.",
+    ],
+    [
+      "a student number containing letters is rejected",
+      {
+        name: "Valid Tutor",
+        studentNumber: "12345a7",
+        email: "v@wits.ac.za",
+        level: "honours",
+      },
+      "Student number must be 5–7 digits.",
     ],
     [
       "a non-Wits email is rejected",
@@ -355,6 +375,25 @@ describe("tutors.js", () => {
     expect(document.getElementById("toast").textContent).toBe(
       "Updated Grace Hopper",
     );
+  });
+
+  test("an edit with an invalid student number is blocked before the PUT", async () => {
+    const { window, document, calls } = loadPage();
+    await wait();
+
+    document
+      .querySelector('tr[data-tutor-id="t1"] [data-action="edit"]')
+      .click();
+    document.getElementById("studentNumber").value = "12345678";
+    submit(window, document);
+    await wait();
+
+    expect(document.getElementById("toast").textContent).toBe(
+      "Student number must be 5–7 digits.",
+    );
+    expect(
+      calls.some((c) => c.method === "PUT" && c.url === "/api/tutors/t1"),
+    ).toBe(false);
   });
 
   test("Cancel abandons the edit and restores add mode", async () => {

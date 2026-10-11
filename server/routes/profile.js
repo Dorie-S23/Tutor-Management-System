@@ -101,6 +101,10 @@ function isValidSaCellPhone(value) {
   return /^(?:\+27|0)[6-8][0-9]{8}$/.test(cleaned);
 }
 
+// Student numbers are five to seven digits, numbers only — the same rule
+// registration and the tutors page enforce.
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+
 // PUT /api/profile/:userId — saves the editable details. Email is
 // deliberately not editable: it's the Supabase Auth login identity, so
 // changing it here would only make sign-in confusing (a hint on the page
@@ -141,11 +145,23 @@ router.put("/:userId", async (req, res) => {
 
   // Organisers have no student number, so only roles with a role table
   // (tutor, student) require one.
-  if (!fields.name || (roleProfile.table && !fields.studentNumber)) {
+  if (!fields.name) {
     return res.status(400).json({
       error: roleProfile.table
         ? "Your name and student number are required"
         : "Your name is required",
+    });
+  }
+
+  if (roleProfile.table && !fields.studentNumber) {
+    return res.status(400).json({
+      error: "Your name and student number are required",
+    });
+  }
+
+  if (roleProfile.table && !STUDENT_NUMBER_RE.test(fields.studentNumber)) {
+    return res.status(400).json({
+      error: "Student number must be 5–7 digits",
     });
   }
 

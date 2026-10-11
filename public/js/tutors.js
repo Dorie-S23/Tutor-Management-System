@@ -18,7 +18,13 @@ const DEFAULT_RATES = {
 // ── Form validation ──────────────────────────────────────────
 const VALID_LEVELS = Object.keys(ACADEMIC_LEVEL_LABELS);
 const WITS_EMAIL_RE = /@(wits\.ac\.za|students\.wits\.ac\.za)$/i;
-const STUDENT_NUM_RE = /^\d{5,10}$/;
+const STUDENT_NUM_RE = /^\d{5,7}$/;
+
+function studentNumberError(value) {
+  if (!value) return "Student number is required.";
+  if (!STUDENT_NUM_RE.test(value)) return "Student number must be 5–7 digits.";
+  return null;
+}
 
 function validateForm({ name, student_number, email, academic_level }) {
   const errors = [];
@@ -26,9 +32,8 @@ function validateForm({ name, student_number, email, academic_level }) {
   if (!name) errors.push("Name is required.");
   else if (name.length < 2) errors.push("Name must be at least 2 characters.");
 
-  if (!student_number) errors.push("Student number is required.");
-  else if (!STUDENT_NUM_RE.test(student_number))
-    errors.push("Student number must be 5–10 digits.");
+  const numError = studentNumberError(student_number);
+  if (numError) errors.push(numError);
 
   if (!email) errors.push("Email is required to create a tutor account.");
   else if (!WITS_EMAIL_RE.test(email))
@@ -306,9 +311,17 @@ form.addEventListener("submit", async (e) => {
   const emailVal = emailEl.value.trim();
   const level = academicLevelEl.value || null;
 
-  // Run client-side validation (skip when editing — email/auth already exists)
+  // The add form runs the full validation; an edit skips the name/email
+  // checks (those were settled at creation) but the student number can
+  // still be changed here, so it's re-checked.
   const isEditing = !!tutorIdEl.value;
-  if (!isEditing) {
+  if (isEditing) {
+    const numError = studentNumberError(studentNumVal);
+    if (numError) {
+      showToast(numError);
+      return;
+    }
+  } else {
     const errors = validateForm({
       name: nameVal,
       student_number: studentNumVal,

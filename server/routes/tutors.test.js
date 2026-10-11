@@ -364,6 +364,41 @@ describe("PUT /api/tutors/:id", () => {
     expect(res.status).toBe(200);
     expect(res.body.hourly_rate).toBe(150);
   });
+
+  test("rejects an invalid student number without touching the row", async () => {
+    tables.tutors = [
+      { id: TUTOR_ID, name: "Alice", student_number: "1234567" },
+    ];
+
+    const res = await request(buildApp())
+      .put(`/api/tutors/${TUTOR_ID}`)
+      .send({ name: "Alice", student_number: "12345678" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Student number must be 5–7 digits/);
+    expect(tables.tutors[0].student_number).toBe("1234567");
+  });
+
+  test("a partial edit without a student number leaves the stored one alone", async () => {
+    tables.tutors = [
+      {
+        id: TUTOR_ID,
+        name: "Alice",
+        student_number: "1234567",
+        academic_level: "honours",
+      },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+    ];
+
+    const res = await request(buildApp())
+      .put(`/api/tutors/${TUTOR_ID}`)
+      .send({ name: "Alice Smith", academic_level: "honours" });
+
+    expect(res.status).toBe(200);
+    expect(tables.tutors[0].student_number).toBe("1234567");
+  });
 });
 
 describe("DELETE /api/tutors/:id", () => {
@@ -727,6 +762,27 @@ describe("POST /api/tutors", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/@wits\.ac\.za or @students\.wits\.ac\.za/);
+  });
+
+  test("rejects student numbers that aren't 5–7 plain digits", async () => {
+    for (const student_number of ["123", "12345678", "12345a7", "12 34567"]) {
+      const res = await request(buildApp())
+        .post("/api/tutors")
+        .send(validPayload({ student_number }));
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Student number must be 5–7 digits/);
+    }
+    expect(mockSupabase.auth.signUp).not.toHaveBeenCalled();
+  });
+
+  test("stores the student number trimmed of surrounding whitespace", async () => {
+    const res = await request(buildApp())
+      .post("/api/tutors")
+      .send(validPayload({ student_number: " 1234567 " }));
+
+    expect(res.status).toBe(201);
+    expect(tables.tutors[0].student_number).toBe("1234567");
   });
 
   test("rejects a duplicate student number without touching auth", async () => {

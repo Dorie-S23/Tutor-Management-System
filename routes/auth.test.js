@@ -217,6 +217,32 @@ describe("POST /api/auth/register", () => {
     expect(res.body.user.role).toBe("volunteer");
     expect(tables.organiser_requests).toHaveLength(0);
   });
+
+  test("a registration with a student number that isn't 5–7 plain digits is rejected", async () => {
+    for (const studentNumber of ["123", "12345678", "12345a7"]) {
+      const res = await request(buildApp())
+        .post("/api/auth/register")
+        .send({ ...BASE, role: "volunteer", studentNumber });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Student number must be 5–7 digits");
+    }
+    expect(mockSupabase.auth.signUp).not.toHaveBeenCalled();
+  });
+
+  test("a valid registration stores the student number trimmed of whitespace", async () => {
+    mockSupabase.auth.signUp.mockResolvedValue({
+      data: { user: { id: "vol1", email: BASE.email } },
+      error: null,
+    });
+
+    const res = await request(buildApp())
+      .post("/api/auth/register")
+      .send({ ...BASE, role: "volunteer", studentNumber: " 1234567 " });
+
+    expect(res.status).toBe(201);
+    expect(tables.students[0].student_no).toBe("1234567");
+  });
 });
 
 describe("POST /api/auth/login — the organiser approval gate", () => {

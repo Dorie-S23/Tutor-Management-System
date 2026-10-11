@@ -7,6 +7,11 @@ const { courseScopeForOrganiser } = require("./organiserScope");
 
 const router = express.Router();
 
+// Student numbers are five to seven digits, numbers only — the same rule
+// the registration and profile routes enforce.
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+const STUDENT_NUMBER_ERROR = "Student number must be 5–7 digits.";
+
 // "HH:MM" or "HH:MM:SS" -> minutes since midnight, for interval-overlap comparisons.
 function toMinutes(timeStr) {
   if (!timeStr) return null;
@@ -282,16 +287,16 @@ router.post("/", async (req, res) => {
   // ── Input validation ─────────────────────────────────────────
   const VALID_LEVELS = ["third_year", "honours", "masters", "phd"];
   const WITS_EMAIL_RE = /@(wits\.ac\.za|students\.wits\.ac\.za)$/i;
+  const trimmedStudentNumber = String(student_number ?? "").trim();
   const errors = [];
 
   if (!name || !name.trim()) errors.push("Name is required.");
   else if (name.trim().length < 2)
     errors.push("Name must be at least 2 characters.");
 
-  if (!student_number || !String(student_number).trim())
-    errors.push("Student number is required.");
-  else if (!/^\d{5,10}$/.test(String(student_number).trim()))
-    errors.push("Student number must be 5–10 digits.");
+  if (!trimmedStudentNumber) errors.push("Student number is required.");
+  else if (!STUDENT_NUMBER_RE.test(trimmedStudentNumber))
+    errors.push(STUDENT_NUMBER_ERROR);
 
   if (!email || !email.trim())
     errors.push("Email is required to create a tutor account.");
@@ -318,7 +323,7 @@ router.post("/", async (req, res) => {
   const { data: existingStudent } = await supabase
     .from("tutors")
     .select("id")
-    .eq("student_number", String(student_number).trim())
+    .eq("student_number", trimmedStudentNumber)
     .maybeSingle();
   if (existingStudent) {
     return res
@@ -385,7 +390,7 @@ router.post("/", async (req, res) => {
     .from("tutors")
     .insert({
       id: userId,
-      student_number,
+      student_number: trimmedStudentNumber,
       email,
       name,
       academic_level,
@@ -411,15 +416,26 @@ router.put("/:id", async (req, res) => {
   const { student_number, email, name, academic_level, weekly_hour_cap } =
     req.body;
 
+  const updates = {
+    email,
+    name,
+    academic_level,
+    weekly_hour_cap,
+  };
+
+  // A partial edit may leave the student number out, but one that is sent
+  // has to pass the same rule as creation.
+  if (student_number != null) {
+    const trimmedStudentNumber = String(student_number).trim();
+    if (!STUDENT_NUMBER_RE.test(trimmedStudentNumber)) {
+      return res.status(400).json({ error: STUDENT_NUMBER_ERROR });
+    }
+    updates.student_number = trimmedStudentNumber;
+  }
+
   const { data, error } = await supabase
     .from("tutors")
-    .update({
-      student_number,
-      email,
-      name,
-      academic_level,
-      weekly_hour_cap,
-    })
+    .update(updates)
     .eq("id", req.params.id)
     .select()
     .single();

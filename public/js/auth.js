@@ -17,6 +17,9 @@ function setMessage(element, text, kind) {
    STUDENT NUMBER FIELD
    ========================= */
 
+// Five to seven digits, numbers only — the server enforces the same rule.
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+
 const roleSelect = document.getElementById("role");
 
 const studentNumberGroup = document.getElementById("student-number-group");
@@ -206,6 +209,15 @@ if (registerForm) {
         "Student number is required for volunteers and tutors.",
         "error",
       );
+
+      return;
+    }
+
+    if (
+      (role === "volunteer" || role === "tutor") &&
+      !STUDENT_NUMBER_RE.test(studentNumber)
+    ) {
+      setMessage(message, "Student number must be 5–7 digits.", "error");
 
       return;
     }
