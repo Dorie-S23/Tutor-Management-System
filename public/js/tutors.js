@@ -77,6 +77,36 @@ const statAvgRateEl = document.getElementById("statAvgRate");
 // either list reloads.
 let workloadCache = [];
 
+// The signed-in user from sessionStorage — the same row the board and the
+// attendance queue read. Organisers carry their approved courseIds from
+// sign-in; a super-organiser or grandfathered organiser has none.
+function getSessionUserId() {
+  try {
+    const raw = sessionStorage.getItem("user");
+    return raw ? JSON.parse(raw).id : null;
+  } catch {
+    return null;
+  }
+}
+
+// True when the session is scoped to a course list — the empty states then
+// explain the scope instead of suggesting there are no tutors at all.
+function isScopedOrganiser() {
+  try {
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    return !!user && Array.isArray(user.courseIds);
+  } catch {
+    return false;
+  }
+}
+
+// Appended to the list and workload fetches so the server scopes both to
+// the organiser's approved courses (the attendance queue's contract).
+function scopeQuery() {
+  const id = getSessionUserId();
+  return id ? `?organiserId=${encodeURIComponent(id)}` : "";
+}
+
 function initials(name) {
   return name
     .split(" ")
@@ -115,7 +145,7 @@ function renderTutorStats() {
 }
 
 async function loadTutors() {
-  const res = await fetch("/api/tutors");
+  const res = await fetch(`/api/tutors${scopeQuery()}`);
   const data = await res.json();
   if (!res.ok) {
     showToast(data.error || "Failed to load tutors");
@@ -140,6 +170,10 @@ function applyHighlight() {
 function renderTutors(tutors) {
   tableBody.innerHTML = "";
   emptyCopyEl.hidden = tutors.length > 0;
+  if (isScopedOrganiser()) {
+    emptyCopyEl.textContent =
+      "No tutors are assigned to your approved courses yet.";
+  }
 
   tutors.forEach((tutor) => {
     const level = ACADEMIC_LEVEL_LABELS[tutor.academic_level] || "—";
@@ -180,7 +214,7 @@ function renderTutors(tutors) {
 
 async function loadWorkload() {
   try {
-    const res = await fetch("/api/tutors/workload");
+    const res = await fetch(`/api/tutors/workload${scopeQuery()}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to load workload");
     renderWorkload(data);
@@ -193,6 +227,10 @@ function renderWorkload(tutors) {
   workloadCache = tutors;
   workloadListEl.innerHTML = "";
   workloadEmptyEl.hidden = tutors.length > 0;
+  if (isScopedOrganiser()) {
+    workloadEmptyEl.textContent =
+      "No tutors are assigned to your approved courses yet.";
+  }
 
   const cap = getGlobalCap();
 
