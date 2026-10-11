@@ -14,7 +14,7 @@ function TutorXMark({ className }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      {/* Soft pink echo behind the mark */}
+      {/* Pale sky echo behind the mark */}
       <line
         className={styles.markEcho}
         x1="34"
@@ -42,7 +42,7 @@ function TutorXMark({ className }) {
         strokeWidth="15"
         strokeLinecap="round"
       />
-      {/* Main strokes: navy diagonal, magenta breaks */}
+      {/* Main strokes: deep blue diagonal, azure breaks */}
       <line
         className={styles.markNavy}
         x1="26"
