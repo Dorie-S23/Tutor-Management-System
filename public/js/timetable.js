@@ -305,7 +305,7 @@ function renderGrid(sessions) {
           ${session.venue ? `<span class="session-meta">${session.venue}</span>` : ""}
         `;
         }
-        // The block stays an <a> to board.html?edit=… so middle-click /
+        // The block stays an <a> to board.html?course=… so middle-click /
         // open-in-new-tab still works; a plain click opens the detail
         // dialog instead of navigating straight away.
         block.addEventListener("click", (e) => {
