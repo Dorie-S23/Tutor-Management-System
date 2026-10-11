@@ -16,7 +16,15 @@ const registerHtml = fs.readFileSync(
   path.join(__dirname, "..", "html", "register.html"),
   "utf8",
 );
-const authJs = fs.readFileSync(path.join(__dirname, "auth.js"), "utf8");
+const authJs = fs
+  .readFileSync(path.join(__dirname, "auth.js"), "utf8")
+  // auth.flows.test.js rewrites the redirect assignments the same way —
+  // both suites must eval identical text or Jest's v8 coverage won't merge
+  // the two copies of auth.js cleanly.
+  .replace(
+    /window\.location\.href = ("(?:[^"\\]|\\.)*");/g,
+    "window.__lastRedirect = $1;",
+  );
 
 function loadRegisterPage() {
   const html = registerHtml.replace(
