@@ -4,9 +4,19 @@ sidebar_position: 6
 
 # User Stories & UATs
 
-Sprint 1 user stories and their acceptance tests (UATs), grouped by role. Each story follows **Who / What / Why**, and each UAT follows a **Given / When / Then** format.
+User stories and their acceptance tests (UATs), organised sprint by sprint — each sprint's stories build on the ones before. Each story follows **Who / What / Why**, and each UAT follows a **Given / When / Then** format.
 
-## Educator
+## Roles
+
+Four roles exist today: **volunteer** (student volunteer), **tutor**, **organiser** and **super-organiser** (admin).
+
+The original brief included an **educator** role — Sprint 1 shipped registration, login and a dashboard for it, and its two stories are kept under Sprint 1 below for the record. The role was **removed in Sprint 2**: a dedicated educator interface would have near-duplicated the organiser's, so lecturers, professors and teaching assistants now register as **organisers**, each restricted to their own course, while a **super-organiser** account approves those requests and sees every course. See [Dev Plan → Roles](./dev-plan.mdx#roles) and the [Database Schema](./Database-Schema.mdx) for the full rationale and the legacy `educators` table.
+
+## Sprint 1 — core platform
+
+_Milestone 1, August 2026._ First deployable system: unified registration and login for every role, organiser module management and tutor allocation, hour logging for tutors and volunteers, and the volunteer application flow. Scope per the [Sprint 1 minutes](./meeting-minutes.mdx#sprint-1-august-2026): a tangible, presentable Basic-Tier system.
+
+### Educator — retired in Sprint 2
 
 1. **User Story:** As an educator, I want to create an account, so that I can access the Tutor Management System.
    **UAT:** Given I am on the registration page, when I enter my details and submit the form, then my account is created successfully.
@@ -14,36 +24,30 @@ Sprint 1 user stories and their acceptance tests (UATs), grouped by role. Each s
 2. **User Story:** As an educator, I want to log in to my own dashboard, so that I can access my educator information.
    **UAT:** Given I have an educator account, when I log in successfully, then I can access my dashboard.
 
-## Organizer
+### Organiser
 
-1. **User Story:** As an organizer, I want to create an account, so that I can access the Tutor Management System.
+1. **User Story:** As an organiser, I want to create an account, so that I can access the Tutor Management System.
    **UAT:** Given I am on the registration page, when I enter my details and submit the form, then my account is created successfully.
 
-2. **User Story:** As an organizer, I want to log in to my own dashboard, so that I can manage tutoring activities.
-   **UAT:** Given I have an organizer account, when I log in successfully, then I can access my dashboard.
+2. **User Story:** As an organiser, I want to log in to my own dashboard, so that I can manage tutoring activities.
+   **UAT:** Given I have an organiser account, when I log in successfully, then I can access my dashboard.
 
-3. **User Story:** As an organizer, I want to view and manage modules requiring tutors, so that I can coordinate tutoring across the system.
-   **UAT:** Given I am logged in as an organizer, when I view the modules, then I can manage modules requiring tutors.
+3. **User Story:** As an organiser, I want to view and manage modules requiring tutors, so that I can coordinate tutoring across the system.
+   **UAT:** Given I am logged in as an organiser, when I view the modules, then I can manage modules requiring tutors.
 
-4. **User Story:** As an organizer, I want to allocate tutors to specific modules, so that each module has the required tutoring support.
+4. **User Story:** As an organiser, I want to allocate tutors to specific modules, so that each module has the required tutoring support.
    **UAT:** Given a tutor and module are available, when I allocate the tutor to the module, then the tutor is assigned to that module.
 
-5. **User Story:** As an organizer, I want to change a tutor's module allocation, so that I can manage changes in tutoring requirements.
+5. **User Story:** As an organiser, I want to change a tutor's module allocation, so that I can manage changes in tutoring requirements.
    **UAT:** Given a tutor is assigned to a module, when I change their allocation, then the tutor is assigned to the new module.
 
-6. **User Story:** As an organizer, I want to view which tutors are assigned to each module, so that I can keep track of tutoring allocations.
+6. **User Story:** As an organiser, I want to view which tutors are assigned to each module, so that I can keep track of tutoring allocations.
    **UAT:** Given tutors have been allocated, when I view the allocations, then I can see which tutors are assigned to each module.
 
-7. **User Story:** As an organizer, I want to see how many tutors are assigned to each module, so that I can identify modules that still require tutors.
+7. **User Story:** As an organiser, I want to see how many tutors are assigned to each module, so that I can identify modules that still require tutors.
    **UAT:** Given modules have tutor allocations, when I view module staffing, then I can see how many tutors are assigned to each module.
 
-8. **User Story:** As an organizer, I want to choose how applicant ranking balances competing allocation objectives (strongest applicants vs fairest spread of hours), so that allocations match this term's priorities.
-   **UAT:** Given I am viewing a course's applications on the allocation board, when I switch the ranking balance between Merit, Balanced and Fair hours, then the applicant list re-orders under the chosen balance, each applicant shows a score, their standing on every objective, and a note explaining any trade-off against a merit-first ranking; my choice persists when I return to the board.
-
-9. **User Story:** As an organizer, I want to draft multiple candidate allocations and compare them side by side before committing, so that I can choose the best proposal instead of accepting the first one.
-   **UAT:** Given one or more uncommitted allocation drafts exist, when I open Allocation drafts and tick up to three of them, then each draft's picks appear in side-by-side columns with picks that differ between drafts flagged; I can rename a draft, remove picks (persisted when I click Save picks), discard an abandoned draft, and publish exactly one draft to commit it.
-
-## Tutor
+### Tutor
 
 1. **User Story:** As a tutor, I want to log into the Tutor Management System, so that I can access my tutoring information and activities.
    **UAT:** Given I have a tutor account, when I enter my login details, then I can access the Tutor Management System.
@@ -72,34 +76,16 @@ Sprint 1 user stories and their acceptance tests (UATs), grouped by role. Each s
 9. **User Story:** As a tutor, I want to view my tutoring schedule on a calendar, so that I can easily plan around my tutoring commitments.
    **UAT:** Given I have scheduled tutoring sessions, when I open the calendar, then I can see my sessions on their scheduled dates.
 
-10. **User Story:** As a tutor, I want to generate a timesheet containing my recorded hours, so that I can submit it to the organiser.
-    **UAT:** Given I have recorded tutoring hours, when I generate my timesheet, then a timesheet containing my hours is created.
-
-11. **User Story:** As a tutor, I want to review my timesheet before submitting it, so that I can ensure my recorded hours are correct.
-    **UAT:** Given I have generated a timesheet, when I review it, then I can see my recorded hours before submitting it.
-
-12. **User Story:** As a tutor, I want to submit my timesheet to the organiser, so that my hours can be reviewed and processed.
-    **UAT:** Given I have reviewed my timesheet, when I submit it, then it is sent to the organiser for review.
-
-13. **User Story:** As a tutor, I want to view the status of my submitted timesheet, so that I know whether it has been reviewed and processed.
-    **UAT:** Given I have submitted a timesheet, when I view its status, then I can see whether it is pending, approved, or requires changes.
-
-14. **User Story:** As a tutor, I want to view my total hours worked, so that I can keep track of my overall tutoring contribution.
+10. **User Story:** As a tutor, I want to view my total hours worked, so that I can keep track of my overall tutoring contribution.
     **UAT:** Given I have recorded tutoring hours, when I view my total hours, then I can see the total time I have worked.
 
-15. **User Story:** As a tutor, I want to view the modules I have been assigned to, so that I know which modules I am responsible for tutoring.
+11. **User Story:** As a tutor, I want to view the modules I have been assigned to, so that I know which modules I am responsible for tutoring.
     **UAT:** Given I have been assigned to modules, when I view my assigned modules, then I can see the modules I am responsible for.
 
-16. **User Story:** As a tutor, I want to view information about my assigned modules, so that I have the information I need to perform my tutoring responsibilities.
+12. **User Story:** As a tutor, I want to view information about my assigned modules, so that I have the information I need to perform my tutoring responsibilities.
     **UAT:** Given I have an assigned module, when I select the module, then I can view its relevant information.
 
-17. **User Story:** As a tutor, I want to know when my timesheet has been approved or requires changes, so that I know what action to take next.
-    **UAT:** Given I have submitted a timesheet, when its status changes, then I can see the updated status.
-
-18. **User Story:** As a tutor, I want to view my previous timesheets, so that I can keep track of my submitted and processed hours.
-    **UAT:** Given I have submitted previous timesheets, when I view my timesheet history, then I can see my previous timesheets.
-
-## Student Volunteer
+### Volunteer
 
 1. **User Story:** As a student who wants to volunteer as a tutor, I want to create an account with my personal and student details, so that I can access the volunteering system.
    **UAT:** Given I am on the registration page, when I enter my details and submit the form, then my account is created successfully.
@@ -127,3 +113,52 @@ Sprint 1 user stories and their acceptance tests (UATs), grouped by role. Each s
 
 9. **User Story:** As a student volunteer, I want to see my logged hours on the calendar, so that I can view my volunteering activity by date.
    **UAT:** Given I have logged volunteering hours, when I open the calendar, then my hours appear on the correct dates.
+
+## Sprint 2 — timesheets & role refinement
+
+_Milestone 2, September 2026._ The monthly timesheet lifecycle for tutors (submitted by the tutor, signed off by the organiser), and the role change described above: the educator role was retired and replaced by the course-scoped **organiser** and the **super-organiser** admin.
+
+### Organiser
+
+1. **User Story:** As an organiser, I want to register against the specific course I run, so that my access is scoped to what I actually manage.
+   **UAT:** Given I choose Organiser on the registration page, when I submit the form with my course selected, then an organiser request is filed for that course and sign-in stays blocked until it is approved; once approved, my board shows only that course.
+
+2. **User Story:** As an organiser, I want to review and sign off the monthly timesheets my tutors submit, so that their hours can be processed.
+   **UAT:** Given tutors have submitted timesheets, when I open the review queue, then I can see each submission and approve it or send it back for changes.
+
+### Super-organiser
+
+1. **User Story:** As a super-organiser, I want to review and approve organiser course requests, so that every organiser only accesses the course they are responsible for.
+   **UAT:** Given one or more organisers have filed course requests, when I open the organiser-requests page and approve a request, then that organiser can sign in and their board is limited to the approved course.
+
+### Tutor
+
+1. **User Story:** As a tutor, I want to generate a timesheet containing my recorded hours, so that I can submit it to the organiser.
+   **UAT:** Given I have recorded tutoring hours, when I generate my timesheet, then a timesheet containing my hours is created.
+
+2. **User Story:** As a tutor, I want to review my timesheet before submitting it, so that I can ensure my recorded hours are correct.
+   **UAT:** Given I have generated a timesheet, when I review it, then I can see my recorded hours before submitting it.
+
+3. **User Story:** As a tutor, I want to submit my timesheet to the organiser, so that my hours can be reviewed and processed.
+   **UAT:** Given I have reviewed my timesheet, when I submit it, then it is sent to the organiser for review.
+
+4. **User Story:** As a tutor, I want to view the status of my submitted timesheet, so that I know whether it has been reviewed and processed.
+   **UAT:** Given I have submitted a timesheet, when I view its status, then I can see whether it is pending, approved, or requires changes.
+
+5. **User Story:** As a tutor, I want to know when my timesheet has been approved or requires changes, so that I know what action to take next.
+   **UAT:** Given I have submitted a timesheet, when its status changes, then I can see the updated status.
+
+6. **User Story:** As a tutor, I want to view my previous timesheets, so that I can keep track of my submitted and processed hours.
+   **UAT:** Given I have submitted previous timesheets, when I view my timesheet history, then I can see my previous timesheets.
+
+## Sprint 3 — allocation decision support
+
+_Milestone 3, September 2026._ Deeper tooling for the organiser's central job: choosing what an allocation optimises for, and comparing candidate allocations before committing one.
+
+### Organiser
+
+1. **User Story:** As an organiser, I want to choose how applicant ranking balances competing allocation objectives (strongest applicants vs fairest spread of hours), so that allocations match this term's priorities.
+   **UAT:** Given I am viewing a course's applications on the allocation board, when I switch the ranking balance between Merit, Balanced and Fair hours, then the applicant list re-orders under the chosen balance, each applicant shows a score, their standing on every objective, and a note explaining any trade-off against a merit-first ranking; my choice persists when I return to the board.
+
+2. **User Story:** As an organiser, I want to draft multiple candidate allocations and compare them side by side before committing, so that I can choose the best proposal instead of accepting the first one.
+   **UAT:** Given one or more uncommitted allocation drafts exist, when I open Allocation drafts and tick up to three of them, then each draft's picks appear in side-by-side columns with picks that differ between drafts flagged; I can rename a draft, remove picks (persisted when I click Save picks), discard an abandoned draft, and publish exactly one draft to commit it.
