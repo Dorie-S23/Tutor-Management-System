@@ -297,7 +297,7 @@ describe("session detail dialog", () => {
     );
     [2, 3, 4].forEach((id) => {
       const block = window.document.querySelector(
-        `.timetable-session[href="board.html?edit=${id}"]`,
+        `.timetable-session[href="board.html?course=${id}"]`,
       );
       expect(block.classList.contains("is-dense")).toBe(true);
       expect(block.querySelectorAll(".session-code")).toHaveLength(1);
@@ -305,7 +305,7 @@ describe("session detail dialog", () => {
     });
     // The lone Tuesday session keeps its full time/venue lines.
     const lone = window.document.querySelector(
-      '.timetable-session[href="board.html?edit=1"]',
+      '.timetable-session[href="board.html?course=1"]',
     );
     expect(lone.classList.contains("is-dense")).toBe(false);
     expect(lone.querySelector(".session-meta")).not.toBeNull();
@@ -329,7 +329,7 @@ describe("session detail dialog", () => {
       ]),
     );
     window.document
-      .querySelector('.timetable-session[href="board.html?edit=1"]')
+      .querySelector('.timetable-session[href="board.html?course=1"]')
       .click();
 
     const modal = window.document.getElementById("sessionDetailModal");
@@ -354,7 +354,7 @@ describe("session detail dialog", () => {
       window.document
         .getElementById("sessionDetailEditBtn")
         .getAttribute("href"),
-    ).toBe("board.html?edit=1");
+    ).toBe("board.html?course=1");
     expect(window.document.getElementById("sessionDetailClash").hidden).toBe(
       true,
     );
@@ -368,7 +368,7 @@ describe("session detail dialog", () => {
       ]),
     );
     window.document
-      .querySelector('.timetable-session[href="board.html?edit=4"]')
+      .querySelector('.timetable-session[href="board.html?course=4"]')
       .click();
 
     const clashNote = window.document.getElementById("sessionDetailClash");
@@ -380,7 +380,7 @@ describe("session detail dialog", () => {
   test("the dismiss button closes the dialog again", async () => {
     const window = await rendered(withDialogDom([course({ id: 1 })]));
     window.document
-      .querySelector('.timetable-session[href="board.html?edit=1"]')
+      .querySelector('.timetable-session[href="board.html?course=1"]')
       .click();
     window.document.getElementById("sessionDetailDismissBtn").click();
 

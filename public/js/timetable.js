@@ -305,7 +305,7 @@ function renderGrid(sessions) {
           ${session.venue ? `<span class="session-meta">${session.venue}</span>` : ""}
         `;
         }
-        // The block stays an <a> to board.html?edit=… so middle-click /
+        // The block stays an <a> to board.html?course=… so middle-click /
         // open-in-new-tab still works; a plain click opens the detail
         // dialog instead of navigating straight away.
         block.addEventListener("click", (e) => {
@@ -389,9 +389,9 @@ function openSessionDetail(session, clashPartners) {
     )
     .join("");
 
-  // Same deep link the block's href carried: the allocation board selects
-  // the course and opens its edit modal.
-  sessionDetailEditBtn.href = `board.html?edit=${session.courseId}`;
+  // Same deep link the block's href carries: the allocation board selects
+  // the course; editing continues from there.
+  sessionDetailEditBtn.href = `board.html?course=${session.courseId}`;
 
   if (typeof sessionDetailModal.showModal === "function") {
     sessionDetailModal.showModal();
