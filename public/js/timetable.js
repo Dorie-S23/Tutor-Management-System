@@ -277,7 +277,7 @@ function renderGrid(sessions) {
 
         const clashPartners = findClashPartners(session, sessions);
         const block = document.createElement("a");
-        block.href = `board.html?edit=${session.courseId}`;
+        block.href = `board.html?course=${session.courseId}`;
         block.className = `timetable-session ${session.type.toLowerCase()}${clashPartners.length ? " clash" : ""}`;
         block.style.top = `${((startMin - HOUR_START * 60) / totalMinutes) * 100}%`;
         block.style.height = `${((endMin - startMin) / totalMinutes) * 100}%`;

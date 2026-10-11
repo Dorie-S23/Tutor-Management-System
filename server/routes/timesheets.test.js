@@ -105,7 +105,36 @@ describe("POST /api/timesheets", () => {
       .send({ tutorId: "t1", weekStart: "September 2026" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/must be a date/);
+    expect(res.body.error).toBe(
+      "weekStart must be a valid calendar date (YYYY-MM-DD)",
+    );
+  });
+
+  test("rejects an impossible month or date like 2026-13 before it reaches the database", async () => {
+    // "2026-13" would normalise to a 13th month, and "2026-13-99" passed
+    // the old shape-only check outright — both must be a clear 400.
+    const badMonth = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-13" });
+    expect(badMonth.status).toBe(400);
+    expect(badMonth.body.error).toBe(
+      "weekStart must be a valid month (YYYY-MM)",
+    );
+
+    const badDay = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-02-30" });
+    expect(badDay.status).toBe(400);
+    expect(badDay.body.error).toBe(
+      "weekStart must be a valid calendar date (YYYY-MM-DD)",
+    );
+
+    const badBoth = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-13-99" });
+    expect(badBoth.status).toBe(400);
+
+    expect(tables.timesheets).toHaveLength(0);
   });
 
   test("snapshots the whole calendar month and normalises to its first day", async () => {
@@ -178,6 +207,18 @@ describe("PATCH /api/timesheets/:userId/:weekStart", () => {
       .send({ status: "maybe" });
 
     expect(res.status).toBe(400);
+    expect(tables.timesheets[0].status).toBe("pending");
+  });
+
+  test("rejects an impossible weekStart param with a 400, not a database error", async () => {
+    const res = await request(buildApp())
+      .patch("/api/timesheets/t1/2026-13-99")
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(
+      "weekStart must be a valid calendar date (YYYY-MM-DD)",
+    );
     expect(tables.timesheets[0].status).toBe("pending");
   });
 

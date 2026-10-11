@@ -16,6 +16,10 @@ const rawImportJs = fs.readFileSync(
   path.join(__dirname, "timetable-import.js"),
   "utf8",
 );
+const dateMaskJs = fs.readFileSync(
+  path.join(__dirname, "date-mask.js"),
+  "utf8",
+);
 
 const STUBS = `
 function addScheduleClasses(classes) {
@@ -85,7 +89,7 @@ function loadImport({ withToast = true, user = null, fetch = null } = {}) {
     );
 
   const dom = new JSDOM(
-    `<!doctype html><html><body>${withToast ? '<div id="toast"></div>' : ""}${PAGE}<script>${importJs}\n${STUBS}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "timetable-import.js")).href}</script></body></html>`,
+    `<!doctype html><html><body>${withToast ? '<div id="toast"></div>' : ""}${PAGE}<script>${dateMaskJs}</script><script>${importJs}\n${STUBS}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "timetable-import.js")).href}</script></body></html>`,
     {
       url: "http://localhost/timetable.html",
       runScripts: "dangerously",
@@ -127,6 +131,49 @@ describe("timetable-import.js", () => {
       'Pick a "classes start on" date first — the PDF has no calendar dates of its own.',
     );
     expect(win.__parseCalls).toBeUndefined();
+  });
+
+  // A typed "32/13/2026" leaves the native value empty, so before this
+  // check Parse/Save only asked to "pick a date"; now the impossible date
+  // blocks the action with the field's own message.
+  test("impossible typed dates block parsing and saving", async () => {
+    const win = loadImport();
+    const doc = win.document;
+    win.__parseResult = [CLASS_A];
+    win.__firstDate = "2026-09-07";
+    setFile(win);
+
+    const typeInto = (id, raw) => {
+      const field = doc.getElementById(`${id}-typed`);
+      field.value = raw;
+      field.dispatchEvent(new win.Event("input", { bubbles: true }));
+      return field;
+    };
+
+    const startField = typeInto("semester-start", "32/13/2026");
+    doc.getElementById("parse-timetable-btn").click();
+    expect(win.__parseCalls).toBeUndefined();
+    expect(doc.activeElement).toBe(startField);
+
+    typeInto("semester-start", "01/09/2026");
+    doc.getElementById("parse-timetable-btn").click();
+    await flush();
+    expect(win.__parseCalls).toBe(1);
+
+    const status = doc.getElementById("timetable-status");
+    const endField = typeInto("semester-end", "29/02/2026");
+    const statusBefore = status.textContent;
+    doc.getElementById("save-timetable-btn").click();
+    expect(win.__addedClasses).toBeUndefined();
+    expect(status.textContent).toBe(statusBefore);
+    expect(doc.activeElement).toBe(endField);
+
+    typeInto("semester-end", "30/11/2026");
+    doc.getElementById("save-timetable-btn").click();
+    await flush();
+    expect(win.__addedClasses).toHaveLength(1);
+
+    win.close();
   });
 
   test("parses, reviews, edits, and adds a single class", async () => {

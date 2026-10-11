@@ -26,6 +26,11 @@ const rawTimesheetsJs = fs
 const timesheetsJsUrl = pathToFileURL(
   path.join(__dirname, "timesheets.js"),
 ).href;
+const dateMaskJs = fs.readFileSync(
+  path.join(__dirname, "date-mask.js"),
+  "utf8",
+);
+const dateMaskJsUrl = pathToFileURL(path.join(__dirname, "date-mask.js")).href;
 
 // The identical newline-free shadow line storage.test.js prepends to its
 // eval'd copy of storage.js — Jest's v8 coverage only merges the two
@@ -111,6 +116,7 @@ function renderPage({
   serverProfile = SERVER_PROFILE,
   profileDown = false,
   entries = [],
+  withMask = false,
 } = {}) {
   const dom = new JSDOM(PAGE_HTML, {
     url: "http://localhost/timesheets.html",
@@ -124,8 +130,13 @@ function renderPage({
         "tutorHours.profile.tutor-1",
         JSON.stringify(LOCAL_PROFILE),
       );
-      window.fetch = (url) => {
+      window.__fetchCalls = [];
+      window.fetch = (url, init) => {
         const path = String(url);
+        window.__fetchCalls.push({
+          url: path,
+          method: (init && init.method) || "GET",
+        });
         if (path.startsWith("/api/profile/")) {
           if (profileDown) return Promise.reject(new Error("network down"));
           if (!serverProfile) {
@@ -195,6 +206,10 @@ function renderPage({
     /^export (async function|function)/gm,
     "$1",
   );
+  if (withMask) {
+    // Loaded first, exactly where timesheets.html loads it.
+    dom.window.eval(`${dateMaskJs}\n//# sourceURL=${dateMaskJsUrl}`);
+  }
   // One sourceURL per eval so each file's coverage lands on its own lines
   // (both evaluate in the window's global scope, so they still share
   // bindings across the two calls).
@@ -355,5 +370,37 @@ describe("timesheets profile sync", () => {
     // The removed fields don't survive a save.
     expect(saved.hourlyRate).toBeUndefined();
     expect(saved.headOfSchool).toBeUndefined();
+  });
+
+  // A typed "13/2026" leaves the native month input empty, so before this
+  // check Submit couldn't tell it apart from "nothing picked"; now the
+  // impossible month blocks the submit with the field's own message.
+  test("an impossible typed month blocks the timesheet submit", async () => {
+    const window = renderPage({ withMask: true });
+    await flush();
+
+    const doc = window.document;
+    const monthField = doc.getElementById("submitMonth-typed");
+    monthField.value = "13/2026";
+    monthField.dispatchEvent(new window.Event("input", { bubbles: true }));
+    expect(monthField.getAttribute("aria-invalid")).toBe("true");
+
+    const posts = () =>
+      window.__fetchCalls.filter(
+        (call) => call.method === "POST" && call.url === "/api/timesheets",
+      );
+
+    doc.getElementById("submitTimesheetBtn").click();
+    await flush();
+    expect(posts()).toHaveLength(0);
+    expect(doc.activeElement).toBe(monthField);
+    expect(monthField.validationMessage).toMatch(/month doesn't exist/);
+
+    // Fixing the month lets the submit through.
+    monthField.value = "09/2026";
+    monthField.dispatchEvent(new window.Event("input", { bubbles: true }));
+    doc.getElementById("submitTimesheetBtn").click();
+    await flush();
+    expect(posts()).toHaveLength(1);
   });
 });

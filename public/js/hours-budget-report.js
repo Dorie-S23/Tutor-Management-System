@@ -12,6 +12,10 @@ const statTotalCostEl = document.getElementById("statTotalCost");
 const statBudgetUsedEl = document.getElementById("statBudgetUsed");
 const statOverBudgetEl = document.getElementById("statOverBudget");
 
+// Impossible typed dates must block the action — the mask surfaces the
+// field's own message; harnesses that don't load date-mask.js pass through.
+const ensureDateFieldValid = window.ensureDateFieldValid ?? (() => true);
+
 function formatMoney(value) {
   if (value == null) return "—";
   return `R${Number(value).toFixed(2)}`;
@@ -230,7 +234,11 @@ function renderAllocationBars(rows) {
   });
 }
 
-applyFilterBtn.addEventListener("click", loadReport);
+applyFilterBtn.addEventListener("click", () => {
+  if (!ensureDateFieldValid(fromDateEl)) return;
+  if (!ensureDateFieldValid(toDateEl)) return;
+  loadReport();
+});
 clearFilterBtn.addEventListener("click", () => {
   fromDateEl.value = "";
   toDateEl.value = "";

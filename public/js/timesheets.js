@@ -128,6 +128,10 @@ const claimRowsEl = document.getElementById("claimRows");
 const submissionsListEl = document.getElementById("submissionsList");
 const submissionsEmptyEl = document.getElementById("submissionsEmpty");
 
+// Impossible typed dates must block the submit — the mask surfaces the
+// field's own message; test DOMs that never load date-mask.js pass through.
+const ensureDateFieldValid = window.ensureDateFieldValid ?? (() => true);
+
 const disputeModal = document.getElementById("disputeModal");
 const disputeForm = document.getElementById("disputeForm");
 const disputeFormError = document.getElementById("disputeFormError");
@@ -393,6 +397,7 @@ submitTimesheetBtn.addEventListener("click", async () => {
     showToast("You need to be signed in to submit a timesheet.", "danger");
     return;
   }
+  if (!ensureDateFieldValid(submitMonthField)) return;
   if (!submitMonthField.value) {
     showToast("Pick a month to submit.", "danger");
     return;

@@ -5,6 +5,7 @@ const { GRACE_MINUTES, isWithinLoggingWindow } = require("../loggingWindow");
 const { sliceTime, matchingSlotTypes } = require("./sessionSlots");
 const { organiserIdsForCourse } = require("./organiserScope");
 const { notify, formatShortDate } = require("./notificationHelpers");
+const { dateError } = require("../utils/dateValidation");
 
 const router = express.Router();
 
@@ -188,6 +189,9 @@ router.post("/", async (req, res) => {
     req.body;
   if (!userId) return res.status(400).json({ error: "userId is required" });
 
+  const invalidDate = dateError(date);
+  if (invalidDate) return res.status(400).json({ error: invalidDate });
+
   const { course, status, error: courseError } = await resolveCourse(courseId);
   if (courseError) return res.status(status).json({ error: courseError });
 
@@ -228,6 +232,9 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const { date, hours, startTime, endTime, taskType, notes, courseId } =
     req.body;
+
+  const invalidDate = dateError(date);
+  if (invalidDate) return res.status(400).json({ error: invalidDate });
 
   const { course, status, error: courseError } = await resolveCourse(courseId);
   if (courseError) return res.status(status).json({ error: courseError });
@@ -315,6 +322,17 @@ router.put("/:id", async (req, res) => {
 // separately and merged here rather than relying on PostgREST embedding.
 router.get("/report", async (req, res) => {
   const { from, to } = req.query;
+
+  // The range is optional, but an impossible date at either end is a
+  // client error — letting it through would only fail inside Postgres.
+  if (from) {
+    const invalidFrom = dateError(from, "from");
+    if (invalidFrom) return res.status(400).json({ error: invalidFrom });
+  }
+  if (to) {
+    const invalidTo = dateError(to, "to");
+    if (invalidTo) return res.status(400).json({ error: invalidTo });
+  }
 
   let query = supabase
     .from("hour_entries")

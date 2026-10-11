@@ -1550,6 +1550,10 @@ overrideForm.addEventListener("submit", async (e) => {
         override: true,
         organiserId: getSessionUserId(),
         reason,
+        // The server requires approvalReason for any status: "approved"
+        // write, override or not — reuse the one reason this form actually
+        // collects, since it's the same justification either way.
+        approvalReason: reason,
         expectedStatus,
       }),
     });
@@ -3907,19 +3911,6 @@ async function init() {
     );
     if (course) selectCourse(course.id);
     else if (courseScope) {
-      showToast("That course isn't part of your organiser access.");
-    }
-  }
-
-  // Arriving from the timetable grid with ?edit=<courseId> jumps straight to
-  // that course's edit modal, so a session block there is a one-click edit.
-  const editId = Number(params.get("edit"));
-  if (Number.isInteger(editId) && editId > 0) {
-    const course = COURSES.find((c) => c.id === editId);
-    if (course) {
-      selectCourse(course.id);
-      openCourseModal(course);
-    } else if (courseScope) {
       showToast("That course isn't part of your organiser access.");
     }
   }

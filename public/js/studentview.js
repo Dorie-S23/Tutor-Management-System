@@ -333,7 +333,9 @@ async function renderOpenSessions() {
 
   let sessions;
   try {
-    const res = await fetch("/api/course-volunteers?status=open");
+    const res = await fetch(
+      `/api/course-volunteers?status=open&excludeRejectedFor=${encodeURIComponent(currentUser.id)}`,
+    );
     if (!res.ok) throw new Error("Failed to load open sessions");
     sessions = await res.json();
   } catch (err) {
