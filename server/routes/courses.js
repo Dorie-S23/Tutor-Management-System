@@ -553,11 +553,40 @@ router.put("/:id", async (req, res) => {
   res.json(data);
 });
 
+// Tables whose rows only exist in the context of one course. Deleting the
+// course cascades through them (the dialog warns "This can't be undone") —
+// applications, volunteer signups and organiser access requests have no
+// removal path of their own once the course is gone, and Postgres would
+// otherwise refuse the delete with a 23503 foreign-key violation.
+// hour_entries is deliberately excluded: logged hours are pay records and
+// must be removed explicitly.
+const COURSE_CHILD_TABLES = [
+  "organiser_requests",
+  "tutor_subject_preference",
+  "course_volunteers",
+  "allocation_overrides",
+  "allocation_draft_assignments",
+  "session_excusals",
+  "session_swaps",
+];
+
+// Postgres names the blocking table in the 23503 detail, e.g.
+// 'Key (id)=(17) is still referenced from table "hour_entries".' Parsing it
+// turns the generic 409 into something the admin can act on.
+function referencedTableFromFkError(error) {
+  const m = /referenced from table "([^"]+)"/.exec(error.details || "");
+  return m ? m[1] : null;
+}
+
 // DELETE /api/courses/:id — remove a course
 router.delete("/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     return res.status(400).json({ error: "Invalid course id" });
+  }
+
+  for (const table of COURSE_CHILD_TABLES) {
+    await supabase.from(table).delete().eq("course_id", id);
   }
 
   const { error, count } = await supabase
@@ -567,9 +596,11 @@ router.delete("/:id", async (req, res) => {
 
   if (error) {
     if (error.code === "23503") {
+      const table = referencedTableFromFkError(error);
       return res.status(409).json({
-        error:
-          "Can't delete this course — it still has tutor applications, volunteers, or preferences linked to it. Remove those first.",
+        error: table
+          ? `Can't delete this course — "${table}" still has rows linked to it. Remove those first.`
+          : "Can't delete this course — other data still references it. Remove that first.",
       });
     }
     return res.status(500).json({ error: error.message });
