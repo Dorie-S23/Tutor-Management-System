@@ -6,6 +6,35 @@ sidebar_position: 5.9
 
 The externally-consumable half of the API: a read-only, no-authentication course catalogue under `/api/v1`, aimed at anything outside the app itself — a department page, a bot, a volunteer's own tooling.
 
+## How to access it
+
+No key, token, or account is needed — if you can reach the base URL, you can use it. Everything below works against the live production deployment; for local development against your own seed data, swap the base URL for `http://localhost:3000/api/v1` (with `npm start`).
+
+**1. GET the base path** — the discovery document describes the API and lists its resources. It works in a plain browser tab, `curl`, Postman, or any HTTP client, since only `GET` is involved:
+
+```bash
+curl https://tutorx.devden.workers.dev/api/v1
+```
+
+**2. Fetch a resource** — list the whole catalogue, filter it, or look up one course by code:
+
+```bash
+curl "https://tutorx.devden.workers.dev/api/v1/courses"
+curl "https://tutorx.devden.workers.dev/api/v1/courses?department=Computer%20Science&session_type=lab"
+curl https://tutorx.devden.workers.dev/api/v1/courses/COMS2000
+```
+
+From JavaScript running on any web page it's a plain `fetch` — CORS is open (`Access-Control-Allow-Origin: *`), so no proxy or server-side code is required:
+
+```js
+const res = await fetch(
+  "https://tutorx.devden.workers.dev/api/v1/courses/COMS2000",
+);
+const { data: course } = await res.json();
+```
+
+The full reference is on this page under [Endpoints](#endpoints), with [error shapes](#errors) and the [versioning policy](#versioning--stability) further down.
+
 ## Overview
 
 The app's internal routes under `/api/*` are built for its own frontend and change together with it. The public API is a deliberately separate, curated surface:

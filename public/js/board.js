@@ -1550,6 +1550,10 @@ overrideForm.addEventListener("submit", async (e) => {
         override: true,
         organiserId: getSessionUserId(),
         reason,
+        // The server requires approvalReason for any status: "approved"
+        // write, override or not — reuse the one reason this form actually
+        // collects, since it's the same justification either way.
+        approvalReason: reason,
         expectedStatus,
       }),
     });
@@ -3736,9 +3740,33 @@ const ORGANISER_TOUR_STEPS = [
     placement: "bottom",
   },
   {
-    selector: ".navbar-right",
-    title: "Quick tools",
-    body: "This button replays the tour any time. Beside it sit the allocation History, the Verify sessions page, and Notifications — then your account, Log out and the light/dark switch.",
+    selector: ".tour-trigger",
+    title: "This tour",
+    body: "The button you're pressing right now — replay this walkthrough whenever you like.",
+    placement: "bottom",
+  },
+  {
+    selector: 'a.nav-icon-btn[href="allocation-history.html"]',
+    title: "Allocation history",
+    body: "Every whole-school auto-allocation run, plus the full log of approve, reject, claim and withdraw actions across applications.",
+    placement: "bottom",
+  },
+  {
+    selector: 'a.nav-icon-btn[href="verify-attendance.html"]',
+    title: "Verify sessions",
+    body: "Pick one of your modules and confirm — or flag — the hours tutors and volunteers logged for sessions that already ran.",
+    placement: "bottom",
+  },
+  {
+    selector: ".notif-bell-btn",
+    title: "Notifications",
+    body: "Approvals, rejections, locks and other events that need your attention. The badge on the bell counts the unread ones.",
+    placement: "bottom",
+  },
+  {
+    selector: ".theme-toggle",
+    title: "Light or dark",
+    body: "Switch the whole app between light and dark. Your name and role sit just beside it, with Log out at the end.",
     placement: "bottom",
   },
 ];
@@ -3773,18 +3801,46 @@ function isAnyModalOpen() {
   );
 }
 
+function syncSecondsSince(date) {
+  return Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+}
+
+// The stamp only surfaces in the icon's hover text (title/aria-label), so
+// it steps up through units instead of counting raw seconds forever:
+// seconds while fresh, then minutes, hours, days.
 function formatSyncStatus(date) {
-  const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+  const seconds = syncSecondsSince(date);
   if (seconds < 3) return "Synced just now";
-  return `Synced ${seconds}s ago`;
+  if (seconds < 60) return `Synced ${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `Synced ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Synced ${hours}h ago`;
+  return `Synced ${Math.floor(hours / 24)}d ago`;
 }
 
 let lastSyncedAt = null;
 
 function tickSyncStatusLabel() {
   if (syncStatusEl && lastSyncedAt) {
-    syncStatusEl.textContent = formatSyncStatus(lastSyncedAt);
+    const label = formatSyncStatus(lastSyncedAt);
+    syncStatusEl.title = label;
+    syncStatusEl.setAttribute("aria-label", label);
   }
+}
+
+// The icon stays transparent-ish in the toolbar and only comes forward for
+// a moment each time a sync lands — a quiet "just refreshed" pulse.
+let syncFlashTimer = null;
+
+function flashSyncIcon() {
+  if (!syncStatusEl) return;
+  syncStatusEl.classList.add("is-flashing");
+  clearTimeout(syncFlashTimer);
+  // Another sync inside the window just extends the flash, not stack timers.
+  syncFlashTimer = setTimeout(() => {
+    syncStatusEl.classList.remove("is-flashing");
+  }, 1500);
 }
 
 let refreshInFlight = false;
@@ -3807,6 +3863,7 @@ async function refreshBoard() {
     ]);
     lastSyncedAt = new Date();
     tickSyncStatusLabel();
+    flashSyncIcon();
   } catch (err) {
     // Fails open, same as every other fetch on this page.
   } finally {
@@ -3821,7 +3878,7 @@ function startPollingSync() {
     if (!document.hidden) refreshBoard();
   }, POLL_INTERVAL_MS);
 
-  setInterval(tickSyncStatusLabel, 1000); // keeps the "Xs ago" label current
+  setInterval(tickSyncStatusLabel, 1000); // keeps the hover label + fade state current
 
   // Catch up immediately when the tab regains focus.
   document.addEventListener("visibilitychange", () => {
@@ -3854,19 +3911,6 @@ async function init() {
     );
     if (course) selectCourse(course.id);
     else if (courseScope) {
-      showToast("That course isn't part of your organiser access.");
-    }
-  }
-
-  // Arriving from the timetable grid with ?edit=<courseId> jumps straight to
-  // that course's edit modal, so a session block there is a one-click edit.
-  const editId = Number(params.get("edit"));
-  if (Number.isInteger(editId) && editId > 0) {
-    const course = COURSES.find((c) => c.id === editId);
-    if (course) {
-      selectCourse(course.id);
-      openCourseModal(course);
-    } else if (courseScope) {
       showToast("That course isn't part of your organiser access.");
     }
   }

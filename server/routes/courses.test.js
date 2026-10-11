@@ -48,6 +48,12 @@ beforeEach(() => {
     courses: [],
     tutor_subject_preference: [],
     course_volunteers: [],
+    organiser_requests: [],
+    allocation_overrides: [],
+    allocation_draft_assignments: [],
+    session_excusals: [],
+    session_swaps: [],
+    hour_entries: [],
     notifications: [],
   };
   mockSupabase = fakeSupabase(tables);
@@ -452,6 +458,86 @@ describe("DELETE /api/courses/:id", () => {
 
     expect(res.status).toBe(204);
     expect(tables.courses).toHaveLength(0);
+  });
+
+  test("cascades through course-scoped rows before deleting", async () => {
+    tables.courses = [
+      { id: 1, course_code: "COMS2000" },
+      { id: 2, course_code: "COMS2001" },
+    ];
+    tables.organiser_requests = [
+      { id: 1, course_id: 1 },
+      { id: 2, course_id: 2 },
+    ];
+    tables.tutor_subject_preference = [
+      { id: 1, course_id: 1 },
+      { id: 2, course_id: 2 },
+    ];
+    tables.course_volunteers = [{ id: 1, course_id: 1 }];
+    tables.allocation_overrides = [{ id: 1, course_id: 1 }];
+    tables.allocation_draft_assignments = [{ id: 1, course_id: 1 }];
+    tables.session_excusals = [{ id: 1, course_id: 1 }];
+    tables.session_swaps = [{ id: 1, course_id: 1 }];
+
+    const res = await request(buildApp()).delete("/api/courses/1");
+
+    expect(res.status).toBe(204);
+    expect(tables.courses.map((c) => c.id)).toEqual([2]);
+    // Rows belonging to course 1 are gone; other courses' rows survive.
+    expect(tables.organiser_requests.map((r) => r.id)).toEqual([2]);
+    expect(tables.tutor_subject_preference.map((r) => r.id)).toEqual([2]);
+    expect(tables.course_volunteers).toHaveLength(0);
+    expect(tables.allocation_overrides).toHaveLength(0);
+    expect(tables.allocation_draft_assignments).toHaveLength(0);
+    expect(tables.session_excusals).toHaveLength(0);
+    expect(tables.session_swaps).toHaveLength(0);
+  });
+
+  test("names the table blocking deletion in the 409", async () => {
+    tables.courses = [{ id: 1, course_code: "COMS2000" }];
+    mockSupabase = fakeSupabase(
+      tables,
+      {},
+      {},
+      {
+        failWith: (table, operation) =>
+          table === "courses" && operation === "delete"
+            ? {
+                code: "23503",
+                message:
+                  "update or delete on table violates foreign key constraint",
+                details:
+                  'Key (id)=(1) is still referenced from table "hour_entries".',
+              }
+            : null,
+      },
+    );
+
+    const res = await request(buildApp()).delete("/api/courses/1");
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("hour_entries");
+    expect(tables.courses).toHaveLength(1);
+  });
+
+  test("falls back to a generic 409 when the blocking table can't be parsed", async () => {
+    tables.courses = [{ id: 1, course_code: "COMS2000" }];
+    mockSupabase = fakeSupabase(
+      tables,
+      {},
+      {},
+      {
+        failWith: (table, operation) =>
+          table === "courses" && operation === "delete"
+            ? { code: "23503", message: "violates foreign key constraint" }
+            : null,
+      },
+    );
+
+    const res = await request(buildApp()).delete("/api/courses/1");
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("other data still references it");
   });
 });
 

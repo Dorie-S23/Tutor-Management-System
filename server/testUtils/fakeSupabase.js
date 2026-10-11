@@ -50,6 +50,23 @@
 //   });
 // The hook must only mutate the seed arrays — issuing queries from inside it
 // would recurse back into the hook.
+//
+// A second member of that same hooks argument, failWith(tableName,
+// operation), runs in the same place and returns an error object to
+// force-fail that query — the way to exercise route branches that only
+// trigger on a real database error, e.g. Postgres's 23503 foreign-key
+// violation when a delete is blocked by a referencing row (something the
+// in-memory tables can't simulate themselves):
+//   const supabase = fakeSupabase(tables, {}, {}, {
+//     failWith: (table, operation) =>
+//       table === "courses" && operation === "delete"
+//         ? {
+//             code: "23503",
+//             message: "update or delete on table violates foreign key constraint",
+//             details: 'Key (id)=(1) is still referenced from table "hour_entries".',
+//           }
+//         : null,
+//   });
 
 function fakeSupabase(
   tables,
@@ -211,6 +228,16 @@ function fakeSupabase(
       function resolve(wantsSingle, allowNullSingle) {
         if (hooks.onBeforeResolve) {
           hooks.onBeforeResolve(tableName, pendingWrite?.type ?? "select");
+        }
+
+        if (hooks.failWith) {
+          const forced = hooks.failWith(
+            tableName,
+            pendingWrite?.type ?? "select",
+          );
+          if (forced) {
+            return { data: null, error: forced, count: 0 };
+          }
         }
 
         if (insertConflict) {

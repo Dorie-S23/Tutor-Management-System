@@ -441,18 +441,20 @@ router.get("/due-reminder", async (req, res) => {
     return res.json({ notified: false });
   }
 
-  const { error: insertError } = await supabase.from("notifications").insert({
-    user_id: tutorId,
-    type: "timesheet_due",
-    message: `You logged hours in ${formatMonth(lastMonthStart)} but haven't submitted a timesheet for it yet.`,
-    related_entity: "timesheet",
-    related_id: lastMonthStart,
-    read: false,
-  });
-
-  if (insertError) {
-    return res.status(500).json({ error: insertError.message });
+  // Through the shared helper rather than an inline insert, so the reminder
+  // also reaches the tutor's inbox. The dedup check above is still what
+  // decides how often either copy goes out.
+  try {
+    await notify(tutorId, {
+      type: "timesheet_due",
+      message: `You logged hours in ${formatMonth(lastMonthStart)} but haven't submitted a timesheet for it yet.`,
+      relatedEntity: "timesheet",
+      relatedId: lastMonthStart,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
+
   res.json({ notified: true });
 });
 

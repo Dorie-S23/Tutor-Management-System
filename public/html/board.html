@@ -168,7 +168,27 @@
           ></ul>
         </div>
         <div class="org-toolbar__spacer"></div>
-        <p class="hint" id="syncStatus" aria-live="polite"></p>
+        <span
+          class="sync-status"
+          id="syncStatus"
+          role="img"
+          aria-label="Not synced yet"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+            <path d="M16 16h5v5" />
+          </svg>
+        </span>
         <button class="btn-secondary" id="obviousFillBtn" type="button">
           Fill obvious assignments
         </button>
@@ -181,7 +201,10 @@
       </div>
 
       <section class="org-stats" aria-label="Overview">
-        <article class="org-stat">
+        <article
+          class="org-stat"
+          title="How many of your courses have every tutor slot filled"
+        >
           <p class="org-stat__label">
             <svg
               viewBox="0 0 24 24"
@@ -200,7 +223,10 @@
           <p class="org-stat__value" id="statFilled">0 / 0</p>
         </article>
 
-        <article class="org-stat">
+        <article
+          class="org-stat"
+          title="Every tutor account in the system, across all courses"
+        >
           <p class="org-stat__label">
             <svg
               viewBox="0 0 24 24"
@@ -221,7 +247,10 @@
           <p class="org-stat__value" id="statTutors">0</p>
         </article>
 
-        <article class="org-stat">
+        <article
+          class="org-stat"
+          title="Pending tutor applications and volunteer sign-ups across your courses"
+        >
           <p class="org-stat__label">
             <svg
               viewBox="0 0 24 24"
@@ -241,7 +270,10 @@
           <p class="org-stat__value" id="statPending">0</p>
         </article>
 
-        <article class="org-stat">
+        <article
+          class="org-stat"
+          title="This week's planned tutor spend against your courses' combined budgets"
+        >
           <p class="org-stat__label">
             <svg
               viewBox="0 0 24 24"

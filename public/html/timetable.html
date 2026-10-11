@@ -136,8 +136,8 @@
           <h1>Timetable</h1>
           <p class="page-sub">
             Every tutorial and lab session across all courses, laid out by day
-            and time. Click a session to edit its details on the allocation
-            board.
+            and time. Click a session for its full details, then edit it on the
+            allocation board straight from there.
           </p>
         </div>
         <div class="head-actions">
@@ -191,6 +191,50 @@
       </section>
 
       <p class="timetable-unscheduled" id="timetableUnscheduled" hidden></p>
+
+      <dialog
+        class="modal session-detail"
+        id="sessionDetailModal"
+        aria-labelledby="sessionDetailHeading"
+      >
+        <div class="modal-form">
+          <header class="modal-head">
+            <h2 id="sessionDetailHeading">Session</h2>
+            <button
+              class="modal-close"
+              id="sessionDetailCloseBtn"
+              type="button"
+              aria-label="Close"
+            >
+              &times;
+            </button>
+          </header>
+
+          <p class="session-detail__clash" id="sessionDetailClash" hidden></p>
+          <dl class="session-detail__list" id="sessionDetailList"></dl>
+
+          <menu class="modal-actions">
+            <li>
+              <button
+                class="btn-secondary"
+                id="sessionDetailDismissBtn"
+                type="button"
+              >
+                Close
+              </button>
+            </li>
+            <li>
+              <a
+                class="btn-primary session-detail__edit"
+                id="sessionDetailEditBtn"
+                href="board.html"
+              >
+                Edit course
+              </a>
+            </li>
+          </menu>
+        </div>
+      </dialog>
     </main>
 
     <script src="../js/user-badge.js"></script>

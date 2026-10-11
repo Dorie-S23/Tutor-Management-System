@@ -27,8 +27,11 @@ router.get("/counts", async (req, res) => {
 // GET /api/course-volunteers?userId=... - a student's own applications, with course info attached
 // GET /api/course-volunteers?courseId=... - everyone who has volunteered for a course, with student info attached
 // GET /api/course-volunteers?status=open - every unclaimed overflow session across all courses, for students to browse
+// GET /api/course-volunteers?status=open&excludeRejectedFor=... - same, minus any
+//   session this volunteer has already been rejected from (see the audit log
+//   note in PATCH /:id for why that can't just be a column on the row).
 router.get("/", async (req, res) => {
-  const { userId, courseId, status } = req.query;
+  const { userId, courseId, status, excludeRejectedFor } = req.query;
   if (!userId && !courseId && !status) {
     return res
       .status(400)
@@ -52,7 +55,33 @@ router.get("/", async (req, res) => {
   const { data, error } = await query;
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+
+  if (!excludeRejectedFor || data.length === 0) {
+    return res.json(data);
+  }
+
+  const { data: rejections, error: rejectionsError } = await supabase
+    .from("audit_log")
+    .select("entity_id, before")
+    .eq("entity_type", "course_volunteers")
+    .eq("action", "rejected")
+    .in(
+      "entity_id",
+      data.map((row) => String(row.id)),
+    );
+
+  // A lookup failure here shouldn't block browsing open sessions outright —
+  // worst case a volunteer sees one they've already been rejected from,
+  // which is the pre-existing behaviour this feature improves on.
+  if (rejectionsError) return res.json(data);
+
+  const rejectedIds = new Set(
+    rejections
+      .filter((row) => row.before?.user_id === excludeRejectedFor)
+      .map((row) => row.entity_id),
+  );
+
+  res.json(data.filter((row) => !rejectedIds.has(String(row.id))));
 });
 
 // POST /api/course-volunteers
@@ -273,7 +302,7 @@ router.patch("/:id", async (req, res) => {
 
   const { data: existing, error: existingError } = await supabase
     .from("course_volunteers")
-    .select("id, status, locked, course_id, session_date")
+    .select("id, status, locked, course_id, session_date, user_id")
     .eq("id", req.params.id)
     .single();
 
@@ -374,7 +403,11 @@ router.patch("/:id", async (req, res) => {
     entityId: data.id,
     action: status,
     actorId: organiserId ?? null,
-    before: { status: existing.status },
+    // user_id rides along on a rejection so GET /?status=open can still
+    // tell who was rejected from this row after it's reopened for someone
+    // else to claim (see DELETE / below) — the row itself only keeps
+    // whoever *currently* has it, not its rejection history.
+    before: { status: existing.status, user_id: existing.user_id },
     after: {
       status,
       rejection_reason: data.rejection_reason ?? null,

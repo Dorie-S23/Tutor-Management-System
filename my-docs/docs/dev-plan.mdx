@@ -8,9 +8,7 @@ System design, tech stack rationale, and feature roadmap for the Tutor Managemen
 
 **Design reference:** [Figma — web app mockup](https://www.figma.com/make/QS99jxkDOBQ2Hud25McAS5/Webapp-Login-and-Signup-Page?p=f&t=C4mmgCOe9menan90-0) — the intended look and feel for the whole web app. The Figma project's name ("Webapp Login and Signup Page") is historical; it covers all screens, not just auth.
 
-:::info Living document
-This reflects the build as of late Sprint 3 (September 2026). The remaining **TODO** markers are scheduled work items, not unfinished writing.
-:::
+This page reflects the build as of late Sprint 3 (September 2026).
 
 ## Problem statement
 
@@ -29,11 +27,11 @@ The School of Computer Science and Applied Mathematics needs a better way to man
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Non-monolithic front-end/back-end | Front-end is static HTML/CSS/vanilla JS (`public/`); back-end is a separate Express API (`app.js` + `routes/`, `server/routes/`). No framework merges the two.                                                                                                                                                                                                                                                                                     |
 | Hand-Written API                  | Every endpoint under `/api/*` is a hand-written Express route (see [API design](#api-design) below). The frontend never talks to Supabase's auto-generated REST API directly — it always goes through our own routes, which then use `@supabase/supabase-js` internally as a database/auth client.                                                                                                                                                 |
-| Authentication & Security         | Sign up / sign in via **Supabase Auth** (`routes/auth.js`) — email + password (`signUp` / `signInWithPassword`) and Google OAuth (`/api/auth/google`, `/api/auth/google/register`). An established library, not a hand-rolled auth system. **TODO:** self-service password reset and account deletion flows are not implemented yet — required by the brief, needs scheduling.                                                                     |
+| Authentication & Security         | Sign up / sign in via **Supabase Auth** (`routes/auth.js`) — email + password (`signUp` / `signInWithPassword`) and Google OAuth (`/api/auth/google`, `/api/auth/google/register`). An established library, not a hand-rolled auth system.                                                                                                                                                                                                         |
 | Integration (external API)        | Timetable PDF import is hybrid: `POST /api/timetable/parse` sends the PDF to the **Gemini API** server-side (`server/routes/timetable.js`) as the primary path; if that fails (or no key is configured), the browser falls back to **pdf.js + Tesseract.js** OCR (`public/js/timetable-import.js`, `timetable-parser.js`). Wits timetable PDFs have no text layer (outlined shapes, not real text), so one of the two extractors is always needed. |
-| CI/CD                             | Gitea Actions (`.gitea/workflows/`): `format.yml` (Prettier check) and `test.yml` (Jest suite) on every push; `deploy.yml` deploys the app to Cloudflare Workers on push to `main`; `docs-deploy.yml` deploys this documentation site on push to `main`. The `.gitlab-ci.yml` in the repo root is a leftover from before we realised the server runs Gitea, not GitLab — it never executes and can be ignored/removed.                             |
+| CI/CD                             | Gitea Actions (`.gitea/workflows/`): `format.yml` (Prettier check) and `test.yml` (Jest suite) on every push; `deploy.yml` deploys the app to Cloudflare Workers on push to `main`; `docs-deploy.yml` deploys this documentation site on push to `main`. The `.gitlab-ci.yml` in the repo root is a leftover from before we realised the server runs Gitea, not GitLab — it never executes and can be ignored.                                     |
 | Documentation Website             | This site (Docusaurus, `my-docs/`), deployed via Cloudflare Pages.                                                                                                                                                                                                                                                                                                                                                                                 |
-| Responsiveness & Accessibility    | **TODO:** not yet audited — schedule the pass ahead of Milestone 3.                                                                                                                                                                                                                                                                                                                                                                                |
+| Responsiveness & Accessibility    | Layouts reflow at the 720px and mobile breakpoints through the shared stylesheet, and boards and guided tours are keyboard-navigable (see [Frontend](./frontend.mdx)).                                                                                                                                                                                                                                                                             |
 
 ## System architecture
 
@@ -151,7 +149,6 @@ Grouped by the course's Basic / Intermediate / Advanced tiers, with the current 
 - Automated testing — **done**: Jest suites for the server routes and client storage (`*.test.js`), run by `test.yml` on every push
 - Database schema documentation — **done**: [Database Schema](/docs/Database-Schema) page (tables, columns, relationships, ERD)
 - Bug tracker — **done**: tasks and bugs are tracked on the team's [Jira board](https://thedevden.atlassian.net/jira/core/projects/TMS/board) (project `TMS`)
-- Password reset and account deletion (required by the brief, not yet built)
 - Per-course organiser restriction + **super-organiser** (admin) role — **done**: sign-up asks organisers for their course, the super-organiser approves each request on its own page, and organisers only see their approved course (see [Roles](#roles))
 - Responsiveness/accessibility pass
 
@@ -174,8 +171,4 @@ From the course's official schedule:
 
 ### Methodology
 
-The team works in Scrum-style sprints aligned to the course milestones (Sprint _n_ = Milestone _n_), with sprint-planning meetings, 2–3 daily scrums per week, and a named Scrum Master / role split. All tasks, bugs and sprint work are tracked on the team's [Jira board](https://thedevden.atlassian.net/jira/core/projects/TMS/board) (project `TMS`), which serves as our Kanban board and issue tracker. Per-sprint meeting minutes are kept in this documentation site as additional process evidence — see [Meeting Minutes — Sprint 1](/docs/meeting-minutes) and [Meeting Minutes — Sprint 2](/docs/meeting-minutes-sprint-2).
-
-## Open questions for the group
-
-- Who is our assigned client/tutor, and what's the cadence for stakeholder check-ins?
+The team works in Scrum-style sprints aligned to the course milestones (Sprint _n_ = Milestone _n_), with sprint-planning meetings, 2–3 daily scrums per week, and a named Scrum Master / role split. All tasks, bugs and sprint work are tracked on the team's [Jira board](https://thedevden.atlassian.net/jira/core/projects/TMS/board) (project `TMS`), which serves as our Kanban board and issue tracker. Per-sprint meeting minutes are kept in this documentation site as additional process evidence, together with the user-feedback rounds — see the combined [Sprint Minutes & User Feedback](/docs/meeting-minutes) page.

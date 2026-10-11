@@ -30,6 +30,10 @@ function getCurrentUser() {
   const dashList = document.getElementById("dashNotifList");
   const dashEmpty = document.getElementById("dashNotifEmpty");
 
+  // Hover tooltip like the tour/history icons have — set before the guard
+  // below so it applies even where the dropdown stays unwired.
+  if (bellBtn) bellBtn.title = "Notifications";
+
   // Nothing to do if this page has no bell markup, or nobody's signed in
   // (some pages are reachable before login redirects fire).
   if (!user || !bellBtn || !badge || !dropdown || !list || !empty) return;
