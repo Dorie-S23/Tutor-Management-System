@@ -31,7 +31,7 @@ The app's only backend-as-a-service dependency, and the one everything else is b
 - Every `server/routes/*.js` file talks to Postgres through the JS query builder (`supabase.from("table").select()/.insert()/.update()/.delete()`, with `.eq()`/`.neq()`/`.in()`/`.order()`/`.single()` etc.) — this compiles down to calls against Supabase's auto-generated PostgREST API, so the app never writes raw SQL.
 - Auth (`routes/auth.js`) uses Supabase's own user table and session tokens for email/password sign-up and login — the app doesn't store or hash passwords itself.
 - `server/routes/transcripts.js` also drives this client's **Storage** API — the private `transcripts` bucket described next — through the same SDK and key as everything else.
-- **Caveat, not a strength:** Row Level Security is currently disabled on every table (flagged as an open item in [Backend](./backend.mdx#deployment)), so the suitability of "PostgREST auto-generates a REST API" cuts both ways — it's convenient, but it also means the anon key currently grants direct read/write to everything unless RLS gets turned back on.
+- **Caveat:** Row Level Security is currently disabled on every table (see the [access-control note](./backend.mdx#deployment) on the Backend page), so the suitability of "PostgREST auto-generates a REST API" cuts both ways — it's convenient, but it also means the anon key currently grants direct read/write to the tables; the Express layer is what enforces the application's access rules.
 
 ### Applicant transcripts (Supabase Storage)
 
