@@ -14,6 +14,10 @@ const reportJs = fs.readFileSync(
   path.join(__dirname, "hours-budget-report.js"),
   "utf8",
 );
+const dateMaskJs = fs.readFileSync(
+  path.join(__dirname, "date-mask.js"),
+  "utf8",
+);
 
 const PAGE = `
   <input type="date" id="fromDate">
@@ -79,7 +83,7 @@ function loadReport(respond) {
   const calls = [];
   const state = { respond };
   const dom = new JSDOM(
-    `<!doctype html><html><body>${PAGE}<script>${reportJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "hours-budget-report.js")).href}</script></body></html>`,
+    `<!doctype html><html><body>${PAGE}<script>${dateMaskJs}</script><script>${reportJs}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "hours-budget-report.js")).href}</script></body></html>`,
     {
       url: "http://localhost/hours-budget-report.html",
       runScripts: "dangerously",
@@ -160,6 +164,34 @@ describe("hours-budget-report.js", () => {
     expect(doc.getElementById("fromDate").value).toBe("");
     expect(doc.getElementById("toDate").value).toBe("");
     expect(calls[2]).toBe("/api/hour-entries/report?");
+  });
+
+  // A typed "32/13/2026" never reaches the native value (see date-mask), so
+  // before this check Apply fired anyway and silently dropped the filter;
+  // now the impossible date blocks it with the field's own message.
+  test("an impossible typed date blocks Apply and the field carries the message", async () => {
+    const { win, calls } = loadReport(() => jsonResponse(REPORT));
+    await flush();
+    const doc = win.document;
+
+    const field = doc.getElementById("fromDate-typed");
+    field.value = "32/13/2026";
+    field.dispatchEvent(new win.Event("input", { bubbles: true }));
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+
+    doc.getElementById("applyFilterBtn").click();
+    await flush();
+    // Only the initial load ran — the impossible date blocked the re-fetch.
+    expect(calls).toHaveLength(1);
+
+    // Fixing the date lets the filter through to the server.
+    field.value = "01/09/2026";
+    field.dispatchEvent(new win.Event("input", { bubbles: true }));
+    doc.getElementById("applyFilterBtn").click();
+    await flush();
+    expect(calls[1]).toBe("/api/hour-entries/report?from=2026-09-01");
+
+    win.close();
   });
 
   test("shows the empty state and singular unlinked wording", async () => {

@@ -8,6 +8,40 @@ const { notify, formatShortDate } = require("./notificationHelpers");
 
 const router = express.Router();
 
+// ---------- date validation ----------
+// Mirrors the frontend mask's calendar rules (public/js/date-mask.js): a
+// real date has year >= 1, a month from 01-12, and a day within that
+// month's length, leap years included. Checking it here turns a date
+// Postgres would reject into a clear 400 instead of an opaque 500.
+function daysInMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+// Returns a message naming what's wrong with the value, or null when it's
+// a real YYYY-MM-DD date. `field` is what the message calls the input —
+// the report's filters are query params named from/to, not "date".
+function dateError(value, field = "date") {
+  if (value == null || value === "") {
+    return `${field} is required (YYYY-MM-DD)`;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (
+      year >= 1 &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= daysInMonth(year, month)
+    ) {
+      return null;
+    }
+  }
+  return `${field} must be a valid calendar date (YYYY-MM-DD)`;
+}
+
 // Every hour entry must be tied to a real course so the budget report can
 // cost it. The entry's display label (subject) is taken from that course's
 // code rather than trusted from the client, so the two can never disagree.
@@ -188,6 +222,9 @@ router.post("/", async (req, res) => {
     req.body;
   if (!userId) return res.status(400).json({ error: "userId is required" });
 
+  const invalidDate = dateError(date);
+  if (invalidDate) return res.status(400).json({ error: invalidDate });
+
   const { course, status, error: courseError } = await resolveCourse(courseId);
   if (courseError) return res.status(status).json({ error: courseError });
 
@@ -228,6 +265,9 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const { date, hours, startTime, endTime, taskType, notes, courseId } =
     req.body;
+
+  const invalidDate = dateError(date);
+  if (invalidDate) return res.status(400).json({ error: invalidDate });
 
   const { course, status, error: courseError } = await resolveCourse(courseId);
   if (courseError) return res.status(status).json({ error: courseError });
@@ -315,6 +355,17 @@ router.put("/:id", async (req, res) => {
 // separately and merged here rather than relying on PostgREST embedding.
 router.get("/report", async (req, res) => {
   const { from, to } = req.query;
+
+  // The range is optional, but an impossible date at either end is a
+  // client error — letting it through would only fail inside Postgres.
+  if (from) {
+    const invalidFrom = dateError(from, "from");
+    if (invalidFrom) return res.status(400).json({ error: invalidFrom });
+  }
+  if (to) {
+    const invalidTo = dateError(to, "to");
+    if (invalidTo) return res.status(400).json({ error: invalidTo });
+  }
 
   let query = supabase
     .from("hour_entries")

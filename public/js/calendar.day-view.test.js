@@ -19,6 +19,10 @@ const rawCalendarJs = fs.readFileSync(
   path.join(__dirname, "calendar.js"),
   "utf8",
 );
+const dateMaskJs = fs.readFileSync(
+  path.join(__dirname, "date-mask.js"),
+  "utf8",
+);
 
 const NL = String.fromCharCode(10);
 
@@ -94,12 +98,12 @@ const calendarJsPad = NL.repeat(
   rawCalendarJs.slice(0, calendarSliceStart).split(NL).length - 1,
 );
 
-function loadCalendar() {
+function loadCalendar({ withMask = false } = {}) {
   // The stand-ins run in their own tag (unattributed); the real source runs
   // in a second one whose padding + sourceURL keep coverage lines exact.
   // The auto-invocations of render() at module load are left in place,
   // exactly like the real page — the test just waits for them.
-  const html = calendarHtml
+  let html = calendarHtml
     .replace(
       '<script type="module" src="../js/calendar.js"></script>',
       "<script>" +
@@ -120,6 +124,15 @@ function loadCalendar() {
       '<script type="module" src="../js/timetable-import.js"></script>',
       "",
     );
+  if (withMask) {
+    // The real mask, loaded where calendar.html loads it — without it the
+    // occurrence editor's date fields fall back to plain native inputs.
+    // (Function form so `$&`-like sequences in the source stay literal.)
+    html = html.replace(
+      '<script src="../js/date-mask.js"></script>',
+      () => "<script>" + dateMaskJs + NL + "</script>",
+    );
+  }
 
   const dom = new JSDOM(html, {
     url: "http://localhost/calendar.html",
@@ -141,8 +154,8 @@ function ready() {
 
 // Loads the page (letting its own renders settle), then clicks the cell for
 // the 10th of the current month and returns everything the assertions need.
-async function openDayViewForTest(scheduleClass) {
-  const window = loadCalendar();
+async function openDayViewForTest(scheduleClass, { withMask = false } = {}) {
+  const window = loadCalendar({ withMask });
   await ready();
   await ready();
 
@@ -362,8 +375,10 @@ describe("occurrence editor weekly repeat", () => {
     openWindow = null;
   });
 
-  async function openEditor(scheduleClass) {
-    const { window, doc, dateStr } = await openDayViewForTest(scheduleClass);
+  async function openEditor(scheduleClass, { withMask = false } = {}) {
+    const { window, doc, dateStr } = await openDayViewForTest(scheduleClass, {
+      withMask,
+    });
     openWindow = window;
     doc
       .querySelector(".day-view-event--class")
@@ -484,6 +499,51 @@ describe("occurrence editor weekly repeat", () => {
       {
         id: "class-1",
         changes: expect.objectContaining({ endDate: dateStr }),
+      },
+    ]);
+  });
+
+  test("impossible typed repeat dates block the save with the field's message", async () => {
+    const { window, doc } = await openEditor(undefined, { withMask: true });
+    const repeat = doc.getElementById("occurrence-repeat");
+    repeat.checked = true;
+    repeat.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+    // An impossible start date stops the save before the day-of-week check.
+    const fromField = doc.getElementById("occurrence-repeat-from-typed");
+    fromField.value = "32/13/2026";
+    fromField.dispatchEvent(new window.Event("input", { bubbles: true }));
+    findSaveButton(doc).click();
+    await ready();
+    expect(window.__updatedClasses).toBeUndefined();
+    expect(doc.querySelector(".occurrence-modal-overlay")).not.toBeNull();
+    expect(fromField.validationMessage).toMatch(/doesn't exist/);
+    expect(doc.activeElement).toBe(fromField);
+
+    // Same for the end date, once the start is a real date again.
+    fromField.value = "15/01/2026";
+    fromField.dispatchEvent(new window.Event("input", { bubbles: true }));
+    const untilField = doc.getElementById("occurrence-repeat-until-typed");
+    untilField.value = "29/02/2026";
+    untilField.dispatchEvent(new window.Event("input", { bubbles: true }));
+    findSaveButton(doc).click();
+    await ready();
+    expect(window.__updatedClasses).toBeUndefined();
+    expect(doc.activeElement).toBe(untilField);
+
+    // Fixing both lets the update through.
+    untilField.value = "28/05/2026";
+    untilField.dispatchEvent(new window.Event("input", { bubbles: true }));
+    findSaveButton(doc).click();
+    await ready();
+    expect(window.__updatedClasses).toEqual([
+      {
+        id: "class-1",
+        changes: expect.objectContaining({
+          firstDate: "2026-01-15",
+          endDate: "2026-05-28",
+          dayOfWeek: 4,
+        }),
       },
     ]);
   });

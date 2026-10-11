@@ -201,6 +201,10 @@
     return btn;
   }
 
+  // Native input → the typed field that fronts it, for the inputs the mask
+  // has adopted. ensureDateFieldValid below reads what was typed through it.
+  const typedFields = new WeakMap();
+
   function enhance(input) {
     if (input.dataset.dateMask === "on") return;
     input.dataset.dateMask = "on";
@@ -258,6 +262,7 @@
           label.htmlFor = visible.id;
         });
     }
+    typedFields.set(input, visible);
 
     // required/min/max move off the hidden native input — a control the
     // browser can't focus to show a message must never be the one to fail
@@ -532,6 +537,20 @@
 
   // Exposed so later-rendered forms can be masked too.
   window.enhanceDateInputs = enhanceDateInputs;
+
+  // Click-driven actions ("Apply", "Save"…) never run the browser's own
+  // form validation, so they call this before reading a value: a typed
+  // twin that's invalid (impossible date, half-typed, out of range) gets
+  // focused with its message surfaced, and false comes back so the action
+  // stops. Fields the mask never adopted, and valid ones — including empty
+  // ones no rule requires — pass straight through.
+  window.ensureDateFieldValid = function (input) {
+    const field = input ? typedFields.get(input) : null;
+    if (!field || field.checkValidity()) return true;
+    if (typeof field.reportValidity === "function") field.reportValidity();
+    field.focus({ preventScroll: true });
+    return false;
+  };
 
   enhanceDateInputs(document);
   if (document.readyState === "loading") {

@@ -257,6 +257,47 @@ describe("date-mask", () => {
     );
   });
 
+  test("ensureDateFieldValid passes valid and untouched fields through", async () => {
+    await withDom(
+      `<input type="date" id="fromDate" /><input type="text" id="notes" />`,
+      (window) => {
+        const doc = window.document;
+        const field = typed(doc, "fromDate");
+
+        // Empty and not required is the native rule for "nothing typed yet".
+        expect(
+          window.ensureDateFieldValid(doc.getElementById("fromDate")),
+        ).toBe(true);
+
+        type(window, field, "15/01/2026");
+        expect(
+          window.ensureDateFieldValid(doc.getElementById("fromDate")),
+        ).toBe(true);
+
+        // Fields the mask never adopted — and nothing at all — pass through.
+        expect(window.ensureDateFieldValid(doc.getElementById("notes"))).toBe(
+          true,
+        );
+        expect(window.ensureDateFieldValid(null)).toBe(true);
+      },
+    );
+  });
+
+  test("ensureDateFieldValid surfaces an impossible typed date and reports failure", async () => {
+    await withDom(`<input type="date" id="fromDate" />`, (window) => {
+      const doc = window.document;
+      const native = doc.getElementById("fromDate");
+      const field = typed(doc, "fromDate");
+
+      type(window, field, "32/13/2026");
+      expect(window.ensureDateFieldValid(native)).toBe(false);
+      expect(field.validationMessage).toMatch(/doesn't exist/);
+      expect(doc.activeElement).toBe(field);
+      // The impossible date never reached the value page scripts read.
+      expect(native.value).toBe("");
+    });
+  });
+
   test("page scripts keep reading and writing the ISO value", async () => {
     await withDom(`<input type="date" id="date" />`, (window) => {
       const doc = window.document;

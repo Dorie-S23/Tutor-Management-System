@@ -16,6 +16,10 @@ const cancelBtn = document.getElementById("cancel-timetable-btn");
 const fileNameEl = document.getElementById("timetable-file-name");
 const profileNoteEl = document.getElementById("timetable-profile-note");
 
+// Impossible typed dates must block the action — the mask surfaces the
+// field's own message; harnesses without the mask pass through.
+const ensureDateFieldValid = window.ensureDateFieldValid ?? (() => true);
+
 // The timetable PDF saved on the user's profile page (see
 // profile-timetable.js), if any. When there is one, Parse PDF uses it
 // without the user picking the file again; choosing a PDF here overrides it.
@@ -154,6 +158,7 @@ parseBtn.addEventListener("click", async () => {
     setStatus("Choose a PDF file first.", true);
     return;
   }
+  if (!ensureDateFieldValid(semesterStartInput)) return;
   if (!semesterStartInput.value) {
     setStatus(
       'Pick a "classes start on" date first — the PDF has no calendar dates of its own.',
@@ -206,6 +211,7 @@ parseBtn.addEventListener("click", async () => {
 
 saveBtn.addEventListener("click", async () => {
   const endDate = semesterEndInput.value;
+  if (!ensureDateFieldValid(semesterEndInput)) return;
   if (!endDate) {
     setStatus('Pick a "repeat weekly until" date first.', true);
     return;

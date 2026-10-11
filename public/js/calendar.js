@@ -38,6 +38,11 @@ renderWelcomeHeading(currentUser.name);
 const isTutor = currentUser.role === "tutor";
 const canManageSchedule = true;
 
+// Impossible typed dates must block the action — the mask surfaces the
+// field's own message; test DOMs that never load date-mask.js pass through,
+// same as the enhanceDateInputs guard in the occurrence editor below.
+const ensureDateFieldValid = window.ensureDateFieldValid ?? (() => true);
+
 // ---------- tutorial/lab sessions from the modules this tutor tutors ----------
 
 // Mirrors DAY_NAMES in server/dayNames.js — index 0 = Sunday, matching Date#getDay().
@@ -995,11 +1000,13 @@ function openOccurrenceModal(cls, dateStr, isCancelled) {
       if (repeatInput.checked) {
         const fromDate = repeatFromInput.value;
         const untilDate = repeatUntilInput.value;
+        if (!ensureDateFieldValid(repeatFromInput)) return;
         const dayOfWeek = weekdayFromDateStr(fromDate);
         if (dayOfWeek === null) {
           showToast("Pick the date the weekly repeat starts.", "danger");
           return;
         }
+        if (!ensureDateFieldValid(repeatUntilInput)) return;
         if (!untilDate) {
           showToast("Pick the date the weekly repeat ends.", "danger");
           return;

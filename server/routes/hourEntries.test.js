@@ -149,6 +149,35 @@ describe("POST /api/hour-entries", () => {
     expect(res.body.error).toBe("Unknown course");
     expect(tables.hour_entries).toHaveLength(0);
   });
+
+  test("rejects an impossible date like 2026-13-99 before it reaches the database", async () => {
+    const res = await request(buildApp()).post("/api/hour-entries").send({
+      userId: "t1",
+      date: "2026-13-99",
+      hours: 2,
+      startTime: "00:00",
+      endTime: "23:59",
+      courseId: 5,
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(
+      "date must be a valid calendar date (YYYY-MM-DD)",
+    );
+    expect(tables.hour_entries).toHaveLength(0);
+  });
+
+  test("rejects an entry with no date", async () => {
+    const res = await request(buildApp()).post("/api/hour-entries").send({
+      userId: "t1",
+      hours: 2,
+      courseId: 5,
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("date is required (YYYY-MM-DD)");
+    expect(tables.hour_entries).toHaveLength(0);
+  });
 });
 
 describe("PUT /api/hour-entries/:id", () => {
@@ -222,6 +251,24 @@ describe("PUT /api/hour-entries/:id", () => {
 
     expect(res.status).toBe(400);
     expect(tables.hour_entries[0].course_id).toBe(5);
+  });
+
+  test("rejects an impossible date on an edit", async () => {
+    // 29 February exists in 2028 but not 2027 — the same leap-year rule
+    // the frontend mask enforces.
+    const res = await request(buildApp()).put("/api/hour-entries/e1").send({
+      date: "2027-02-29",
+      hours: 2,
+      startTime: "00:00",
+      endTime: "23:59",
+      courseId: 5,
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(
+      "date must be a valid calendar date (YYYY-MM-DD)",
+    );
+    expect(tables.hour_entries[0].date).toBe(TODAY);
   });
 });
 
@@ -370,6 +417,48 @@ describe("GET /api/hour-entries/report", () => {
     expect(res.status).toBe(200);
     expect(res.body.rows).toHaveLength(1);
     expect(res.body.rows[0].hours).toBe(3);
+  });
+
+  test("rejects impossible or malformed from/to filters with a 400", async () => {
+    const badFrom = await request(buildApp()).get(
+      "/api/hour-entries/report?from=2026-13-99&to=2026-09-30",
+    );
+    expect(badFrom.status).toBe(400);
+    expect(badFrom.body.error).toBe(
+      "from must be a valid calendar date (YYYY-MM-DD)",
+    );
+
+    const badTo = await request(buildApp()).get(
+      "/api/hour-entries/report?from=2026-09-01&to=2026-02-30",
+    );
+    expect(badTo.status).toBe(400);
+    expect(badTo.body.error).toBe(
+      "to must be a valid calendar date (YYYY-MM-DD)",
+    );
+
+    // A display-format date isn't the API's YYYY-MM-DD either.
+    const malformed = await request(buildApp()).get(
+      "/api/hour-entries/report?from=15/01/2026",
+    );
+    expect(malformed.status).toBe(400);
+    expect(malformed.body.error).toBe(
+      "from must be a valid calendar date (YYYY-MM-DD)",
+    );
+  });
+
+  test("accepts a real leap day but rejects it in a common year", async () => {
+    const leap = await request(buildApp()).get(
+      "/api/hour-entries/report?from=2028-02-29&to=2028-02-29",
+    );
+    expect(leap.status).toBe(200);
+
+    const common = await request(buildApp()).get(
+      "/api/hour-entries/report?from=2027-02-29",
+    );
+    expect(common.status).toBe(400);
+    expect(common.body.error).toBe(
+      "from must be a valid calendar date (YYYY-MM-DD)",
+    );
   });
 
   test("reports unlinked hours (no course_id) separately instead of dropping them", async () => {
