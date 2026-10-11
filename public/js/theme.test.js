@@ -40,7 +40,9 @@ describe("theme", () => {
         expect(root.style.colorScheme).toBe("dark");
 
         const button = window.document.querySelector(".theme-toggle");
-        expect(button.textContent).toBe("Light mode");
+        // Dark mode shows the sun icon (click goes to light) — the sun is
+        // the only icon carrying a <circle>.
+        expect(button.querySelector("svg circle")).not.toBeNull();
         expect(button.getAttribute("aria-pressed")).toBe("true");
       },
     );
@@ -77,12 +79,13 @@ describe("theme", () => {
         button.click();
         expect(root.dataset.theme).toBe("dark");
         expect(window.localStorage.getItem("tms-theme")).toBe("dark");
-        expect(button.textContent).toBe("Light mode");
+        expect(button.querySelector("svg circle")).not.toBeNull();
 
         button.click();
         expect(root.dataset.theme).toBe("light");
         expect(window.localStorage.getItem("tms-theme")).toBe("light");
-        expect(button.textContent).toBe("Dark mode");
+        // Light mode shows the moon — no circle in that icon.
+        expect(button.querySelector("svg circle")).toBeNull();
       },
     );
   });

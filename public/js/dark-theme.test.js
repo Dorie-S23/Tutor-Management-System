@@ -58,8 +58,8 @@ describe("dark theme coverage", () => {
     );
 
     // The toggle the script injects is styled here because the redesigned
-    // pages do not load global.css.
-    expect(appCss).toMatch(/\.theme-toggle\s*\{/);
+    // pages do not load global.css — grouped with the navbar icon buttons.
+    expect(appCss).toContain(".theme-toggle");
 
     // Dark mode must not bleed onto paper.
     expect(appCss).toContain("@media print");

@@ -230,3 +230,162 @@ describe("timetable grid", () => {
     expect(unscheduled.textContent).toContain("Couldn't load courses");
   });
 });
+
+// --- Session detail dialog (click a block) ---------------------------------
+
+// Same harness as withDom above, plus the detail-dialog nodes timetable.html
+// carries, so openSessionDetail() has something to fill.
+function withDialogDom(courses) {
+  const dom = new JSDOM(
+    `
+    <body>
+      <div id="timetableGrid"></div>
+      <p id="timetableUnscheduled" hidden></p>
+      <dialog id="sessionDetailModal">
+        <h2 id="sessionDetailHeading"></h2>
+        <p id="sessionDetailClash" hidden></p>
+        <dl id="sessionDetailList"></dl>
+        <a id="sessionDetailEditBtn"></a>
+        <button id="sessionDetailCloseBtn" type="button"></button>
+        <button id="sessionDetailDismissBtn" type="button"></button>
+      </dialog>
+      <script>
+        window.__courses = ${JSON.stringify(courses)};
+        window.fetch = () =>
+          Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(window.__courses),
+          });
+        ${src}
+        //# sourceURL=${pathToFileURL(path.join(__dirname, "timetable.js")).href}
+      </script>
+    </body>
+  `,
+    { url: "http://localhost/html/timetable.html", runScripts: "dangerously" },
+  );
+  return dom.window;
+}
+
+function thursdayCourse(overrides) {
+  return course({
+    course_code: "COMS1018A",
+    course_name: "Intro to Algorithms and Programming I",
+    department: "Computer Science",
+    tutors_needed: 5,
+    no_of_tutors_assigned: 5,
+    min_mark: 74,
+    hours_per_week: 3,
+    budget: 15000,
+    course_level: 4,
+    Day_of_tut: "Thursday",
+    tutor_start_time: "14:15:00",
+    tutor_end_time: "17:00:00",
+    venues: "WSS206",
+    ...overrides,
+  });
+}
+
+describe("session detail dialog", () => {
+  test("three concurrent sessions render as code-only dense blocks", async () => {
+    const window = await rendered(
+      withDialogDom([
+        course({ id: 1 }),
+        thursdayCourse({ id: 2 }),
+        thursdayCourse({ id: 3, course_code: "APPM2021", venues: "OGS1" }),
+        thursdayCourse({ id: 4, course_code: "COMS3011A" }),
+      ]),
+    );
+    [2, 3, 4].forEach((id) => {
+      const block = window.document.querySelector(
+        `.timetable-session[href="board.html?edit=${id}"]`,
+      );
+      expect(block.classList.contains("is-dense")).toBe(true);
+      expect(block.querySelectorAll(".session-code")).toHaveLength(1);
+      expect(block.querySelector(".session-meta")).toBeNull();
+    });
+    // The lone Tuesday session keeps its full time/venue lines.
+    const lone = window.document.querySelector(
+      '.timetable-session[href="board.html?edit=1"]',
+    );
+    expect(lone.classList.contains("is-dense")).toBe(false);
+    expect(lone.querySelector(".session-meta")).not.toBeNull();
+  });
+
+  test("clicking a block opens the dialog with the full session and course info", async () => {
+    const window = await rendered(
+      withDialogDom([
+        course({
+          id: 1,
+          course_code: "COMS2002A",
+          course_name: "Database Fundamentals II",
+          department: "Computer Science",
+          tutors_needed: 10,
+          no_of_tutors_assigned: 3,
+          min_mark: 70,
+          hours_per_week: 2,
+          budget: 12000,
+          course_level: 2,
+        }),
+      ]),
+    );
+    window.document
+      .querySelector('.timetable-session[href="board.html?edit=1"]')
+      .click();
+
+    const modal = window.document.getElementById("sessionDetailModal");
+    expect(modal.hasAttribute("open")).toBe(true);
+    expect(
+      window.document.getElementById("sessionDetailHeading").textContent,
+    ).toBe("COMS2002A · Tutorial");
+
+    const listHtml =
+      window.document.getElementById("sessionDetailList").innerHTML;
+    expect(listHtml).toContain("Database Fundamentals II");
+    expect(listHtml).toContain("Monday");
+    expect(listHtml).toContain("10:00–11:00");
+    expect(listHtml).toContain("MSL004");
+    expect(listHtml).toContain("3 of 10 assigned");
+    expect(listHtml).toContain("70%");
+    expect(listHtml).toContain("2h");
+    expect(listHtml).toContain("2nd year");
+    expect(listHtml).toContain("R12,000");
+
+    expect(
+      window.document
+        .getElementById("sessionDetailEditBtn")
+        .getAttribute("href"),
+    ).toBe("board.html?edit=1");
+    expect(window.document.getElementById("sessionDetailClash").hidden).toBe(
+      true,
+    );
+  });
+
+  test("a clashing session shows the venue-clash note naming the other course", async () => {
+    const window = await rendered(
+      withDialogDom([
+        thursdayCourse({ id: 2 }),
+        thursdayCourse({ id: 4, course_code: "COMS3011A" }),
+      ]),
+    );
+    window.document
+      .querySelector('.timetable-session[href="board.html?edit=4"]')
+      .click();
+
+    const clashNote = window.document.getElementById("sessionDetailClash");
+    expect(clashNote.hidden).toBe(false);
+    expect(clashNote.textContent).toContain("WSS206");
+    expect(clashNote.textContent).toContain("COMS1018A");
+  });
+
+  test("the dismiss button closes the dialog again", async () => {
+    const window = await rendered(withDialogDom([course({ id: 1 })]));
+    window.document
+      .querySelector('.timetable-session[href="board.html?edit=1"]')
+      .click();
+    window.document.getElementById("sessionDetailDismissBtn").click();
+
+    expect(
+      window.document.getElementById("sessionDetailModal").hasAttribute("open"),
+    ).toBe(false);
+  });
+});
