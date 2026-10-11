@@ -3675,6 +3675,16 @@ html[data-theme="dark"] {
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+  /* The button now holds a sun/moon icon instead of text (js/theme.js)
+     — keep it centred and size the svg like the app.css navbar icons. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
 }
 
 .theme-toggle:hover {
