@@ -665,6 +665,97 @@ describe("GET /api/course-volunteers?status=open", () => {
     expect(res.status).toBe(200);
     expect(res.body.map((r) => r.id).sort()).toEqual(["s1", "s2"]);
   });
+
+  test("excludeRejectedFor hides a reopened session from the volunteer who was rejected from it", async () => {
+    // s1 was claimed and rejected, then withdrawn — exactly how a claimed
+    // session actually gets back to 'open' (see DELETE /): same row, same
+    // id, user_id cleared. Nothing on the row itself says student-1 was
+    // ever rejected from it; that only lives in the audit log.
+    tables.course_volunteers = [
+      { id: "s1", course_id: 1, status: "open", user_id: null },
+      { id: "s2", course_id: 1, status: "open", user_id: null },
+    ];
+    tables.audit_log = [
+      {
+        entity_type: "course_volunteers",
+        entity_id: "s1",
+        action: "rejected",
+        before: { status: "pending", user_id: "student-1" },
+      },
+    ];
+
+    const res = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-1",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((r) => r.id)).toEqual(["s2"]);
+  });
+
+  test("excludeRejectedFor doesn't hide the session from a volunteer who wasn't the one rejected", async () => {
+    tables.course_volunteers = [
+      { id: "s1", course_id: 1, status: "open", user_id: null },
+    ];
+    tables.audit_log = [
+      {
+        entity_type: "course_volunteers",
+        entity_id: "s1",
+        action: "rejected",
+        before: { status: "pending", user_id: "student-1" },
+      },
+    ];
+
+    const res = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-2",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((r) => r.id)).toEqual(["s1"]);
+  });
+
+  test("end to end: rejecting a claim, then withdrawing it, keeps it hidden from the rejected volunteer once it's open again", async () => {
+    // course_id is a string here to match the query-string type DELETE
+    // reads it as — fakeSupabase does a strict === match and doesn't
+    // coerce the way Postgrest does for a real integer column (see the
+    // withdraw tests below for the same caveat).
+    tables.course_volunteers = [
+      {
+        id: "s1",
+        course_id: "1",
+        session_date: "2026-11-03",
+        status: "pending",
+        user_id: "student-1",
+      },
+    ];
+
+    const rejectRes = await request(buildApp())
+      .patch("/api/course-volunteers/s1")
+      .send({
+        status: "rejected",
+        rejectionReason: "Not available that week after all",
+        organiserId: "organiser-1",
+      });
+    expect(rejectRes.status).toBe(200);
+
+    const withdrawRes = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+    expect(withdrawRes.status).toBe(204);
+    expect(tables.course_volunteers[0]).toMatchObject({
+      status: "open",
+      user_id: null,
+    });
+
+    const openForRejected = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-1",
+    );
+    expect(openForRejected.body).toEqual([]);
+
+    const openForEveryoneElse = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-2",
+    );
+    expect(openForEveryoneElse.body.map((r) => r.id)).toEqual(["s1"]);
+  });
 });
 
 describe("course-volunteers audit log", () => {
