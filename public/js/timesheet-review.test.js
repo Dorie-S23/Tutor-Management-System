@@ -101,6 +101,8 @@ const PROFILE = {
 const SIGNED_PDF_URL =
   "https://fake-supabase.test/storage/v1/object/sign/timesheets/u1/2026-09-01.pdf?token=fake";
 
+let currentDom = null;
+
 function loadPage({
   all = ALL,
   disputes = [DISPUTE],
@@ -209,8 +211,17 @@ function loadPage({
     },
   });
 
+  currentDom = dom;
+
   return { window: dom.window, document: dom.window.document, calls };
 }
+
+// Boot starts the page's background-sync intervals — close each test's
+// window so they don't fire against a torn-down document and hang the runner.
+afterEach(() => {
+  currentDom?.window.close();
+  currentDom = null;
+});
 
 const wait = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
 

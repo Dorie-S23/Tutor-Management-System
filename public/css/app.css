@@ -3159,13 +3159,13 @@ td {
   color: var(--faint);
 }
 
-/* ---------- Sync status icon (board.html toolbar) ---------- */
+/* ---------- Sync status icon (board.html, timesheet-review.html) ---------- */
 
 /* The "Synced … ago" stamp is an icon, not a text label — the exact
    wording lives in its title/aria-label, so hover reveals it without
    taking toolbar space. Transparent-ish by default; it flashes to full
    opacity for a moment each time a sync lands (flashSyncIcon in
-   board.js). */
+   board.js / timesheet-review.js). */
 .sync-status {
   display: inline-flex;
   align-items: center;
