@@ -1,14 +1,19 @@
 const express = require("express");
 const request = require("supertest");
 const { fakeSupabase } = require("../testUtils/fakeSupabase");
+const { MAX_TIMESHEET_PDF_BYTES } = require("./timesheetStorage");
 
 let tables;
+let storageFiles;
 let mockSupabase;
 
 // The route module grabs the Supabase client via `require("../supabaseClient")`
 // at load time, so the mock has to be in place before it's required below.
+// Storage is a lazy delegate like `from` — mockSupabase isn't built yet when
+// this factory runs, and the PDF routes reach storage via this path.
 jest.mock("../supabaseClient", () => ({
   from: (...args) => mockSupabase.from(...args),
+  storage: { from: (...args) => mockSupabase.storage.from(...args) },
 }));
 
 const timesheetsRouter = require("./timesheets");
@@ -29,11 +34,19 @@ beforeEach(() => {
     notifications: [],
     hour_entries: [],
   };
-  // Unique (user_id, week_start) — mirrors the table's real PK, so the
-  // POST route's "already submitted this month" branch (23505) is testable.
-  mockSupabase = fakeSupabase(tables, {
-    timesheets: [["user_id", "week_start"]],
-  });
+  // The PDF routes store into the shared transcripts bucket; the array is
+  // mutated in place, so tests can inspect what was uploaded.
+  storageFiles = { transcripts: [] };
+  // Unique (user_id, week_start) — mirrors the table's real PK, so a
+  // duplicate insert still errors like Postgres (the POST route's 23505
+  // race fallback).
+  mockSupabase = fakeSupabase(
+    tables,
+    {
+      timesheets: [["user_id", "week_start"]],
+    },
+    storageFiles,
+  );
 });
 
 describe("GET /api/timesheets", () => {
@@ -171,7 +184,7 @@ describe("POST /api/timesheets", () => {
     expect(res.body.error).toMatch(/no logged hours/i);
   });
 
-  test("rejects a second submission for the same month", async () => {
+  test("rejects a second submission while the month is still awaiting review", async () => {
     tables.hour_entries = [
       { id: 1, user_id: "t1", date: "2026-09-20", hours: 2 },
     ];
@@ -184,7 +197,90 @@ describe("POST /api/timesheets", () => {
       .send({ tutorId: "t1", weekStart: "2026-09-20" });
 
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/already submitted/i);
+    expect(res.body.error).toBe(
+      "That month's timesheet is still awaiting review",
+    );
+    expect(tables.timesheets).toHaveLength(1);
+  });
+
+  test("an approved month stays locked, with its own message", async () => {
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: "2026-09-20", hours: 2 },
+    ];
+    tables.timesheets = [
+      { user_id: "t1", week_start: "2026-09-01", status: "approved" },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-09-15" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "That month's timesheet has already been approved",
+    );
+    expect(tables.timesheets[0].status).toBe("approved");
+  });
+
+  test("resubmitting a rejected month rebuilds the snapshot and reopens it for review", async () => {
+    // The tutor fixed the hours after the rejection: the month's current
+    // entries replace the frozen ones, and the note about the superseded
+    // version is cleared.
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: "2026-09-05", hours: 2 },
+      { id: 2, user_id: "t1", date: "2026-09-18", hours: 4 },
+    ];
+    tables.timesheets = [
+      {
+        user_id: "t1",
+        week_start: "2026-09-01",
+        status: "rejected",
+        total_hours: 9,
+        entries_snapshot: [{ date: "2026-09-03", hours: 9 }],
+        reviewer_note: "Tuesday's hours look off",
+        reviewed_at: "2026-09-10T10:00:00.000Z",
+        submitted_at: "2026-09-02T08:00:00.000Z",
+      },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-09-20" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("pending");
+    expect(res.body.total_hours).toBe(6);
+    expect(res.body.entries_snapshot.map((e) => e.date)).toEqual([
+      "2026-09-05",
+      "2026-09-18",
+    ]);
+    expect(res.body.reviewer_note).toBeNull();
+    expect(res.body.reviewed_at).toBeNull();
+    expect(res.body.submitted_at).not.toBe("2026-09-02T08:00:00.000Z");
+    // Still one row for the month — the resubmission updated it in place
+    // rather than inserting a second one.
+    expect(tables.timesheets).toHaveLength(1);
+  });
+
+  test("a rejected month with no logged hours can't be resubmitted", async () => {
+    tables.timesheets = [
+      {
+        user_id: "t1",
+        week_start: "2026-09-01",
+        status: "rejected",
+        reviewer_note: "fix the hours",
+      },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-09-01" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/no logged hours/i);
+    // The rejection stands — nothing was half-updated.
+    expect(tables.timesheets[0].status).toBe("rejected");
+    expect(tables.timesheets[0].reviewer_note).toBe("fix the hours");
   });
 });
 
@@ -621,5 +717,272 @@ describe("GET /api/timesheets/payroll-export", () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/no approved timesheets/i);
+  });
+});
+
+describe("POST /api/timesheets/:userId/:weekStart/pdf", () => {
+  const PDF = Buffer.from("%PDF-1.4 fake claim");
+
+  test("uploads the month's claim PDF to the shared bucket", async () => {
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(PDF);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({
+      uploaded: true,
+      monthStart: "2026-09-01",
+      size: PDF.length,
+    });
+    expect(storageFiles.transcripts).toHaveLength(1);
+    expect(storageFiles.transcripts[0].name).toBe(
+      "t1/timesheets/2026-09-01.pdf",
+    );
+    expect(storageFiles.transcripts[0].metadata.mimetype).toBe(
+      "application/pdf",
+    );
+    expect(storageFiles.transcripts[0].body).toEqual(PDF);
+  });
+
+  test("a YYYY-MM weekStart normalises to the same stored path", async () => {
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(PDF);
+
+    expect(res.status).toBe(201);
+    expect(storageFiles.transcripts[0].name).toBe(
+      "t1/timesheets/2026-09-01.pdf",
+    );
+  });
+
+  test("rejects an impossible weekStart before touching storage", async () => {
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-13-99/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(PDF);
+
+    expect(res.status).toBe(400);
+    expect(storageFiles.transcripts).toHaveLength(0);
+  });
+
+  test("a body that isn't a PDF is rejected", async () => {
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(Buffer.from("just some text"));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/doesn't look like a PDF/);
+    expect(storageFiles.transcripts).toHaveLength(0);
+  });
+
+  test("a JSON body is rejected — express.raw only parses application/pdf", async () => {
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .send({ note: "not a pdf" });
+
+    expect(res.status).toBe(400);
+    expect(storageFiles.transcripts).toHaveLength(0);
+  });
+
+  test("oversized uploads answer 413 with the size limit", async () => {
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(Buffer.alloc(MAX_TIMESHEET_PDF_BYTES + 1));
+
+    expect(res.status).toBe(413);
+    expect(res.body.error).toMatch(/15 MB/);
+  });
+
+  test("a pending month is locked — its PDF can't be replaced", async () => {
+    tables.timesheets = [
+      { user_id: "t1", week_start: "2026-09-01", status: "pending" },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(PDF);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "That month's timesheet is still awaiting review",
+    );
+    expect(storageFiles.transcripts).toHaveLength(0);
+  });
+
+  test("an approved month is locked with its own message", async () => {
+    tables.timesheets = [
+      { user_id: "t1", week_start: "2026-09-01", status: "approved" },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(PDF);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "That month's timesheet has already been approved",
+    );
+  });
+
+  test("a rejected month's PDF is replaced, not duplicated", async () => {
+    tables.timesheets = [
+      { user_id: "t1", week_start: "2026-09-01", status: "rejected" },
+    ];
+    storageFiles.transcripts.push({
+      name: "t1/timesheets/2026-09-01.pdf",
+      body: Buffer.from("%PDF-1.4 old"),
+    });
+
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(PDF);
+
+    expect(res.status).toBe(201);
+    expect(storageFiles.transcripts).toHaveLength(1);
+    expect(storageFiles.transcripts[0].body).toEqual(PDF);
+  });
+
+  test("without the bucket, the upload answers the setup 503", async () => {
+    mockSupabase = fakeSupabase(
+      tables,
+      { timesheets: [["user_id", "week_start"]] },
+      {},
+    );
+
+    const res = await request(buildApp())
+      .post("/api/timesheets/t1/2026-09-01/pdf")
+      .set("Content-Type", "application/pdf")
+      .send(PDF);
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/bucket is missing/i);
+  });
+});
+
+describe("GET /api/timesheets/:userId/:weekStart/pdf-url", () => {
+  test("signs a short-lived URL for the month's stored PDF", async () => {
+    storageFiles.transcripts.push({ name: "t1/timesheets/2026-09-01.pdf" });
+
+    const res = await request(buildApp()).get(
+      "/api/timesheets/t1/2026-09-01/pdf-url",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toContain("fake-supabase.test");
+    expect(res.body.url).toContain("t1/timesheets/2026-09-01.pdf");
+    expect(res.body.expiresIn).toBe(300);
+  });
+
+  test("no stored PDF answers 404 with a friendly message", async () => {
+    const res = await request(buildApp()).get(
+      "/api/timesheets/t1/2026-09-01/pdf-url",
+    );
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("No PDF on file for that month");
+  });
+
+  test("an impossible weekStart is a 400", async () => {
+    const res = await request(buildApp()).get(
+      "/api/timesheets/t1/2026-13-99/pdf-url",
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  test("without the bucket, signing answers the setup 503", async () => {
+    mockSupabase = fakeSupabase(
+      tables,
+      { timesheets: [["user_id", "week_start"]] },
+      {},
+    );
+
+    const res = await request(buildApp()).get(
+      "/api/timesheets/t1/2026-09-01/pdf-url",
+    );
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/bucket is missing/i);
+  });
+});
+
+describe("notifying organisers of a submission", () => {
+  function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  const ORGANISERS = [
+    { id: "o1", role: "organiser", name: "Org One" },
+    { id: "o2", role: "organiser", name: "Org Two" },
+    { id: "so", role: "super_organiser", name: "Super" },
+    { id: "t1", role: "tutor", name: "Thandi Tutor" },
+  ];
+
+  test("a fresh submission notifies every organiser, keyed to the review row", async () => {
+    tables.users = ORGANISERS;
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: "2026-09-05", hours: 2 },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-09" });
+    expect(res.status).toBe(201);
+    await flush();
+
+    expect(tables.notifications).toHaveLength(3);
+    for (const row of tables.notifications) {
+      expect(["o1", "o2", "so"]).toContain(row.user_id);
+      expect(row).toMatchObject({
+        type: "timesheet_submitted",
+        related_entity: "timesheet",
+        related_id: "t1_2026-09-01",
+        read: false,
+      });
+      expect(row.message).toContain("Thandi Tutor");
+      expect(row.message).toMatch(/submitted/);
+      expect(row.message).toMatch(/September 2026/);
+    }
+  });
+
+  test("a resubmission says resubmitted", async () => {
+    tables.users = ORGANISERS;
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: "2026-09-05", hours: 2 },
+    ];
+    tables.timesheets = [
+      { user_id: "t1", week_start: "2026-09-01", status: "rejected" },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-09-01" });
+    expect(res.status).toBe(200);
+    await flush();
+
+    expect(tables.notifications).toHaveLength(3);
+    expect(tables.notifications[0].message).toMatch(/resubmitted/);
+    expect(tables.notifications[0].related_id).toBe("t1_2026-09-01");
+  });
+
+  test("with no organisers there's nobody to notify — and no crash", async () => {
+    tables.hour_entries = [
+      { id: 1, user_id: "t1", date: "2026-09-05", hours: 2 },
+    ];
+
+    const res = await request(buildApp())
+      .post("/api/timesheets")
+      .send({ tutorId: "t1", weekStart: "2026-09" });
+    expect(res.status).toBe(201);
+    await flush();
+
+    expect(tables.notifications).toHaveLength(0);
   });
 });

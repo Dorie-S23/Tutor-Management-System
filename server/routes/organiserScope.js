@@ -87,6 +87,19 @@ async function organiserIdsForCourse(courseId) {
   return ids;
 }
 
+// Every organiser and super-organiser, for activity that isn't tied to one
+// course — e.g. a tutor submitting a monthly timesheet, whose snapshot can
+// span any course. Like the other lookups here the notification use is
+// best-effort, so query errors answer an empty list rather than throwing.
+async function allOrganiserIds() {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, role")
+    .in("role", ["organiser", "super_organiser"]);
+  if (error) return [];
+  return (data || []).map((user) => user.id);
+}
+
 // The set of course ids this organiser may see, or null when they see every
 // course (super-organiser, or a grandfathered organiser with no request
 // rows). Returns undefined when the user isn't an organiser at all —
@@ -112,5 +125,6 @@ async function courseScopeForOrganiser(userId) {
 module.exports = {
   hasCourseAccess,
   organiserIdsForCourse,
+  allOrganiserIds,
   courseScopeForOrganiser,
 };

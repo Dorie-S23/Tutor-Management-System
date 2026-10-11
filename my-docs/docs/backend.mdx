@@ -83,6 +83,7 @@ server/
     ├── profileTimetable.js  # /api/profile/:userId/timetable — timetable PDF kept on the profile page
     ├── transcripts.js       # /api/transcripts — applicant transcript upload + signed URLs
     ├── transcriptStorage.js # helper (not mounted) — transcript bucket access for other routes
+    ├── timesheetStorage.js  # helper (not mounted) — timesheet-PDF bucket access for the timesheets routes
     ├── organiserRequests.js # /api/organiser-requests — sign-up + additional-access review queue
     └── timetable.js         # /api/timetable/parse — Gemini reads an uploaded timetable PDF
 models/
@@ -100,7 +101,7 @@ models/
 ## API Conventions
 
 - Every endpoint lives under `/api/*` and is a plain Express route — no framework-generated CRUD, no GraphQL.
-- Request/response bodies are JSON (`express.json()` / `express.urlencoded()`) — the two exceptions are the file-upload routes, which take raw bytes instead of multipart (`express.raw`): `POST /api/timetable/parse` (a timetable PDF, `application/pdf`, 15 MB limit) and `POST /api/transcripts/:userId` (an applicant transcript — PDF/PNG/JPEG, 5 MB limit).
+- Request/response bodies are JSON (`express.json()` / `express.urlencoded()`) — the exceptions are the file-upload routes, which take raw bytes instead of multipart (`express.raw`): `POST /api/timetable/parse` (a timetable PDF, `application/pdf`, 15 MB limit), `POST /api/transcripts/:userId` (an applicant transcript — PDF/PNG/JPEG, 5 MB limit) and `POST /api/timesheets/:userId/:weekStart/pdf` (a submitted month's claim PDF, `application/pdf`, 15 MB limit).
 - Errors are always `{ "error": "human-readable message" }`, with a status code that means something:
   - `400` — bad/missing input, caught before touching the database
   - `401` — authentication failed (wrong password, no session)

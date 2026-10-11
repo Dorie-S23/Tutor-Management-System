@@ -57,6 +57,35 @@ function makeActionBtn(label, variant, onClick) {
   return btn;
 }
 
+// Opens the PDF the tutor submitted for this month. Months filed before the
+// capture feature existed simply have none stored — the server answers 404
+// and the toast points at Details, which can still show and print the claim
+// rebuilt from the frozen snapshot.
+async function openSubmissionPdf(sub, btn) {
+  btn.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/timesheets/${encodeURIComponent(sub.user_id)}/${sub.week_start}/pdf-url`,
+    );
+    if (res.status === 404) {
+      showToast(
+        "No PDF on file for that month — use Details to view or print the claim.",
+      );
+      return;
+    }
+    const body = await res.json();
+    if (!res.ok) {
+      showToast("Couldn't open the PDF — try again.");
+      return;
+    }
+    window.open(body.url, "_blank");
+  } catch {
+    showToast("Network error — couldn't reach the server.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function loadOpenDisputes() {
   try {
     const res = await fetch("/api/timesheet-disputes?resolved=false");
@@ -154,6 +183,12 @@ function renderSubmission(sub) {
   actionsEl.appendChild(
     makeActionBtn("Details", "btn-small-neutral", () => toggleDetail(li, sub)),
   );
+  // The document the tutor submitted from, straight from storage — opened
+  // in a new tab via a short-lived signed URL.
+  const pdfBtn = makeActionBtn("PDF", "btn-small-neutral", () =>
+    openSubmissionPdf(sub, pdfBtn),
+  );
+  actionsEl.appendChild(pdfBtn);
 
   if (disputes.length > 0) {
     actionsEl.appendChild(
@@ -218,6 +253,269 @@ function verificationPill(status) {
   return `<span class="status-pill ${info.className}">${info.label}</span>`;
 }
 
+// ---------- the tutor's claim form (Details view) ----------
+
+// The paper "Tutor Claim Form" the tutor prints from their own timesheets
+// page (timesheets.html / timesheets.js), rebuilt here from the submission's
+// frozen entries_snapshot so the organiser sees the document itself. The
+// markup keeps the tutor page's structure and class names, so the sheet
+// styles in app.css apply unchanged — but the tutor page's element ids
+// (cFullName, ...) become data-claim hooks: several details can be open at
+// once, and ids must stay unique.
+const CLAIM_MIN_ROWS = 15;
+
+const YEAR_OF_STUDY_LABELS = {
+  third_year: "3rd Year",
+  honours: "Honours",
+  masters: "Masters",
+  phd: "PhD",
+};
+
+function formatDuration(hours) {
+  const n = Number(hours);
+  return `${n}${n === 1 ? "hr" : "hrs"}`;
+}
+
+function claimDocumentHtml() {
+  return `
+    <div class="claim-doc-toolbar no-print">
+      <button type="button" class="btn-small btn-small-neutral claim-print-btn">
+        Print / Save as PDF
+      </button>
+    </div>
+    <div class="claim-form">
+      <table class="claim-title-table">
+        <tr>
+          <td class="claim-title-text">
+            <div>School of Computer Sciences &amp; Applied Mathematics</div>
+            <div>Tutor Claim Form</div>
+            <div data-claim="year"></div>
+          </td>
+          <td class="claim-title-crest">
+            <span
+              class="claim-crest"
+              role="img"
+              aria-label="Wits University crest"
+            ></span>
+          </td>
+        </tr>
+      </table>
+
+      <table class="claim-info-table">
+        <colgroup>
+          <col class="claim-col-label" />
+          <col span="4" />
+          <col class="claim-col-label2" />
+          <col class="claim-col-value2" />
+        </colgroup>
+        <tr>
+          <th>FULL<br />Name of Tutor:</th>
+          <td colspan="6" data-claim="fullName"></td>
+        </tr>
+        <tr>
+          <th>Student No.:</th>
+          <td colspan="4" data-claim="studentNo"></td>
+          <th class="claim-th-strong">Payroll No:</th>
+          <td data-claim="payrollNo"></td>
+        </tr>
+        <tr>
+          <th>Email Address:</th>
+          <td colspan="6" data-claim="email"></td>
+        </tr>
+        <tr>
+          <th>
+            Year of Study:
+            <span class="visually-hidden" data-claim="yearOfStudy"></span>
+          </th>
+          <td class="claim-year-option" data-year="third_year">
+            3<sup>rd</sup> Year
+          </td>
+          <td class="claim-year-option" data-year="honours">Honours</td>
+          <td class="claim-year-option" data-year="masters">Masters</td>
+          <td class="claim-year-option" data-year="phd">PhD</td>
+          <th>Cell phone No:</th>
+          <td data-claim="cellPhone"></td>
+        </tr>
+      </table>
+
+      <table class="claim-tasks-table">
+        <colgroup>
+          <col class="claim-col-date" />
+          <col class="claim-col-times" />
+          <col class="claim-col-duration" />
+          <col class="claim-col-description" />
+          <col class="claim-col-supervisor" />
+          <col class="claim-col-signature" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Date of Task</th>
+            <th>Times of Task</th>
+            <th>Duration of Task</th>
+            <th>
+              Description of Task<br />(tutoring, marking, invigilation,
+              admin)
+            </th>
+            <th>Name of Supervisor</th>
+            <th>Signature of Supervisor</th>
+          </tr>
+        </thead>
+        <tbody data-claim="rows"></tbody>
+      </table>
+
+      <table class="claim-footer-table">
+        <tr>
+          <th>Student Signature</th>
+          <td></td>
+          <th>Date:</th>
+          <td class="claim-footer-value" data-claim="signDate"></td>
+        </tr>
+      </table>
+
+      <table class="claim-footer-table">
+        <tr>
+          <th>Total Number of Hours:</th>
+          <td class="claim-footer-value" data-claim="totalHours"></td>
+          <th>Total Amount:</th>
+          <td class="claim-footer-value" data-claim="totalAmount"></td>
+        </tr>
+      </table>
+
+      <table class="claim-hos-table">
+        <colgroup>
+          <col class="claim-col-hos-label" />
+          <col class="claim-col-hos-name" />
+          <col class="claim-col-hos-signature" />
+          <col />
+        </colgroup>
+        <tr>
+          <th rowspan="2">Head of School:</th>
+          <td class="claim-hos-name">Prof R Klein</td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>Name</th>
+          <th>Signature</th>
+          <th>Date</th>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+// One snapshot entry as a claim task row, formatted exactly like the tutor's
+// own claim (renderClaim in public/js/timesheets.js): dd/mm/yyyy date,
+// "HH:MM-HH:MM" times, "2.5hrs" duration, "TaskType – Subject"
+// description, and blank supervisor columns (a snapshot carries no
+// supervisor). Returns the month's total hours for the totals table.
+function renderClaimRows(tbody, entries) {
+  tbody.innerHTML = "";
+  const sorted = [...entries].sort((a, b) =>
+    String(a.date).localeCompare(String(b.date)),
+  );
+  let totalHours = 0;
+
+  for (const entry of sorted) {
+    totalHours += Number(entry.hours);
+
+    const times =
+      entry.start_time && entry.end_time
+        ? `${entry.start_time.slice(0, 5)}-${entry.end_time.slice(0, 5)}`
+        : "";
+    const description = [entry.task_type, entry.subject]
+      .filter(Boolean)
+      .join(" – ");
+
+    const tr = document.createElement("tr");
+    [
+      toDisplayDate(entry.date),
+      times,
+      formatDuration(entry.hours),
+      description,
+      "",
+      "",
+    ].forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+
+  // The printed Wits form always has room for 15 tasks; blank rows keep the
+  // same shape when fewer were logged.
+  for (let i = sorted.length; i < CLAIM_MIN_ROWS; i++) {
+    const tr = document.createElement("tr");
+    tr.className = "claim-blank-row";
+    for (let col = 0; col < 6; col++) {
+      tr.appendChild(document.createElement("td"));
+    }
+    tbody.appendChild(tr);
+  }
+
+  return totalHours;
+}
+
+// The identity block mirrors the tutor's own claim: Profile-page values
+// (name, student number, e-mail, cell phone) and the locked year of study
+// from the tutor record. The payroll number only ever exists in the tutor's
+// browser, so it stays blank here — like the paper form until payroll
+// completes it. A failed fetch leaves the blanks; the document still renders
+// everything the submission itself carries.
+async function fillClaimIdentity(claim, userId) {
+  if (!userId) return;
+
+  let profile;
+  try {
+    const res = await fetch(`/api/profile/${encodeURIComponent(userId)}`);
+    if (!res.ok) return;
+    profile = await res.json();
+  } catch {
+    return;
+  }
+
+  const setField = (field, value) => {
+    if (!value) return;
+    claim.querySelector(`[data-claim="${field}"]`).textContent = value;
+  };
+  setField("fullName", profile.name);
+  setField("studentNo", profile.studentNumber);
+  setField("email", profile.email);
+  setField("cellPhone", profile.cellPhone);
+
+  // Only the four levels the form lists can mark an option; anything else
+  // (or nothing on record) leaves them all unmarked, like the tutor page.
+  const level = Object.hasOwn(YEAR_OF_STUDY_LABELS, profile.yearOfStudy ?? "")
+    ? profile.yearOfStudy
+    : "";
+  setField("yearOfStudy", YEAR_OF_STUDY_LABELS[level] || "");
+  claim.querySelectorAll(".claim-year-option").forEach((cell) => {
+    cell.classList.toggle(
+      "is-selected",
+      level !== "" && cell.dataset.year === level,
+    );
+  });
+}
+
+// Printing straight from the page would include all its chrome; narrowing
+// the paper copy to the open submission's claim sheet keeps Print / Save as
+// PDF to the one document (body.claim-printing rules in app.css).
+function printClaim(claim) {
+  document.body.classList.add("claim-printing");
+  claim.classList.add("claim-print-target");
+  const cleanup = () => {
+    document.body.classList.remove("claim-printing");
+    claim.classList.remove("claim-print-target");
+  };
+
+  // window.print() blocks until the dialog closes in most browsers; Safari
+  // prints asynchronously, so afterprint covers the cleanup there too.
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.print();
+  cleanup();
+}
+
 function toggleDetail(li, sub) {
   const existing = li.querySelector(".submission-detail");
   if (existing) {
@@ -250,8 +548,39 @@ function toggleDetail(li, sub) {
           .join("")}
       </tbody>
     </table>
+    ${claimDocumentHtml()}
   `;
+
+  // What the row already carries goes in first; the profile fetch below
+  // fills in the rest of the identity block a beat later.
+  const claim = detail.querySelector(".claim-form");
+  claim.querySelector('[data-claim="fullName"]').textContent =
+    sub.users?.name || "";
+  claim.querySelector('[data-claim="email"]').textContent =
+    sub.users?.email || "";
+
+  // The claim's header year and signature date freeze at the day the
+  // timesheet was submitted, just as entries_snapshot freezes the hours.
+  const submittedAt = sub.submitted_at || new Date().toISOString();
+  claim.querySelector('[data-claim="year"]').textContent = submittedAt.slice(
+    0,
+    4,
+  );
+  claim.querySelector('[data-claim="signDate"]').textContent =
+    toDisplayDate(submittedAt);
+
+  const totalHours = renderClaimRows(
+    claim.querySelector('[data-claim="rows"]'),
+    entries,
+  );
+  claim.querySelector('[data-claim="totalHours"]').textContent = totalHours;
+
+  detail
+    .querySelector(".claim-print-btn")
+    .addEventListener("click", () => printClaim(claim));
+
   li.appendChild(detail);
+  fillClaimIdentity(claim, sub.user_id);
 }
 
 async function setSubmissionStatus(sub, status, name, reviewerNote) {

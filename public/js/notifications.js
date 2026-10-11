@@ -78,6 +78,14 @@ function getCurrentUser() {
       param: "highlightWeek",
       tutor: "timesheets.html",
     },
+    // A tutor filing a month's claim — organisers land on the review queue
+    // with that row flashed (timesheet-review.js applyHighlight reads
+    // "highlight" and matches "<userId>_<weekStart>").
+    timesheet_submitted: {
+      param: "highlight",
+      organiser: "timesheet-review.html",
+      super_organiser: "timesheet-review.html",
+    },
     // A volunteer covering a tutor's excused session
     cover_assigned: {
       param: "highlightCover",
