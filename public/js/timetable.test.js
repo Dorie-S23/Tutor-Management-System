@@ -354,7 +354,7 @@ describe("session detail dialog", () => {
       window.document
         .getElementById("sessionDetailEditBtn")
         .getAttribute("href"),
-    ).toBe("board.html?edit=1");
+    ).toBe("board.html?course=1");
     expect(window.document.getElementById("sessionDetailClash").hidden).toBe(
       true,
     );
