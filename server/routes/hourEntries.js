@@ -5,42 +5,9 @@ const { GRACE_MINUTES, isWithinLoggingWindow } = require("../loggingWindow");
 const { sliceTime, matchingSlotTypes } = require("./sessionSlots");
 const { organiserIdsForCourse } = require("./organiserScope");
 const { notify, formatShortDate } = require("./notificationHelpers");
+const { dateError } = require("../utils/dateValidation");
 
 const router = express.Router();
-
-// ---------- date validation ----------
-// Mirrors the frontend mask's calendar rules (public/js/date-mask.js): a
-// real date has year >= 1, a month from 01-12, and a day within that
-// month's length, leap years included. Checking it here turns a date
-// Postgres would reject into a clear 400 instead of an opaque 500.
-function daysInMonth(year, month) {
-  return new Date(year, month, 0).getDate();
-}
-
-// Returns a message naming what's wrong with the value, or null when it's
-// a real YYYY-MM-DD date. `field` is what the message calls the input —
-// the report's filters are query params named from/to, not "date".
-function dateError(value, field = "date") {
-  if (value == null || value === "") {
-    return `${field} is required (YYYY-MM-DD)`;
-  }
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
-  if (match) {
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    if (
-      year >= 1 &&
-      month >= 1 &&
-      month <= 12 &&
-      day >= 1 &&
-      day <= daysInMonth(year, month)
-    ) {
-      return null;
-    }
-  }
-  return `${field} must be a valid calendar date (YYYY-MM-DD)`;
-}
 
 // Every hour entry must be tied to a real course so the budget report can
 // cost it. The entry's display label (subject) is taken from that course's

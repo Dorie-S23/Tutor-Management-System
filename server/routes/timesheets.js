@@ -2,6 +2,7 @@ const express = require("express");
 const supabase = require("../supabaseClient");
 const { getRatesMap } = require("./academicLevelRates");
 const { notify } = require("./notificationHelpers");
+const { dateError, monthOrDateError } = require("../utils/dateValidation");
 
 const router = express.Router();
 
@@ -74,8 +75,12 @@ router.post("/", async (req, res) => {
       .status(400)
       .json({ error: "tutorId and weekStart are required" });
   }
-  if (!/^\d{4}-\d{2}(-\d{2})?$/.test(weekStart)) {
-    return res.status(400).json({ error: "weekStart must be a date" });
+  // The picker sends "YYYY-MM" and older callers a full date in the month —
+  // either way it must be a real period. "2026-13-99" would otherwise be
+  // normalised into an impossible month and only fail inside Postgres.
+  const invalidWeekStart = monthOrDateError(weekStart, "weekStart");
+  if (invalidWeekStart) {
+    return res.status(400).json({ error: invalidWeekStart });
   }
 
   const monthStart = getMonthStart(weekStart);
@@ -223,6 +228,13 @@ router.patch("/:userId/:weekStart", async (req, res) => {
     return res
       .status(400)
       .json({ error: "A note is required to reject a timesheet" });
+  }
+
+  // The period key is a full date ("YYYY-MM-01", or a legacy weekly
+  // Monday) — an impossible one would only fail as a database filter.
+  const invalidWeekStart = dateError(req.params.weekStart, "weekStart");
+  if (invalidWeekStart) {
+    return res.status(400).json({ error: invalidWeekStart });
   }
 
   const { data, error } = await supabase
