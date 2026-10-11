@@ -17,6 +17,10 @@ Link: https://tutorx.devden.workers.dev/
 We used Docusaurus to document our development.
 Link: https://tutorx-documentation.devden.workers.dev/
 
+### Public API
+
+A read-only, no-authentication course catalogue is published at https://tutorx.devden.workers.dev/api/v1 — endpoints, filters, and examples are on the [Public API](https://tutorx-documentation.devden.workers.dev/docs/public-api) page of our documentation site.
+
 ### Issue & Task Tracking
 
 Tasks and bugs are tracked on the team's [Jira board](https://thedevden.atlassian.net/jira/core/projects/TMS/board) (project `TMS`).

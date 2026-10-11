@@ -8,7 +8,7 @@ Every third-party service and CDN this app actually talks to: why it was chosen 
 
 ## Overview
 
-Five external services are in active use — one database/auth/storage backend, one indirect OAuth provider, one AI API, and two CDN-hosted asset loads (which serve as that AI API's fallback). Nothing else in the app makes an outbound call to a third party: no payment processor, no email/SMS provider, no analytics/tracking script. The timetable reader's back-and-forth — LLM-only, then OCR-only, now both — is summarised in [Timetable parsing: a brief history](#timetable-parsing-a-brief-history) below.
+Six external services are in active use — one database/auth/storage backend, one indirect OAuth provider, one AI API, one transactional email API, and two CDN-hosted asset loads (which serve as that AI API's fallback). Nothing else in the app makes an outbound call to a third party: no payment processor, no SMS provider, no analytics/tracking script. The timetable reader's back-and-forth — LLM-only, then OCR-only, now both — is summarised in [Timetable parsing: a brief history](#timetable-parsing-a-brief-history) below.
 
 ## Supabase — database + auth
 
@@ -31,7 +31,7 @@ The app's only backend-as-a-service dependency, and the one everything else is b
 - Every `server/routes/*.js` file talks to Postgres through the JS query builder (`supabase.from("table").select()/.insert()/.update()/.delete()`, with `.eq()`/`.neq()`/`.in()`/`.order()`/`.single()` etc.) — this compiles down to calls against Supabase's auto-generated PostgREST API, so the app never writes raw SQL.
 - Auth (`routes/auth.js`) uses Supabase's own user table and session tokens for email/password sign-up and login — the app doesn't store or hash passwords itself.
 - `server/routes/transcripts.js` also drives this client's **Storage** API — the private `transcripts` bucket described next — through the same SDK and key as everything else.
-- **Caveat, not a strength:** Row Level Security is currently disabled on every table (flagged as an open item in [Backend](./backend.mdx#deployment)), so the suitability of "PostgREST auto-generates a REST API" cuts both ways — it's convenient, but it also means the anon key currently grants direct read/write to everything unless RLS gets turned back on.
+- **Caveat:** Row Level Security is currently disabled on every table (see the [access-control note](./backend.mdx#deployment) on the Backend page), so the suitability of "PostgREST auto-generates a REST API" cuts both ways — it's convenient, but it also means the anon key currently grants direct read/write to the tables; the Express layer is what enforces the application's access rules.
 
 ### Applicant transcripts (Supabase Storage)
 
@@ -45,6 +45,7 @@ How it works:
 - **Applications are gated on it.** `POST /api/tutor-applications` and `POST /api/course-volunteers` refuse with `403` until a transcript is on record (`hasTranscript()` in `server/routes/transcriptStorage.js`).
 - **Setup is manual, once per Supabase project** — create the private `transcripts` bucket and a policy for the anon role (step 3 in [Getting Started](./getting-started.mdx)). Until that's done, an upload answers `503` with a message saying so (status checks just look empty), rather than failing opaquely.
 - **Profile timetables share the bucket.** Tutors and volunteers can keep their class-timetable PDF on their profile page (`server/routes/profileTimetable.js`, mounted at `/api/profile/:userId/timetable`: `GET` status, `POST` upload/replace, `GET …/signed-url`, `DELETE`). It's stored at `<userId>/timetable.pdf` in the same `transcripts` bucket, so the existing bucket and anon policy cover it with no extra setup, and `listTranscripts()` only matches `transcript.*`, so a saved timetable never counts as a transcript.
+- **Timesheet claim PDFs share the bucket too.** When a tutor submits a month, their browser renders the claim form itself (html2canvas + jsPDF — production runs on Cloudflare Workers, with no server-side browser to do it) and uploads it via `POST /api/timesheets/:userId/:weekStart/pdf` to `<userId>/timesheets/<monthStart>.pdf` in the same bucket. Organisers open it from the review queue's PDF button, which fetches a 5-minute signed URL (`GET …/pdf-url`); months filed before this feature simply answer `404` and the button points at the Details view instead.
 
 ## Google OAuth — via Supabase, not a direct integration
 
@@ -140,8 +141,50 @@ The feature has changed shape twice and then needed one production fix; this pag
 3. **Hybrid** — Gemini is back as the primary reader via the same route, and the OCR pipeline is kept as the automatic fallback. `GEMINI_API_KEY` is read by the code again, so treat it as live config, not a leftover.
 4. **Production fix (current)** — the restored route worked locally but not on the live site: the deployed Worker had no `GEMINI_API_KEY` secret, so it answered `503` and the calendar page silently fell back to OCR, which surfaced to users as "No classes could be recognised in this PDF". Two traps made the diagnosis slow: a same-named `tutorx` Worker in a second Cloudflare account absorbed a manual `wrangler secret put` (the laptop's wrangler login belongs to that other account), and the free tier's per-model **daily** quota made the then-default model look permanently dead. Fixed by having `deploy.yml` push the key into the production Worker from a Gitea repo secret on every deploy, and by the probe-verified multi-model failover cascade described above. Verified working end-to-end against production.
 
+## Resend — notification emails
+
+### Why it's suitable
+
+- **An HTTP API, because SMTP isn't an option.** Cloudflare Workers blocks outbound SMTP entirely, so nodemailer and every other SMTP client simply cannot run on the deployed app. Resend is a single `fetch` POST with a bearer token, which means no new dependency ships to the Workers runtime.
+- **The key stays server-side.** `RESEND_API_KEY` is read by `server/emailClient.js` only; the browser never sees it and never talks to Resend directly.
+- **A free tier covers this project's volume** — 3,000 emails/month at 100/day, against an app whose notifications are low-frequency decisions rather than a marketing list.
+
+### How it works
+
+Three small layers, so nothing outside the notification path has to know email exists:
+
+1. **`server/routes/notificationHelpers.js`** is the single choke point — every notification in the app is written through `notify()` (one user) or `notifyMany()` (a broadcast, e.g. every tutor and volunteer on a course whose session time moved). Once the in-app row is committed it hands `{ type, message }` to the email leg **without awaiting it**, so a slow provider can't hold up the response, and with a `.catch()` so a failure can't turn a successful request into an error.
+2. **`server/notificationEmails.js`** decides _whether_ and _what_. It holds the allowlist of types worth an inbox ping, looks the recipient's address and name up in `users`, and renders the subject and body. Message text is built from database values a user can influence (a course name, another person's name), so it's HTML-escaped before going anywhere near markup.
+3. **`server/emailClient.js`** does the actual POST to `https://api.resend.com/emails`, behind an 8-second `AbortController` deadline.
+
+:::info Which notifications get emailed
+
+The rule is **someone made a decision about you, or a deadline is approaching**: `application_status`, `volunteer_status`, `timesheet_status`, `timesheet_due`, `cover_assigned`, `organiser_request`, `session_change`, `swap_request`, `swap_accepted`, `swap_declined`.
+
+Deliberately left in-app only:
+
+- **`attendance_logged`** — fires for every session an organiser verifies, so it's the one type most likely to become spam.
+- **`cover_found`, `cover_cancelled`, `cover_unavailable`, `swap_withdrawn`, `cover_reminder`** — each repeats something the recipient already got an email about from the other side of the same swap, or is visible the next time they open the app.
+
+The allowlist is the whole mechanism: a notification type added later stays out of people's inboxes until someone adds it to `EMAIL_SUBJECTS` on purpose.
+:::
+
+:::info Setup
+
+- **Local:** `RESEND_API_KEY` in `.env` (see [Getting Started](./getting-started.mdx)).
+- **Production (Cloudflare Worker):** `deploy.yml` syncs the key from a **Gitea repo secret** (`RESEND_API_KEY`) into the production Worker on every main deploy, exactly like `GEMINI_API_KEY` — `.env` isn't read there. The same laptop-wrangler trap applies: don't `wrangler secret put` from a developer machine, or the key lands on the same-named `tutorx` Worker in a different Cloudflare account.
+- **No key?** Nothing changes. `sendEmail()` resolves `{ sent: false, reason: "not_configured" }` without making a request or logging anything, and every notification is in-app only — which is the normal state of a fresh clone, not an error.
+- **No verified domain? Emails only reach you.** This is the one real constraint. Without a sending domain verified in Resend (**Domains → Add Domain**, then add the SPF/DKIM records it gives you to your DNS), the default sender `onboarding@resend.dev` may only deliver to _the email address on your own Resend account_, and every other send is answered `403`. That's enough to develop and demo against, but real users won't receive anything until a domain is verified and `EMAIL_FROM` points at it. The `403` body is included in the warning that gets logged, so this failure announces itself rather than looking like a mystery.
+- **Free-tier limits apply.** 100 emails/day. Going over answers `429`; since the send is fire-and-forget that surfaces only as a warning in the Worker logs, and the in-app notification is unaffected either way.
+  :::
+
+:::warning Known trade-off: a dropped email under load
+
+The email is fired without being awaited, and on Cloudflare Workers a promise still pending when the response is sent can be cancelled. Under load an email may therefore be dropped even though the in-app notification was written. Closing that properly means threading a `waitUntil()` execution context through every `notify()` call site — a larger change than this feature needs, and one that would equally affect the fire-and-forget notification writes several routes already make. The in-app feed remains the source of truth; email is a best-effort copy of it.
+:::
+
 ## Everything else
 
 - All `fetch()` calls in `public/js/**` (storage.js, board.js, tutors.js, dashboard.js, etc.) hit this app's own `/api/...` routes — same-origin, not an external service.
 - No `axios` or `XMLHttpRequest` anywhere in the repo.
-- `package.json` dependencies are limited to `@supabase/supabase-js`, `cors`, `dotenv`, `express` (+ dev deps `jest`, `jsdom`, `prettier`, `supertest`, `wrangler`) — no payment, email/SMS, analytics, or AI SDK among them: the Gemini call is a plain `fetch`.
+- `package.json` dependencies are limited to `@supabase/supabase-js`, `cors`, `dotenv`, `express` (+ dev deps `jest`, `jsdom`, `prettier`, `supertest`, `wrangler`) — no payment, SMS, analytics, email, or AI SDK among them: both the Gemini and the Resend call are a plain `fetch`.

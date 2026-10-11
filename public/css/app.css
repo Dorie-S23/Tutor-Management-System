@@ -189,32 +189,10 @@ button:focus-visible {
   flex: none;
 }
 
-/* Light/dark toggle (mounted by js/theme.js, preferring .navbar-right).
-   Sized to match the 32px bell button beside it; the role accent blocks
-   further down tint it like the bell on tutor/organiser pages. */
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 13px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.09);
-  color: var(--blue);
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.theme-toggle:hover {
-  background: rgba(37, 99, 235, 0.16);
-}
-
-/* On a bare page whose only host is a tab bar, don't stretch with the links. */
+/* The light/dark toggle is styled with the navbar icon buttons below
+   (.notif-bell-btn group) so it matches the bell, tour and history icons.
+   On a bare page whose only host is a tab bar, don't stretch it with the
+   links. */
 .tab-nav > .theme-toggle {
   align-self: center;
   margin: 0 8px;
@@ -340,9 +318,18 @@ html[data-theme="dark"] .tab-nav.nav-menu-panel a[aria-current="page"] {
   white-space: nowrap;
 }
 
+/* Hovering a destructive action reads as a warning: red text on a faint
+   red tint, with the border joining in. The transition lives on the hover
+   state only — on the base it would also animate theme switches (the
+   button fading to its new colours a beat behind the rest of the page). */
 .btn-logout:hover {
-  border-color: #cbd5e1;
-  color: var(--ink-3);
+  background: rgb(254, 242, 242);
+  border-color: rgb(252, 165, 165);
+  color: #b91c1c;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 /* ---------- Notification bell ---------- */
@@ -355,7 +342,8 @@ html[data-theme="dark"] .tab-nav.nav-menu-panel a[aria-current="page"] {
 
 .notif-bell-btn,
 .tour-trigger,
-.nav-icon-btn {
+.nav-icon-btn,
+.theme-toggle {
   position: relative;
   width: 32px;
   height: 32px;
@@ -371,13 +359,15 @@ html[data-theme="dark"] .tab-nav.nav-menu-panel a[aria-current="page"] {
 
 .notif-bell-btn:hover,
 .tour-trigger:hover,
-.nav-icon-btn:hover {
+.nav-icon-btn:hover,
+.theme-toggle:hover {
   background: rgba(37, 99, 235, 0.16);
 }
 
 .notif-bell-btn svg,
 .tour-trigger svg,
-.nav-icon-btn svg {
+.nav-icon-btn svg,
+.theme-toggle svg {
   width: 17px;
   height: 17px;
 }
@@ -3024,6 +3014,11 @@ td {
   text-align: right;
 }
 
+/* A rejected row pairs Resubmit with the dispute link — keep them apart. */
+.ts-row__action > * + * {
+  margin-left: 8px;
+}
+
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3164,6 +3159,30 @@ td {
   color: var(--faint);
 }
 
+/* ---------- Sync status icon (board.html toolbar) ---------- */
+
+/* The "Synced … ago" stamp is an icon, not a text label — the exact
+   wording lives in its title/aria-label, so hover reveals it without
+   taking toolbar space. Transparent-ish by default; it flashes to full
+   opacity for a moment each time a sync lands (flashSyncIcon in
+   board.js). */
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  opacity: 0.4;
+  transition: opacity 0.4s ease;
+}
+
+.sync-status.is-flashing {
+  opacity: 1;
+}
+
+.sync-status svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* ---------- Transcript upload panel (modules.html, StudentView.html) ---------- */
 
 /* On the volunteer dashboard the panel sits directly in the main column
@@ -3261,23 +3280,16 @@ body[data-theme="tutor"] .role-badge {
 
 body[data-theme="tutor"] .notif-bell-btn,
 body[data-theme="tutor"] .tour-trigger,
-body[data-theme="tutor"] .nav-icon-btn {
-  background: rgba(15, 118, 110, 0.09);
-  color: rgb(15, 118, 110);
-}
-
+body[data-theme="tutor"] .nav-icon-btn,
 body[data-theme="tutor"] .theme-toggle {
   background: rgba(15, 118, 110, 0.09);
   color: rgb(15, 118, 110);
 }
 
-body[data-theme="tutor"] .theme-toggle:hover {
-  background: rgba(15, 118, 110, 0.16);
-}
-
 body[data-theme="tutor"] .notif-bell-btn:hover,
 body[data-theme="tutor"] .tour-trigger:hover,
-body[data-theme="tutor"] .nav-icon-btn:hover {
+body[data-theme="tutor"] .nav-icon-btn:hover,
+body[data-theme="tutor"] .theme-toggle:hover {
   background: rgba(15, 118, 110, 0.16);
 }
 
@@ -3815,29 +3827,6 @@ html[data-theme="dark"] .claim-form th {
   background: #d9d9d9;
 }
 
-/* The toggle button the theme script injects — global.css styles the
-   legacy pages' copy; the redesigned pages only load this sheet. */
-.theme-toggle {
-  margin-left: 8px;
-  padding: 7px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface, #fff);
-  color: var(--ink-3);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.theme-toggle:hover {
-  border-color: var(--blue);
-  background: var(--blue-tint-2);
-  color: var(--ink);
-}
-
 /* ---------- Volunteer dark-mode readability (scoped) ----------
    The volunteer pages carry body[data-theme="volunteer"] purely as a
    scoping hook — no palette rules attach to it (volunteers keep the
@@ -3947,12 +3936,23 @@ html[data-theme="dark"]
     border-radius: 0;
     box-shadow: none;
   }
-}
 
-@media (max-width: 600px) {
-  .theme-toggle {
-    padding: 7px 10px;
-    font-size: 12px;
+  /* Printing a single claim from the review page's Details view: everything
+     is hidden except the claim sheet the Print button belongs to. */
+  body.claim-printing * {
+    visibility: hidden;
+  }
+
+  body.claim-printing .claim-print-target,
+  body.claim-printing .claim-print-target * {
+    visibility: visible;
+  }
+
+  body.claim-printing .claim-print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
   }
 }
 
@@ -4025,23 +4025,16 @@ body[data-theme="organiser"] .role-badge {
 
 body[data-theme="organiser"] .notif-bell-btn,
 body[data-theme="organiser"] .tour-trigger,
-body[data-theme="organiser"] .nav-icon-btn {
-  background: rgba(124, 58, 237, 0.08);
-  color: rgb(109, 40, 217);
-}
-
+body[data-theme="organiser"] .nav-icon-btn,
 body[data-theme="organiser"] .theme-toggle {
   background: rgba(124, 58, 237, 0.08);
   color: rgb(109, 40, 217);
 }
 
-body[data-theme="organiser"] .theme-toggle:hover {
-  background: rgba(124, 58, 237, 0.15);
-}
-
 body[data-theme="organiser"] .notif-bell-btn:hover,
 body[data-theme="organiser"] .tour-trigger:hover,
-body[data-theme="organiser"] .nav-icon-btn:hover {
+body[data-theme="organiser"] .nav-icon-btn:hover,
+body[data-theme="organiser"] .theme-toggle:hover {
   background: rgba(124, 58, 237, 0.15);
 }
 
@@ -5511,6 +5504,19 @@ body[data-theme="organiser"] textarea:focus {
   font-size: 12px;
 }
 
+/* The claim sheet inside a submission's Details view (timesheet-review):
+   the same .claim-form sheet as the tutor's timesheets page, with the
+   Print / Save as PDF button above it. */
+.claim-doc-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.submission-detail .claim-form {
+  margin-top: 10px;
+}
+
 /* ---------- Workload panel ---------- */
 
 .workload-list {
@@ -5794,7 +5800,11 @@ body[data-theme="organiser"] textarea:focus {
 
 .timetable-grid {
   display: grid;
-  grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+  /* A floor on the day-column width keeps side-by-side lanes readable when
+     several sessions overlap one hour; below it the shell scrolls sideways
+     instead of squeezing (same fallback the comment on .timetable-shell
+     describes). */
+  grid-template-columns: 56px repeat(7, minmax(150px, 1fr));
 }
 
 .timetable-grid-header {
@@ -5862,6 +5872,62 @@ body[data-theme="organiser"] textarea:focus {
   background: rgb(254, 242, 242) !important;
   border-color: rgb(252, 165, 165);
   color: rgb(185, 28, 28) !important;
+}
+
+/* Dense hours (3+ overlapping sessions in one lane cluster): the block is
+   too narrow for the time/venue lines, so it renders the course code only
+   and centres it — the click detail dialog carries the rest. */
+.timetable-session.is-dense {
+  padding: 3px 5px;
+  justify-content: center;
+}
+
+/* Session detail dialog opened from a grid block. Selectors stay scoped to
+   .modal-form because its bare `p` rule outranks single-class selectors. */
+.modal-form .session-detail__list {
+  margin: 14px 0 2px;
+  display: grid;
+  gap: 7px;
+}
+
+.modal-form .session-detail__row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.modal-form .session-detail__row dt {
+  font-weight: 600;
+  color: var(--faint);
+}
+
+.modal-form .session-detail__row dd {
+  margin: 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.modal-form .session-detail__clash {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgb(252, 165, 165);
+  border-radius: 8px;
+  background: rgb(254, 242, 242);
+  color: rgb(185, 28, 28);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+html[data-theme="dark"] .modal-form .session-detail__clash {
+  background: rgba(185, 28, 28, 0.16);
+  border-color: rgba(252, 165, 165, 0.45);
+  color: rgb(253, 186, 186);
+}
+
+.modal-form .session-detail__edit {
+  text-decoration: none;
 }
 
 .timetable-legend {
@@ -6728,6 +6794,15 @@ html[data-theme="dark"] .onboarding-tooltip {
 
 /* Hover borders on the white-surface buttons hard-code a light slate;
    on the dark surface it reads as a bright ring. */
-html[data-theme="dark"] :is(.btn-secondary:hover, .btn-logout:hover) {
+html[data-theme="dark"] .btn-secondary:hover {
   border-color: var(--faint);
+}
+
+/* Logout keeps its red warning hover in dark mode, translated to the dark
+   danger palette — the surface group above would otherwise keep the button
+   raised and the light hover colours would glow. */
+html[data-theme="dark"] .btn-logout:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #f87171;
 }

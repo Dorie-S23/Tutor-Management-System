@@ -294,7 +294,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `notifications`
 
-- Per-user notification feed. Written by several routes (application and volunteer decisions, timesheet statuses, session changes, cover assignments and swaps) via `server/routes/notificationHelpers.js`, and read by the bell icon's polling via `GET /api/notifications`.
+- Per-user notification feed. Written by several routes (application and volunteer decisions, timesheet statuses, session changes, cover assignments and swaps) via `server/routes/notificationHelpers.js`, and read by the bell icon's polling via `GET /api/notifications`. A subset of these types also sends an email copy to the address on the user's `users` row — see [Notification emails](./external-services.mdx#resend--notification-emails). This table is the source of truth either way: no email state is stored here, so a sent email can't be queried and a dropped one leaves no trace beyond a Worker log line.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)

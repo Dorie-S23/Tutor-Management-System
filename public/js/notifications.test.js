@@ -294,6 +294,40 @@ describe("notifications.js", () => {
     win.close();
   });
 
+  test("routes a timesheet_submitted ping to the review queue for organisers only", async () => {
+    // The tutor filed the month — organisers land on the review queue with
+    // that row flashed (related_id is "<userId>_<monthStart>", matching
+    // timesheet-review.js's highlight key). The tutor has no destination
+    // for their own filing, so the same unread item just marks read.
+    const item = () =>
+      notification({
+        id: "n1",
+        type: "timesheet_submitted",
+        related_id: "t1_2026-09-01",
+      });
+
+    const organiser = loadNotifications({
+      storedUser: JSON.stringify({ id: "o1", role: "organiser" }),
+      respond: () => jsonResponse([item()]),
+    });
+    await flush();
+    [...organiser.win.document.querySelectorAll("#notifList li")].forEach(
+      (li) => li.click(),
+    );
+    await flush();
+    expect(organiser.navErrors).toHaveLength(1);
+    organiser.win.close();
+
+    const tutor = loadNotifications({ respond: () => jsonResponse([item()]) });
+    await flush();
+    [...tutor.win.document.querySelectorAll("#notifList li")].forEach((li) =>
+      li.click(),
+    );
+    await flush();
+    expect(tutor.navErrors).toHaveLength(0);
+    tutor.win.close();
+  });
+
   test("shows the empty state when there are no notifications", async () => {
     const { win } = loadNotifications({ respond: () => jsonResponse([]) });
     await flush();

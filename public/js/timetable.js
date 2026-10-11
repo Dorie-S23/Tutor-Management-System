@@ -16,6 +16,15 @@ const TOTAL_SLOTS = ((HOUR_END - HOUR_START) * 60) / SLOT_MINUTES;
 
 const gridEl = document.getElementById("timetableGrid");
 const unscheduledEl = document.getElementById("timetableUnscheduled");
+const sessionDetailModal = document.getElementById("sessionDetailModal");
+const sessionDetailHeading = document.getElementById("sessionDetailHeading");
+const sessionDetailClash = document.getElementById("sessionDetailClash");
+const sessionDetailList = document.getElementById("sessionDetailList");
+const sessionDetailEditBtn = document.getElementById("sessionDetailEditBtn");
+const sessionDetailCloseBtn = document.getElementById("sessionDetailCloseBtn");
+const sessionDetailDismissBtn = document.getElementById(
+  "sessionDetailDismissBtn",
+);
 
 function timeToMinutes(hhmm) {
   const [h, m] = hhmm.split(":").map(Number);
@@ -33,6 +42,14 @@ function mapCourseRow(row) {
   return {
     id: row.id,
     code: row.course_code,
+    name: row.course_name,
+    department: row.department,
+    tutorsNeeded: row.tutors_needed,
+    tutorsAssigned: row.no_of_tutors_assigned,
+    minMark: row.min_mark,
+    hoursPerWeek: row.hours_per_week,
+    budget: row.budget,
+    level: row.course_level,
     dayOfTut: row.Day_of_tut,
     startTime: row.tutor_start_time,
     endTime: row.tutor_end_time,
@@ -53,6 +70,7 @@ function getAllSessions(courses) {
       sessions.push({
         courseId: c.id,
         courseCode: c.code,
+        course: c,
         type: "Tutorial",
         day: c.dayOfTut,
         start: c.startTime.slice(0, 5),
@@ -64,6 +82,7 @@ function getAllSessions(courses) {
       sessions.push({
         courseId: c.id,
         courseCode: c.code,
+        course: c,
         type: "Lab",
         day: c.dayOfLab,
         start: c.labStartTime.slice(0, 5),
@@ -273,11 +292,26 @@ function renderGrid(sessions) {
         block.title = clashPartners.length
           ? `Venue clash (${clashPartners.map((p) => sharedVenues(session.venue, p.venue).join("/")).join(", ")}) with ${clashPartners.map((p) => `${p.courseCode} ${p.type}`).join(", ")}`
           : `${session.courseCode} ${session.type}${session.venue ? ` · ${session.venue}` : " · no venue set"}`;
-        block.innerHTML = `
+        // Three or more sessions side-by-side leaves each lane too narrow
+        // for the time/venue lines, which then clip mid-word — render just
+        // the course code there and let the click detail carry the rest.
+        if (laneCount >= 3) {
+          block.classList.add("is-dense");
+          block.innerHTML = `<span class="session-code">${session.courseCode}${clashPartners.length ? " ⚠" : ""}</span>`;
+        } else {
+          block.innerHTML = `
           <span class="session-code">${session.courseCode}${clashPartners.length ? " ⚠" : ""}</span>
           <span class="session-meta">${session.type} · ${session.start}–${session.end}</span>
           ${session.venue ? `<span class="session-meta">${session.venue}</span>` : ""}
         `;
+        }
+        // The block stays an <a> to board.html?course=… so middle-click /
+        // open-in-new-tab still works; a plain click opens the detail
+        // dialog instead of navigating straight away.
+        block.addEventListener("click", (e) => {
+          e.preventDefault();
+          openSessionDetail(session, clashPartners);
+        });
         overlay.appendChild(block);
       });
     });
@@ -291,6 +325,84 @@ function renderGrid(sessions) {
   } else {
     unscheduledEl.hidden = true;
   }
+}
+
+// course_level is stored as a rank (see the Add/Edit Course form) —
+// translate it back to a label for the detail dialog.
+const LEVEL_LABELS = {
+  1: "1st year",
+  2: "2nd year",
+  3: "3rd year",
+  4: "Honours",
+  5: "Masters",
+  6: "PhD",
+};
+
+function closeSessionDetail() {
+  if (typeof sessionDetailModal.close === "function") {
+    sessionDetailModal.close();
+  } else {
+    sessionDetailModal.removeAttribute("open");
+  }
+}
+
+function openSessionDetail(session, clashPartners) {
+  if (!sessionDetailModal) return;
+  const course = session.course || {};
+  sessionDetailHeading.textContent = `${session.courseCode} · ${session.type}`;
+
+  if (clashPartners.length) {
+    sessionDetailClash.hidden = false;
+    sessionDetailClash.textContent = `Venue clash — shares ${clashPartners
+      .map((p) => sharedVenues(session.venue, p.venue).join("/"))
+      .join(", ")} with ${clashPartners
+      .map((p) => `${p.courseCode} ${p.type}`)
+      .join(", ")} at an overlapping time.`;
+  } else {
+    sessionDetailClash.hidden = true;
+  }
+
+  const rows = [
+    ["Course", course.name || "—"],
+    ["Day", session.day],
+    ["Time", `${session.start}–${session.end}`],
+    ["Venue", session.venue || "No venue set"],
+    ["Department", course.department || "—"],
+    [
+      "Tutors",
+      `${course.tutorsAssigned ?? 0} of ${course.tutorsNeeded ?? "—"} assigned`,
+    ],
+    ["Min mark", course.minMark != null ? `${course.minMark}%` : "—"],
+    [
+      "Hours / week",
+      course.hoursPerWeek != null ? `${course.hoursPerWeek}h` : "—",
+    ],
+    ["Level", LEVEL_LABELS[course.level] || "—"],
+  ];
+  if (course.budget != null) {
+    rows.push(["Budget", `R${Number(course.budget).toLocaleString("en-US")}`]);
+  }
+  sessionDetailList.innerHTML = rows
+    .map(
+      ([label, value]) =>
+        `<div class="session-detail__row"><dt>${label}</dt><dd>${value}</dd></div>`,
+    )
+    .join("");
+
+  // Same deep link the block's href carries: the allocation board selects
+  // the course; editing continues from there.
+  sessionDetailEditBtn.href = `board.html?course=${session.courseId}`;
+
+  if (typeof sessionDetailModal.showModal === "function") {
+    sessionDetailModal.showModal();
+  } else {
+    sessionDetailModal.setAttribute("open", "");
+  }
+}
+
+if (sessionDetailModal) {
+  sessionDetailCloseBtn.addEventListener("click", closeSessionDetail);
+  sessionDetailDismissBtn.addEventListener("click", closeSessionDetail);
 }
 
 async function loadAndRender() {

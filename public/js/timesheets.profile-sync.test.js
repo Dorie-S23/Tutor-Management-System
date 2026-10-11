@@ -89,12 +89,14 @@ const PAGE_HTML = `<!doctype html><html><body>
   <p id="submitMonthHint"></p>
   <p id="timesheet-hint" hidden></p>
   <div id="claimWrapper" hidden>
-    <span id="cYear"></span><span id="cFullName"></span>
-    <span id="cStudentNo"></span><span id="cPayrollNo"></span>
-    <span id="cEmail"></span><span id="cYearOfStudy"></span>
-    <span id="cCellPhone"></span>
-    <div id="claimRows"></div>
-    <span id="cSignDate"></span><span id="cTotalHours"></span>
+    <div class="claim-form" id="claimForm">
+      <span id="cYear"></span><span id="cFullName"></span>
+      <span id="cStudentNo"></span><span id="cPayrollNo"></span>
+      <span id="cEmail"></span><span id="cYearOfStudy"></span>
+      <span id="cCellPhone"></span>
+      <div id="claimRows"></div>
+      <span id="cSignDate"></span><span id="cTotalHours"></span>
+    </div>
   </div>
   <div id="submissionsList"></div>
   <p id="submissionsEmpty" hidden></p>
@@ -186,6 +188,19 @@ function renderPage({
           status: 200,
           json: async () => [],
         });
+      };
+      // The CDN PDF libraries can't load in jsdom — the submit flow needs
+      // stand-ins or it would wait forever on scripts that never load.
+      window.html2canvas = () => Promise.resolve({ width: 800, height: 1200 });
+      window.jspdf = {
+        jsPDF: class {
+          addImage() {}
+          output() {
+            return Promise.resolve(
+              new window.Blob(["%PDF- fake"], { type: "application/pdf" }),
+            );
+          }
+        },
       };
       // The dispute dialog never opens in these tests, but jsdom's dialog
       // support is patchy — stub the methods timesheets.js binds regardless.

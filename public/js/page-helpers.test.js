@@ -72,14 +72,17 @@ describe("theme.js", () => {
     const button = win.document.querySelector(".theme-toggle");
     expect(button).toBeTruthy();
     expect(win.document.documentElement.dataset.theme).toBe("dark");
-    expect(button.textContent).toBe("Light mode");
+    // Dark mode shows the sun icon (click goes to light) — the sun is the
+    // only icon carrying a <circle>.
+    expect(button.querySelector("svg circle")).not.toBeNull();
     expect(button.getAttribute("aria-pressed")).toBe("true");
     expect(button.getAttribute("aria-label")).toBe("Switch to light mode");
 
     button.click();
     expect(win.document.documentElement.dataset.theme).toBe("light");
     expect(win.localStorage.getItem("tms-theme")).toBe("light");
-    expect(button.textContent).toBe("Dark mode");
+    // Light mode shows the moon — no circle in that icon.
+    expect(button.querySelector("svg circle")).toBeNull();
     expect(button.getAttribute("aria-pressed")).toBe("false");
     expect(button.getAttribute("aria-label")).toBe("Switch to dark mode");
   });
@@ -88,9 +91,10 @@ describe("theme.js", () => {
     const win = loadTheme({ stored: "light" });
     await ready();
     expect(win.document.documentElement.dataset.theme).toBe("light");
-    expect(win.document.querySelector(".theme-toggle").textContent).toBe(
-      "Dark mode",
-    );
+    // Light mode shows the moon — no circle in that icon.
+    expect(
+      win.document.querySelector(".theme-toggle").querySelector("svg circle"),
+    ).toBeNull();
   });
 
   test("falls back to a dark system preference when nothing valid is stored", async () => {

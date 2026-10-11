@@ -30,6 +30,10 @@ function getCurrentUser() {
   const dashList = document.getElementById("dashNotifList");
   const dashEmpty = document.getElementById("dashNotifEmpty");
 
+  // Hover tooltip like the tour/history icons have — set before the guard
+  // below so it applies even where the dropdown stays unwired.
+  if (bellBtn) bellBtn.title = "Notifications";
+
   // Nothing to do if this page has no bell markup, or nobody's signed in
   // (some pages are reachable before login redirects fire).
   if (!user || !bellBtn || !badge || !dropdown || !list || !empty) return;
@@ -77,6 +81,14 @@ function getCurrentUser() {
     timesheet_due: {
       param: "highlightWeek",
       tutor: "timesheets.html",
+    },
+    // A tutor filing a month's claim — organisers land on the review queue
+    // with that row flashed (timesheet-review.js applyHighlight reads
+    // "highlight" and matches "<userId>_<weekStart>").
+    timesheet_submitted: {
+      param: "highlight",
+      organiser: "timesheet-review.html",
+      super_organiser: "timesheet-review.html",
     },
     // A volunteer covering a tutor's excused session
     cover_assigned: {

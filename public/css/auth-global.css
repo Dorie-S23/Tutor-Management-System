@@ -461,6 +461,14 @@ html[data-theme="dark"] {
   color: var(--ink);
 }
 
+/* theme.js injects bare viewBox-only SVGs (no width/height) — without an
+   explicit size they collapse to nothing inside the button, leaving an
+   empty pill. Mirrors the .theme-toggle svg rules in global.css/app.css. */
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
 .auth-header .theme-toggle,
 .auth-shell .theme-toggle {
   position: fixed;

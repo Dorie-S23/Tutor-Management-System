@@ -31,11 +31,13 @@ cp .env.example .env
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 GEMINI_API_KEY=
+RESEND_API_KEY=
 PORT=3000
 ```
 
 - **`SUPABASE_URL`** / **`SUPABASE_ANON_KEY`** — from your Supabase project's **Settings → API**. The variable name matters: both `app.js` and `server/supabaseClient.js` read `SUPABASE_ANON_KEY` specifically — an `.env` with the older `SUPABASE_KEY` name will crash the server on startup with `Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables`.
 - **`GEMINI_API_KEY`** — a Google AI Studio key, used only for reading uploaded timetable PDFs (`POST /api/timetable/parse`). Optional: without it that route answers `503` and the calendar page falls back to on-device OCR.
+- **`RESEND_API_KEY`** — a [Resend](https://resend.com) API key (**API Keys → Create API Key**), used only for the email copy of a notification. Optional: without it notifications are in-app only and nothing errors. Note that Resend will only deliver to _your own_ Resend account address until you verify a sending domain — see [Notification emails](./external-services.mdx#resend--notification-emails).
 - **`PORT`** — defaults to `3000` if omitted.
 
 `.env` is gitignored and never committed — each teammate keeps their own.

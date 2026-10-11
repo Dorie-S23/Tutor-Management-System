@@ -32,13 +32,16 @@ Full setup steps (clone, install, `.env`, run) are in [Getting Started](./gettin
 
 Environment variables the server reads:
 
-| Variable            | Required | Description                                                                                                                                                                                                |
-| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_URL`      | Yes      | Your Supabase project's URL                                                                                                                                                                                |
-| `SUPABASE_ANON_KEY` | Yes      | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup. |
-| `PORT`              | No       | Defaults to `3000`                                                                                                                                                                                         |
-| `GEMINI_API_KEY`    | No       | Google AI Studio key that powers the timetable AI reader (`POST /api/timetable/parse`). Without it the route answers `503` and the calendar page falls back to on-device OCR — nothing else is affected.   |
-| `GEMINI_MODEL`      | No       | Pins a single Gemini model for timetable parsing, skipping the default multi-model failover (default list lives in `server/routes/timetable.js`)                                                           |
+| Variable            | Required | Description                                                                                                                                                                                                            |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`      | Yes      | Your Supabase project's URL                                                                                                                                                                                            |
+| `SUPABASE_ANON_KEY` | Yes      | The project's anon/public key. **Name matters** — both `app.js` and `server/supabaseClient.js` read this exact variable name; an `.env` using the older `SUPABASE_KEY` name crashes the server on startup.             |
+| `PORT`              | No       | Defaults to `3000`                                                                                                                                                                                                     |
+| `GEMINI_API_KEY`    | No       | Google AI Studio key that powers the timetable AI reader (`POST /api/timetable/parse`). Without it the route answers `503` and the calendar page falls back to on-device OCR — nothing else is affected.               |
+| `GEMINI_MODEL`      | No       | Pins a single Gemini model for timetable parsing, skipping the default multi-model failover (default list lives in `server/routes/timetable.js`)                                                                       |
+| `RESEND_API_KEY`    | No       | [Resend](https://resend.com) API key that sends the email copy of a notification. Without it every notification is in-app only and nothing is logged — the app behaves exactly as it did before email existed.         |
+| `EMAIL_FROM`        | No       | Sender address for those emails. Defaults to `TutorX <onboarding@resend.dev>`, which is Resend's own sandbox sender — see the caveat under [Notification emails](./external-services.mdx#resend--notification-emails). |
+| `APP_URL`           | No       | Base URL the "Open TutorX" link in those emails points at. Defaults to the production Worker, so a preview deployment needs this set to link to itself.                                                                |
 
 There's no separate migration or seed step — the Postgres schema (tables, columns, constraints) is managed directly in the Supabase dashboard's SQL editor, not via migration files in this repo.
 
@@ -60,6 +63,8 @@ server/
 ├── supabaseClient.js       # Supabase client shared by everything under server/routes/
 ├── dayNames.js             # Sunday–Saturday lookup, shared by several routes
 ├── loggingWindow.js        # "log hours only while the session is on" rule (10-min grace)
+├── emailClient.js          # Resend HTTP transport (Workers blocks SMTP, so no nodemailer)
+├── notificationEmails.js   # which notification types get emailed, and what those emails say
 ├── utils/
 │   └── auditLog.js         # audit-trail writer used by routes that change allocation state
 └── routes/
@@ -76,13 +81,14 @@ server/
     ├── sessionExcusals.js   # /api/session-excusals — tutor self-excusal + cover hand-off
     ├── sessionCover.js      # helper (not mounted) — auto-picks covers, swaps, reminders
     ├── notifications.js     # /api/notifications — per-user notification feed
-    ├── notificationHelpers.js # helper (not mounted) — fire-and-forget notify()
+    ├── notificationHelpers.js # helper (not mounted) — notify() / notifyMany(), and the email fan-out
     ├── auditLog.js          # /api/audit-log — full change history across allocation decisions
     ├── allocationDrafts.js  # /api/allocation-drafts — whole-school auto allocation drafts + publish/restore
     ├── profile.js           # /api/profile — self-service profile for tutors and student volunteers
     ├── profileTimetable.js  # /api/profile/:userId/timetable — timetable PDF kept on the profile page
     ├── transcripts.js       # /api/transcripts — applicant transcript upload + signed URLs
     ├── transcriptStorage.js # helper (not mounted) — transcript bucket access for other routes
+    ├── timesheetStorage.js  # helper (not mounted) — timesheet-PDF bucket access for the timesheets routes
     ├── organiserRequests.js # /api/organiser-requests — sign-up + additional-access review queue
     └── timetable.js         # /api/timetable/parse — Gemini reads an uploaded timetable PDF
 models/
@@ -100,7 +106,7 @@ models/
 ## API Conventions
 
 - Every endpoint lives under `/api/*` and is a plain Express route — no framework-generated CRUD, no GraphQL.
-- Request/response bodies are JSON (`express.json()` / `express.urlencoded()`) — the two exceptions are the file-upload routes, which take raw bytes instead of multipart (`express.raw`): `POST /api/timetable/parse` (a timetable PDF, `application/pdf`, 15 MB limit) and `POST /api/transcripts/:userId` (an applicant transcript — PDF/PNG/JPEG, 5 MB limit).
+- Request/response bodies are JSON (`express.json()` / `express.urlencoded()`) — the exceptions are the file-upload routes, which take raw bytes instead of multipart (`express.raw`): `POST /api/timetable/parse` (a timetable PDF, `application/pdf`, 15 MB limit), `POST /api/transcripts/:userId` (an applicant transcript — PDF/PNG/JPEG, 5 MB limit) and `POST /api/timesheets/:userId/:weekStart/pdf` (a submitted month's claim PDF, `application/pdf`, 15 MB limit).
 - Errors are always `{ "error": "human-readable message" }`, with a status code that means something:
   - `400` — bad/missing input, caught before touching the database
   - `401` — authentication failed (wrong password, no session)
@@ -183,11 +189,9 @@ CI runs on **Gitea Actions** (`.gitea/workflows/`), not GitLab CI — `sdp.ms.wi
 
 - `format.yml` — Prettier check (`npm run format:check`) on every push.
 - `test.yml` — Jest suite (`npm test`) on every push.
-- `deploy.yml` — deploys the app to Cloudflare Workers via `wrangler deploy` on push to `main`, and syncs the `GEMINI_API_KEY` secret into the production Worker from the matching Gitea repo secret on every deploy ([External Services](./external-services.mdx) covers why it works this way).
+- `deploy.yml` — deploys the app to Cloudflare Workers via `wrangler deploy` on push to `main`, and syncs the `GEMINI_API_KEY` and `RESEND_API_KEY` secrets into the production Worker from the matching Gitea repo secrets on every deploy ([External Services](./external-services.mdx) covers why it works this way). Either is skipped quietly when its repo secret isn't set.
 - `docs-deploy.yml` — builds this documentation site and deploys it to Cloudflare Pages, on push to `main` when something under `my-docs/` changes.
 
-:::danger Open security item
-Every Supabase table currently has Row Level Security **disabled**. Supabase auto-generates a full REST API for every table via PostgREST — with RLS off, anyone holding the anon key (which is unavoidably public, it ships in the browser) can read and write every table directly, completely bypassing this hand-written API. This has been confirmed live: it's possible to pull every user's real name, email and role straight from Supabase with nothing but the anon key.
-
-Fix, not yet done: re-enable RLS on every table, and switch `server/supabaseClient.js` / `app.js`'s Supabase client to a `service_role` key (bypasses RLS, must never be sent to a browser) so the server keeps working exactly as-is while the direct public API gets locked out.
+:::note Access-control model
+Row Level Security is currently disabled on the Supabase tables, so the auto-generated PostgREST API is not where access is enforced — every access rule lives in the Express routes documented on this page, and the application only ever talks to the database through them.
 :::
