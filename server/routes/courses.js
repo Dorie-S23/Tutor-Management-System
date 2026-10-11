@@ -1,6 +1,7 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { MAX_DIAGONALS, diagonalLabels } = require("./courseDiagonals");
+const { notifyMany } = require("./notificationHelpers");
 
 const router = express.Router();
 
@@ -416,25 +417,17 @@ async function notifySessionChange(courseId, before, after) {
       .eq("status", "approved"),
   ]);
 
-  const recipientIds = new Set([
+  const recipientIds = [
     ...(tutorRows || []).map((r) => r.tutor_id),
     ...(volunteerRows || []).map((r) => r.user_id),
-  ]);
-  if (recipientIds.size === 0) return;
+  ];
 
-  const message = `${after.course_code}'s session time changed — check the calendar for the new day/time/venue.`;
-
-  const { error } = await supabase.from("notifications").insert(
-    [...recipientIds].map((userId) => ({
-      user_id: userId,
-      type: "session_change",
-      message,
-      related_entity: "course",
-      related_id: String(courseId),
-      read: false,
-    })),
-  );
-  if (error) throw error;
+  await notifyMany(recipientIds, {
+    type: "session_change",
+    message: `${after.course_code}'s session time changed — check the calendar for the new day/time/venue.`,
+    relatedEntity: "course",
+    relatedId: courseId,
+  });
 }
 
 // GET /api/courses — list all courses
