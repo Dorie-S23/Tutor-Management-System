@@ -29,10 +29,15 @@ function consumeQueryParam() { return null; }
 function scrollAndHighlight() {}
 `;
 
+// Local date parts, not toISOString — the UTC conversion shifts the
+// result back a day during the first two hours after local midnight
+// (SAST), which made "tomorrow" fixtures read as "today" on CI runs
+// that started just after midnight.
 function isoDaysFromNow(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 // An excusal the student is covering: tomorrow, so it survives the

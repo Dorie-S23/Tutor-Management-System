@@ -89,10 +89,14 @@ function course2Row(overrides = {}) {
   });
 }
 
+// Local date parts, not toISOString — the UTC conversion shifts the
+// result back a day during the first two hours after local midnight
+// (SAST), which broke these fixtures on nightly CI runs.
 function nextThursdayIso() {
   const d = new Date();
   d.setDate(d.getDate() + ((4 - d.getDay() + 7) % 7 || 7));
-  return d.toISOString().slice(0, 10);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function loadBoard(config = {}, { user, url } = {}) {
