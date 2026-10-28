@@ -8,9 +8,12 @@ on:
 
 jobs:
   deploy-docs:
-    runs-on: dorsa-temp-runner
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - run: npm ci
         working-directory: my-docs
       - run: npm run build
