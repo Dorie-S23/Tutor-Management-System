@@ -1,13 +1,13 @@
 format:
   stage: test
-  image: node:20
+  image: node:24
   script:
     - npm ci
     - npm run format:check
 
 pages:
   stage: deploy
-  image: node:20
+  image: node:24
   script:
     - cd my-docs
     - npm ci
