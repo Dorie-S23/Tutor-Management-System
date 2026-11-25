@@ -3,12 +3,14 @@ const request = require("supertest");
 const { fakeSupabase } = require("../testUtils/fakeSupabase");
 
 let tables;
+let storageFiles;
 let mockSupabase;
 
 // The route module grabs the Supabase client via `require("../supabaseClient")`
 // at load time, so the mock has to be in place before it's required below.
 jest.mock("../supabaseClient", () => ({
   from: (...args) => mockSupabase.from(...args),
+  storage: { from: (...args) => mockSupabase.storage.from(...args) },
 }));
 
 const courseVolunteersRouter = require("./courseVolunteers");
@@ -27,9 +29,16 @@ beforeEach(() => {
     notifications: [],
     audit_log: [],
   };
-  mockSupabase = fakeSupabase(tables, {
-    course_volunteers: [["user_id", "course_id"]],
-  });
+  // The transcripts bucket exists and starts empty; tests whose request
+  // should get past the transcript check seed a file into it.
+  storageFiles = { transcripts: [] };
+  mockSupabase = fakeSupabase(
+    tables,
+    {
+      course_volunteers: [["user_id", "course_id"]],
+    },
+    storageFiles,
+  );
 });
 
 describe("POST /api/course-volunteers", () => {
@@ -42,6 +51,9 @@ describe("POST /api/course-volunteers", () => {
         min_mark: 60,
       },
     ];
+    // The tests below that reach the insert flow through the transcript
+    // check; the ones that fail validation or the mark bar never get there.
+    storageFiles.transcripts.push("student-1/transcript.pdf");
   });
 
   test("a student meeting the mark requirement is recorded as a pending volunteer", async () => {
@@ -130,6 +142,39 @@ describe("POST /api/course-volunteers", () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("You've already volunteered for COMS1000.");
     expect(tables.course_volunteers).toHaveLength(1);
+  });
+
+  test("refuses a volunteer application until a transcript is on file", async () => {
+    storageFiles.transcripts.length = 0;
+
+    const res = await request(buildApp())
+      .post("/api/course-volunteers")
+      .send({ userId: "student-1", courseId: 1, mark: 75 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe(
+      "Please upload your transcript before applying.",
+    );
+    expect(tables.course_volunteers).toHaveLength(0);
+  });
+
+  test("answers 502 when the transcript storage lookup itself fails", async () => {
+    mockSupabase.storage.from = () => ({
+      list: async () => ({
+        data: null,
+        error: { message: "FetchError: request to Supabase failed" },
+      }),
+    });
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(buildApp())
+      .post("/api/course-volunteers")
+      .send({ userId: "student-1", courseId: 1, mark: 75 });
+
+    errorSpy.mockRestore();
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/unavailable/);
+    expect(tables.course_volunteers).toHaveLength(0);
   });
 });
 
@@ -305,6 +350,18 @@ describe("PATCH /api/course-volunteers/:id", () => {
     expect(tables.course_volunteers[0].status).toBe("approved");
   });
 
+  test("a locked rejected volunteer can't be reconsidered either", async () => {
+    tables.course_volunteers[0].status = "rejected";
+    tables.course_volunteers[0].locked = true;
+
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1")
+      .send({ status: "pending" });
+
+    expect(res.status).toBe(409);
+    expect(tables.course_volunteers[0].status).toBe("rejected");
+  });
+
   // The notification fan-out is fire-and-forget (not awaited before the
   // route responds), so these flush a macrotask after the request resolves
   // to let it land before asserting on the fake table.
@@ -387,6 +444,18 @@ describe("PATCH /api/course-volunteers/:id/lock", () => {
   });
 
   test("locks an approved volunteer", async () => {
+    const res = await request(buildApp())
+      .patch("/api/course-volunteers/1/lock")
+      .send({ locked: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.locked).toBe(true);
+    expect(tables.course_volunteers[0].locked).toBe(true);
+  });
+
+  test("locks a rejected volunteer, closing off remove-and-revolunteer", async () => {
+    tables.course_volunteers[0].status = "rejected";
+
     const res = await request(buildApp())
       .patch("/api/course-volunteers/1/lock")
       .send({ locked: true });
@@ -596,6 +665,97 @@ describe("GET /api/course-volunteers?status=open", () => {
     expect(res.status).toBe(200);
     expect(res.body.map((r) => r.id).sort()).toEqual(["s1", "s2"]);
   });
+
+  test("excludeRejectedFor hides a reopened session from the volunteer who was rejected from it", async () => {
+    // s1 was claimed and rejected, then withdrawn — exactly how a claimed
+    // session actually gets back to 'open' (see DELETE /): same row, same
+    // id, user_id cleared. Nothing on the row itself says student-1 was
+    // ever rejected from it; that only lives in the audit log.
+    tables.course_volunteers = [
+      { id: "s1", course_id: 1, status: "open", user_id: null },
+      { id: "s2", course_id: 1, status: "open", user_id: null },
+    ];
+    tables.audit_log = [
+      {
+        entity_type: "course_volunteers",
+        entity_id: "s1",
+        action: "rejected",
+        before: { status: "pending", user_id: "student-1" },
+      },
+    ];
+
+    const res = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-1",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((r) => r.id)).toEqual(["s2"]);
+  });
+
+  test("excludeRejectedFor doesn't hide the session from a volunteer who wasn't the one rejected", async () => {
+    tables.course_volunteers = [
+      { id: "s1", course_id: 1, status: "open", user_id: null },
+    ];
+    tables.audit_log = [
+      {
+        entity_type: "course_volunteers",
+        entity_id: "s1",
+        action: "rejected",
+        before: { status: "pending", user_id: "student-1" },
+      },
+    ];
+
+    const res = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-2",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((r) => r.id)).toEqual(["s1"]);
+  });
+
+  test("end to end: rejecting a claim, then withdrawing it, keeps it hidden from the rejected volunteer once it's open again", async () => {
+    // course_id is a string here to match the query-string type DELETE
+    // reads it as — fakeSupabase does a strict === match and doesn't
+    // coerce the way Postgrest does for a real integer column (see the
+    // withdraw tests below for the same caveat).
+    tables.course_volunteers = [
+      {
+        id: "s1",
+        course_id: "1",
+        session_date: "2026-11-03",
+        status: "pending",
+        user_id: "student-1",
+      },
+    ];
+
+    const rejectRes = await request(buildApp())
+      .patch("/api/course-volunteers/s1")
+      .send({
+        status: "rejected",
+        rejectionReason: "Not available that week after all",
+        organiserId: "organiser-1",
+      });
+    expect(rejectRes.status).toBe(200);
+
+    const withdrawRes = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+    expect(withdrawRes.status).toBe(204);
+    expect(tables.course_volunteers[0]).toMatchObject({
+      status: "open",
+      user_id: null,
+    });
+
+    const openForRejected = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-1",
+    );
+    expect(openForRejected.body).toEqual([]);
+
+    const openForEveryoneElse = await request(buildApp()).get(
+      "/api/course-volunteers?status=open&excludeRejectedFor=student-2",
+    );
+    expect(openForEveryoneElse.body.map((r) => r.id)).toEqual(["s1"]);
+  });
 });
 
 describe("course-volunteers audit log", () => {
@@ -778,6 +938,34 @@ describe("course-volunteers audit log", () => {
 
     expect(res.status).toBe(204);
     expect(tables.courses[0].no_of_tutors_assigned).toBe(0);
+  });
+
+  test("a locked rejected application can't be withdrawn — that's the reapply block", async () => {
+    // The abuse the lock exists for: remove the rejected row, volunteer
+    // again, get rejected, repeat. With the row locked the DELETE is
+    // refused, so the unique (user, course) constraint keeps blocking a
+    // fresh application for as long as the lock stands.
+    tables.course_volunteers = [
+      {
+        id: "v1",
+        course_id: "1",
+        user_id: "student-1",
+        status: "rejected",
+        mark: 60,
+        locked: true,
+      },
+    ];
+
+    const res = await request(buildApp()).delete(
+      "/api/course-volunteers?userId=student-1&courseId=1",
+    );
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "This application is locked and can't be withdrawn.",
+    );
+    expect(tables.course_volunteers).toHaveLength(1);
+    expect(tables.course_volunteers[0].status).toBe("rejected");
   });
 
   test("releasing an approved claimed session doesn't touch the course's slot count", async () => {

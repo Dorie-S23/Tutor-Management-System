@@ -40,6 +40,9 @@ function getCancelledOccurrencesForDate() {
   return [];
 }
 function addScheduleClasses() {}
+function loadSchedule() {
+  return Promise.resolve([]);
+}
 function cancelScheduleOccurrence() {}
 function modifyScheduleOccurrence() {}
 function clearScheduleException() {}
@@ -80,6 +83,9 @@ function loadCalendar() {
   const html = calendarHtml
     .replace(
       '<script type="module" src="../js/calendar.js"></script>',
+      // Deliberately unattributed: this suite runs a line-modified copy of
+      // calendar.js (auto-invocations stripped), so tagging it with the real
+      // file's sourceURL would skew the coverage Jest merges for it.
       `<script>\n${stubs}\n${calendarJs}\n</script>`,
     )
     .replace(

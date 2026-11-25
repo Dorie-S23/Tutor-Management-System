@@ -8,13 +8,13 @@ How the browser-facing side of the app is built, and the conventions to follow w
 
 ## Overview
 
-Everything under `public/` — one plain HTML page per screen, one script per page, and a handful of shared helpers. Covers four roles (student, tutor, organiser, educator), each with their own set of pages behind a shared login.
+Everything under `public/` — one plain HTML page per screen, one script per page, and a handful of shared helpers. Covers three roles (volunteer, tutor, organiser) plus the super-organiser admin variant, each with their own set of pages behind a shared login. The volunteer role was renamed from "student" — accounts created before the rename still store `student` and are aliased back to `volunteer` at login. The educator role was dropped (see [Dev Plan → Roles](./dev-plan.mdx#roles)).
 
 ## Tech Stack
 
 - **Vanilla HTML/CSS/JS** — no framework, no build step. What's written in `public/` is exactly what ships.
 - **No bundler** — pages load plain `<script>` tags (`type="module"` where a page needs `import`/`export`, e.g. the student pages that pull from `storage.js`). Nothing is compiled or bundled.
-- **Google Fonts** — Fraunces, Space Grotesk, Inter, IBM Plex Mono — loaded via `<link>` tags per page.
+- **Google Fonts** — Fraunces (display) + Outfit are the primary pair on the redesigned pages; the few legacy pages still load Space Grotesk / Inter / IBM Plex Mono. All via `<link>` tags per page, nothing self-hosted.
 - Served as static files by the backend (`express.static("public")` locally, Cloudflare's assets layer in production) — there's no separate frontend dev server.
 
 ## Prerequisites
@@ -32,26 +32,40 @@ There's no separate frontend install or dev server to start. Follow [Getting Sta
 public/
 ├── html/                # one .html file per page
 │   ├── login.html, register.html,
-│   │   google-register.html, google-callback.html   # auth
-│   ├── StudentView.html, my-sessions.html,
-│   │   log-hours.html, calendar.html, profile.html   # student pages
-│   ├── dashboard.html, timesheets.html               # tutor pages
-│   ├── educator.html                                 # educator page
-│   └── board.html, tutors.html                       # organiser pages
+│   │   google-register.html, google-callback.html          # auth
+│   ├── StudentView.html, student-calendar.html,
+│   │   volunteer-log-hours.html, volunteer-timesheets.html,
+│   │   student-profile.html, my-sessions.html                # volunteer pages
+│   ├── dashboard.html, log-hours.html, calendar.html,
+│   │   timesheets.html, modules.html, profile.html           # tutor pages
+│   ├── board.html, tutors.html, timetable.html,
+│   │   timesheet-review.html, hours-budget-report.html,
+│   │   organiser-requests.html, allocation-history.html      # organiser pages
+│   ├── student_calender.html                                 # legacy volunteer calendar, superseded by student-calendar.html
+│   └── educator.html                                         # leftover static page from the dropped educator role
 ├── css/
-│   ├── style.css                  # student pages
-│   ├── global.css                 # organiser pages (board / tutors)
+│   ├── app.css                    # the shared design system — nearly every page
+│   ├── global.css                 # legacy: profile.html + educator.html
+│   ├── style.css                  # legacy: google-callback.html
 │   └── auth.css, auth-global.css  # login / register
 └── js/
-    ├── nav.js          # highlights the active nav tab
-    ├── storage.js      # fetch() wrapper around the hour-entries / course API
-    ├── sessions.js     # reads the logged-in user out of sessionStorage
-    ├── logout.js       # shared handler for any page with a #logout-button
-    ├── auth.js         # login/register form handling, incl. Google OAuth
-    └── <page>.js        # one script per page (studentview.js, calendar.js, board.js, ...)
+    ├── nav.js              # highlights the active nav tab
+    ├── storage.js          # fetch() wrapper around the hour-entries / course API
+    ├── sessions.js         # reads the logged-in user out of sessionStorage
+    ├── logout.js           # shared handler for any page with a #logout-button
+    ├── auth.js             # login/register form handling, incl. Google OAuth
+    ├── auth-ui.js          # show/hide password toggles on the auth pages
+    ├── notifications.js    # the bell icon — polls /api/notifications every 45s
+    ├── user-badge.js       # fills the navbar's user pill (name + role)
+    ├── onboarding.js       # shared first-run guided tour (spotlight walkthrough)
+    ├── universal-search.js # header search across courses / tutors / timesheets
+    ├── highlightTarget.js  # scroll-to-and-flash for notification deep links
+    ├── sessionTiming.js    # client mirror of the server's logging-window rule
+    ├── timetable-import.js # review-and-save UI for a parsed timetable PDF
+    └── <page>.js           # one script per page (studentview.js, calendar.js, board.js, ...)
 ```
 
-Each page is self-contained — its `.html` links only the stylesheet and script(s) it needs. Different areas of the app can look and behave differently without a shared design system forcing consistency across all of them.
+Each page is self-contained — its `.html` links only the stylesheet and script(s) it needs. Nearly every page now shares the app.css design system; only a handful of legacy pages (profile, educator, google-callback) still run on their older stylesheets. The look-and-feel reference for the whole UI is the Figma mockup linked from the [Dev Plan](./dev-plan.mdx).
 
 ## How a Page Works
 
@@ -81,7 +95,7 @@ Prettier only, default config (`.prettierrc` is empty `{}`). No linter is config
 
 ### Styling conventions
 
-There's no single shared design system — each "zone" of the app (student, organiser, auth) has its own stylesheet and its own visual language. When adding a page, match the stylesheet already used by its zone rather than introducing a new one.
+Nearly every page runs on the shared app.css design system: design tokens (`--blue`, `--line`, the `--ink` family) with per-role accent themes via `body[data-theme=...]`, dark-mode rules under `html[data-theme="dark"]`, new components written as BEM-style modifiers on existing classes, and responsive overrides kept in the media-query blocks at the bottom of the file. The remaining legacy zones (global.css, style.css, the auth stylesheets) keep their own visual language — when touching one of those, match its stylesheet rather than introducing a new one.
 
 ## Deployment
 

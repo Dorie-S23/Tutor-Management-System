@@ -1,6 +1,8 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
 const { notify } = require("./notificationHelpers");
+const { fillUncoveredForCourse, reassignCoversOf } = require("./sessionCover");
+const { hasTranscript, storageFailure } = require("./transcriptStorage");
 const { recordAudit } = require("../utils/auditLog");
 
 const router = express.Router();
@@ -25,8 +27,11 @@ router.get("/counts", async (req, res) => {
 // GET /api/course-volunteers?userId=... - a student's own applications, with course info attached
 // GET /api/course-volunteers?courseId=... - everyone who has volunteered for a course, with student info attached
 // GET /api/course-volunteers?status=open - every unclaimed overflow session across all courses, for students to browse
+// GET /api/course-volunteers?status=open&excludeRejectedFor=... - same, minus any
+//   session this volunteer has already been rejected from (see the audit log
+//   note in PATCH /:id for why that can't just be a column on the row).
 router.get("/", async (req, res) => {
-  const { userId, courseId, status } = req.query;
+  const { userId, courseId, status, excludeRejectedFor } = req.query;
   if (!userId && !courseId && !status) {
     return res
       .status(400)
@@ -50,7 +55,33 @@ router.get("/", async (req, res) => {
   const { data, error } = await query;
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+
+  if (!excludeRejectedFor || data.length === 0) {
+    return res.json(data);
+  }
+
+  const { data: rejections, error: rejectionsError } = await supabase
+    .from("audit_log")
+    .select("entity_id, before")
+    .eq("entity_type", "course_volunteers")
+    .eq("action", "rejected")
+    .in(
+      "entity_id",
+      data.map((row) => String(row.id)),
+    );
+
+  // A lookup failure here shouldn't block browsing open sessions outright —
+  // worst case a volunteer sees one they've already been rejected from,
+  // which is the pre-existing behaviour this feature improves on.
+  if (rejectionsError) return res.json(data);
+
+  const rejectedIds = new Set(
+    rejections
+      .filter((row) => row.before?.user_id === excludeRejectedFor)
+      .map((row) => row.entity_id),
+  );
+
+  res.json(data.filter((row) => !rejectedIds.has(String(row.id))));
 });
 
 // POST /api/course-volunteers
@@ -144,6 +175,18 @@ async function postCourseApplication(req, res) {
   if (Number.isInteger(course.min_mark) && markNum < course.min_mark) {
     return res.status(403).json({
       error: `You need at least ${course.min_mark} for ${course.course_code} to volunteer — you entered ${markNum}.`,
+    });
+  }
+
+  // An application needs a transcript on file for the organiser to review —
+  // the upload section below this page's course boards provides it.
+  const transcript = await hasTranscript(userId);
+  if (transcript.error) {
+    return storageFailure(res, transcript.error);
+  }
+  if (!transcript.has) {
+    return res.status(403).json({
+      error: "Please upload your transcript before applying.",
     });
   }
 
@@ -259,7 +302,7 @@ router.patch("/:id", async (req, res) => {
 
   const { data: existing, error: existingError } = await supabase
     .from("course_volunteers")
-    .select("id, status, locked, course_id, session_date")
+    .select("id, status, locked, course_id, session_date, user_id")
     .eq("id", req.params.id)
     .single();
 
@@ -269,7 +312,7 @@ router.patch("/:id", async (req, res) => {
 
   if (existing.locked) {
     return res.status(409).json({
-      error: "This approval is locked and can't be reconsidered.",
+      error: "This application is locked and can't be reconsidered.",
     });
   }
 
@@ -343,12 +386,28 @@ router.patch("/:id", async (req, res) => {
     );
   }
 
+  // Keep session covers in step: a newly approved volunteer can fill any
+  // uncovered upcoming sessions, and one taken off the course hands theirs on.
+  if (status === "approved" && !wasApproved) {
+    fillUncoveredForCourse(data.course_id).catch((err) =>
+      console.warn("Failed to fill uncovered sessions:", err),
+    );
+  } else if (wasApproved && status !== "approved") {
+    reassignCoversOf(data.user_id, data.course_id).catch((err) =>
+      console.warn("Failed to reassign session covers:", err),
+    );
+  }
+
   await recordAudit({
     entityType: "course_volunteers",
     entityId: data.id,
     action: status,
     actorId: organiserId ?? null,
-    before: { status: existing.status },
+    // user_id rides along on a rejection so GET /?status=open can still
+    // tell who was rejected from this row after it's reopened for someone
+    // else to claim (see DELETE / below) — the row itself only keeps
+    // whoever *currently* has it, not its rejection history.
+    before: { status: existing.status, user_id: existing.user_id },
     after: {
       status,
       rejection_reason: data.rejection_reason ?? null,
@@ -360,8 +419,11 @@ router.patch("/:id", async (req, res) => {
 });
 
 // PATCH /api/course-volunteers/:id/lock — permanently lock an approved
-// volunteer. This is intentionally one-way: there is no unlock. Once
-// locked, PATCH /:id refuses any status change to this record, forever.
+// volunteer or a rejected application. This is intentionally one-way:
+// there is no unlock. Once locked, PATCH /:id refuses any status change to
+// this record, and DELETE / refuses to withdraw it — a locked rejection
+// therefore can't be cleared, so the student can never volunteer for the
+// course again.
 router.patch("/:id/lock", async (req, res) => {
   const { locked } = req.body ?? {};
   if (locked !== true) {
@@ -381,15 +443,18 @@ router.patch("/:id/lock", async (req, res) => {
   }
 
   if (existing.locked) {
-    return res
-      .status(409)
-      .json({ error: "This approval is already locked and cannot be changed" });
+    return res.status(409).json({
+      error: "This application is already locked and cannot be changed",
+    });
   }
 
-  if (existing.status !== "approved") {
-    return res
-      .status(409)
-      .json({ error: "Only an approved volunteer can be locked" });
+  // A pending application still has an organiser's decision ahead of it —
+  // locking is for recording a decision as final, not for freezing the
+  // queue.
+  if (existing.status !== "approved" && existing.status !== "rejected") {
+    return res.status(409).json({
+      error: "Only an approved or rejected application can be locked",
+    });
   }
 
   const { data, error } = await supabase
@@ -420,7 +485,9 @@ router.patch("/:id/lock", async (req, res) => {
 // the course's assigned-tutor count is freed up too — same as withdrawing
 // an approved tutor application does. A claimed session never bumped that
 // count in the first place (see PATCH /:id above), so withdrawing one
-// doesn't touch it either.
+// doesn't touch it either. A locked record can't be withdrawn at all — an
+// organiser's lock (approval or rejection) is final, and for a rejection
+// that's exactly what stops the student clearing it to volunteer again.
 router.delete("/", async (req, res) => {
   const { userId, courseId } = req.query;
   if (!userId || !courseId) {
@@ -429,13 +496,19 @@ router.delete("/", async (req, res) => {
 
   const { data: existing } = await supabase
     .from("course_volunteers")
-    .select("id, status, session_date")
+    .select("id, status, session_date, locked")
     .eq("user_id", userId)
     .eq("course_id", courseId)
     .maybeSingle();
 
   if (!existing) {
     return res.status(204).end();
+  }
+
+  if (existing.locked) {
+    return res.status(409).json({
+      error: "This application is locked and can't be withdrawn.",
+    });
   }
 
   if (existing.status === "approved" && !existing.session_date) {

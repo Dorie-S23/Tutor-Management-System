@@ -18,7 +18,13 @@ const DEFAULT_RATES = {
 // ── Form validation ──────────────────────────────────────────
 const VALID_LEVELS = Object.keys(ACADEMIC_LEVEL_LABELS);
 const WITS_EMAIL_RE = /@(wits\.ac\.za|students\.wits\.ac\.za)$/i;
-const STUDENT_NUM_RE = /^\d{5,10}$/;
+const STUDENT_NUM_RE = /^\d{5,7}$/;
+
+function studentNumberError(value) {
+  if (!value) return "Student number is required.";
+  if (!STUDENT_NUM_RE.test(value)) return "Student number must be 5–7 digits.";
+  return null;
+}
 
 function validateForm({ name, student_number, email, academic_level }) {
   const errors = [];
@@ -26,9 +32,8 @@ function validateForm({ name, student_number, email, academic_level }) {
   if (!name) errors.push("Name is required.");
   else if (name.length < 2) errors.push("Name must be at least 2 characters.");
 
-  if (!student_number) errors.push("Student number is required.");
-  else if (!STUDENT_NUM_RE.test(student_number))
-    errors.push("Student number must be 5–10 digits.");
+  const numError = studentNumberError(student_number);
+  if (numError) errors.push(numError);
 
   if (!email) errors.push("Email is required to create a tutor account.");
   else if (!WITS_EMAIL_RE.test(email))
@@ -68,9 +73,84 @@ const workloadListEl = document.getElementById("workloadList");
 const workloadEmptyEl = document.getElementById("workloadEmpty");
 const globalWeeklyCapEl = document.getElementById("globalWeeklyCap");
 const applyCapBtn = document.getElementById("applyCapBtn");
+const statTutorCountEl = document.getElementById("statTutorCount");
+const statTotalHoursEl = document.getElementById("statTotalHours");
+const statNearCapEl = document.getElementById("statNearCap");
+const statAvgRateEl = document.getElementById("statAvgRate");
+
+// Latest workload rows, kept so the stat tiles can recompute whenever
+// either list reloads.
+let workloadCache = [];
+
+// The signed-in user from sessionStorage — the same row the board and the
+// attendance queue read. Organisers carry their approved courseIds from
+// sign-in; a super-organiser or grandfathered organiser has none.
+function getSessionUserId() {
+  try {
+    const raw = sessionStorage.getItem("user");
+    return raw ? JSON.parse(raw).id : null;
+  } catch {
+    return null;
+  }
+}
+
+// True when the session is scoped to a course list — the empty states then
+// explain the scope instead of suggesting there are no tutors at all.
+function isScopedOrganiser() {
+  try {
+    const user = JSON.parse(sessionStorage.getItem("user") || "null");
+    return !!user && Array.isArray(user.courseIds);
+  } catch {
+    return false;
+  }
+}
+
+// Appended to the list and workload fetches so the server scopes both to
+// the organiser's approved courses (the attendance queue's contract).
+function scopeQuery() {
+  const id = getSessionUserId();
+  return id ? `?organiserId=${encodeURIComponent(id)}` : "";
+}
+
+function initials(name) {
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+// Fills the four stat tiles from the two caches. Every lookup is guarded so
+// the page still boots if the tiles are ever missing from the markup.
+function renderTutorStats() {
+  const tutors = window.__tutorsCache || [];
+
+  if (statTutorCountEl) statTutorCountEl.textContent = String(tutors.length);
+
+  const rated = tutors.filter((t) => t.hourly_rate != null);
+  if (statAvgRateEl) {
+    statAvgRateEl.textContent = rated.length
+      ? `R${Math.round(rated.reduce((sum, t) => sum + Number(t.hourly_rate), 0) / rated.length)}/h`
+      : "—";
+  }
+
+  const totalHours = workloadCache.reduce(
+    (sum, t) => sum + (t.assignedHours || 0),
+    0,
+  );
+  if (statTotalHoursEl) statTotalHoursEl.textContent = `${totalHours}h`;
+
+  const cap = getGlobalCap();
+  const nearCap =
+    cap > 0
+      ? workloadCache.filter((t) => (t.assignedHours || 0) / cap >= 0.8).length
+      : 0;
+  if (statNearCapEl) statNearCapEl.textContent = String(nearCap);
+}
 
 async function loadTutors() {
-  const res = await fetch("/api/tutors");
+  const res = await fetch(`/api/tutors${scopeQuery()}`);
   const data = await res.json();
   if (!res.ok) {
     showToast(data.error || "Failed to load tutors");
@@ -95,18 +175,30 @@ function applyHighlight() {
 function renderTutors(tutors) {
   tableBody.innerHTML = "";
   emptyCopyEl.hidden = tutors.length > 0;
+  if (isScopedOrganiser()) {
+    emptyCopyEl.textContent =
+      "No tutors are assigned to your approved courses yet.";
+  }
 
   tutors.forEach((tutor) => {
-    const level = ACADEMIC_LEVEL_LABELS[tutor.academic_level] || "";
+    const level = ACADEMIC_LEVEL_LABELS[tutor.academic_level] || "—";
     const rate = tutor.hourly_rate;
     const rateLabel = rate != null ? `R${rate}/h` : "";
     const tr = document.createElement("tr");
     tr.dataset.tutorId = tutor.id;
     tr.innerHTML = `
-      <td>${tutor.name || ""}</td>
-      <td>${tutor.student_number || ""}</td>
-      <td>${tutor.email || ""}</td>
-      <td>${level}${rateLabel ? ` <span class="tutor-rate-badge">${rateLabel}</span>` : ""}</td>
+      <td>
+        <span class="cell-tutor">
+          <span class="avatar">${initials(tutor.name || "?")}</span>
+          <span class="name-block">
+            <span class="name">${tutor.name || ""}</span>
+            <span class="role">${level}</span>
+          </span>
+        </span>
+      </td>
+      <td class="cell-sub">${tutor.student_number || ""}</td>
+      <td class="cell-sub">${tutor.email || ""}</td>
+      <td>${rateLabel ? `<span class="tutor-rate-badge">${rateLabel}</span>` : "—"}</td>
       <td class="row-actions">
         <button type="button" class="btn-small btn-small-neutral" data-action="edit">Edit</button>
         <button type="button" class="btn-small" data-action="delete">Delete</button>
@@ -122,11 +214,12 @@ function renderTutors(tutors) {
   });
 
   applyHighlight();
+  renderTutorStats();
 }
 
 async function loadWorkload() {
   try {
-    const res = await fetch("/api/tutors/workload");
+    const res = await fetch(`/api/tutors/workload${scopeQuery()}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to load workload");
     renderWorkload(data);
@@ -136,8 +229,13 @@ async function loadWorkload() {
 }
 
 function renderWorkload(tutors) {
+  workloadCache = tutors;
   workloadListEl.innerHTML = "";
   workloadEmptyEl.hidden = tutors.length > 0;
+  if (isScopedOrganiser()) {
+    workloadEmptyEl.textContent =
+      "No tutors are assigned to your approved courses yet.";
+  }
 
   const cap = getGlobalCap();
 
@@ -170,6 +268,8 @@ function renderWorkload(tutors) {
       : "No approved courses";
     workloadListEl.appendChild(row);
   });
+
+  renderTutorStats();
 }
 
 function startEdit(tutor) {
@@ -211,9 +311,17 @@ form.addEventListener("submit", async (e) => {
   const emailVal = emailEl.value.trim();
   const level = academicLevelEl.value || null;
 
-  // Run client-side validation (skip when editing — email/auth already exists)
+  // The add form runs the full validation; an edit skips the name/email
+  // checks (those were settled at creation) but the student number can
+  // still be changed here, so it's re-checked.
   const isEditing = !!tutorIdEl.value;
-  if (!isEditing) {
+  if (isEditing) {
+    const numError = studentNumberError(studentNumVal);
+    if (numError) {
+      showToast(numError);
+      return;
+    }
+  } else {
     const errors = validateForm({
       name: nameVal,
       student_number: studentNumVal,

@@ -31,6 +31,7 @@ beforeEach(() => {
     tutor_busy_times: [],
     courses: [],
     users: [],
+    organiser_requests: [],
     academic_level_rates: [],
   };
   mockSupabase = fakeSupabase(tables);
@@ -178,6 +179,159 @@ describe("GET /api/tutors/rates", () => {
   });
 });
 
+describe("GET /api/tutors — organiser scoping", () => {
+  // org1 is approved for course 5 and still waiting on course 7; the two
+  // tutors between them cover an in-scope assignment, an out-of-scope one,
+  // and a pending one that must never count.
+  function seedScope() {
+    tables.users.push(
+      {
+        id: "org1",
+        name: "Org One",
+        email: "org1@wits.ac.za",
+        role: "organiser",
+      },
+      {
+        id: "org2",
+        name: "Org Two",
+        email: "org2@wits.ac.za",
+        role: "organiser",
+      },
+      {
+        id: "super1",
+        name: "Super",
+        email: "super@wits.ac.za",
+        role: "super_organiser",
+      },
+      { id: "t-in", name: "Ada In", email: "ada@wits.ac.za", role: "tutor" },
+      { id: "t-out", name: "Bob Out", email: "bob@wits.ac.za", role: "tutor" },
+    );
+    tables.organiser_requests = [
+      { id: 1, user_id: "org1", course_id: 5, status: "approved" },
+      { id: 2, user_id: "org1", course_id: 7, status: "pending" },
+      { id: 3, user_id: "org2", course_id: 9, status: "pending" },
+    ];
+    tables.tutors = [
+      { id: "t-in", name: "Ada In", academic_level: "honours" },
+      { id: "t-out", name: "Bob Out", academic_level: "phd" },
+    ];
+    tables.courses = [
+      {
+        id: 5,
+        course_code: "COMS1016A",
+        course_name: "Intro to CS",
+        hours_per_week: 3,
+      },
+      {
+        id: 7,
+        course_code: "COMS2000",
+        course_name: "Data Structures",
+        hours_per_week: 6,
+      },
+    ];
+    // fakeSupabase doesn't join — the embedded course rides on the row.
+    tables.tutor_subject_preference = [
+      {
+        tutor_id: "t-in",
+        course_id: 5,
+        status: "approved",
+        courses: {
+          course_code: "COMS1016A",
+          course_name: "Intro to CS",
+          hours_per_week: 3,
+        },
+      },
+      { tutor_id: "t-in", course_id: 7, status: "pending" },
+      {
+        tutor_id: "t-out",
+        course_id: 7,
+        status: "approved",
+        courses: {
+          course_code: "COMS2000",
+          course_name: "Data Structures",
+          hours_per_week: 6,
+        },
+      },
+    ];
+  }
+
+  test("without an organiserId the list stays unscoped", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t) => t.name)).toEqual(["Ada In", "Bob Out"]);
+  });
+
+  test("a course-scoped organiser only sees tutors approved for their courses", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=org1");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t) => t.id)).toEqual(["t-in"]);
+  });
+
+  test("the super-organiser sees every tutor", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=super1");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+
+  test("an organiser with no approved courses yet gets an empty list", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=org2");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  test("a caller id that isn't an organiser is rejected", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors?organiserId=t-in");
+
+    expect(res.status).toBe(403);
+  });
+
+  test("the workload keeps only in-scope tutors and their in-scope hours", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get(
+      "/api/tutors/workload?organiserId=org1",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].id).toBe("t-in");
+    // Only the approved course-5 assignment counts — the pending course-7
+    // row and Bob's out-of-scope course never reach the totals.
+    expect(res.body[0].assignedHours).toBe(3);
+    expect(res.body[0].courses).toEqual([
+      {
+        course_code: "COMS1016A",
+        course_name: "Intro to CS",
+        hours_per_week: 3,
+      },
+    ]);
+  });
+
+  test("the workload without an organiserId stays unscoped", async () => {
+    seedScope();
+
+    const res = await request(buildApp()).get("/api/tutors/workload");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t) => t.id)).toEqual(["t-in", "t-out"]);
+    expect(res.body.map((t) => t.assignedHours)).toEqual([3, 6]);
+  });
+});
+
 describe("PUT /api/tutors/:id", () => {
   test("edits an existing tutor's fields", async () => {
     tables.tutors = [
@@ -210,6 +364,41 @@ describe("PUT /api/tutors/:id", () => {
     expect(res.status).toBe(200);
     expect(res.body.hourly_rate).toBe(150);
   });
+
+  test("rejects an invalid student number without touching the row", async () => {
+    tables.tutors = [
+      { id: TUTOR_ID, name: "Alice", student_number: "1234567" },
+    ];
+
+    const res = await request(buildApp())
+      .put(`/api/tutors/${TUTOR_ID}`)
+      .send({ name: "Alice", student_number: "12345678" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Student number must be 5–7 digits/);
+    expect(tables.tutors[0].student_number).toBe("1234567");
+  });
+
+  test("a partial edit without a student number leaves the stored one alone", async () => {
+    tables.tutors = [
+      {
+        id: TUTOR_ID,
+        name: "Alice",
+        student_number: "1234567",
+        academic_level: "honours",
+      },
+    ];
+    tables.academic_level_rates = [
+      { academic_level: "honours", hourly_rate: 150 },
+    ];
+
+    const res = await request(buildApp())
+      .put(`/api/tutors/${TUTOR_ID}`)
+      .send({ name: "Alice Smith", academic_level: "honours" });
+
+    expect(res.status).toBe(200);
+    expect(tables.tutors[0].student_number).toBe("1234567");
+  });
 });
 
 describe("DELETE /api/tutors/:id", () => {
@@ -223,30 +412,40 @@ describe("DELETE /api/tutors/:id", () => {
   });
 });
 
-describe("PUT /api/tutors/:id/busy-times", () => {
-  test("requires classes to be an array", async () => {
-    const res = await request(buildApp())
-      .put(`/api/tutors/${TUTOR_ID}/busy-times`)
-      .send({ classes: "not-an-array" });
-
-    expect(res.status).toBe(400);
+describe("/api/tutors/:id/busy-times", () => {
+  const busyTime = (fields) => ({
+    tutor_id: TUTOR_ID,
+    title: "COMS2011A",
+    day_of_week: 1,
+    start_time: "09:00",
+    end_time: "10:00",
+    first_date: "2026-01-05",
+    end_date: "2026-06-01",
+    venue: "FNB1",
+    exceptions: [],
+    ...fields,
   });
 
-  test("fully replaces the tutor's previous busy times with the new list", async () => {
+  test("GET lists only this user's classes", async () => {
     tables.tutor_busy_times = [
-      {
-        id: 1,
-        tutor_id: TUTOR_ID,
-        title: "Old class",
-        day_of_week: 1,
-        start_time: "09:00",
-        end_time: "10:00",
-      },
-      { id: 2, tutor_id: "someone-else", day_of_week: 2 },
+      busyTime({ id: 2, title: "Second" }),
+      busyTime({ id: 1, title: "First" }),
+      busyTime({ id: 3, tutor_id: "someone-else" }),
     ];
 
+    const res = await request(buildApp()).get(
+      `/api/tutors/${TUTOR_ID}/busy-times`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((b) => b.title)).toEqual(["First", "Second"]);
+  });
+
+  test("POST adds every class for this user", async () => {
+    tables.tutor_busy_times = [busyTime({ id: 1 })];
+
     const res = await request(buildApp())
-      .put(`/api/tutors/${TUTOR_ID}/busy-times`)
+      .post(`/api/tutors/${TUTOR_ID}/busy-times`)
       .send({
         classes: [
           {
@@ -254,34 +453,133 @@ describe("PUT /api/tutors/:id/busy-times", () => {
             dayOfWeek: 3,
             startTime: "11:00",
             endTime: "12:00",
+            firstDate: "2026-01-07",
+            endDate: "2026-05-27",
+            venue: "",
+          },
+          {
+            title: "Another",
+            dayOfWeek: 4,
+            startTime: "08:00",
+            endTime: "09:00",
           },
         ],
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-
-    const remaining = tables.tutor_busy_times.filter(
-      (b) => b.tutor_id === TUTOR_ID,
-    );
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].title).toBe("New class");
-    // Another tutor's busy times are untouched.
-    expect(
-      tables.tutor_busy_times.some((b) => b.tutor_id === "someone-else"),
-    ).toBe(true);
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0]).toMatchObject({
+      tutor_id: TUTOR_ID,
+      title: "New class",
+      day_of_week: 3,
+      start_time: "11:00",
+      end_time: "12:00",
+      first_date: "2026-01-07",
+      end_date: "2026-05-27",
+      venue: null,
+    });
+    // exceptions is left to the column default, so adding works even
+    // before that column exists.
+    expect(res.body[0]).not.toHaveProperty("exceptions");
+    // The existing class is kept — adding never replaces.
+    expect(tables.tutor_busy_times).toHaveLength(3);
   });
 
-  test("an empty list just clears the tutor's busy times", async () => {
-    tables.tutor_busy_times = [{ id: 1, tutor_id: TUTOR_ID, day_of_week: 1 }];
+  test("POST rejects an empty list or a class without a valid day and times", async () => {
+    const app = buildApp();
+    const url = `/api/tutors/${TUTOR_ID}/busy-times`;
+
+    expect((await request(app).post(url).send({ classes: [] })).status).toBe(
+      400,
+    );
+    expect(
+      (
+        await request(app)
+          .post(url)
+          .send({
+            classes: [{ dayOfWeek: 7, startTime: "09:00", endTime: "10:00" }],
+          })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post(url)
+          .send({ classes: [{ dayOfWeek: 2 }] })
+      ).status,
+    ).toBe(400);
+  });
+
+  test("PATCH updates only the fields sent, including per-day exceptions", async () => {
+    tables.tutor_busy_times = [busyTime({ id: 1 })];
+    const exceptions = [{ date: "2026-01-12", type: "cancelled" }];
 
     const res = await request(buildApp())
-      .put(`/api/tutors/${TUTOR_ID}/busy-times`)
-      .send({ classes: [] });
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({ venue: "WSS", exceptions });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
-    expect(tables.tutor_busy_times).toHaveLength(0);
+    expect(res.body).toMatchObject({
+      title: "COMS2011A",
+      venue: "WSS",
+      exceptions,
+    });
+    expect(tables.tutor_busy_times[0].exceptions).toEqual(exceptions);
+  });
+
+  test("PATCH 404s for another user's class and 400s with nothing to change", async () => {
+    tables.tutor_busy_times = [busyTime({ id: 1, tutor_id: "someone-else" })];
+    const app = buildApp();
+
+    const notMine = await request(app)
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({ venue: "WSS" });
+    expect(notMine.status).toBe(404);
+    expect(tables.tutor_busy_times[0].venue).toBe("FNB1");
+
+    const empty = await request(app)
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({});
+    expect(empty.status).toBe(400);
+
+    const badExceptions = await request(app)
+      .patch(`/api/tutors/${TUTOR_ID}/busy-times/1`)
+      .send({ exceptions: "nope" });
+    expect(badExceptions.status).toBe(400);
+  });
+
+  test("DELETE one class leaves the rest, and never touches another user's", async () => {
+    tables.tutor_busy_times = [
+      busyTime({ id: 1 }),
+      busyTime({ id: 2 }),
+      busyTime({ id: 3, tutor_id: "someone-else" }),
+    ];
+    const app = buildApp();
+
+    expect(
+      (await request(app).delete(`/api/tutors/${TUTOR_ID}/busy-times/1`))
+        .status,
+    ).toBe(204);
+    expect(
+      (await request(app).delete(`/api/tutors/${TUTOR_ID}/busy-times/3`))
+        .status,
+    ).toBe(204);
+
+    expect(tables.tutor_busy_times.map((b) => b.id)).toEqual([2, 3]);
+  });
+
+  test("DELETE without an id clears all of this user's classes only", async () => {
+    tables.tutor_busy_times = [
+      busyTime({ id: 1 }),
+      busyTime({ id: 2, tutor_id: "someone-else" }),
+    ];
+
+    const res = await request(buildApp()).delete(
+      `/api/tutors/${TUTOR_ID}/busy-times`,
+    );
+
+    expect(res.status).toBe(204);
+    expect(tables.tutor_busy_times.map((b) => b.id)).toEqual([2]);
   });
 });
 
@@ -464,6 +762,27 @@ describe("POST /api/tutors", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/@wits\.ac\.za or @students\.wits\.ac\.za/);
+  });
+
+  test("rejects student numbers that aren't 5–7 plain digits", async () => {
+    for (const student_number of ["123", "12345678", "12345a7", "12 34567"]) {
+      const res = await request(buildApp())
+        .post("/api/tutors")
+        .send(validPayload({ student_number }));
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Student number must be 5–7 digits/);
+    }
+    expect(mockSupabase.auth.signUp).not.toHaveBeenCalled();
+  });
+
+  test("stores the student number trimmed of surrounding whitespace", async () => {
+    const res = await request(buildApp())
+      .post("/api/tutors")
+      .send(validPayload({ student_number: " 1234567 " }));
+
+    expect(res.status).toBe(201);
+    expect(tables.tutors[0].student_number).toBe("1234567");
   });
 
   test("rejects a duplicate student number without touching auth", async () => {

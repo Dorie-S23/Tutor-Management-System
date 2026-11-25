@@ -2,278 +2,581 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/images/tutorx-logo-purple.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tutor Allocation Board</title>
+    <title>Courses | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
+    <script src="../js/nav-menu.js"></script>
   </head>
-  <body>
-    <header class="board-header board-header--brand">
-      <hgroup class="header-left">
-        <p class="eyebrow">
-          <img src="../images/images.png" alt="" class="eyebrow-logo" />
-          School of Computer Science &amp; Applied Mathematics
-        </p>
-        <h1>Tutor Allocation Board</h1>
-      </hgroup>
 
-      <img
-        src="../images/Wits-890x664.png"
-        alt="University of the Witwatersrand"
-        class="header-wits-logo"
-      />
+  <body data-theme="organiser">
+    <header class="app-navbar">
+      <a class="brand-mark" href="board.html">
+        <span class="brand-mark-badge">
+          <img src="../images/txlogo.png" alt="" />
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
 
-      <button class="btn btn-danger" id="logout-button" type="button">
-        Logout
-      </button>
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="board.html" aria-current="page">Courses</a>
+        <a href="tutors.html">Tutors</a>
+        <a href="timetable.html">Timetable</a>
+        <a href="timesheet-review.html">Timesheets</a>
+        <a href="hours-budget-report.html">Budget</a>
+        <!-- Revealed by user-badge.js for the super-organiser only. -->
+        <a href="organiser-requests.html" data-super-only hidden> Requests </a>
+        <a href="organiser-profile.html">Profile</a>
+      </nav>
 
-      <div class="header-toolbar">
-        <dl class="header-right">
-          <dt class="stat-label">courses staffed</dt>
-          <dd class="stat-value" id="statFilled">0 / 0</dd>
-          <dt class="stat-label">tutors on the roll</dt>
-          <dd class="stat-value" id="statTutors">0</dd>
-          <dt class="stat-label">needs review</dt>
-          <dd class="stat-value" id="statPending">0</dd>
-        </dl>
-
-        <p class="hint" id="syncStatus" aria-live="polite"></p>
-
-        <div class="header-actions">
-          <div class="universal-search">
-            <input
-              type="search"
-              id="universalSearchInput"
-              class="universal-search-input"
-              placeholder="Search courses, tutors, timesheets…"
-              aria-label="Universal search"
-            />
-            <ul
-              class="universal-search-results"
-              id="universalSearchResults"
-              hidden
-            ></ul>
-          </div>
-
-          <button class="btn btn-primary" id="obviousFillBtn" type="button">
-            Fill obvious assignments
-          </button>
-          <button class="btn btn-primary" id="autoAllocateBtn" type="button">
-            Auto-allocate whole school
-          </button>
-          <a class="btn btn-ghost" href="tutors.html">Manage tutors</a>
-          <a class="btn btn-ghost" href="timetable.html">Timetable</a>
-          <a class="btn btn-ghost" href="timesheet-review.html">Timesheets</a>
-          <a class="btn btn-ghost" href="hours-budget-report.html"
-            >Budget report</a
+      <div class="navbar-right">
+        <button
+          type="button"
+          id="tour-link"
+          class="tour-trigger"
+          aria-label="Take a tour"
+          title="Take a tour"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-          <a class="btn btn-ghost" href="allocation-history.html">History</a>
-          <button class="btn btn-ghost" id="tour-button" type="button">
-            Take the tour
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <path d="M12 17h.01" />
+          </svg>
+        </button>
+        <a
+          href="allocation-history.html"
+          class="nav-icon-btn"
+          aria-label="History"
+          title="History"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M12 7v5l4 2" />
+          </svg>
+        </a>
+        <a
+          href="verify-attendance.html"
+          class="nav-icon-btn"
+          aria-label="Verify sessions"
+          title="Verify sessions"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <polyline points="16 11 18 13 22 9" />
+          </svg>
+        </a>
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
           </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
         </div>
+
+        <div class="user-pill">
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Organiser</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
       </div>
     </header>
 
-    <main class="board-layout">
-      <!-- LEFT: course register -->
-      <section class="course-rail" aria-labelledby="railHeading">
+    <main class="app-main">
+      <div class="org-toolbar">
+        <div class="universal-search">
+          <input
+            type="search"
+            id="universalSearchInput"
+            class="universal-search-input"
+            placeholder="Search courses, tutors, timesheets…"
+            aria-label="Universal search"
+          />
+          <ul
+            class="universal-search-results"
+            id="universalSearchResults"
+            hidden
+          ></ul>
+        </div>
+        <div class="org-toolbar__spacer"></div>
+        <span
+          class="sync-status"
+          id="syncStatus"
+          role="img"
+          aria-label="Not synced yet"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+            <path d="M16 16h5v5" />
+          </svg>
+        </span>
+        <button class="btn-secondary" id="obviousFillBtn" type="button">
+          Fill obvious assignments
+        </button>
+        <button class="btn-secondary" id="autoAllocateBtn" type="button">
+          Auto-allocate whole school
+        </button>
+        <button class="btn-secondary" id="draftsBtn" type="button">
+          Allocation drafts
+        </button>
+      </div>
+
+      <section class="org-stats" aria-label="Overview">
+        <article
+          class="org-stat"
+          title="How many of your courses have every tutor slot filled"
+        >
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M22 10 12 5 2 10l10 5 10-5Z" />
+              <path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5" />
+            </svg>
+            Courses staffed
+          </p>
+          <p class="org-stat__value" id="statFilled">0 / 0</p>
+        </article>
+
+        <article
+          class="org-stat"
+          title="Every tutor account in the system, across all courses"
+        >
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Tutors on the roll
+          </p>
+          <p class="org-stat__value" id="statTutors">0</p>
+        </article>
+
+        <article
+          class="org-stat"
+          title="Pending tutor applications and volunteer sign-ups across your courses"
+        >
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            Needs review
+          </p>
+          <p class="org-stat__value" id="statPending">0</p>
+        </article>
+
+        <article
+          class="org-stat"
+          title="This week's planned tutor spend against your courses' combined budgets"
+        >
+          <p class="org-stat__label">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+            </svg>
+            Weekly budget used
+          </p>
+          <p class="org-stat__value" id="statBudget">—</p>
+        </article>
+      </section>
+
+      <section class="org-rail" aria-labelledby="railHeading">
         <header class="rail-head">
-          <h2 id="railHeading">Courses</h2>
+          <h2 id="railHeading">
+            Course portfolio
+            <span class="rail-count" id="railCount">0</span>
+          </h2>
+          <p class="rail-hint" id="railHint" hidden></p>
+        </header>
+
+        <div class="rail-tools">
           <search>
             <input
               type="search"
               id="courseSearch"
+              class="rail-search"
               placeholder="Find a course…"
               aria-label="Search courses"
             />
           </search>
-        </header>
-        <label class="shortfall-toggle">
-          <input type="checkbox" id="shortfallToggle" />
-          Show short-staffed courses only
-        </label>
-        <button
-          class="btn btn-primary btn-full"
-          id="addCourseBtn"
-          type="button"
-        >
-          + Add course
-        </button>
-        <nav aria-label="Course list">
+          <label class="shortfall-toggle">
+            <input type="checkbox" id="shortfallToggle" />
+            Show short-staffed courses only
+          </label>
+          <button class="btn-primary rail-add" id="addCourseBtn" type="button">
+            + Add course
+          </button>
+        </div>
+
+        <nav class="rail-scroll" aria-label="Course list">
           <ul class="course-list" id="courseList">
             <!-- injected -->
           </ul>
+          <p class="empty-copy" id="courseListEmpty" hidden>
+            No courses match — try a different search.
+          </p>
         </nav>
       </section>
 
-      <!-- RIGHT: course detail + assignment -->
-      <section class="detail-pane" id="detailPane" aria-label="Course detail">
-        <section class="empty-state" id="emptyState">
-          <p class="empty-mark">—</p>
-          <p>
-            Pick a course from the register to see who's on it, and who could
-            be.
-          </p>
+      <div class="org-layout">
+        <section class="org-detail" aria-label="Course detail">
+          <section class="empty-state" id="emptyState">
+            <p>
+              Pick a course board above to see who's on it, and who could be.
+            </p>
+          </section>
+
+          <article class="course-detail" id="courseDetail" hidden>
+            <div class="detail-card">
+              <header class="detail-head">
+                <hgroup>
+                  <p class="detail-code" id="dCode"></p>
+                  <h2 id="dName"></h2>
+                  <p class="detail-sub" id="dSession"></p>
+                </hgroup>
+                <div class="detail-head-actions">
+                  <button
+                    class="btn-secondary"
+                    id="editCourseBtn"
+                    type="button"
+                  >
+                    Edit course
+                  </button>
+                  <button class="btn-danger" id="deleteCourseBtn" type="button">
+                    Delete
+                  </button>
+                </div>
+              </header>
+
+              <div class="detail-stats">
+                <div class="detail-stat">
+                  <p class="detail-stat__label">Min mark</p>
+                  <p class="detail-stat__value" id="dMinMark"></p>
+                </div>
+                <div class="detail-stat">
+                  <p class="detail-stat__label">Hours / week</p>
+                  <p class="detail-stat__value" id="dHours"></p>
+                </div>
+                <div class="detail-stat">
+                  <p class="detail-stat__label">Slots filled</p>
+                  <p class="detail-stat__value" id="dTutorsAssigned"></p>
+                </div>
+                <div class="detail-stat">
+                  <p class="detail-stat__label">Budget</p>
+                  <p class="detail-stat__value" id="dBudget"></p>
+                  <p class="detail-stat__sub" id="dRemainingBudget"></p>
+                </div>
+              </div>
+
+              <section class="assignment-card" id="assignmentCard">
+                <!-- injected: assigned tutor chips -->
+              </section>
+            </div>
+
+            <div class="activity-grid">
+              <section
+                class="activity-col activity-col--apps"
+                aria-labelledby="applicantsHeading"
+              >
+                <header class="activity-col__head">
+                  <h3 class="activity-col__title" id="applicantsHeading">
+                    Applications
+                  </h3>
+                  <span class="activity-col__count" id="applicantsCount" hidden
+                    >0</span
+                  >
+                </header>
+                <div
+                  class="preset-picker"
+                  id="presetPicker"
+                  role="group"
+                  aria-label="Ranking balance"
+                >
+                  <button
+                    type="button"
+                    class="preset-btn"
+                    data-preset="merit"
+                    aria-pressed="true"
+                  >
+                    Merit
+                  </button>
+                  <button
+                    type="button"
+                    class="preset-btn"
+                    data-preset="balanced"
+                    aria-pressed="false"
+                  >
+                    Balanced
+                  </button>
+                  <button
+                    type="button"
+                    class="preset-btn"
+                    data-preset="fairness"
+                    aria-pressed="false"
+                  >
+                    Fair hours
+                  </button>
+                </div>
+                <p class="hint">
+                  Approve fills an open spot; reject frees it up for someone
+                  else.
+                </p>
+                <p class="hint" id="presetHint">
+                  <!-- injected: what the active balance means, and who leads -->
+                </p>
+                <ul class="tutor-list" id="applicantList">
+                  <!-- injected -->
+                </ul>
+                <p class="empty-copy" id="applicantsEmpty" hidden>
+                  No tutors have applied for this course yet.
+                </p>
+              </section>
+
+              <section
+                class="activity-col activity-col--excusals"
+                aria-labelledby="excusalsHeading"
+              >
+                <header class="activity-col__head">
+                  <h3 class="activity-col__title" id="excusalsHeading">
+                    Session excusals
+                  </h3>
+                  <span class="activity-col__count" id="excusalsCount" hidden
+                    >0</span
+                  >
+                </header>
+                <p class="hint">
+                  Tutors who've excused themselves from an upcoming session; an
+                  approved volunteer is put in to cover each one automatically.
+                </p>
+                <ul class="tutor-list" id="excusalList">
+                  <!-- injected -->
+                </ul>
+                <p class="empty-copy" id="excusalsEmpty" hidden>
+                  No excusals recorded for this course.
+                </p>
+              </section>
+
+              <section
+                class="activity-col activity-col--volunteers"
+                aria-labelledby="volunteersHeading"
+              >
+                <header class="activity-col__head">
+                  <h3 class="activity-col__title" id="volunteersHeading">
+                    Student volunteers
+                  </h3>
+                  <span class="activity-col__count" id="dVolunteered">0</span>
+                  <button
+                    class="btn-small"
+                    id="postOverflowSessionBtn"
+                    type="button"
+                  >
+                    + Post overflow session
+                  </button>
+                </header>
+                <p class="hint">
+                  Approve or reject students who've volunteered to help tutor
+                  this module, or post a specific gap below for someone to
+                  claim.
+                </p>
+                <ul class="tutor-list" id="volunteerList">
+                  <!-- injected -->
+                </ul>
+                <p class="empty-copy" id="volunteersEmpty" hidden>
+                  No students have volunteered for this course yet.
+                </p>
+              </section>
+            </div>
+
+            <section
+              class="assign-panel"
+              id="diagonalsPanel"
+              aria-labelledby="diagonalsHeading"
+              hidden
+            >
+              <header class="assign-panel-head">
+                <h3 id="diagonalsHeading">Diagonals</h3>
+                <button class="btn-small" id="splitDiagonalsBtn" type="button">
+                  Split evenly
+                </button>
+              </header>
+
+              <p class="hint" id="diagonalsHint">
+                Approved tutors and student volunteers are grouped into
+                diagonals. Split evenly to spread everyone out, then move
+                individuals with the dropdown next to their name.
+              </p>
+
+              <div class="diagonal-grid" id="diagonalGrid">
+                <!-- injected -->
+              </div>
+            </section>
+
+            <!-- Shown in place of the activity panels when the selected
+                 course is outside the organiser's access — its details are
+                 visible, but managing it needs an access request first. -->
+            <section class="locked-panel" id="lockedPanel" hidden>
+              <h3>You don't have access to this course</h3>
+              <p class="hint">
+                You can see this course because every course is listed here, but
+                managing it is limited to its own organiser. Send a request to
+                the super-organiser to be added — you'll be notified once it's
+                reviewed.
+              </p>
+              <button class="btn-primary" id="requestAccessBtn" type="button">
+                Request access
+              </button>
+            </section>
+          </article>
         </section>
 
-        <article class="course-detail" id="courseDetail" hidden>
-          <header class="detail-head">
-            <hgroup>
-              <p class="course-code" id="dCode"></p>
-              <h2 id="dName"></h2>
-              <p class="detail-sub" id="dSession"></p>
-            </hgroup>
-            <div class="detail-head-right">
-              <dl class="hours-need">
-                <dt class="stat-label">hours / week needed</dt>
-                <dd class="stat-value" id="dHours"></dd>
-              </dl>
-              <dl class="hours-need">
-                <dt class="stat-label">tutors assigned</dt>
-                <dd class="stat-value" id="dTutorsAssigned"></dd>
-              </dl>
-              <dl class="hours-need">
-                <dt class="stat-label">students volunteered</dt>
-                <dd class="stat-value" id="dVolunteered"></dd>
-              </dl>
-              <dl class="hours-need">
-                <dt class="stat-label">budget</dt>
-                <dd class="stat-value" id="dBudget"></dd>
-              </dl>
-              <dl class="hours-need">
-                <dt class="stat-label">remaining (weekly, assigned tutors)</dt>
-                <dd class="stat-value" id="dRemainingBudget"></dd>
-              </dl>
-              <button
-                class="btn btn-ghost btn-small-pad"
-                id="editCourseBtn"
-                type="button"
-              >
-                Edit course
-              </button>
-              <button
-                class="btn btn-danger btn-small-pad"
-                id="deleteCourseBtn"
-                type="button"
-              >
-                Delete course
-              </button>
+        <aside class="org-side">
+          <section class="side-panel">
+            <h3 class="side-panel__title">Weekly budget</h3>
+            <p class="budget-line">
+              <strong id="weekBudgetUsed">—</strong>
+              <span id="weekBudgetTotal"></span>
+            </p>
+            <div class="budget-bar">
+              <span class="budget-bar__fill" id="weekBudgetBar"></span>
             </div>
-          </header>
-
-          <section class="assignment-card" id="assignmentCard">
-            <!-- injected: filled or empty assignment -->
-          </section>
-
-          <section class="assign-panel" aria-labelledby="applicantsHeading">
-            <header class="assign-panel-head">
-              <h3 id="applicantsHeading">Applications</h3>
-              <div
-                class="preset-picker"
-                id="presetPicker"
-                role="group"
-                aria-label="Ranking balance"
-              >
-                <button
-                  type="button"
-                  class="preset-btn"
-                  data-preset="merit"
-                  aria-pressed="true"
-                >
-                  Merit
-                </button>
-                <button
-                  type="button"
-                  class="preset-btn"
-                  data-preset="balanced"
-                  aria-pressed="false"
-                >
-                  Balanced
-                </button>
-                <button
-                  type="button"
-                  class="preset-btn"
-                  data-preset="fairness"
-                  aria-pressed="false"
-                >
-                  Fair hours
-                </button>
-              </div>
-            </header>
-
-            <p class="hint">
-              Approve fills an open tutor spot on this course; reject frees it
-              up for someone else.
-            </p>
-
-            <p class="hint" id="presetHint">
-              <!-- injected: what the active balance means, and who leads -->
-            </p>
-
-            <ul class="tutor-list" id="applicantList">
-              <!-- injected -->
-            </ul>
-            <p class="empty-copy" id="applicantsEmpty" hidden>
-              No tutors have applied for this course yet.
+            <p class="budget-note" id="weekBudgetNote">
+              Projected from each assigned tutor's rate × hours per week.
             </p>
           </section>
 
-          <section class="assign-panel" aria-labelledby="excusalsHeading">
-            <header class="assign-panel-head">
-              <h3 id="excusalsHeading">Session Excusals</h3>
-            </header>
-
-            <p class="hint">
-              Tutors who've excused themselves from an upcoming session on this
-              course — find cover if you need to.
-            </p>
-
-            <ul class="tutor-list" id="excusalList">
-              <!-- injected -->
-            </ul>
-            <p class="empty-copy" id="excusalsEmpty" hidden>
-              No excusals recorded for this course.
+          <section class="side-panel">
+            <h3 class="side-panel__title">Tutor load</h3>
+            <div class="load-list" id="tutorLoadList"></div>
+            <p class="attention-empty" id="tutorLoadEmpty" hidden>
+              No tutors on the roll yet.
             </p>
           </section>
 
-          <section class="assign-panel" aria-labelledby="volunteersHeading">
-            <header class="assign-panel-head">
-              <h3 id="volunteersHeading">Student Volunteers</h3>
-              <button
-                class="btn btn-ghost btn-small-pad"
-                id="postOverflowSessionBtn"
-                type="button"
-              >
-                + Post overflow session
-              </button>
-            </header>
-
-            <p class="hint">
-              Approve or reject students who've volunteered to help tutor this
-              module, or post a specific gap below for someone to claim.
-            </p>
-
-            <ul class="tutor-list" id="volunteerList">
-              <!-- injected -->
-            </ul>
-            <p class="empty-copy" id="volunteersEmpty" hidden>
-              No students have volunteered for this course yet.
-            </p>
+          <section class="side-panel">
+            <h3 class="side-panel__title">Needs attention</h3>
+            <ul class="attention-list" id="attentionList"></ul>
           </section>
-        </article>
-      </section>
+        </aside>
+      </div>
     </main>
 
     <output class="toast" id="toast" role="status" aria-live="polite"></output>
 
     <dialog
-      class="modal"
+      class="modal modal-wide"
       id="addCourseModal"
       aria-labelledby="addCourseHeading"
     >
@@ -363,7 +666,7 @@
         </label>
 
         <label class="field">
-          <span class="field-label">Tutors Needed</span>
+          <span class="field-label">Tutors needed</span>
           <input
             type="number"
             id="TutorsNeededInput"
@@ -476,21 +779,40 @@
           </div>
         </div>
 
+        <div class="field-group">
+          <label class="field-checkbox">
+            <input type="checkbox" id="hasDiagonalsInput" />
+            <span>Split into diagonals</span>
+          </label>
+
+          <div id="diagonalFields" class="field-subgroup" hidden>
+            <label class="field">
+              <span class="field-label">Number of diagonals</span>
+              <input
+                type="number"
+                id="diagonalCountInput"
+                name="diagonal_count"
+                min="2"
+                max="26"
+                step="1"
+                placeholder="e.g. 3"
+              />
+            </label>
+            <p class="hint" id="diagonalCountHint"></p>
+          </div>
+        </div>
+
         <p class="field-warning" id="courseClashWarning" hidden></p>
         <p class="field-error" id="addCourseError" hidden></p>
 
         <menu class="modal-actions">
           <li>
-            <button class="btn btn-ghost" id="addCourseCancelBtn" type="button">
+            <button class="btn-secondary" id="addCourseCancelBtn" type="button">
               Cancel
             </button>
           </li>
           <li>
-            <button
-              class="btn btn-primary"
-              id="addCourseSubmitBtn"
-              type="submit"
-            >
+            <button class="btn-primary" id="addCourseSubmitBtn" type="submit">
               Add course
             </button>
           </li>
@@ -533,16 +855,12 @@
 
         <menu class="modal-actions">
           <li>
-            <button class="btn btn-ghost" id="overrideCancelBtn" type="button">
+            <button class="btn-secondary" id="overrideCancelBtn" type="button">
               Cancel
             </button>
           </li>
           <li>
-            <button
-              class="btn btn-primary"
-              id="overrideSubmitBtn"
-              type="submit"
-            >
+            <button class="btn-primary" id="overrideSubmitBtn" type="submit">
               Approve with override
             </button>
           </li>
@@ -610,7 +928,7 @@
         <menu class="modal-actions">
           <li>
             <button
-              class="btn btn-ghost"
+              class="btn-secondary"
               id="postOverflowSessionCancelBtn"
               type="button"
             >
@@ -619,7 +937,7 @@
           </li>
           <li>
             <button
-              class="btn btn-primary"
+              class="btn-primary"
               id="postOverflowSessionSubmitBtn"
               type="submit"
             >
@@ -662,7 +980,7 @@
         <menu class="modal-actions">
           <li>
             <button
-              class="btn btn-ghost"
+              class="btn-secondary"
               id="obviousFillCancelBtn"
               type="button"
             >
@@ -671,7 +989,7 @@
           </li>
           <li>
             <button
-              class="btn btn-primary"
+              class="btn-primary"
               id="obviousFillConfirmBtn"
               type="button"
             >
@@ -713,7 +1031,7 @@
         <menu class="modal-actions">
           <li>
             <button
-              class="btn btn-ghost"
+              class="btn-secondary"
               id="autoAllocateCancelBtn"
               type="button"
             >
@@ -722,11 +1040,57 @@
           </li>
           <li>
             <button
-              class="btn btn-primary"
+              class="btn-primary"
               id="autoAllocatePublishBtn"
               type="button"
             >
               Publish selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <dialog
+      class="modal modal-xwide"
+      id="allocationDraftsModal"
+      aria-labelledby="allocationDraftsHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="allocationDraftsHeading">Allocation drafts</h2>
+          <button
+            class="modal-close"
+            id="draftsCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
+
+        <p class="hint" id="draftsHint"></p>
+
+        <div class="drafts-layout">
+          <ul class="drafts-rail" id="draftsList" aria-label="Open drafts">
+            <!-- injected -->
+          </ul>
+
+          <div class="drafts-compare">
+            <div class="drafts-columns" id="draftsColumns" hidden>
+              <!-- injected -->
+            </div>
+            <p class="empty-copy" id="draftsEmpty">
+              Tick drafts on the left to open them side by side — picks that
+              differ between drafts are flagged.
+            </p>
+          </div>
+        </div>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn-secondary" id="draftsCancelBtn" type="button">
+              Close
             </button>
           </li>
         </menu>
@@ -758,7 +1122,7 @@
         <menu class="modal-actions">
           <li>
             <button
-              class="btn btn-ghost"
+              class="btn-secondary"
               id="deleteCourseCancelBtn"
               type="button"
             >
@@ -767,7 +1131,7 @@
           </li>
           <li>
             <button
-              class="btn btn-danger"
+              class="btn-danger"
               id="deleteCourseConfirmBtn"
               type="button"
             >
@@ -812,12 +1176,12 @@
 
         <menu class="modal-actions">
           <li>
-            <button class="btn btn-ghost" id="reasonCancelBtn" type="button">
+            <button class="btn-secondary" id="reasonCancelBtn" type="button">
               Cancel
             </button>
           </li>
           <li>
-            <button class="btn btn-primary" id="reasonSubmitBtn" type="submit">
+            <button class="btn-primary" id="reasonSubmitBtn" type="submit">
               Confirm
             </button>
           </li>
@@ -825,10 +1189,22 @@
       </form>
     </dialog>
 
+    <script src="../js/user-badge.js"></script>
+    <script src="../js/date-mask.js"></script>
     <script src="../js/onboarding.js"></script>
     <script src="../js/universal-search.js"></script>
     <script src="../js/allocation-objectives.js"></script>
     <script src="../js/board.js"></script>
+    <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
+    <script type="module">
+      // Organiser page (shared with the super-organiser admin) — bounce
+      // signed-out visitors to login and any other signed-in role back to
+      // their own home page. A module script so it stays out of the way of
+      // the keyboard-nav test harness, which loads board.js inline as a
+      // classic script.
+      import { requireRole } from "../js/storage.js";
+      requireRole(["organiser", "super_organiser"]);
+    </script>
   </body>
 </html>

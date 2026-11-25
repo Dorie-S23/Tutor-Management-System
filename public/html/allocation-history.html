@@ -2,74 +2,257 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/images/tutorx-logo-purple.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Allocation History | Tutor Management System</title>
+    <title>History | TutorX</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../css/global.css" />
+    <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
+    <script src="../js/nav-menu.js"></script>
   </head>
-  <body>
-    <header class="board-header board-header--brand">
-      <hgroup class="header-left">
-        <p class="eyebrow">
-          <img src="../images/images.png" alt="" class="eyebrow-logo" />
-          School of Computer Science &amp; Applied Mathematics
-        </p>
-        <h1>Allocation History</h1>
-      </hgroup>
 
-      <img
-        src="../images/Wits-890x664.png"
-        alt="University of the Witwatersrand"
-        class="header-wits-logo"
-      />
+  <body data-theme="organiser">
+    <header class="app-navbar">
+      <a class="brand-mark" href="board.html">
+        <span class="brand-mark-badge">
+          <img src="../images/txlogo.png" alt="" />
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
 
-      <div class="header-actions">
-        <a class="btn btn-ghost" href="board.html">&larr; Allocation board</a>
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="board.html">Courses</a>
+        <a href="tutors.html">Tutors</a>
+        <a href="timetable.html">Timetable</a>
+        <a href="timesheet-review.html">Timesheets</a>
+        <a href="hours-budget-report.html">Budget</a>
+        <!-- Revealed by user-badge.js for the super-organiser only. -->
+        <a href="organiser-requests.html" data-super-only hidden> Requests </a>
+        <a href="organiser-profile.html">Profile</a>
+      </nav>
+
+      <div class="navbar-right">
+        <button
+          type="button"
+          id="tour-link"
+          class="tour-trigger"
+          aria-label="Take a tour"
+          title="Take a tour"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <path d="M12 17h.01" />
+          </svg>
+        </button>
+        <a
+          href="allocation-history.html"
+          class="nav-icon-btn"
+          aria-label="History"
+          title="History"
+          aria-current="page"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M12 7v5l4 2" />
+          </svg>
+        </a>
+        <a
+          href="verify-attendance.html"
+          class="nav-icon-btn"
+          aria-label="Verify sessions"
+          title="Verify sessions"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <polyline points="16 11 18 13 22 9" />
+          </svg>
+        </a>
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
+        </div>
+
+        <div class="user-pill">
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Organiser</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
       </div>
-      <button class="btn btn-danger" id="logout-button" type="button">
-        Logout
-      </button>
     </header>
 
-    <main class="dashboard-layout">
-      <section class="card" aria-labelledby="draftsHeading">
-        <div class="assign-panel-head">
-          <h2 id="draftsHeading">Past Allocation Runs</h2>
+    <main class="app-main">
+      <header class="page-head">
+        <div>
+          <h1>Allocation History</h1>
+          <p class="page-sub">
+            Every whole-school allocation run, plus the full log of approve,
+            reject, claim and withdraw actions across tutor applications and
+            volunteer sessions.
+          </p>
         </div>
+      </header>
+
+      <section class="panel" aria-labelledby="draftsHeading">
+        <header class="review-toolbar">
+          <h2 id="draftsHeading">Past Allocation Runs</h2>
+        </header>
         <p class="hint">
           Every whole-school auto allocation that's been run, published or not.
-          Restoring a published run reverts every application it approved back
-          to what it was before, and frees up the course slots again.
+          Compare an unpublished run against the current allocation to see what
+          would still land today before publishing it. Restoring a published run
+          reverts every application it approved back to what it was before, and
+          frees up the course slots again.
         </p>
 
-        <div class="course-list" id="draftsList">
+        <div class="review-list" id="draftsList">
           <!-- rendered by allocation-history.js -->
         </div>
       </section>
 
-      <section class="card" aria-labelledby="changeHistoryHeading">
-        <div class="assign-panel-head">
+      <section class="panel" aria-labelledby="changeHistoryHeading">
+        <header class="review-toolbar">
           <h2 id="changeHistoryHeading">Full Change History</h2>
-        </div>
+        </header>
         <p class="hint">
           Every recorded approve, reject, claim and withdraw across tutor
           applications and volunteer sessions, newest first.
         </p>
 
-        <div class="course-list" id="historyList">
+        <div class="review-list" id="historyList">
           <!-- rendered by allocation-history.js -->
         </div>
       </section>
     </main>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog
+      class="modal modal-wide"
+      id="compareModal"
+      aria-labelledby="compareHeading"
+    >
+      <div class="modal-form">
+        <header class="modal-head">
+          <h2 id="compareHeading">Compare run with now</h2>
+          <button
+            class="modal-close"
+            id="compareCloseBtn"
+            type="button"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </header>
 
+        <p class="hint" id="compareHint"></p>
+
+        <ul class="tutor-list" id="compareList">
+          <!-- injected -->
+        </ul>
+        <p class="empty-copy" id="compareEmpty" hidden>
+          This run proposed nothing.
+        </p>
+
+        <menu class="modal-actions">
+          <li>
+            <button class="btn-secondary" id="compareCancelBtn" type="button">
+              Cancel
+            </button>
+          </li>
+          <li>
+            <button class="btn-primary" id="comparePublishBtn" type="button">
+              Publish selected
+            </button>
+          </li>
+        </menu>
+      </div>
+    </dialog>
+
+    <output class="toast" id="toast" role="status" aria-live="polite"></output>
+
+    <script src="../js/user-badge.js"></script>
+    <script src="../js/onboarding.js"></script>
     <script src="../js/allocation-history.js"></script>
+    <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>
+    <script type="module">
+      // Organiser page (shared with the super-organiser admin) — bounce
+      // signed-out visitors to login and any other signed-in role back to
+      // their own home page. A module script so it stays out of the way of
+      // the jsdom harness, which loads allocation-history.js inline as a
+      // classic script.
+      import { requireRole } from "../js/storage.js";
+      requireRole(["organiser", "super_organiser"]);
+    </script>
   </body>
 </html>

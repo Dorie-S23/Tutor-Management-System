@@ -954,6 +954,91 @@ input[type="search"]:focus-visible {
   color: var(--ink-faint);
 }
 
+/* ---------- diagonals ---------- */
+
+.diagonal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.diagonal-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.diagonal-card--unassigned {
+  border-style: dashed;
+  background: var(--amber-bg);
+  border-color: var(--amber-line);
+}
+
+.diagonal-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.diagonal-card-head h4 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 15px;
+}
+
+.diagonal-card-counts {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.diagonal-card-sub {
+  margin: 10px 0 4px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.diagonal-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.diagonal-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.diagonal-member-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagonal-member-select {
+  flex-shrink: 0;
+  width: auto;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
 /* ---------- confirm bar ---------- */
 
 .confirm-bar {
@@ -1098,6 +1183,153 @@ input[type="search"]:focus-visible {
 
 .modal-wide {
   width: min(640px, 94vw);
+}
+
+.modal-xwide {
+  width: min(1180px, 96vw);
+}
+
+/* Allocation drafts workspace: a rail of open drafts on the left, one
+   column per ticked draft on the right so candidates can be compared side
+   by side. Picks not shared by every column are flagged (draft-diff). */
+.drafts-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.drafts-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 0 0;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(560px, 62vh);
+  overflow-y: auto;
+}
+
+.draft-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draft-card.selected {
+  border-color: var(--navy);
+  background: var(--navy-bg);
+}
+
+.draft-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.draft-card-head .name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.draft-meta {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.draft-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-small.neutral {
+  color: var(--ink-soft);
+  border-color: var(--line);
+}
+.btn-small.neutral:hover {
+  background: var(--line-soft);
+}
+
+.draft-rename-input {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border: 1px solid var(--navy);
+  border-radius: 4px;
+}
+
+.drafts-columns {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+/* An author display rule beats the UA's [hidden] rule, so without this
+   the columns container would stay visible while "hidden". */
+.drafts-columns[hidden] {
+  display: none;
+}
+
+.draft-column {
+  flex: 1 1 0;
+  min-width: 230px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draft-column-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.draft-column-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.draft-pick-list {
+  max-height: min(380px, 46vh);
+}
+
+.tutor-row.draft-diff {
+  border-style: dashed;
+  border-color: var(--navy);
+}
+
+.tutor-row.draft-staged {
+  opacity: 0.55;
+}
+
+.draft-diff-badge {
+  margin-left: auto;
+}
+
+.draft-column-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
 }
 
 .obvious-fill-course-head {
@@ -1393,6 +1625,65 @@ input[type="search"]:focus-visible {
 
 .notif-item:hover {
   background: var(--line-soft);
+}
+
+/* ---------- Hamburger nav menu (mounted by js/nav-menu.js) ----------
+   Replaces the row of nav links in .header-actions with one menu button
+   that reveals them as a dropdown — the notif bell stays outside it,
+   always visible. Same page-agnostic approach as .notif-bell-btn above,
+   whose circular icon-button look this reuses directly. */
+.nav-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nav-menu-toggle.is-open {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.nav-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 220px;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  z-index: 40;
+}
+
+/* The moved links keep their .btn.btn-ghost classes (same elements, just
+   relocated) — flatten that pill-button look back into plain menu rows. */
+.nav-menu-panel a {
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-weight: 500;
+  white-space: normal;
+}
+
+.nav-menu-panel a:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.nav-menu-panel a[aria-current="page"] {
+  background: var(--navy-bg);
+  color: var(--navy);
+  font-weight: 600;
 }
 
 .notif-item--unread {
@@ -1702,6 +1993,127 @@ input[type="search"]:focus-visible {
   margin-bottom: 16px;
 }
 
+/* ---------- Profile page: banner card with overlapping avatar ---------- */
+
+.page-head {
+  margin-bottom: 18px;
+}
+
+.page-head h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+}
+
+.page-sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.profile-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.profile-banner {
+  height: 104px;
+  background:
+    radial-gradient(
+      120% 170% at 88% -30%,
+      rgba(255, 255, 255, 0.25),
+      transparent 55%
+    ),
+    linear-gradient(115deg, #3d5ee0, #3457d5 55%, #2b46b8);
+}
+
+.profile-card-body {
+  padding: 0 28px 28px;
+}
+
+.profile-identity {
+  position: relative;
+  margin: 0 0 24px;
+  /* Clears the banner — the avatar overlaps it independently via its own
+     absolute offset below, so the name's position never depends on how
+     tall the text block happens to be. */
+  padding-top: 38px;
+}
+
+.profile-avatar {
+  position: absolute;
+  top: -34px;
+  left: 0;
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 4px solid var(--panel);
+  background: #eef1fd;
+  color: var(--ta-primary);
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+}
+
+.profile-identity-text {
+  margin-left: 90px;
+}
+
+.profile-identity-text h2 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.profile-role {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #eef1fd;
+  color: var(--ta-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+/* Mockup-style field captions: small, uppercase, letter-spaced — scoped to
+   the profile card so the rest of the app's forms keep their labels. */
+.profile-card .form-field label {
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .profile-card-body {
+    padding: 0 18px 20px;
+  }
+
+  .profile-identity {
+    margin-bottom: 18px;
+  }
+
+  .profile-identity-text {
+    margin-left: 86px;
+  }
+
+  .profile-card .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .form-field {
   display: flex;
   flex-direction: column;
@@ -1734,6 +2146,13 @@ input[type="search"]:focus-visible {
   outline-offset: 1px;
 }
 
+/* Display-only fields (e.g. the profile page's login email) — shaded like
+   the editable inputs beside them but visibly not editable. */
+.form-field input[readonly] {
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
 .form-actions {
   display: flex;
   gap: 10px;
@@ -1763,10 +2182,11 @@ input[type="search"]:focus-visible {
   color: var(--ink);
 }
 
-.row-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+/* Same lesson as app.css's .row-actions: never display:flex the td
+   itself — it breaks the table-cell layout. Space the buttons with a
+   sibling margin instead. */
+.row-actions .btn-small + .btn-small {
+  margin-left: 8px;
 }
 
 .btn-small-neutral {
@@ -1917,6 +2337,495 @@ input[type="search"]:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+  }
+}
+
+/* ============================================================
+   STUDENT DASHBOARD (StudentView / My Sessions / Profile)
+   Scoped under body.student-app so it can't affect other pages.
+   ============================================================ */
+
+.student-app * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.student-app {
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  color: #222;
+  line-height: 1.5;
+}
+
+.student-app > header {
+  background: #ffffff;
+  border-bottom: 1px solid #ddd;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-app > header h1 {
+  color: #2563eb;
+  font-size: 24px;
+}
+
+.student-app nav {
+  display: flex;
+  gap: 10px;
+}
+
+.student-app nav a {
+  color: #555;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.student-app nav a:hover,
+.student-app nav a[aria-current="page"] {
+  background: #eaf1ff;
+  color: #2563eb;
+}
+
+.student-app main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 35px 25px;
+}
+
+.student-app main > section {
+  margin-bottom: 30px;
+}
+
+.student-app main > section:first-child {
+  margin-bottom: 30px;
+}
+
+.student-app main > section:first-child h2 {
+  font-size: 30px;
+}
+
+.student-app main > section:first-child p {
+  color: #777;
+}
+
+.student-app section > header {
+  margin-bottom: 20px;
+}
+
+.student-app section > header h2 {
+  font-size: 22px;
+}
+
+.student-app section > header p {
+  color: #777;
+}
+
+.student-app main > section:nth-child(2) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.student-app main > section:nth-child(2) > h2 {
+  grid-column: 1 / -1;
+}
+
+.student-app main > section:nth-child(2) article {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.student-app main > section:nth-child(2) article h3 {
+  color: #2563eb;
+  font-size: 28px;
+}
+
+.student-app main > section:nth-child(2) article p {
+  color: #777;
+}
+
+.student-app main > section:nth-child(3) {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.student-app main > section:nth-child(3) > section {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.student-app main > section:nth-child(3) article {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.student-app main > section:nth-child(3) article h3 {
+  margin-bottom: 8px;
+}
+
+.student-app main > section:nth-child(3) article p {
+  color: #777;
+  font-size: 14px;
+  margin-bottom: 15px;
+}
+
+.student-app .session-meta {
+  color: #555;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px !important;
+}
+
+.student-app .session-note {
+  flex-grow: 1;
+}
+
+.student-app .empty-state {
+  grid-column: 1 / -1;
+  color: #777;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.student-app button {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 7px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: auto;
+}
+
+.student-app button:hover {
+  background: #1d4ed8;
+}
+
+.student-app main > section:last-child {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.student-app main > section:last-child > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-app main > section:last-child article {
+  border-top: 1px solid #eee;
+  padding: 18px 0;
+}
+
+.student-app main > section:last-child article h3 {
+  margin-bottom: 5px;
+}
+
+.student-app main > section:last-child article p {
+  color: #777;
+}
+
+.student-app strong {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #e8f7ed;
+  color: #22863a;
+  font-size: 13px;
+}
+
+.student-app > footer {
+  border-top: 1px solid #ddd;
+  background: white;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.student-app > footer p {
+  color: #777;
+}
+
+.student-app .toast {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translate(-50%, 20px);
+  background: #1f2430;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+}
+
+.student-app .toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.student-app .card {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.student-app .card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-app .session-list article {
+  border-top: 1px solid #eee;
+  padding: 18px 0;
+}
+
+.student-app .session-list article:first-child {
+  border-top: none;
+}
+
+.student-app .session-list article h3 {
+  margin-bottom: 5px;
+}
+
+.student-app .session-list article p {
+  color: #777;
+}
+
+/* A session this volunteer is covering for an excused tutor. */
+.student-app .session-list article.session-cover {
+  border-left: 4px solid #3457d5;
+  background: #eef2fd;
+  padding-left: 14px;
+  padding-right: 14px;
+  border-radius: 6px;
+}
+
+.student-app .session-list article .session-cover-badge {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3457d5;
+}
+
+/* Another volunteer asking this student to take their session over. */
+.student-app .session-list article.session-swap-request {
+  border-left-color: #a66a17;
+  background: #fbf4e6;
+}
+
+.student-app .session-swap-request .session-cover-badge {
+  color: #a66a17;
+}
+
+/* "Can't make it" → pick who takes over; pending request; accept/decline. */
+.student-app .swap-controls {
+  margin-top: 10px;
+}
+
+.student-app .swap-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.student-app .swap-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+.student-app .swap-select {
+  padding: 7px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  max-width: 360px;
+}
+
+.student-app .swap-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.student-app .swap-panel .swap-buttons {
+  margin-top: 0;
+}
+
+.student-app .swap-buttons button,
+.student-app .swap-controls > button {
+  width: auto;
+  margin-top: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.student-app .swap-buttons .btn-secondary {
+  background: white;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.student-app .swap-buttons .btn-secondary:hover {
+  background: #f3f3f3;
+}
+
+.student-app .session-list article .swap-pending {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a66a17;
+}
+
+.student-app .btn-cancel {
+  width: auto;
+  display: block;
+  margin-top: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+  background: white;
+  color: #d33;
+  border: 1px solid #d33;
+}
+
+.student-app .btn-cancel:hover {
+  background: #d33;
+  color: white;
+}
+
+.student-app .status-pill {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.student-app .status-pill.completed {
+  background: #e8f7ed;
+  color: #22863a;
+}
+
+.student-app .status-pill.missed {
+  background: #fdecea;
+  color: #d33;
+}
+
+.student-app .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.student-app .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.student-app .form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.student-app .form-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.student-app .form-field input,
+.student-app .form-field textarea {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.student-app .checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.student-app .checkbox-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #222;
+}
+
+.student-app .form-actions button {
+  width: auto;
+  padding: 10px 20px;
+}
+
+@media (max-width: 800px) {
+  .student-app > header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .student-app main > section:nth-child(2) {
+    grid-template-columns: 1fr;
+  }
+
+  .student-app main > section:nth-child(3) > section {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .student-app .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 500px) {
+  .student-app > header nav {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .student-app main > section:nth-child(3) > section {
+    grid-template-columns: 1fr;
+  }
+
+  .student-app > footer {
+    flex-direction: column;
+    gap: 15px;
   }
 }
 
@@ -2387,6 +3296,32 @@ body.tutor-app {
   font-size: 0.9rem;
 }
 
+/* An upcoming session the tutor has excused themselves from. */
+.tutor-app .application-row--excused {
+  border-style: dashed !important;
+  opacity: 0.85;
+}
+
+.tutor-app .excused-note {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a03d2c;
+}
+
+/* Who's covering an excusal — or that nobody is yet. */
+.tutor-app .excusal-cover {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tutor-app .excusal-cover--found {
+  color: #2f6b4f;
+}
+
+.tutor-app .excusal-cover--pending {
+  color: #a66a17;
+}
+
 .tutor-app .placeholder {
   text-align: center;
   color: var(--ta-text-muted);
@@ -2520,6 +3455,51 @@ body.tutor-app {
   white-space: nowrap;
 }
 
+/* A session the tutor has excused themselves from — kept on the calendar
+   so they can still see it, but struck through, faded and tagged. */
+.tutor-app .calendar-course-pill--excused {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.tutor-app .calendar-excused-label {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+/* A tutor's session a student volunteer is covering. */
+.tutor-app .calendar-course-pill--cover {
+  border-width: 2px;
+}
+
+.tutor-app .calendar-cover-tag {
+  display: inline-block;
+  margin-right: 0.3rem;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: #3457d5;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+.tutor-app .calendar-excused-tag {
+  display: inline-block;
+  margin-right: 0.3rem;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: #a03d2c;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
 .tutor-app #timetable-debug-text {
   width: 100%;
   padding: 0.6rem;
@@ -2649,4 +3629,287 @@ body.tutor-app {
 
 .submission-detail table {
   width: 100%;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #121815;
+  --panel: #1c2621;
+  --ink: #f4f9f5;
+  --ink-soft: #dbe5de;
+  --ink-faint: #bccabf;
+  --line: #3b4a42;
+  --line-soft: #2b3630;
+  --navy: #9ac7d3;
+  --navy-bg: #20363a;
+  --green: #98d5ad;
+  --green-bg: #1f3a2a;
+  --green-line: #477b58;
+  --amber: #f0c579;
+  --amber-bg: #44351f;
+  --amber-line: #8b6b35;
+  --red: #f1a79a;
+  --red-bg: #432822;
+  --red-line: #8a4c40;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 20px rgba(0, 0, 0, 0.14);
+  --ta-bg: #141a20;
+  --ta-surface: #1d2630;
+  --ta-border: #3c4957;
+  --ta-text: #eff3f8;
+  --ta-text-muted: #cbd5e0;
+  --ta-primary: #9cb3ff;
+  --ta-primary-hover: #bac9ff;
+  --ta-danger: #f29a9a;
+  --ta-danger-hover: #ffc0c0;
+}
+
+.theme-toggle {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  /* The button now holds a sun/moon icon instead of text (js/theme.js)
+     — keep it centred and size the svg like the app.css navbar icons. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.theme-toggle:hover {
+  border-color: var(--navy);
+  background: var(--navy-bg);
+  color: var(--ink);
+}
+
+.tutor-app .theme-toggle {
+  padding: 0.55rem 0.75rem;
+  border-color: var(--ta-border);
+  border-radius: 6px;
+  background: var(--ta-surface);
+  color: var(--ta-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.tutor-app .theme-toggle:hover {
+  border-color: var(--ta-primary);
+  background: var(--ta-bg);
+}
+
+html[data-theme="dark"] .tutor-app #logout-button,
+html[data-theme="dark"] .tutor-app .btn-danger,
+html[data-theme="dark"] .calendar-class-pill {
+  background: var(--ta-surface);
+}
+
+html[data-theme="dark"] .tutor-app .stat-tile--accent {
+  background: #202e45;
+  border-color: #465c82;
+}
+
+html[data-theme="dark"] .tutor-app .claim-form {
+  color: var(--ta-text);
+}
+
+html[data-theme="dark"] .tutor-app .claim-form th,
+html[data-theme="dark"] .tutor-app .claim-form td {
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .tutor-app .claim-info-table th,
+html[data-theme="dark"] .tutor-app .claim-tasks-table th,
+html[data-theme="dark"] .tutor-app .claim-footer-table th,
+html[data-theme="dark"] .tutor-app .claim-hos-table th {
+  background: var(--ta-bg);
+}
+
+@media (max-width: 600px) {
+  .theme-toggle {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+}
+
+/* ============================================================
+   Dark-mode legibility fixes.
+   In dark mode the accent tokens (--navy, --red, --ta-primary, --ink …)
+   become LIGHT colours, so anything that paired them with white text, or
+   that hard-coded a dark text colour / light background, lost contrast.
+   ============================================================ */
+
+/* Light accent fills -> dark text */
+html[data-theme="dark"] .avatar,
+html[data-theme="dark"] .preset-btn.active,
+html[data-theme="dark"] .btn-primary,
+html[data-theme="dark"] .btn-small-primary,
+html[data-theme="dark"] .notif-bell-badge,
+html[data-theme="dark"] .calendar-session-pill,
+html[data-theme="dark"] .tutor-app #logout-button:hover,
+html[data-theme="dark"] .tutor-app .btn-danger:hover,
+html[data-theme="dark"] .workload-pct:not(.workload-pct--outside),
+html[data-theme="dark"] body:not(.tutor-app) .btn-danger,
+html[data-theme="dark"] body:not(.student-app) .toast {
+  color: #0f1a1d;
+}
+
+/* Welcome banner: gradient is light in dark mode */
+html[data-theme="dark"] .tutor-app .card--welcome h2 {
+  color: #0f1a1d;
+}
+
+html[data-theme="dark"] .tutor-app .card--welcome p {
+  color: rgba(15, 26, 29, 0.85);
+}
+
+/* Profile avatar / role chip had a hard-coded light background */
+html[data-theme="dark"] .profile-avatar,
+html[data-theme="dark"] .profile-role {
+  background: #202e45;
+  color: var(--ta-primary);
+}
+
+/* Hard-coded dark text colours -> theme colours */
+html[data-theme="dark"] .tutor-app .excused-note {
+  color: var(--red);
+}
+
+html[data-theme="dark"] .tutor-app .excusal-cover--found {
+  color: var(--green);
+}
+
+html[data-theme="dark"] .tutor-app .excusal-cover--pending {
+  color: var(--amber);
+}
+
+/* ---------- student pages (body.student-app) ----------
+   These pages hard-code a light palette, while the shared calendar/form
+   rules they also use switch to light-on-dark text. Theme them fully so
+   text is never light-on-light. */
+
+html[data-theme="dark"] body.student-app {
+  background: var(--ta-bg);
+  color: var(--ta-text);
+}
+
+html[data-theme="dark"] .student-app > header,
+html[data-theme="dark"] .student-app > footer,
+html[data-theme="dark"] .student-app .card,
+html[data-theme="dark"] .student-app main > section:nth-child(2) article,
+html[data-theme="dark"] .student-app main > section:nth-child(3),
+html[data-theme="dark"] .student-app main > section:last-child {
+  background: var(--ta-surface);
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .student-app > header h1,
+html[data-theme="dark"] .student-app main > section:nth-child(2) article h3 {
+  color: var(--ta-primary);
+}
+
+html[data-theme="dark"] .student-app nav a {
+  color: var(--ta-text-muted);
+}
+
+html[data-theme="dark"] .student-app nav a[aria-current="page"] {
+  background: #202e45;
+  color: var(--ta-primary);
+}
+
+html[data-theme="dark"] .student-app main > section:first-child p,
+html[data-theme="dark"] .student-app section > header p,
+html[data-theme="dark"] .student-app main > section:nth-child(2) article p,
+html[data-theme="dark"] .student-app main > section:nth-child(3) article p,
+html[data-theme="dark"] .student-app main > section:last-child article p,
+html[data-theme="dark"] .student-app .session-list article p,
+html[data-theme="dark"] .student-app .session-meta,
+html[data-theme="dark"] .student-app .empty-state,
+html[data-theme="dark"] .student-app > footer p,
+html[data-theme="dark"] .student-app .form-field label {
+  color: var(--ta-text-muted);
+}
+
+html[data-theme="dark"] .student-app main > section:nth-child(3) article,
+html[data-theme="dark"] .student-app main > section:last-child article,
+html[data-theme="dark"] .student-app .session-list article,
+html[data-theme="dark"] .student-app .swap-select,
+html[data-theme="dark"] .student-app .form-field textarea {
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .student-app .swap-label,
+html[data-theme="dark"] .student-app .checkbox-row label {
+  color: var(--ta-text);
+}
+
+html[data-theme="dark"] .student-app .swap-select,
+html[data-theme="dark"] .student-app .form-field textarea,
+html[data-theme="dark"] .student-app .swap-buttons .btn-secondary,
+html[data-theme="dark"] .student-app .btn-cancel {
+  background: var(--ta-bg);
+}
+
+html[data-theme="dark"] .student-app .swap-buttons .btn-secondary {
+  color: var(--ta-text);
+  border-color: var(--ta-border);
+}
+
+html[data-theme="dark"] .student-app .swap-buttons .btn-secondary:hover {
+  background: var(--ta-surface);
+}
+
+html[data-theme="dark"] .student-app .btn-cancel {
+  color: var(--ta-danger);
+  border-color: var(--ta-danger);
+}
+
+html[data-theme="dark"] .student-app .btn-cancel:hover {
+  background: var(--ta-danger);
+  color: #0f1a1d;
+}
+
+html[data-theme="dark"] .student-app .session-list article.session-cover {
+  background: #202e45;
+}
+
+html[data-theme="dark"]
+  .student-app
+  .session-list
+  article
+  .session-cover-badge {
+  color: var(--ta-primary);
+}
+
+html[data-theme="dark"]
+  .student-app
+  .session-list
+  article.session-swap-request {
+  background: var(--amber-bg);
+}
+
+html[data-theme="dark"] .student-app .session-swap-request .session-cover-badge,
+html[data-theme="dark"] .student-app .session-list article .swap-pending {
+  color: var(--amber);
+}
+
+html[data-theme="dark"] .student-app strong,
+html[data-theme="dark"] .student-app .status-pill.completed {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+html[data-theme="dark"] .student-app .status-pill.missed {
+  background: var(--red-bg);
+  color: var(--red);
 }

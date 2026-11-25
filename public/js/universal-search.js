@@ -28,10 +28,15 @@ if (searchInput && resultsEl) {
     }
   }
 
-  function toDisplayDate(dateStr) {
-    if (!dateStr) return "";
-    const [y, m, d] = dateStr.slice(0, 10).split("-");
-    return `${d}/${m}/${y}`;
+  // "September 2026" — the calendar month a submission covers (week_start
+  // stores the month's first day).
+  function formatMonthLabel(monthStart) {
+    if (!monthStart) return "";
+    const [y, m] = monthStart.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(undefined, {
+      month: "long",
+      year: "numeric",
+    });
   }
 
   function matchCourses(q) {
@@ -111,7 +116,7 @@ if (searchInput && resultsEl) {
           timesheetMatches
             .map(
               (s) => `
-          <li><a href="timesheet-review.html?highlight=${s.user_id}_${s.week_start}">${s.users?.name || "Unknown tutor"} — week of ${toDisplayDate(s.week_start)}</a></li>
+          <li><a href="timesheet-review.html?highlight=${s.user_id}_${s.week_start}">${s.users?.name || "Unknown tutor"} — ${formatMonthLabel(s.week_start)}</a></li>
         `,
             )
             .join(""),

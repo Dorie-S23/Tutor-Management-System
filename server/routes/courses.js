@@ -1,5 +1,7 @@
 const express = require("express");
 const supabase = require("../supabaseClient");
+const { MAX_DIAGONALS, diagonalLabels } = require("./courseDiagonals");
+const { notifyMany } = require("./notificationHelpers");
 
 const router = express.Router();
 
@@ -186,6 +188,8 @@ function parseCoursePayload(body) {
     lab_end_time,
     lab_venues,
     budget,
+    has_diagonals,
+    diagonal_count,
   } = body ?? {};
 
   if (typeof course_code !== "string" || !course_code.trim()) {
@@ -292,6 +296,22 @@ function parseCoursePayload(body) {
     }
   }
 
+  // Optional — only large courses get split into diagonals (A, B, C…).
+  // Unticked means no diagonals at all, whatever count the client sent.
+  let diagonalCount = null;
+  if (has_diagonals) {
+    diagonalCount = Number(diagonal_count);
+    if (
+      !Number.isInteger(diagonalCount) ||
+      diagonalCount < 2 ||
+      diagonalCount > MAX_DIAGONALS
+    ) {
+      return {
+        error: `number of diagonals must be an integer between 2 and ${MAX_DIAGONALS}`,
+      };
+    }
+  }
+
   return {
     values: {
       course_code: course_code.trim(),
@@ -310,8 +330,34 @@ function parseCoursePayload(body) {
       lab_end_time: lab.end,
       lab_venues: lab.venue,
       budget: budgetNum,
+      diagonal_count: diagonalCount,
     },
   };
+}
+
+// After a course's diagonal count shrinks (or diagonals are switched off),
+// anyone still placed in a diagonal that no longer exists is moved back to
+// unassigned, so they don't silently sit in a hidden "diagonal E".
+async function clearStaleDiagonals(courseId, diagonalCount) {
+  const valid = new Set(diagonalLabels(diagonalCount));
+  for (const table of ["tutor_subject_preference", "course_volunteers"]) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("id, diagonal")
+      .eq("course_id", courseId);
+    if (error) throw error;
+
+    const staleIds = (data || [])
+      .filter((row) => row.diagonal != null && !valid.has(row.diagonal))
+      .map((row) => row.id);
+    if (staleIds.length === 0) continue;
+
+    const { error: updateError } = await supabase
+      .from(table)
+      .update({ diagonal: null })
+      .in("id", staleIds);
+    if (updateError) throw updateError;
+  }
 }
 
 // The only Tutorial/Lab fields that matter to someone already assigned —
@@ -371,25 +417,17 @@ async function notifySessionChange(courseId, before, after) {
       .eq("status", "approved"),
   ]);
 
-  const recipientIds = new Set([
+  const recipientIds = [
     ...(tutorRows || []).map((r) => r.tutor_id),
     ...(volunteerRows || []).map((r) => r.user_id),
-  ]);
-  if (recipientIds.size === 0) return;
+  ];
 
-  const message = `${after.course_code}'s session time changed — check the calendar for the new day/time/venue.`;
-
-  const { error } = await supabase.from("notifications").insert(
-    [...recipientIds].map((userId) => ({
-      user_id: userId,
-      type: "session_change",
-      message,
-      related_entity: "course",
-      related_id: String(courseId),
-      read: false,
-    })),
-  );
-  if (error) throw error;
+  await notifyMany(recipientIds, {
+    type: "session_change",
+    message: `${after.course_code}'s session time changed — check the calendar for the new day/time/venue.`,
+    relatedEntity: "course",
+    relatedId: courseId,
+  });
 }
 
 // GET /api/courses — list all courses
@@ -405,11 +443,29 @@ router.get("/", async (req, res) => {
   res.json(data);
 });
 
-// POST /api/courses — add a new course
+// POST /api/courses — add a new course. Creating is super-organiser-only
+// (organisers manage the courses they're approved for, they don't create
+// new ones); the caller passes their user id, same trust model as the rest
+// of this API. Guard sits after payload validation — the form's field rules
+// are public anyway — but before any clash check or write.
 router.post("/", async (req, res) => {
   const { values, error: validationError } = parseCoursePayload(req.body);
   if (validationError) {
     return res.status(400).json({ error: validationError });
+  }
+
+  const { data: caller } = req.body?.userId
+    ? await supabase
+        .from("users")
+        .select("id, role")
+        .eq("id", req.body.userId)
+        .maybeSingle()
+    : { data: null };
+
+  if (!caller || caller.role !== "super_organiser") {
+    return res
+      .status(403)
+      .json({ error: "Only the super-organiser can add courses" });
   }
 
   const clashError = await findVenueClash(values, null);
@@ -457,7 +513,7 @@ router.put("/:id", async (req, res) => {
   // notifying already-assigned tutors/volunteers about.
   const { data: before } = await supabase
     .from("courses")
-    .select(SESSION_FIELDS.join(", "))
+    .select([...SESSION_FIELDS, "diagonal_count"].join(", "))
     .eq("id", id)
     .maybeSingle();
 
@@ -486,14 +542,51 @@ router.put("/:id", async (req, res) => {
     );
   }
 
+  if ((before?.diagonal_count ?? 0) > (values.diagonal_count ?? 0)) {
+    try {
+      await clearStaleDiagonals(id, values.diagonal_count);
+    } catch (err) {
+      console.warn("Failed to clear stale diagonal placements:", err);
+    }
+  }
+
   res.json(data);
 });
+
+// Tables whose rows only exist in the context of one course. Deleting the
+// course cascades through them (the dialog warns "This can't be undone") —
+// applications, volunteer signups and organiser access requests have no
+// removal path of their own once the course is gone, and Postgres would
+// otherwise refuse the delete with a 23503 foreign-key violation.
+// hour_entries is deliberately excluded: logged hours are pay records and
+// must be removed explicitly.
+const COURSE_CHILD_TABLES = [
+  "organiser_requests",
+  "tutor_subject_preference",
+  "course_volunteers",
+  "allocation_overrides",
+  "allocation_draft_assignments",
+  "session_excusals",
+  "session_swaps",
+];
+
+// Postgres names the blocking table in the 23503 detail, e.g.
+// 'Key (id)=(17) is still referenced from table "hour_entries".' Parsing it
+// turns the generic 409 into something the admin can act on.
+function referencedTableFromFkError(error) {
+  const m = /referenced from table "([^"]+)"/.exec(error.details || "");
+  return m ? m[1] : null;
+}
 
 // DELETE /api/courses/:id — remove a course
 router.delete("/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     return res.status(400).json({ error: "Invalid course id" });
+  }
+
+  for (const table of COURSE_CHILD_TABLES) {
+    await supabase.from(table).delete().eq("course_id", id);
   }
 
   const { error, count } = await supabase
@@ -503,9 +596,11 @@ router.delete("/:id", async (req, res) => {
 
   if (error) {
     if (error.code === "23503") {
+      const table = referencedTableFromFkError(error);
       return res.status(409).json({
-        error:
-          "Can't delete this course — it still has tutor applications, volunteers, or preferences linked to it. Remove those first.",
+        error: table
+          ? `Can't delete this course — "${table}" still has rows linked to it. Remove those first.`
+          : "Can't delete this course — other data still references it. Remove that first.",
       });
     }
     return res.status(500).json({ error: error.message });

@@ -1,14 +1,35 @@
 const API_URL = "";
 
+/*
+ * Writes a status message into one of the #*-message elements and
+ * toggles the state class that colours it (see auth-global.css).
+ * kind: "error" | "success" | undefined for a neutral note.
+ */
+function setMessage(element, text, kind) {
+  element.textContent = text;
+
+  element.classList.toggle("is-error", kind === "error");
+
+  element.classList.toggle("is-success", kind === "success");
+}
+
 /* =========================
    STUDENT NUMBER FIELD
    ========================= */
+
+// Five to seven digits, numbers only — the server enforces the same rule.
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
 
 const roleSelect = document.getElementById("role");
 
 const studentNumberGroup = document.getElementById("student-number-group");
 
 const studentNumberInput = document.getElementById("student-number");
+
+// Organiser-only course dropdown (register.html only — null elsewhere).
+const courseGroup = document.getElementById("course-group");
+
+const courseSelect = document.getElementById("course");
 
 const googleRegisterButton = document.getElementById("google-register-button");
 
@@ -24,7 +45,7 @@ if (googleRegisterButton) {
 
 if (roleSelect) {
   roleSelect.addEventListener("change", () => {
-    if (roleSelect.value === "student" || roleSelect.value === "tutor") {
+    if (roleSelect.value === "volunteer" || roleSelect.value === "tutor") {
       // Show student number field
       studentNumberGroup.style.display = "block";
 
@@ -39,6 +60,103 @@ if (roleSelect) {
 
       // No longer required
       studentNumberInput.required = false;
+    }
+
+    /* -------------------------
+           Organiser course choice
+
+           Shown only for organisers — the list is
+           fetched from the course register on first
+           use, so the other roles never pay for it.
+           ------------------------- */
+
+    if (courseGroup && courseSelect) {
+      if (roleSelect.value === "organiser") {
+        courseGroup.style.display = "block";
+
+        courseSelect.required = true;
+
+        loadCoursesOnce();
+      } else {
+        courseGroup.style.display = "none";
+
+        courseSelect.required = false;
+
+        courseSelect.value = "";
+      }
+    }
+  });
+}
+
+/* =========================
+   ORGANISER COURSES
+   ========================= */
+
+// Fetched at most once, however often the role is switched back and forth.
+// A failed load resets the flag so picking "organiser" again retries.
+let coursesRequested = false;
+
+async function loadCoursesOnce() {
+  if (coursesRequested) return;
+
+  coursesRequested = true;
+
+  const message = document.getElementById("register-message");
+
+  try {
+    const response = await fetch(`${API_URL}/api/courses`);
+
+    const rows = await response.json();
+
+    if (!response.ok) {
+      throw new Error(rows.error || "Failed to load courses");
+    }
+
+    rows.forEach((row) => {
+      const option = document.createElement("option");
+
+      option.value = row.id;
+
+      option.textContent = `${row.course_code} — ${row.course_name}`;
+
+      courseSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error("Course load error:", error);
+
+    coursesRequested = false;
+
+    if (message) {
+      setMessage(
+        message,
+        "Couldn't load the course list — please try again.",
+        "error",
+      );
+    }
+  }
+}
+
+/* =========================
+   FORGOT PASSWORD
+   ========================= */
+
+// The prototype shows a "Forgot password?" link but the app has no
+// self-service reset — point users at their course administrator
+// instead (shown in the login card's message area).
+const forgotPasswordLink = document.getElementById("forgot-password-link");
+
+if (forgotPasswordLink) {
+  forgotPasswordLink.addEventListener("click", (event) => {
+    event.preventDefault();
+
+    const message = document.getElementById("login-message");
+
+    if (message) {
+      setMessage(
+        message,
+        "Please contact your course administrator to reset your password.",
+        "error",
+      );
     }
   });
 }
@@ -67,31 +185,16 @@ if (registerForm) {
       .getElementById("student-number")
       .value.trim();
 
+    const courseId = courseSelect ? courseSelect.value : "";
+
     const message = document.getElementById("register-message");
-
-    /* -------------------------
-           Validate Wits email
-           ------------------------- */
-
-    if (
-      !email.toLowerCase().endsWith("@wits.ac.za") &&
-      !email.toLowerCase().endsWith("@students.wits.ac.za")
-    ) {
-      message.textContent = "Please use a Wits email address.";
-
-      message.style.color = "red";
-
-      return;
-    }
 
     /* -------------------------
            Check passwords
            ------------------------- */
 
     if (password !== confirmPassword) {
-      message.textContent = "Passwords do not match.";
-
-      message.style.color = "red";
+      setMessage(message, "Passwords do not match.", "error");
 
       return;
     }
@@ -100,17 +203,36 @@ if (registerForm) {
            Check student number
            ------------------------- */
 
-    if (role === "student" && !studentNumber) {
-      message.textContent = "Student number is required for students.";
-
-      message.style.color = "red";
+    if ((role === "volunteer" || role === "tutor") && !studentNumber) {
+      setMessage(
+        message,
+        "Student number is required for volunteers and tutors.",
+        "error",
+      );
 
       return;
     }
 
-    message.textContent = "Creating your account...";
+    if (
+      (role === "volunteer" || role === "tutor") &&
+      !STUDENT_NUMBER_RE.test(studentNumber)
+    ) {
+      setMessage(message, "Student number must be 5–7 digits.", "error");
 
-    message.style.color = "";
+      return;
+    }
+
+    /* -------------------------
+           Check organiser course
+           ------------------------- */
+
+    if (role === "organiser" && !courseId) {
+      setMessage(message, "Choose the course you want to organise.", "error");
+
+      return;
+    }
+
+    setMessage(message, "Creating your account...");
 
     try {
       const response = await fetch(`${API_URL}/api/auth/register`, {
@@ -126,6 +248,7 @@ if (registerForm) {
           password,
           role,
           studentNumber,
+          courseId: role === "organiser" ? Number(courseId) : undefined,
         }),
       });
 
@@ -136,20 +259,29 @@ if (registerForm) {
                ------------------------- */
 
       if (!response.ok) {
-        message.textContent = data.error || "Registration failed.";
-
-        message.style.color = "red";
+        setMessage(message, data.error || "Registration failed.", "error");
 
         return;
       }
 
       /* -------------------------
                Registration successful
+
+               Organisers can't sign in until the
+               super-organiser approves their course
+               request, so say so instead of promising
+               an immediate login.
                ------------------------- */
 
-      message.textContent = "Registration successful! Redirecting to login...";
+      setMessage(
+        message,
 
-      message.style.color = "green";
+        role === "organiser"
+          ? "Registration successful! Your organiser request is awaiting approval — you can sign in once it's approved."
+          : "Registration successful! Redirecting to login...",
+
+        "success",
+      );
 
       setTimeout(() => {
         window.location.href = "login.html";
@@ -157,9 +289,7 @@ if (registerForm) {
     } catch (error) {
       console.error("Registration error:", error);
 
-      message.textContent = "Unable to connect to the server.";
-
-      message.style.color = "red";
+      setMessage(message, "Unable to connect to the server.", "error");
     }
   });
 }
@@ -180,9 +310,7 @@ if (loginForm) {
 
     const message = document.getElementById("login-message");
 
-    message.textContent = "Logging in...";
-
-    message.style.color = "";
+    setMessage(message, "Logging in...");
 
     try {
       const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -205,9 +333,7 @@ if (loginForm) {
                ------------------------- */
 
       if (!response.ok) {
-        message.textContent = data.error || "Login failed.";
-
-        message.style.color = "red";
+        setMessage(message, data.error || "Login failed.", "error");
 
         return;
       }
@@ -216,9 +342,7 @@ if (loginForm) {
                Login successful
                ------------------------- */
 
-      message.textContent = "Login successful!";
-
-      message.style.color = "green";
+      setMessage(message, "Login successful!", "success");
 
       /*
        * Store the Supabase access token
@@ -240,7 +364,9 @@ if (loginForm) {
 
       setTimeout(() => {
         switch (data.user.role) {
+          // Legacy accounts created before the Volunteer rename.
           case "student":
+          case "volunteer":
             window.location.href = "StudentView.html";
             break;
 
@@ -253,6 +379,7 @@ if (loginForm) {
             break;
 
           case "organiser":
+          case "super_organiser":
             window.location.href = "board.html";
             break;
 
@@ -264,9 +391,37 @@ if (loginForm) {
     } catch (error) {
       console.error("Login error:", error);
 
-      message.textContent = "Unable to connect to the server.";
-
-      message.style.color = "red";
+      setMessage(message, "Unable to connect to the server.", "error");
     }
   });
+}
+
+/* =========================
+   GOOGLE SIGN-IN FAILURE
+   ========================= */
+
+// google-callback.html sends a failed Google sign-in back here with the
+// reason in ?authError=, so show it in the login card and then drop the
+// param (replaceState, no reload) — refreshing shouldn't repeat a message
+// that belongs to a sign-in attempt that's already over.
+const loginMessage = document.getElementById("login-message");
+
+if (loginMessage) {
+  const loginParams = new URLSearchParams(window.location.search);
+
+  const authError = loginParams.get("authError");
+
+  if (authError) {
+    setMessage(loginMessage, authError, "error");
+
+    loginParams.delete("authError");
+
+    const query = loginParams.toString();
+
+    history.replaceState(
+      null,
+      "",
+      window.location.pathname + (query ? `?${query}` : ""),
+    );
+  }
 }

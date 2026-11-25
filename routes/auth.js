@@ -3,6 +3,28 @@ const express = require("express");
 const router = express.Router();
 
 /* =========================================================
+   ROLE ALIASES
+
+   Accounts created before the Volunteer rename stored
+   "student" in users.role — accept it as an alias so those
+   accounts keep working while new signups use "volunteer".
+   ========================================================= */
+
+const ROLE_ALIASES = { student: "volunteer" };
+
+const normaliseRole = (role) =>
+  ROLE_ALIASES[String(role).toLowerCase()] || String(role).toLowerCase();
+
+/* =========================================================
+   STUDENT NUMBER FORMAT
+
+   Volunteers and tutors must give a student number that is
+   five to seven digits with no other characters.
+   ========================================================= */
+
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+
+/* =========================================================
    GENERATE STAFF ID
 
    Organisers don't choose their own staff ID - we assign
@@ -56,25 +78,12 @@ router.post("/register", async (req, res) => {
     }
 
     /* =====================================================
-           Validate Wits email
-           ===================================================== */
-
-    if (
-      !email.toLowerCase().endsWith("@wits.ac.za") &&
-      !email.toLowerCase().endsWith("@students.wits.ac.za")
-    ) {
-      return res.status(400).json({
-        error: "You must use a Wits email address",
-      });
-    }
-
-    /* =====================================================
            Validate role
            ===================================================== */
 
-    const validRoles = ["student", "tutor", "educator", "organiser"];
+    const validRoles = ["volunteer", "tutor", "organiser"];
 
-    const userRole = role.toLowerCase();
+    const userRole = normaliseRole(role);
 
     if (!validRoles.includes(userRole)) {
       return res.status(400).json({
@@ -88,10 +97,63 @@ router.post("/register", async (req, res) => {
            Students and tutors require a student number
            ===================================================== */
 
-    if ((userRole === "student" || userRole === "tutor") && !studentNumber) {
+    if ((userRole === "volunteer" || userRole === "tutor") && !studentNumber) {
       return res.status(400).json({
-        error: "Student number is required for students and tutors",
+        error: "Student number is required for volunteers and tutors",
       });
+    }
+
+    const trimmedStudentNumber =
+      studentNumber == null ? "" : String(studentNumber).trim();
+
+    if (
+      (userRole === "volunteer" || userRole === "tutor") &&
+      !STUDENT_NUMBER_RE.test(trimmedStudentNumber)
+    ) {
+      return res.status(400).json({
+        error: "Student number must be 5–7 digits",
+      });
+    }
+
+    /* =====================================================
+           Validate organiser course
+
+           Organiser access is granted one course at a time,
+           so a new organiser has to say which course their
+           request is for — the super-organiser approves or
+           denies it before the account can sign in.
+           ===================================================== */
+
+    let courseId = null;
+
+    if (userRole === "organiser") {
+      courseId = Number(req.body.courseId);
+
+      if (!courseId) {
+        return res.status(400).json({
+          error: "Choose the course you want to be an organiser for",
+        });
+      }
+
+      const { data: course, error: courseError } = await req.supabase
+        .from("courses")
+        .select("id")
+        .eq("id", courseId)
+        .maybeSingle();
+
+      if (courseError) {
+        console.error("Course lookup error:", courseError);
+
+        return res.status(500).json({
+          error: "Could not check the course",
+        });
+      }
+
+      if (!course) {
+        return res.status(400).json({
+          error: "That course does not exist",
+        });
+      }
     }
 
     /* =====================================================
@@ -168,14 +230,14 @@ router.post("/register", async (req, res) => {
            degree
            ===================================================== */
 
-    if (userRole === "student") {
+    if (userRole === "volunteer") {
       const { error: studentError } = await req.supabase
         .from("students")
         .insert({
           id: userId,
           name: name,
           email: email,
-          student_no: studentNumber,
+          student_no: trimmedStudentNumber,
         });
 
       if (studentError) {
@@ -205,7 +267,7 @@ router.post("/register", async (req, res) => {
     else if (userRole === "tutor") {
       const { error: tutorError } = await req.supabase.from("tutors").insert({
         id: userId,
-        student_number: studentNumber,
+        student_number: trimmedStudentNumber,
         email: email,
         name: name,
       });
@@ -280,6 +342,31 @@ router.post("/register", async (req, res) => {
 
           details: organiserError.message,
           hint: organiserError.hint,
+        });
+      }
+
+      /* ===================================================
+             File the access request the super-organiser
+             reviews — until it's approved this organiser
+             can't sign in (see POST /login).
+             =================================================== */
+
+      const { error: requestError } = await req.supabase
+        .from("organiser_requests")
+        .insert({
+          user_id: userId,
+          course_id: courseId,
+          status: "pending",
+        });
+
+      if (requestError) {
+        console.error("Organiser request error:", requestError);
+
+        return res.status(500).json({
+          error:
+            "User was created, but the organiser request could not be saved",
+
+          details: requestError.message,
         });
       }
     }
@@ -372,9 +459,9 @@ router.post("/google/register", async (req, res) => {
            Validate role
            ===================================================== */
 
-    const validRoles = ["student", "tutor", "educator", "organiser"];
+    const validRoles = ["volunteer", "tutor", "organiser"];
 
-    const userRole = role.toLowerCase();
+    const userRole = normaliseRole(role);
 
     if (!validRoles.includes(userRole)) {
       return res.status(400).json({
@@ -388,9 +475,21 @@ router.post("/google/register", async (req, res) => {
            Students and tutors require one.
            ===================================================== */
 
-    if ((userRole === "student" || userRole === "tutor") && !studentNumber) {
+    if ((userRole === "volunteer" || userRole === "tutor") && !studentNumber) {
       return res.status(400).json({
-        error: "Student number is required for students and tutors",
+        error: "Student number is required for volunteers and tutors",
+      });
+    }
+
+    const trimmedStudentNumber =
+      studentNumber == null ? "" : String(studentNumber).trim();
+
+    if (
+      (userRole === "volunteer" || userRole === "tutor") &&
+      !STUDENT_NUMBER_RE.test(trimmedStudentNumber)
+    ) {
+      return res.status(400).json({
+        error: "Student number must be 5–7 digits",
       });
     }
 
@@ -438,17 +537,43 @@ router.post("/google/register", async (req, res) => {
     const email = authenticatedUser.email;
 
     /* =====================================================
-           Validate Wits email
+           Validate organiser course
+
+           Same rule as /register: organiser access is
+           granted one course at a time, so the request has
+           to name the course it's for.
            ===================================================== */
 
-    if (
-      !email ||
-      (!email.toLowerCase().endsWith("@wits.ac.za") &&
-        !email.toLowerCase().endsWith("@students.wits.ac.za"))
-    ) {
-      return res.status(400).json({
-        error: "You must use a Wits email address",
-      });
+    let courseId = null;
+
+    if (userRole === "organiser") {
+      courseId = Number(req.body.courseId);
+
+      if (!courseId) {
+        return res.status(400).json({
+          error: "Choose the course you want to be an organiser for",
+        });
+      }
+
+      const { data: course, error: courseError } = await authenticatedSupabase
+        .from("courses")
+        .select("id")
+        .eq("id", courseId)
+        .maybeSingle();
+
+      if (courseError) {
+        console.error("Google course lookup error:", courseError);
+
+        return res.status(500).json({
+          error: "Could not check the course",
+        });
+      }
+
+      if (!course) {
+        return res.status(400).json({
+          error: "That course does not exist",
+        });
+      }
     }
 
     /* =====================================================
@@ -506,14 +631,14 @@ router.post("/google/register", async (req, res) => {
            STUDENT
            ===================================================== */
 
-    if (userRole === "student") {
+    if (userRole === "volunteer") {
       const { error: studentError } = await authenticatedSupabase
         .from("students")
         .insert({
           id: userId,
           name: name,
           email: email,
-          student_no: studentNumber,
+          student_no: trimmedStudentNumber,
         });
 
       if (studentError) {
@@ -536,7 +661,7 @@ router.post("/google/register", async (req, res) => {
         .from("tutors")
         .insert({
           id: userId,
-          student_number: studentNumber,
+          student_number: trimmedStudentNumber,
           email: email,
           name: name,
         });
@@ -597,6 +722,31 @@ router.post("/google/register", async (req, res) => {
             "User was created, but could not be added to the organisers table",
 
           details: organiserError.message,
+        });
+      }
+
+      /* ===================================================
+             File the pending access request (same as
+             /register) — it's reviewed by the
+             super-organiser before sign-in is allowed.
+             =================================================== */
+
+      const { error: requestError } = await authenticatedSupabase
+        .from("organiser_requests")
+        .insert({
+          user_id: userId,
+          course_id: courseId,
+          status: "pending",
+        });
+
+      if (requestError) {
+        console.error("Google organiser request error:", requestError);
+
+        return res.status(500).json({
+          error:
+            "User was created, but the organiser request could not be saved",
+
+          details: requestError.message,
         });
       }
     }
@@ -731,6 +881,58 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    const userRole = normaliseRole(profile.role);
+
+    /* =====================================================
+           Organiser approval gate
+
+           A pending or denied request blocks sign-in. An
+           approved request carries the course access the
+           board filters on; legacy organisers — registered
+           before requests existed — have no rows at all and
+           keep full access.
+           ===================================================== */
+
+    let courseIds;
+
+    if (userRole === "organiser") {
+      const { data: requests, error: requestsError } = await req.supabase
+        .from("organiser_requests")
+        .select("course_id, status")
+        .eq("user_id", data.user.id);
+
+      if (requestsError) {
+        console.error("Organiser request lookup error:", requestsError);
+
+        return res.status(500).json({
+          error: "Could not check your organiser request",
+
+          // Surfaces setup gaps plainly — e.g. a project that hasn't had the
+          // organiser_requests table created yet (see Getting Started).
+          details: requestsError.message,
+        });
+      }
+
+      const rows = requests || [];
+
+      if (rows.length > 0) {
+        const approved = rows.filter((row) => row.status === "approved");
+
+        if (approved.length > 0) {
+          courseIds = approved.map((row) => row.course_id);
+        } else if (rows.some((row) => row.status === "pending")) {
+          return res.status(403).json({
+            error:
+              "Your organiser request is still awaiting approval — you can sign in once the super-organiser approves it.",
+          });
+        } else {
+          return res.status(403).json({
+            error: "Your organiser request was denied.",
+          });
+        }
+      }
+    }
+
     /* =====================================================
            Successful login
            ===================================================== */
@@ -745,7 +947,12 @@ router.post("/login", async (req, res) => {
 
         name: profile.name,
 
-        role: profile.role,
+        // Legacy "student" rows are reported as "volunteer".
+        role: userRole,
+
+        // Approved courses an organiser is limited to. Absent for every
+        // other role — and for legacy organisers, who keep full access.
+        ...(courseIds ? { courseIds } : {}),
       },
 
       session: data.session,

@@ -3,8 +3,14 @@ const express = require("express");
 const supabase = require("../supabaseClient");
 const { DAY_NAMES } = require("../dayNames");
 const { getRatesMap } = require("./academicLevelRates");
+const { courseScopeForOrganiser } = require("./organiserScope");
 
 const router = express.Router();
+
+// Student numbers are five to seven digits, numbers only — the same rule
+// the registration and profile routes enforce.
+const STUDENT_NUMBER_RE = /^\d{5,7}$/;
+const STUDENT_NUMBER_ERROR = "Student number must be 5–7 digits.";
 
 // "HH:MM" or "HH:MM:SS" -> minutes since midnight, for interval-overlap comparisons.
 function toMinutes(timeStr) {
@@ -17,8 +23,32 @@ function overlaps(startA, endA, startB, endB) {
   return startA < endB && startB < endA;
 }
 
-// GET /api/tutors — list all tutors
+// Resolves the ?organiserId= scope shared by the list and workload views —
+// the same contract as the attendance queue. undefined means the caller
+// isn't an organiser at all (a 403), null means they see everything (the
+// super-organiser, or a grandfathered organiser with no request rows), and
+// an array holds the only course ids they may look at. Without an
+// organiserId the view isn't scoped, matching the rest of this API's
+// trust model.
+async function scopeFor(req) {
+  const { organiserId } = req.query;
+  if (!organiserId) return null;
+  return courseScopeForOrganiser(organiserId);
+}
+
+// GET /api/tutors?organiserId=... — list tutors, rates stitched on. A
+// course-scoped organiser only gets tutors assigned (approved) to their
+// courses — someone they could never have allocated has no business on
+// this page.
 router.get("/", async (req, res) => {
+  const scopeCourseIds = await scopeFor(req);
+  if (scopeCourseIds === undefined) {
+    return res.status(403).json({ error: "Only organisers can list tutors" });
+  }
+  if (Array.isArray(scopeCourseIds) && scopeCourseIds.length === 0) {
+    return res.json([]);
+  }
+
   const { data, error } = await supabase
     .from("tutors")
     .select("*")
@@ -26,11 +56,26 @@ router.get("/", async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
 
+  let tutors = data || [];
+  if (Array.isArray(scopeCourseIds)) {
+    const { data: assignments, error: assignError } = await supabase
+      .from("tutor_subject_preference")
+      .select("tutor_id")
+      .eq("status", "approved")
+      .in("course_id", scopeCourseIds);
+    if (assignError) {
+      return res.status(500).json({ error: assignError.message });
+    }
+
+    const inScope = new Set((assignments || []).map((a) => a.tutor_id));
+    tutors = tutors.filter((t) => inScope.has(t.id));
+  }
+
   const { ratesMap, error: ratesError } = await getRatesMap();
   if (ratesError) return res.status(500).json({ error: ratesError.message });
 
   res.json(
-    data.map((t) => ({
+    tutors.map((t) => ({
       ...t,
       hourly_rate:
         t.academic_level != null ? (ratesMap[t.academic_level] ?? null) : null,
@@ -43,6 +88,18 @@ router.get("/", async (req, res) => {
 // view. Registered before /:id so "workload" isn't swallowed as a tutor id.
 router.get("/workload", async (req, res) => {
   try {
+    // Same scope contract as the list: a course-scoped organiser sees the
+    // tutors assigned inside their courses, and only those courses count
+    // toward the hours — nothing from a module they can't see leaks into
+    // the bars or the per-course tooltip.
+    const scopeCourseIds = await scopeFor(req);
+    if (scopeCourseIds === undefined) {
+      return res.status(403).json({ error: "Only organisers can list tutors" });
+    }
+    if (Array.isArray(scopeCourseIds) && scopeCourseIds.length === 0) {
+      return res.json([]);
+    }
+
     const { data: tutors, error: tutorsError } = await supabase
       .from("tutors")
       .select("id, name, weekly_hour_cap")
@@ -55,7 +112,9 @@ router.get("/workload", async (req, res) => {
 
     const { data: approvals, error: approvalsError } = await supabase
       .from("tutor_subject_preference")
-      .select("tutor_id, courses(course_code, course_name, hours_per_week)")
+      .select(
+        "tutor_id, course_id, courses(course_code, course_name, hours_per_week)",
+      )
       .eq("status", "approved");
 
     if (approvalsError) {
@@ -63,8 +122,16 @@ router.get("/workload", async (req, res) => {
       return res.status(500).json({ error: approvalsError.message });
     }
 
+    // Outside-scope assignments drop out before anything is summed, so the
+    // numbers describe exactly the courses shown.
+    const assignments = (approvals || []).filter(
+      (a) =>
+        !Array.isArray(scopeCourseIds) ||
+        scopeCourseIds.includes(Number(a.course_id)),
+    );
+
     const coursesByTutor = {};
-    (approvals || []).forEach((a) => {
+    assignments.forEach((a) => {
       // The embedded course can come back as a single object or (depending
       // on how the foreign key is set up) an array with one entry — handle
       // both instead of assuming one shape.
@@ -78,16 +145,22 @@ router.get("/workload", async (req, res) => {
       });
     });
 
-    const workload = (tutors || []).map((t) => {
-      const courses = coursesByTutor[t.id] || [];
-      return {
-        id: t.id,
-        name: t.name,
-        weeklyHourCap: t.weekly_hour_cap,
-        assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
-        courses,
-      };
-    });
+    const workload = (tutors || [])
+      .filter(
+        (t) =>
+          !Array.isArray(scopeCourseIds) ||
+          (coursesByTutor[t.id] || []).length > 0,
+      )
+      .map((t) => {
+        const courses = coursesByTutor[t.id] || [];
+        return {
+          id: t.id,
+          name: t.name,
+          weeklyHourCap: t.weekly_hour_cap,
+          assignedHours: courses.reduce((sum, c) => sum + c.hours_per_week, 0),
+          courses,
+        };
+      });
 
     res.json(workload);
   } catch (err) {
@@ -214,16 +287,16 @@ router.post("/", async (req, res) => {
   // ── Input validation ─────────────────────────────────────────
   const VALID_LEVELS = ["third_year", "honours", "masters", "phd"];
   const WITS_EMAIL_RE = /@(wits\.ac\.za|students\.wits\.ac\.za)$/i;
+  const trimmedStudentNumber = String(student_number ?? "").trim();
   const errors = [];
 
   if (!name || !name.trim()) errors.push("Name is required.");
   else if (name.trim().length < 2)
     errors.push("Name must be at least 2 characters.");
 
-  if (!student_number || !String(student_number).trim())
-    errors.push("Student number is required.");
-  else if (!/^\d{5,10}$/.test(String(student_number).trim()))
-    errors.push("Student number must be 5–10 digits.");
+  if (!trimmedStudentNumber) errors.push("Student number is required.");
+  else if (!STUDENT_NUMBER_RE.test(trimmedStudentNumber))
+    errors.push(STUDENT_NUMBER_ERROR);
 
   if (!email || !email.trim())
     errors.push("Email is required to create a tutor account.");
@@ -250,7 +323,7 @@ router.post("/", async (req, res) => {
   const { data: existingStudent } = await supabase
     .from("tutors")
     .select("id")
-    .eq("student_number", String(student_number).trim())
+    .eq("student_number", trimmedStudentNumber)
     .maybeSingle();
   if (existingStudent) {
     return res
@@ -317,7 +390,7 @@ router.post("/", async (req, res) => {
     .from("tutors")
     .insert({
       id: userId,
-      student_number,
+      student_number: trimmedStudentNumber,
       email,
       name,
       academic_level,
@@ -343,15 +416,26 @@ router.put("/:id", async (req, res) => {
   const { student_number, email, name, academic_level, weekly_hour_cap } =
     req.body;
 
+  const updates = {
+    email,
+    name,
+    academic_level,
+    weekly_hour_cap,
+  };
+
+  // A partial edit may leave the student number out, but one that is sent
+  // has to pass the same rule as creation.
+  if (student_number != null) {
+    const trimmedStudentNumber = String(student_number).trim();
+    if (!STUDENT_NUMBER_RE.test(trimmedStudentNumber)) {
+      return res.status(400).json({ error: STUDENT_NUMBER_ERROR });
+    }
+    updates.student_number = trimmedStudentNumber;
+  }
+
   const { data, error } = await supabase
     .from("tutors")
-    .update({
-      student_number,
-      email,
-      name,
-      academic_level,
-      weekly_hour_cap,
-    })
+    .update(updates)
     .eq("id", req.params.id)
     .select()
     .single();
@@ -380,33 +464,82 @@ router.delete("/:id", async (req, res) => {
   res.status(204).end();
 });
 
-// PUT /api/tutors/:id/busy-times — replace a tutor's whole imported timetable.
-// Full-replace (rather than diffing individual classes) avoids reconciling
-// client-generated ids with server-generated ones.
-router.put("/:id/busy-times", async (req, res) => {
+// ---------- busy times (the calendar's added/imported classes) ----------
+// The database is the only copy of these: the calendar reads them from here
+// on load and writes each change straight back, and the organiser board's
+// clash checks read the same rows. :id is the user's id — student
+// volunteers keep classes here too, despite the "tutor" naming.
+
+// Calendar field name -> column, for the fields a class can be created or
+// updated with. `exceptions` holds per-day cancellations/edits (see
+// server/migrations/2026-10-08-busy-times-calendar.sql).
+const BUSY_TIME_FIELDS = {
+  title: "title",
+  dayOfWeek: "day_of_week",
+  startTime: "start_time",
+  endTime: "end_time",
+  firstDate: "first_date",
+  endDate: "end_date",
+  venue: "venue",
+  exceptions: "exceptions",
+};
+
+// Builds a row update from just the fields present on `body`, so a PATCH
+// only touches what it sends. Empty strings become null, like the original
+// import did.
+function busyTimeColumns(body) {
+  const columns = {};
+  for (const [field, column] of Object.entries(BUSY_TIME_FIELDS)) {
+    if (body[field] === undefined) continue;
+    columns[column] = body[field] === "" ? null : body[field];
+  }
+  return columns;
+}
+
+function validateBusyTime(c, { partial }) {
+  if (!partial || c.dayOfWeek !== undefined) {
+    if (!Number.isInteger(c.dayOfWeek) || c.dayOfWeek < 0 || c.dayOfWeek > 6) {
+      return "dayOfWeek must be an integer from 0 (Sunday) to 6 (Saturday)";
+    }
+  }
+  if (!partial && (!c.startTime || !c.endTime)) {
+    return "startTime and endTime are required";
+  }
+  if (c.exceptions !== undefined && !Array.isArray(c.exceptions)) {
+    return "exceptions must be an array";
+  }
+  return null;
+}
+
+// GET /api/tutors/:id/busy-times — this user's classes, oldest first.
+router.get("/:id/busy-times", async (req, res) => {
+  const { data, error } = await supabase
+    .from("tutor_busy_times")
+    .select("*")
+    .eq("tutor_id", req.params.id)
+    .order("id");
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// POST /api/tutors/:id/busy-times — add one or more classes
+// ({ classes: [...] }, the timetable import adds several at once).
+router.post("/:id/busy-times", async (req, res) => {
   const { classes } = req.body ?? {};
-  if (!Array.isArray(classes)) {
-    return res.status(400).json({ error: "classes must be an array" });
+  if (!Array.isArray(classes) || classes.length === 0) {
+    return res.status(400).json({ error: "classes must be a non-empty array" });
+  }
+  for (const c of classes) {
+    const problem = validateBusyTime(c ?? {}, { partial: false });
+    if (problem) return res.status(400).json({ error: problem });
   }
 
-  const { error: deleteError } = await supabase
-    .from("tutor_busy_times")
-    .delete()
-    .eq("tutor_id", req.params.id);
-
-  if (deleteError) return res.status(500).json({ error: deleteError.message });
-
-  if (classes.length === 0) return res.json([]);
-
+  // A new class has no per-day exceptions; the column's own default ([])
+  // covers that, so adding classes doesn't depend on it being sent.
   const rows = classes.map((c) => ({
+    ...busyTimeColumns(c),
     tutor_id: req.params.id,
-    title: c.title || null,
-    day_of_week: c.dayOfWeek,
-    start_time: c.startTime,
-    end_time: c.endTime,
-    first_date: c.firstDate || null,
-    end_date: c.endDate || null,
-    venue: c.venue || null,
   }));
 
   const { data, error } = await supabase
@@ -415,7 +548,57 @@ router.put("/:id/busy-times", async (req, res) => {
     .select();
 
   if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+// PATCH /api/tutors/:id/busy-times/:busyTimeId — change some fields of one
+// class (including its per-day exceptions).
+router.patch("/:id/busy-times/:busyTimeId", async (req, res) => {
+  const body = req.body ?? {};
+  const problem = validateBusyTime(body, { partial: true });
+  if (problem) return res.status(400).json({ error: problem });
+
+  const columns = busyTimeColumns(body);
+  if (Object.keys(columns).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  const { data, error } = await supabase
+    .from("tutor_busy_times")
+    .update(columns)
+    .eq("id", Number(req.params.busyTimeId))
+    .eq("tutor_id", req.params.id)
+    .select()
+    .single();
+
+  if (error?.code === "PGRST116") {
+    return res.status(404).json({ error: "Class not found" });
+  }
+  if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// DELETE /api/tutors/:id/busy-times/:busyTimeId — remove one class.
+router.delete("/:id/busy-times/:busyTimeId", async (req, res) => {
+  const { error } = await supabase
+    .from("tutor_busy_times")
+    .delete()
+    .eq("id", Number(req.params.busyTimeId))
+    .eq("tutor_id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
+});
+
+// DELETE /api/tutors/:id/busy-times — remove all of this user's classes.
+router.delete("/:id/busy-times", async (req, res) => {
+  const { error } = await supabase
+    .from("tutor_busy_times")
+    .delete()
+    .eq("tutor_id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).end();
 });
 
 // GET /api/tutors/:id/assignment-check?courseId=X — timetable clashes and

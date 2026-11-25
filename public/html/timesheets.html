@@ -2,19 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/images/tutorx-logo-teal.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Timesheets | Tutor Management System</title>
-    <link rel="stylesheet" href="../css/global.css" />
+    <title>Timesheets | TutorX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
+    <script src="../js/nav-menu.js"></script>
   </head>
-  <body class="tutor-app">
-    <header class="app-header no-print">
-      <h1>Timesheets</h1>
-      <nav class="tab-nav">
+
+  <body data-theme="tutor">
+    <header class="app-navbar no-print">
+      <a class="brand-mark" href="dashboard.html">
+        <span class="brand-mark-badge">
+          <img src="../images/txlogo.png" alt="" />
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
+
+      <nav class="tab-nav" aria-label="Main navigation">
         <a href="dashboard.html">Dashboard</a>
         <a href="log-hours.html">Log Hours</a>
         <a href="calendar.html">Calendar</a>
-        <a href="timesheets.html">Timesheets</a>
+        <a href="timesheets.html" aria-current="page">Timesheets</a>
         <a href="modules.html">Module Application</a>
+        <a href="profile.html">Profile</a>
+      </nav>
+
+      <div class="navbar-right">
         <div class="notif-bell" id="notifBell">
           <button
             type="button"
@@ -57,213 +78,283 @@
             </p>
           </div>
         </div>
-        <a href="#" id="logout-button">Logout</a>
-      </nav>
+
+        <div class="user-pill">
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Tutor</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
     </header>
 
-    <main>
-      <div class="card no-print">
-        <h2>Your details</h2>
-        <p class="card-hint">
-          Saved on this device and reused every time you generate a timesheet.
-        </p>
-        <form id="profile-form">
-          <div class="form-grid">
-            <div class="form-field">
-              <label for="fullName">Full name</label>
-              <input type="text" id="fullName" required />
-            </div>
-            <div class="form-field">
-              <label for="studentNumber">Student number</label>
-              <input type="text" id="studentNumber" required />
-            </div>
-            <div class="form-field">
-              <label for="email">Email address</label>
-              <input type="email" id="email" required />
-            </div>
-            <div class="form-field">
-              <label for="cellPhone">Cell phone number</label>
-              <input type="tel" id="cellPhone" />
-            </div>
-            <div class="form-field">
-              <label for="yearOfStudy">Year of study</label>
-              <select id="yearOfStudy">
-                <option value="third_year">3rd Year</option>
-                <option value="honours">Honours</option>
-                <option value="masters">Masters</option>
-                <option value="phd">PhD</option>
-              </select>
-            </div>
-            <div class="form-field">
-              <label for="payrollNumber">Payroll number</label>
-              <input type="text" id="payrollNumber" placeholder="Optional" />
-            </div>
-            <div class="form-field">
-              <label for="hourlyRate">Hourly rate (R)</label>
-              <input
-                type="number"
-                id="hourlyRate"
-                min="0"
-                step="0.01"
-                placeholder="Optional"
-              />
-            </div>
-            <div class="form-field">
-              <label for="headOfSchool">Head of School</label>
-              <input type="text" id="headOfSchool" placeholder="Optional" />
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn-primary">Save details</button>
-            </div>
-          </div>
-        </form>
-      </div>
-
-      <div class="card no-print">
-        <h2>Generate timesheet</h2>
-        <div class="form-grid">
-          <div class="form-field">
-            <label for="rangeFrom">From</label>
-            <input type="date" id="rangeFrom" />
-          </div>
-          <div class="form-field">
-            <label for="rangeTo">To</label>
-            <input type="date" id="rangeTo" />
-          </div>
-          <div class="form-actions">
-            <button type="button" id="printBtn" class="btn-primary">
-              Print / Save as PDF
-            </button>
-          </div>
+    <main class="app-main">
+      <div class="page-head no-print">
+        <div>
+          <h1>My timesheets</h1>
+          <p class="page-sub">
+            Submit your logged hours for sign-off and track what your organiser
+            decides.
+          </p>
         </div>
-        <p id="timesheet-hint" class="card-hint" hidden>
-          Fill in your details above to generate a timesheet.
-        </p>
+        <button type="button" id="new-timesheet-btn" class="btn-primary">
+          <svg
+            viewBox="0 0 24 24"
+            width="15"
+            height="15"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          New timesheet
+        </button>
       </div>
 
-      <div class="card no-print">
-        <h2>Submit a weekly timesheet</h2>
-        <p class="card-hint">
-          Submitting locks in that week's logged hours for organiser sign-off —
-          later edits to your logged hours won't change a submitted week.
-        </p>
-        <div class="form-grid">
-          <div class="form-field">
-            <label for="submitWeekStart">Week starting (Monday)</label>
-            <input type="date" id="submitWeekStart" />
+      <div class="page-stack">
+        <section
+          class="panel panel--list no-print"
+          aria-label="Submitted timesheets"
+        >
+          <div id="submissionsList">
+            <!-- rendered by timesheets.js -->
           </div>
-          <div class="form-actions">
-            <button type="button" id="submitTimesheetBtn" class="btn-primary">
-              Submit for approval
-            </button>
-          </div>
-        </div>
-        <p class="card-hint" id="submitWeekHint"></p>
-      </div>
+          <p class="empty-state" id="submissionsEmpty" hidden>
+            No timesheets submitted yet — submit one below once you've logged
+            your hours for the month.
+          </p>
+        </section>
 
-      <div class="card no-print">
-        <h2>My submitted timesheets</h2>
-        <table class="tutors-table">
-          <thead>
-            <tr>
-              <th>Week of</th>
-              <th>Hours</th>
-              <th>Status</th>
-              <th>Submitted</th>
-              <th>Dispute</th>
-            </tr>
-          </thead>
-          <tbody id="submissionsTableBody"></tbody>
-        </table>
-        <p class="card-hint" id="submissionsEmpty" hidden>
-          No timesheets submitted yet.
-        </p>
-      </div>
+        <section class="panel no-print" aria-labelledby="details-heading">
+          <h2 id="details-heading">Your details</h2>
+          <p class="hint">
+            Saved on this device and reused every time you generate a timesheet.
+          </p>
+          <p class="hint" id="details-sync-hint" hidden>
+            Your name, student number, email and phone number come from your
+            <a href="profile.html">Profile page</a> — change them there.
+          </p>
+          <form id="profile-form">
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="fullName">Full name</label>
+                <input type="text" id="fullName" required />
+              </div>
+              <div class="form-field">
+                <label for="studentNumber">Student number</label>
+                <input type="text" id="studentNumber" required />
+              </div>
+              <div class="form-field">
+                <label for="email">Email address</label>
+                <input type="email" id="email" required />
+              </div>
+              <div class="form-field">
+                <label for="cellPhone">Cell phone number</label>
+                <input type="tel" id="cellPhone" />
+              </div>
+              <div class="form-field">
+                <label for="yearOfStudy">Year of study</label>
+                <select id="yearOfStudy">
+                  <option value="third_year">3rd Year</option>
+                  <option value="honours">Honours</option>
+                  <option value="masters">Masters</option>
+                  <option value="phd">PhD</option>
+                </select>
+                <p class="hint" id="year-of-study-hint" hidden>
+                  Set from your tutor record, since it decides your pay rate —
+                  ask an organiser if it's wrong.
+                </p>
+              </div>
+              <div class="form-field">
+                <label for="payrollNumber">Payroll number</label>
+                <input type="text" id="payrollNumber" placeholder="Optional" />
+              </div>
+              <div class="form-actions full-width">
+                <button type="submit" class="btn-primary">Save details</button>
+              </div>
+            </div>
+          </form>
+        </section>
 
-      <div class="card claim-preview" id="claimWrapper">
-        <div class="claim-form" id="claimForm">
-          <table class="claim-title-table">
-            <tr>
-              <td>
-                <strong
-                  >School of Computer Sciences &amp; Applied Mathematics</strong
+        <div class="tools-grid no-print">
+          <section class="panel" aria-labelledby="generate-heading">
+            <h2 id="generate-heading">Generate timesheet</h2>
+            <p class="hint">
+              Pick a date range to print or save a claim form for the hours you
+              logged in that window.
+            </p>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="rangeFrom">From</label>
+                <input type="date" id="rangeFrom" />
+              </div>
+              <div class="form-field">
+                <label for="rangeTo">To</label>
+                <input type="date" id="rangeTo" />
+              </div>
+              <div class="form-actions full-width">
+                <button type="button" id="printBtn" class="btn-primary">
+                  Print / Save as PDF
+                </button>
+              </div>
+            </div>
+            <p class="hint" id="timesheet-hint" hidden>
+              Fill in your details above to generate a timesheet.
+            </p>
+          </section>
+
+          <section class="panel" aria-labelledby="submit-heading">
+            <h2 id="submit-heading">Submit a monthly timesheet</h2>
+            <p class="hint">
+              Submitting locks in that month's logged hours for organiser
+              sign-off — later edits to your logged hours won't change a
+              submitted month.
+            </p>
+            <div class="form-grid">
+              <div class="form-field full-width">
+                <label for="submitMonth">Month</label>
+                <input type="month" id="submitMonth" />
+              </div>
+              <div class="form-actions full-width">
+                <button
+                  type="button"
+                  id="submitTimesheetBtn"
+                  class="btn-primary"
                 >
-                <div>Tutor Claim Form</div>
-                <div id="cYear"></div>
-              </td>
-            </tr>
-          </table>
-
-          <table class="claim-info-table">
-            <tr>
-              <th>FULL<br />Name of Tutor:</th>
-              <td colspan="3" id="cFullName"></td>
-            </tr>
-            <tr>
-              <th>Student No.:</th>
-              <td id="cStudentNo"></td>
-              <th>Payroll No:</th>
-              <td id="cPayrollNo"></td>
-            </tr>
-            <tr>
-              <th>Email Address:</th>
-              <td colspan="3" id="cEmail"></td>
-            </tr>
-            <tr>
-              <th>Year of Study:</th>
-              <td colspan="3">
-                <span id="cYearOfStudy"></span>
-                &nbsp;&nbsp;&nbsp; Cell phone No: <span id="cCellPhone"></span>
-              </td>
-            </tr>
-          </table>
-
-          <table class="claim-tasks-table">
-            <thead>
-              <tr>
-                <th>Date of Task</th>
-                <th>Times of Task</th>
-                <th>Duration of Task</th>
-                <th>
-                  Description of Task<br />(tutoring, marking, invigilation,
-                  admin)
-                </th>
-                <th>Name of Supervisor</th>
-                <th>Signature of Supervisor</th>
-              </tr>
-            </thead>
-            <tbody id="claimRows"></tbody>
-          </table>
-
-          <table class="claim-footer-table">
-            <tr>
-              <th>Student Signature</th>
-              <td></td>
-              <th>Date:</th>
-              <td id="cSignDate"></td>
-            </tr>
-            <tr>
-              <th>Total Number of Hours:</th>
-              <td id="cTotalHours"></td>
-              <th>Total Amount:</th>
-              <td id="cTotalAmount"></td>
-            </tr>
-          </table>
-
-          <table class="claim-hos-table">
-            <tr>
-              <th rowspan="2">Head of School:</th>
-              <td id="cHeadOfSchool"></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <th>Name</th>
-              <th>Signature</th>
-              <th>Date</th>
-            </tr>
-          </table>
+                  Submit for approval
+                </button>
+              </div>
+            </div>
+            <p class="hint" id="submitMonthHint"></p>
+          </section>
         </div>
+
+        <section class="panel claim-preview" id="claimWrapper" hidden>
+          <div class="claim-form" id="claimForm">
+            <table class="claim-title-table">
+              <tr>
+                <td class="claim-title-text">
+                  <div>
+                    School of Computer Sciences &amp; Applied Mathematics
+                  </div>
+                  <div>Tutor Claim Form</div>
+                  <div id="cYear"></div>
+                </td>
+                <td class="claim-title-crest">
+                  <span
+                    class="claim-crest"
+                    role="img"
+                    aria-label="Wits University crest"
+                  ></span>
+                </td>
+              </tr>
+            </table>
+
+            <table class="claim-info-table">
+              <colgroup>
+                <col class="claim-col-label" />
+                <col span="4" />
+                <col class="claim-col-label2" />
+                <col class="claim-col-value2" />
+              </colgroup>
+              <tr>
+                <th>FULL<br />Name of Tutor:</th>
+                <td colspan="6" id="cFullName"></td>
+              </tr>
+              <tr>
+                <th>Student No.:</th>
+                <td colspan="4" id="cStudentNo"></td>
+                <th class="claim-th-strong">Payroll No:</th>
+                <td id="cPayrollNo"></td>
+              </tr>
+              <tr>
+                <th>Email Address:</th>
+                <td colspan="6" id="cEmail"></td>
+              </tr>
+              <tr>
+                <th>
+                  Year of Study:
+                  <span class="visually-hidden" id="cYearOfStudy"></span>
+                </th>
+                <td class="claim-year-option" data-year="third_year">
+                  3<sup>rd</sup> Year
+                </td>
+                <td class="claim-year-option" data-year="honours">Honours</td>
+                <td class="claim-year-option" data-year="masters">Masters</td>
+                <td class="claim-year-option" data-year="phd">PhD</td>
+                <th>Cell phone No:</th>
+                <td id="cCellPhone"></td>
+              </tr>
+            </table>
+
+            <table class="claim-tasks-table">
+              <colgroup>
+                <col class="claim-col-date" />
+                <col class="claim-col-times" />
+                <col class="claim-col-duration" />
+                <col class="claim-col-description" />
+                <col class="claim-col-supervisor" />
+                <col class="claim-col-signature" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Date of Task</th>
+                  <th>Times of Task</th>
+                  <th>Duration of Task</th>
+                  <th>
+                    Description of Task<br />(tutoring, marking, invigilation,
+                    admin)
+                  </th>
+                  <th>Name of Supervisor</th>
+                  <th>Signature of Supervisor</th>
+                </tr>
+              </thead>
+              <tbody id="claimRows"></tbody>
+            </table>
+
+            <table class="claim-footer-table">
+              <tr>
+                <th>Student Signature</th>
+                <td></td>
+                <th>Date:</th>
+                <td class="claim-footer-value" id="cSignDate"></td>
+              </tr>
+            </table>
+
+            <table class="claim-footer-table">
+              <tr>
+                <th>Total Number of Hours:</th>
+                <td class="claim-footer-value" id="cTotalHours"></td>
+                <th>Total Amount:</th>
+                <td class="claim-footer-value" id="cTotalAmount"></td>
+              </tr>
+            </table>
+
+            <table class="claim-hos-table">
+              <colgroup>
+                <col class="claim-col-hos-label" />
+                <col class="claim-col-hos-name" />
+                <col class="claim-col-hos-signature" />
+                <col />
+              </colgroup>
+              <tr>
+                <th rowspan="2">Head of School:</th>
+                <td class="claim-hos-name" id="cHeadOfSchool">Prof R Klein</td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr>
+                <th>Name</th>
+                <th>Signature</th>
+                <th>Date</th>
+              </tr>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -287,7 +378,7 @@
 
         <p class="field-error" id="disputeFormError" hidden></p>
 
-        <p class="card-hint" id="disputeModalContext"></p>
+        <p class="hint" id="disputeModalContext"></p>
 
         <label class="field">
           <span class="field-label">What's wrong?</span>
@@ -315,8 +406,10 @@
       </form>
     </dialog>
 
-    <output class="toast" id="toast" role="status" aria-live="polite"></output>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <script src="../js/user-badge.js"></script>
+    <script src="../js/date-mask.js"></script>
     <script type="module" src="../js/timesheets.js"></script>
     <script src="../js/notifications.js"></script>
     <script src="../js/logout.js"></script>

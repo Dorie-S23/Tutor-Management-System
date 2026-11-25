@@ -2,22 +2,48 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/images/txlogo.png" />
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>Signing in...</title>
+    <title>Signing in | TutorX</title>
 
-    <link rel="stylesheet" href="/css/style.css" />
+    <!-- Fonts used by the auth pages -->
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Design tokens, base typography and the shared card shell -->
+
+    <link rel="stylesheet" href="../css/auth-global.css" />
+
+    <script src="../js/theme.js"></script>
   </head>
 
   <body>
-    <div class="auth-container">
-      <div class="auth-card">
-        <h1>Signing you in...</h1>
+    <main class="auth-page">
+      <section class="auth-card">
+        <header class="auth-header">
+          <span class="eyebrow">TutorX</span>
 
-        <p id="status">Please wait while we complete your Google login.</p>
-      </div>
-    </div>
+          <h1>Signing you in...</h1>
+        </header>
+
+        <div class="auth-progress" id="callback-progress">
+          <span class="auth-spinner" aria-hidden="true"></span>
+
+          <p id="status" class="form-message" aria-live="polite">
+            Please wait while we complete your Google login.
+          </p>
+        </div>
+      </section>
+    </main>
 
     <!-- Supabase JavaScript -->
 
@@ -33,6 +59,41 @@
         SUPABASE_ANON_KEY,
       );
 
+      const status = document.getElementById("status");
+
+      const progress = document.getElementById("callback-progress");
+
+      /*
+       * Mirrors auth.js setMessage — toggles the state classes that
+       * colour the shared .form-message element (see auth-global.css)
+       * and stops the spinner once the flow reaches a terminal state.
+       */
+
+      function setStatus(text, kind) {
+        status.textContent = text;
+
+        status.classList.toggle("is-error", kind === "error");
+
+        status.classList.toggle("is-success", kind === "success");
+
+        progress.classList.toggle("is-done", Boolean(kind));
+      }
+
+      /*
+       * Every failure ends here: the message is shown on this page in
+       * case navigation is slow or blocked, then the person is sent back
+       * to login.html with the reason in ?authError= (consumed by
+       * public/js/auth.js) so they're never stranded on this spinner.
+       */
+
+      function failBackToLogin(message) {
+        setStatus(message, "error");
+
+        const params = new URLSearchParams({ authError: message });
+
+        window.location.href = `/html/login.html?${params.toString()}`;
+      }
+
       /*
        * Map a user's role to the page they should
        * land on, matching the routes used by
@@ -41,7 +102,9 @@
 
       function redirectPathForRole(role) {
         switch (role) {
+          // Legacy accounts created before the Volunteer rename.
           case "student":
+          case "volunteer":
             return "/html/StudentView.html";
 
           case "tutor":
@@ -51,6 +114,7 @@
             return "/html/educator.html";
 
           case "organiser":
+          case "super_organiser":
             return "/html/board.html";
 
           default:
@@ -59,8 +123,6 @@
       }
 
       async function handleGoogleCallback() {
-        const status = document.getElementById("status");
-
         try {
           /*
            * =================================================
@@ -81,7 +143,7 @@
            */
 
           if (code) {
-            status.textContent = "Completing Google sign-in...";
+            setStatus("Completing Google sign-in...");
 
             const { error } =
               await supabaseClient.auth.exchangeCodeForSession(code);
@@ -89,7 +151,7 @@
             if (error) {
               console.error("Code exchange error:", error);
 
-              status.textContent = "Could not complete Google sign-in.";
+              failBackToLogin("Could not complete Google sign-in.");
 
               return;
             }
@@ -107,7 +169,7 @@
           if (error) {
             console.error("Session error:", error);
 
-            status.textContent = "Could not retrieve your login session.";
+            failBackToLogin("Could not retrieve your login session.");
 
             return;
           }
@@ -124,7 +186,7 @@
           if (!session || !session.user) {
             console.error("No Supabase session found.");
 
-            status.textContent = "No authenticated user was found.";
+            failBackToLogin("No authenticated user was found.");
 
             return;
           }
@@ -149,7 +211,7 @@
           if (profileError) {
             console.error("Profile lookup error:", profileError);
 
-            status.textContent = "Could not check your account.";
+            failBackToLogin("Could not check your account.");
 
             return;
           }
@@ -167,7 +229,7 @@
           if (!profile) {
             console.log("New Google user detected.");
 
-            status.textContent = "Setting up your account...";
+            setStatus("Setting up your account...");
 
             /*
              * Store information needed by
@@ -210,7 +272,61 @@
 
           console.log("Existing user detected:", profile);
 
-          status.textContent = "Login successful. Redirecting...";
+          /*
+           * =================================================
+           * STEP 8
+           * ORGANISER APPROVAL GATE
+           *
+           * Mirrors POST /api/auth/login: a pending or
+           * denied request blocks sign-in; an approved
+           * request carries the course access the board
+           * filters on; legacy organisers (no request
+           * rows) keep full access.
+           * =================================================
+           */
+
+          const profileRole =
+            profile.role === "student" ? "volunteer" : profile.role;
+
+          let courseIds;
+
+          if (profileRole === "organiser") {
+            const { data: requestRows, error: requestsError } =
+              await supabaseClient
+                .from("organiser_requests")
+                .select("course_id, status")
+                .eq("user_id", user.id);
+
+            if (requestsError) {
+              console.error("Organiser request lookup error:", requestsError);
+
+              failBackToLogin("Could not check your organiser request.");
+
+              return;
+            }
+
+            const rows = requestRows || [];
+
+            if (rows.length > 0) {
+              const approved = rows.filter((row) => row.status === "approved");
+
+              if (approved.length > 0) {
+                courseIds = approved.map((row) => row.course_id);
+              } else {
+                await supabaseClient.auth.signOut();
+
+                failBackToLogin(
+                  rows.some((row) => row.status === "pending")
+                    ? "Your organiser request is still awaiting approval — you can sign in once the super-organiser approves it."
+                    : "Your organiser request was denied.",
+                );
+
+                return;
+              }
+            }
+          }
+
+          setStatus("Login successful. Redirecting...", "success");
 
           /*
            * Store the logged-in user's information the
@@ -228,7 +344,11 @@
               id: user.id,
               email: user.email,
               name: profile.name,
-              role: profile.role,
+              // Legacy "student" profiles are reported as "volunteer".
+              role: profileRole,
+              // Approved courses an organiser is limited to — absent
+              // for legacy organisers, who keep full access.
+              ...(courseIds ? { courseIds } : {}),
             }),
           );
 
@@ -237,11 +357,11 @@
            * their role.
            */
 
-          window.location.href = redirectPathForRole(profile.role);
+          window.location.href = redirectPathForRole(profileRole);
         } catch (error) {
           console.error("Google callback error:", error);
 
-          status.textContent = "An unexpected error occurred.";
+          failBackToLogin("An unexpected error occurred.");
         }
       }
 

@@ -22,6 +22,9 @@ function buildApp() {
 
 function validCourse(overrides = {}) {
   return {
+    // POST /api/courses is super-organiser-only; every create test sends the
+    // seeded super-organiser's id unless a case overrides it.
+    userId: "admin1",
     course_code: "COMS2000",
     course_name: "Data Structures",
     department: "Computer Science",
@@ -41,9 +44,16 @@ function validCourse(overrides = {}) {
 
 beforeEach(() => {
   tables = {
+    users: [{ id: "admin1", role: "super_organiser" }],
     courses: [],
     tutor_subject_preference: [],
     course_volunteers: [],
+    organiser_requests: [],
+    allocation_overrides: [],
+    allocation_draft_assignments: [],
+    session_excusals: [],
+    session_swaps: [],
+    hour_entries: [],
     notifications: [],
   };
   mockSupabase = fakeSupabase(tables);
@@ -64,6 +74,25 @@ describe("GET /api/courses", () => {
 });
 
 describe("POST /api/courses", () => {
+  test("rejects a caller who isn't the super-organiser", async () => {
+    tables.users.push({ id: "org1", role: "organiser" });
+
+    const noId = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ userId: undefined }));
+    const organiser = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ userId: "org1" }));
+    const stranger = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ userId: "ghost" }));
+
+    expect(noId.status).toBe(403);
+    expect(organiser.status).toBe(403);
+    expect(stranger.status).toBe(403);
+    expect(tables.courses).toHaveLength(0);
+  });
+
   test("rejects a payload missing course_code, course_name or department", async () => {
     const res = await request(buildApp())
       .post("/api/courses")
@@ -430,6 +459,86 @@ describe("DELETE /api/courses/:id", () => {
     expect(res.status).toBe(204);
     expect(tables.courses).toHaveLength(0);
   });
+
+  test("cascades through course-scoped rows before deleting", async () => {
+    tables.courses = [
+      { id: 1, course_code: "COMS2000" },
+      { id: 2, course_code: "COMS2001" },
+    ];
+    tables.organiser_requests = [
+      { id: 1, course_id: 1 },
+      { id: 2, course_id: 2 },
+    ];
+    tables.tutor_subject_preference = [
+      { id: 1, course_id: 1 },
+      { id: 2, course_id: 2 },
+    ];
+    tables.course_volunteers = [{ id: 1, course_id: 1 }];
+    tables.allocation_overrides = [{ id: 1, course_id: 1 }];
+    tables.allocation_draft_assignments = [{ id: 1, course_id: 1 }];
+    tables.session_excusals = [{ id: 1, course_id: 1 }];
+    tables.session_swaps = [{ id: 1, course_id: 1 }];
+
+    const res = await request(buildApp()).delete("/api/courses/1");
+
+    expect(res.status).toBe(204);
+    expect(tables.courses.map((c) => c.id)).toEqual([2]);
+    // Rows belonging to course 1 are gone; other courses' rows survive.
+    expect(tables.organiser_requests.map((r) => r.id)).toEqual([2]);
+    expect(tables.tutor_subject_preference.map((r) => r.id)).toEqual([2]);
+    expect(tables.course_volunteers).toHaveLength(0);
+    expect(tables.allocation_overrides).toHaveLength(0);
+    expect(tables.allocation_draft_assignments).toHaveLength(0);
+    expect(tables.session_excusals).toHaveLength(0);
+    expect(tables.session_swaps).toHaveLength(0);
+  });
+
+  test("names the table blocking deletion in the 409", async () => {
+    tables.courses = [{ id: 1, course_code: "COMS2000" }];
+    mockSupabase = fakeSupabase(
+      tables,
+      {},
+      {},
+      {
+        failWith: (table, operation) =>
+          table === "courses" && operation === "delete"
+            ? {
+                code: "23503",
+                message:
+                  "update or delete on table violates foreign key constraint",
+                details:
+                  'Key (id)=(1) is still referenced from table "hour_entries".',
+              }
+            : null,
+      },
+    );
+
+    const res = await request(buildApp()).delete("/api/courses/1");
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("hour_entries");
+    expect(tables.courses).toHaveLength(1);
+  });
+
+  test("falls back to a generic 409 when the blocking table can't be parsed", async () => {
+    tables.courses = [{ id: 1, course_code: "COMS2000" }];
+    mockSupabase = fakeSupabase(
+      tables,
+      {},
+      {},
+      {
+        failWith: (table, operation) =>
+          table === "courses" && operation === "delete"
+            ? { code: "23503", message: "violates foreign key constraint" }
+            : null,
+      },
+    );
+
+    const res = await request(buildApp()).delete("/api/courses/1");
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("other data still references it");
+  });
 });
 
 describe("PATCH /api/courses/:id/tutors-assigned", () => {
@@ -481,5 +590,76 @@ describe("PATCH /api/courses/:id/tutors-assigned", () => {
       .send({ delta: -1 });
 
     expect(res.status).toBe(409);
+  });
+});
+
+describe("diagonals on the course form", () => {
+  test("stores diagonal_count when diagonals are ticked", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ has_diagonals: true, diagonal_count: 3 }));
+
+    expect(res.status).toBe(201);
+    expect(tables.courses[0].diagonal_count).toBe(3);
+  });
+
+  test("ignores the count when diagonals are unticked", async () => {
+    const res = await request(buildApp())
+      .post("/api/courses")
+      .send(validCourse({ has_diagonals: false, diagonal_count: 3 }));
+
+    expect(res.status).toBe(201);
+    expect(tables.courses[0].diagonal_count).toBeNull();
+  });
+
+  test.each([1, 27, 2.5, ""])(
+    "rejects a diagonal count of %p",
+    async (diagonal_count) => {
+      const res = await request(buildApp())
+        .post("/api/courses")
+        .send(validCourse({ has_diagonals: true, diagonal_count }));
+
+      expect(res.status).toBe(400);
+      expect(tables.courses).toHaveLength(0);
+    },
+  );
+
+  test("shrinking the count unassigns anyone in a removed diagonal", async () => {
+    tables.courses = [
+      { id: 1, ...validCourse(), course_level: 4, diagonal_count: 3 },
+    ];
+    tables.tutor_subject_preference = [
+      { id: 1, course_id: 1, diagonal: "A" },
+      { id: 2, course_id: 1, diagonal: "C" },
+      { id: 3, course_id: 2, diagonal: "C" },
+    ];
+    tables.course_volunteers = [{ id: 10, course_id: 1, diagonal: "C" }];
+
+    const res = await request(buildApp())
+      .put("/api/courses/1")
+      .send(validCourse({ has_diagonals: true, diagonal_count: 2 }));
+
+    expect(res.status).toBe(200);
+    expect(tables.tutor_subject_preference.map((r) => r.diagonal)).toEqual([
+      "A",
+      null,
+      "C", // a different course's placement is left alone
+    ]);
+    expect(tables.course_volunteers[0].diagonal).toBeNull();
+  });
+
+  test("turning diagonals off clears every placement on the course", async () => {
+    tables.courses = [
+      { id: 1, ...validCourse(), course_level: 4, diagonal_count: 2 },
+    ];
+    tables.tutor_subject_preference = [{ id: 1, course_id: 1, diagonal: "A" }];
+
+    const res = await request(buildApp())
+      .put("/api/courses/1")
+      .send(validCourse({ has_diagonals: false }));
+
+    expect(res.status).toBe(200);
+    expect(tables.courses[0].diagonal_count).toBeNull();
+    expect(tables.tutor_subject_preference[0].diagonal).toBeNull();
   });
 });

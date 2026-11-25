@@ -22,14 +22,25 @@
 //   const supabase = fakeSupabase(tables, {
 //     course_volunteers: [["user_id", "course_id"]],
 //   });
+// A third argument adds a minimal Supabase Storage stand-in, backed by the
+// same plain-arrays idea: each bucket maps to an array of stored files
+// (path strings, or objects for richer seeds). The arrays are mutated in
+// place, so tests can seed a pre-uploaded transcript and inspect what the
+// route stored. A bucket whose value is not an array (e.g. null, or simply
+// absent) stands for a bucket that was never created — matching real
+// Storage (verified live), list() quietly answers empty while every write
+// fails with "Bucket not found", which the transcript routes surface as a
+// friendly "not set up yet" error:
+//   const storageFiles = { transcripts: ["tutor-1/transcript.pdf"] };
+//   const supabase = fakeSupabase(tables, {}, storageFiles);
 //
-// A third argument — hooks — lets a test interleave a competing writer into
+// A fourth argument — hooks — lets a test interleave a competing writer into
 // a route's sequence, to exercise optimistic-concurrency races:
 // onBeforeResolve(tableName, operation) runs just before every query
 // resolves ("operation" is "update", "delete" or "select"), so it can
 // mutate the seed rows the route is about to write, after the route has
 // already read them:
-//   const supabase = fakeSupabase(tables, {}, {
+//   const supabase = fakeSupabase(tables, {}, {}, {
 //     onBeforeResolve: (table, operation) => {
 //       if (table === "courses" && operation === "update") {
 //         // e.g. another organiser's approval landed first:
@@ -39,9 +50,134 @@
 //   });
 // The hook must only mutate the seed arrays — issuing queries from inside it
 // would recurse back into the hook.
+//
+// A second member of that same hooks argument, failWith(tableName,
+// operation), runs in the same place and returns an error object to
+// force-fail that query — the way to exercise route branches that only
+// trigger on a real database error, e.g. Postgres's 23503 foreign-key
+// violation when a delete is blocked by a referencing row (something the
+// in-memory tables can't simulate themselves):
+//   const supabase = fakeSupabase(tables, {}, {}, {
+//     failWith: (table, operation) =>
+//       table === "courses" && operation === "delete"
+//         ? {
+//             code: "23503",
+//             message: "update or delete on table violates foreign key constraint",
+//             details: 'Key (id)=(1) is still referenced from table "hour_entries".',
+//           }
+//         : null,
+//   });
 
-function fakeSupabase(tables, uniqueConstraints = {}, hooks = {}) {
+function fakeSupabase(
+  tables,
+  uniqueConstraints = {},
+  storageFiles = {},
+  hooks = {},
+) {
   return {
+    storage: {
+      from(bucketName) {
+        const bucket = storageFiles[bucketName];
+
+        if (!Array.isArray(bucket)) {
+          const notFound = { message: "Bucket not found" };
+          return {
+            // Real Storage lists a missing bucket as empty rather than
+            // erroring; only the write operations fail.
+            list: async () => ({ data: [], error: null }),
+            upload: async () => ({ data: null, error: notFound }),
+            remove: async () => ({ data: null, error: notFound }),
+            createSignedUrl: async () => ({ data: null, error: notFound }),
+            download: async () => ({ data: null, error: notFound }),
+          };
+        }
+
+        const asEntry = (item) =>
+          typeof item === "string" ? { name: item } : item;
+
+        return {
+          // Non-recursive, like the real thing: only the direct children of
+          // `folder` come back, with `name` stripped of the folder prefix.
+          list: async (folder = "") => {
+            const prefix = folder
+              ? `${String(folder).replace(/\/+$/, "")}/`
+              : "";
+            const entries = bucket
+              .map(asEntry)
+              .filter((entry) => entry.name.startsWith(prefix))
+              .map((entry) => ({
+                ...entry,
+                name: entry.name.slice(prefix.length),
+              }))
+              .filter((entry) => entry.name && !entry.name.includes("/"))
+              .map((entry) => ({
+                name: entry.name,
+                updated_at: entry.updatedAt ?? null,
+                metadata: entry.metadata ?? null,
+              }));
+            return { data: entries, error: null };
+          },
+          upload: async (path, body, opts = {}) => {
+            const existing = bucket.findIndex(
+              (item) => asEntry(item).name === path,
+            );
+            const entry = {
+              name: path,
+              body,
+              updatedAt: new Date().toISOString(),
+              metadata: {
+                size: body?.length ?? 0,
+                mimetype: opts.contentType ?? null,
+              },
+            };
+            if (existing !== -1) {
+              if (!opts.upsert) {
+                return { data: null, error: { message: "Duplicate" } };
+              }
+              bucket[existing] = entry;
+            } else {
+              bucket.push(entry);
+            }
+            return { data: { path }, error: null };
+          },
+          remove: async (paths) => {
+            const wanted = new Set(Array.isArray(paths) ? paths : [paths]);
+            for (let i = bucket.length - 1; i >= 0; i -= 1) {
+              if (wanted.has(asEntry(bucket[i]).name)) bucket.splice(i, 1);
+            }
+            return { data: null, error: null };
+          },
+          createSignedUrl: async (path, expiresIn) => {
+            const found = bucket.some((item) => asEntry(item).name === path);
+            if (!found) {
+              return { data: null, error: { message: "Object not found" } };
+            }
+            return {
+              data: {
+                signedUrl: `https://fake-supabase.test/storage/v1/object/sign/${bucketName}/${path}?token=fake-token&expiresIn=${expiresIn}`,
+              },
+              error: null,
+            };
+          },
+          // Like the real client, answers a Blob of the stored bytes. Seeded
+          // entries without a `body` come back as an empty file.
+          download: async (path) => {
+            const item = bucket.find((entry) => asEntry(entry).name === path);
+            if (!item) {
+              return { data: null, error: { message: "Object not found" } };
+            }
+            const entry = asEntry(item);
+            return {
+              data: new Blob([entry.body ?? Buffer.alloc(0)], {
+                type: entry.metadata?.mimetype ?? "application/octet-stream",
+              }),
+              error: null,
+            };
+          },
+        };
+      },
+    },
+
     from(tableName) {
       const rows = tables[tableName];
       if (!rows) {
@@ -92,6 +228,16 @@ function fakeSupabase(tables, uniqueConstraints = {}, hooks = {}) {
       function resolve(wantsSingle, allowNullSingle) {
         if (hooks.onBeforeResolve) {
           hooks.onBeforeResolve(tableName, pendingWrite?.type ?? "select");
+        }
+
+        if (hooks.failWith) {
+          const forced = hooks.failWith(
+            tableName,
+            pendingWrite?.type ?? "select",
+          );
+          if (forced) {
+            return { data: null, error: forced, count: 0 };
+          }
         }
 
         if (insertConflict) {

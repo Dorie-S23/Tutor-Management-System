@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
-    "@docusaurus/faster": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
@@ -40,6 +39,6 @@
     ]
   },
   "engines": {
-    "node": ">=20.0"
+    "node": ">=22.0"
   }
 }

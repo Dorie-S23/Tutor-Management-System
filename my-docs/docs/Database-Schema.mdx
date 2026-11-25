@@ -10,7 +10,7 @@ We designed a relational database using **Supabase**, which is built on PostgreS
 
 ![Entity-relationship diagram of the Tutor Management System schema (dbdiagram.io)](/img/supabase-schema.png)
 
-The tables split into four areas: **identity** (`users` plus one profile table per role), **courses and allocation** (`courses`, `course_volunteers`, `tutor_subject_preference`, `allocation_overrides`, `allocation_drafts`, `allocation_draft_assignments`, `session_excusals`, `session_swaps`), **timetable and time tracking** (`tutor_busy_times`, `hour_entries`, `timesheets`, `timesheet_disputes`), and **reference and audit** (`academic_terms`, `notifications`, `audit_log`).
+The tables split into four areas: **identity** (`users` plus one profile table per role, `organiser_requests`), **courses and allocation** (`courses`, `course_volunteers`, `tutor_subject_preference`, `allocation_overrides`, `allocation_drafts`, `allocation_draft_assignments`, `session_excusals`, `session_swaps`), **timetable and time tracking** (`tutor_busy_times`, `hour_entries`, `timesheets`, `timesheet_disputes`), and **reference and audit** (`academic_terms`, `notifications`, `audit_log`).
 
 ### Tables Overview
 
@@ -21,8 +21,10 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - **Fields**:
 - `id` (uuid, PK) — the Supabase Auth user UUID
 - `email` (text, required)
-- `name` (text)
-- `role` (text) — `student`, `tutor`, `educator` or `organiser`
+- `name` (text) — the account holder's full name; registration and the profile page both use a single full-name field
+- `cell_phone` (text) — not collected at registration, so this starts as `null`; filled in from the profile page (`/api/profile`), which checks it's a valid South African cell number
+- `role` (text) — `volunteer`, `tutor`, `organiser` or `super_organiser`. The educator role was dropped (see [Dev Plan → Roles](./dev-plan.mdx#roles)); legacy `educator` rows may still exist. Accounts created before the Volunteer rename store `student` here; the API accepts it as an alias for `volunteer`. The `super_organiser` value marks the one admin account (promoted by hand — see [Getting Started](./getting-started.mdx#4-set-up-organiser-access-one-off))
+- `auth_provider` (text) — `password` or `google`, set at registration
 
 #### `students`
 
@@ -32,7 +34,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `id` (uuid, PK, FK → `users.id`)
 - `name` (varchar, required)
 - `email` (text)
-- `student_no` (text, required, unique)
+- `student_no` (text, required, unique) — five to seven digits, numbers only; checked at registration and on the profile page
 - `degree` (varchar)
 
 #### `tutors`
@@ -41,7 +43,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - **Primary key**: `id`
 - **Fields**:
 - `id` (uuid, PK, FK → `users.id`)
-- `student_number` (text, required, unique)
+- `student_number` (text, required, unique) — five to seven digits, numbers only; checked on registration, the tutors page and the profile page
 - `email` (text, required)
 - `name` (text)
 - `academic_level` (text) — `third_year`, `honours`, `masters` or `phd`; looks up the tutor's pay rate in `academic_level_rates` and is checked against a course's `course_level`
@@ -57,7 +59,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `educators`
 
-- Profile row for every account registered with role `educator`.
+- Legacy: profile row for accounts registered with role `educator`. The educator role was dropped — no new rows are written (see [Dev Plan → Roles](./dev-plan.mdx#roles)).
 - **Primary key**: `id`
 - **Fields**:
 - `id` (uuid, PK, FK → `users.id`)
@@ -71,6 +73,20 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `staff_id` (varchar, required) — generated server-side on registration
 - `full_name` (varchar)
 - `email` (varchar)
+
+#### `organiser_requests`
+
+- One row per access request, approved or denied by the super-organiser (via `/api/organiser-requests`). Two kinds: `signup` — filed when someone registers as an organiser, where approval grants their chosen course and unblocks their sign-in; `access` — filed from the board by an existing organiser asking for one more course, where approval widens their scope on their next sign-in. A pending or denied `signup` blocks the account at sign-in. Organisers registered before requests existed have no rows here and keep full access to every course.
+- **Primary key**: `id`
+- **Fields**:
+- `id` (bigint, PK)
+- `user_id` (uuid, required, FK → `users.id`) — the requesting organiser
+- `course_id` (smallint, required, FK → `courses.id`) — the course they're asking for
+- `kind` (text, required, default `signup`) — `signup` or `access`; rows from before the column exist read back as `signup`
+- `status` (text, required, default `pending`) — `pending`, `approved` or `denied`
+- `created_at` (timestamptz, required, default now)
+- `reviewed_at` (timestamptz) — when the super-organiser approved or denied it
+- `reviewed_by` (uuid, FK → `users.id`) — the super-organiser who reviewed it
 
 #### `courses`
 
@@ -93,6 +109,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `lab_start_time`, `lab_end_time` (time)
 - `lab_venues` (text)
 - `budget` (numeric)
+- `diagonal_count` (smallint, 2–26) — how many diagonals (student groups labelled A, B, C…) a large course is split into; null when it isn't split. Set from the organiser's Add/Edit Course form
 
 #### `course_volunteers`
 
@@ -104,6 +121,10 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `course_id` (integer, required, FK → `courses.id`)
 - `mark` (integer)
 - `status` (text, required, default `pending`) — `pending`, `approved` or `rejected`
+- `locked` (bool) — set once an organiser's decision is final: it locks an approval or a rejection. A locked row can't be reconsidered or withdrawn, so a locked rejection stops the student removing it to volunteer for the course again
+- `rejection_reason` (text) — organiser's note written when the application is rejected
+- `approval_reason` (text) — organiser's note written when the application is approved
+- `diagonal` (text) — the diagonal (`A`–`Z`) an approved volunteer is placed in, when the course is split into diagonals; null = unassigned
 - `created_at` (timestamptz, required, default now)
 
 #### `tutor_subject_preference`
@@ -118,7 +139,10 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `Tutor_name` (text) — denormalised copy of the tutor's name
 - `tutor_mark` (integer) — the mark the tutor scored for the course
 - `Availability` (bool) — whether the tutor is free at the course's scheduled times
-- `locked` (bool, required)
+- `locked` (bool, required) — set once an organiser's decision is final: it locks an approval or a rejection. A locked row can't be reconsidered or withdrawn, so a locked rejection stops the tutor removing it to re-apply
+- `rejection_reason` (text) — organiser's note written when the application is rejected
+- `approval_reason` (text) — organiser's note written when the application is approved
+- `diagonal` (text) — the diagonal (`A`–`Z`) an approved tutor is placed in, when the course is split into diagonals; null = unassigned
 
 #### `allocation_overrides`
 
@@ -136,7 +160,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 #### `allocation_drafts`
 
 - A saved draft of a proposed tutor allocation, which can be edited and later published.
-- Not yet read or written by the application API — managed directly in Supabase.
+- Read and written by the application API (`server/routes/allocationDrafts.js`): created by auto-allocate, renamed or pruned while open, then published or discarded.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
@@ -149,7 +173,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 #### `allocation_draft_assignments`
 
 - One tutor–course pairing inside a draft allocation.
-- Not yet read or written by the application API — managed directly in Supabase.
+- Read and written by the application API (`server/routes/allocationDrafts.js`): proposed by auto-allocate, removed when an organiser prunes an open draft, applied on publish.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
@@ -162,13 +186,21 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 #### `session_excusals`
 
 - A tutor excusing themselves from one scheduled session of a course they are approved for.
+- An approved student volunteer on the course is automatically assigned to cover it (`cover_user_id`), reminded the day before, and can hand it on if they can't make it.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
 - `tutor_id` (uuid, required, FK → `tutors.id`)
 - `course_id` (smallint, required, FK → `courses.id`)
 - `session_date` (date, required)
+- `session_type` (text) — `tutorial` or `lab`: which of the course's sessions the tutor is excused from; null on excusals recorded before this was tracked
 - `reason` (text)
+- `cover_user_id` (uuid, FK → `users.id`) — the student volunteer covering the session; null when no volunteer was free
+- `cover_assigned_at` (timestamptz) — when the current cover was assigned
+- `cover_reminded_at` (timestamptz) — when the day-before reminder went out, so it's only sent once
+- `cover_declined_by` (uuid[], required, default `{}`) — volunteers who said they can't make it, so they aren't picked again
+- `swap_to_user_id` (uuid, FK → `users.id`) — another volunteer the cover has asked to take the session over; the cover only moves once they accept. Null = no pending request
+- `swap_requested_at` (timestamptz) — when that swap was asked for
 - `created_at` (timestamptz, required, default now)
 
 #### `session_swaps`
@@ -188,16 +220,17 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `tutor_busy_times`
 
-- Recurring busy blocks from a tutor's imported class timetable, used for clash checks when assigning courses.
+- The classes on a user's calendar (added manually or imported from a timetable PDF), each recurring weekly. This is the only copy — the calendar loads them from here and keeps nothing in the browser — and the organiser board reads them for clash checks when assigning courses.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)
-- `tutor_id` (uuid, required, FK → `tutors.id`)
+- `tutor_id` (uuid, required, FK → `users.id`) — despite the name, any calendar user: student volunteers keep classes here too
 - `title` (text) — e.g. the class name
 - `day_of_week` (smallint, required, 0 = Sunday through 6 = Saturday)
 - `start_time`, `end_time` (time, required)
 - `first_date`, `end_date` (date) — the block's active range
 - `venue` (text)
+- `exceptions` (jsonb, required, default `[]`) — per-day changes to the recurring class, at most one per date: `{ date, type: "cancelled" }` or `{ date, type: "modified", overrides: { title?, startTime?, endTime?, venue? } }`
 - `source` (text, required)
 - `created_at` (timestamptz, required, default now)
 
@@ -208,6 +241,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - **Fields**:
 - `id` (uuid, PK)
 - `user_id` (uuid, required, FK → `users.id`)
+- `course_id` (integer, FK → `courses.id`) — the course the hours were worked on; null for unlinked entries, which are excluded from the budget report
 - `date` (date, required)
 - `hours` (numeric, required)
 - `start_time`, `end_time` (time)
@@ -216,14 +250,18 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 - `notes` (text)
 - `created_at` (timestamptz, required, default now)
 - `updated_at` (timestamptz)
+- `verification_status` (text, required, default `pending`) — the organiser's attendance-verification call on the logged session: `pending`, `verified` or `flagged`. Rows that predate the feature backfill to `pending`, and a structural edit by the entry's owner resets a decided entry back to `pending`
+- `verified_by` (uuid, FK → `users.id`) — the organiser who made the call; null while pending
+- `verified_at` (timestamptz)
+- `verification_note` (text) — the organiser's explanation when they flag a logged session (required); verifying is a one-click call and writes no note
 
 #### `timesheets`
 
-- A tutor's weekly submission of logged hours, for organiser sign-off. `entries_snapshot` freezes the hour entries at submission time so later edits can't retroactively change an approved week.
+- A tutor's monthly submission of logged hours, for organiser sign-off. `entries_snapshot` freezes the hour entries at submission time so later edits can't retroactively change an approved month.
 - **Composite primary key**: `(user_id, week_start)`
 - **Fields**:
 - `user_id` (uuid, required, FK → `users.id`)
-- `week_start` (date, required) — the Monday of the submitted week
+- `week_start` (date, required) — the first day of the submitted month. (The column name predates the switch from weekly to monthly periods — no schema migration was done, it just stores a month start now.)
 - `status` (text, required, default `pending`) — `pending`, `approved` or `rejected`
 - `submitted_at` (timestamptz, required, default now)
 - `reviewed_at` (timestamptz)
@@ -256,7 +294,7 @@ The tables split into four areas: **identity** (`users` plus one profile table p
 
 #### `notifications`
 
-- Per-user notification feed. Not yet read or written by the application API — managed directly in Supabase.
+- Per-user notification feed. Written by several routes (application and volunteer decisions, timesheet statuses, session changes, cover assignments and swaps) via `server/routes/notificationHelpers.js`, and read by the bell icon's polling via `GET /api/notifications`. A subset of these types also sends an email copy to the address on the user's `users` row — see [Notification emails](./external-services.mdx#resend--notification-emails). This table is the source of truth either way: no email state is stored here, so a sent email can't be queried and a dropped one leaves no trace beyond a Worker log line.
 - **Primary key**: `id`
 - **Fields**:
 - `id` (bigint, PK)

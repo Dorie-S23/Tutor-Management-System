@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
 
 const A = require("./allocation-objectives");
 
@@ -407,7 +408,7 @@ describe("allocation-objectives.js in a browser (UMD branch)", () => {
       runScripts: "dangerously",
     });
     const script = dom.window.document.createElement("script");
-    script.textContent = source;
+    script.textContent = `${source}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "allocation-objectives.js")).href}`;
     dom.window.document.body.appendChild(script);
 
     expect(typeof dom.window.AllocationObjectives).toBe("object");

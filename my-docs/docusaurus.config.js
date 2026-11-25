@@ -12,11 +12,14 @@ import { themes as prismThemes } from "prism-react-renderer";
 const config = {
   title: "TutorX",
   tagline: "Documentation for the Tutor Management System",
-  favicon: "img/favicon.svg",
+  favicon: "img/txlogo.png",
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
+    // v4 opts into the rspack-based "Faster" bundler, whose native binary is
+    // blocked by Windows App Control on the self-hosted runner — stay on webpack.
+    faster: false,
   },
 
   // Deployed as its own Cloudflare Worker (see my-docs/wrangler.toml),
@@ -67,8 +70,7 @@ const config = {
         title: "TutorX",
         logo: {
           alt: "TutorX logo",
-          src: "img/logo.svg",
-          srcDark: "img/logo-dark.svg",
+          src: "img/txlogo.png",
         },
         items: [
           {

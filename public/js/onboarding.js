@@ -12,6 +12,12 @@
    `steps` is an array of { selector, title, body, placement }.
    Each tour is only auto-shown once per (tourId, userId) pair,
    tracked in localStorage. Pass `force: true` to replay it.
+
+   While a step is on screen the page behind it is locked down: a
+   full-viewport click shield, a capture-phase click guard, and
+   `inert` on the rest of the page stop pointer and keyboard input
+   from reaching (or triggering) real controls mid-tour, so the tour
+   can only be advanced from its own controls or left via "Skip tour".
    ============================================================ */
 (function () {
   function tourKey(tourId, userId) {
@@ -61,14 +67,82 @@
     renderStep();
   }
 
+  // While a step is on screen the ring and tooltip sit in viewport
+  // coordinates, so the page must not move underneath them. The lock is
+  // overflow: hidden on both scrollers — that stops wheel, keyboard,
+  // and scrollbar scrolling — while renderStep lifts and re-applies it
+  // around its scrollIntoView so step positioning still works.
+  let scrollLockState = null;
+
+  function setScrollLock(on) {
+    const html = document.documentElement;
+    const body = document.body;
+    if (on) {
+      if (!scrollLockState) {
+        scrollLockState = {
+          html: html.style.overflow,
+          body: body.style.overflow,
+        };
+      }
+      html.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+    } else if (scrollLockState) {
+      html.style.overflow = scrollLockState.html;
+      body.style.overflow = scrollLockState.body;
+      scrollLockState = null;
+    }
+  }
+
+  // Everything except the tour's own elements is switched off while a
+  // step shows. The click shield already eats pointer input; `inert`
+  // stops keyboard focus from reaching (and Enter/Space from
+  // activating) page controls behind the overlay too.
+  const TOUR_UI_CLASSES = [
+    "onboarding-backdrop",
+    "onboarding-shield",
+    "onboarding-ring",
+    "onboarding-tooltip",
+  ];
+
+  function setPageInert(on) {
+    for (const el of document.body.children) {
+      if (TOUR_UI_CLASSES.some((cls) => el.classList.contains(cls))) continue;
+      if (on) {
+        // Don't stomp on inert that was already there for another reason.
+        if (!el.hasAttribute("inert")) {
+          el.setAttribute("inert", "");
+          el.setAttribute("data-onboarding-inert", "");
+        }
+      } else if (el.hasAttribute("data-onboarding-inert")) {
+        el.removeAttribute("inert");
+        el.removeAttribute("data-onboarding-inert");
+      }
+    }
+  }
+
+  // Capture-phase backstop for the shield: any click that would reach a
+  // real control (or a link that would navigate away) is swallowed, so
+  // the tour can't fire actual actions or end itself from under the user.
+  // Clicks inside the tooltip — Next, Back, Skip — pass through.
+  function onGuardClick(e) {
+    if (!activeTour) return;
+    const tooltip = document.querySelector(".onboarding-tooltip");
+    if (tooltip && tooltip.contains(e.target)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+
   function teardown() {
     document
       .querySelectorAll(
-        ".onboarding-backdrop, .onboarding-ring, .onboarding-tooltip",
+        ".onboarding-backdrop, .onboarding-shield, .onboarding-ring, .onboarding-tooltip",
       )
       .forEach((el) => el.remove());
     window.removeEventListener("resize", renderStep);
     document.removeEventListener("keydown", onKeydown);
+    document.removeEventListener("click", onGuardClick, true);
+    setPageInert(false);
+    setScrollLock(false);
   }
 
   function finish() {
@@ -161,33 +235,38 @@
     }
 
     target.scrollIntoView({ block: "center", behavior: "auto" });
+    // Freeze the page again now the target is in place; the highlight
+    // geometry below is measured against the locked layout.
+    setScrollLock(true);
 
     const rect = target.getBoundingClientRect();
     const pad = 6;
 
     const backdrop = document.createElement("div");
     backdrop.className = "onboarding-backdrop";
-    Object.assign(backdrop.style, {
-      position: "fixed",
-      inset: "0",
-      zIndex: "1000",
-      background: "rgba(15, 23, 42, 0.55)",
-      clipPath: spotlightClipPath(rect, pad),
-    });
+    // The spotlight hole is cut per step, so it stays inline; the rest of
+    // the backdrop's look lives in app.css.
+    backdrop.style.clipPath = spotlightClipPath(rect, pad);
     document.body.appendChild(backdrop);
+
+    // Transparent full-viewport layer above the page but below the
+    // tooltip: pointer input aimed at the spotlit control lands here and
+    // goes nowhere, so the tour can't be derailed by a click on the very
+    // button it is highlighting.
+    const shield = document.createElement("div");
+    shield.className = "onboarding-shield";
+    shield.setAttribute("aria-hidden", "true");
+    document.body.appendChild(shield);
 
     const ring = document.createElement("div");
     ring.className = "onboarding-ring";
+    // Ring geometry tracks the spotlighted element, so it stays inline;
+    // its look (radius, outline colours) lives in app.css.
     Object.assign(ring.style, {
-      position: "fixed",
       top: `${rect.top - pad}px`,
       left: `${rect.left - pad}px`,
       width: `${rect.width + pad * 2}px`,
       height: `${rect.height + pad * 2}px`,
-      borderRadius: "10px",
-      boxShadow: "0 0 0 3px #fff, 0 0 0 5px #2563eb",
-      zIndex: "1001",
-      pointerEvents: "none",
     });
     document.body.appendChild(ring);
 
@@ -196,61 +275,45 @@
     tooltip.setAttribute("role", "dialog");
     tooltip.setAttribute("aria-modal", "true");
     tooltip.setAttribute("aria-label", step.title);
-    Object.assign(tooltip.style, {
-      position: "fixed",
-      zIndex: "1002",
-      maxWidth: "320px",
-      background: "#ffffff",
-      borderRadius: "12px",
-      boxShadow: "0 16px 40px rgba(15, 23, 42, 0.3)",
-      padding: "18px",
-      fontFamily: "inherit",
-    });
 
     const stepCount = document.createElement("p");
+    stepCount.className = "onboarding-step-count";
     stepCount.textContent = `Step ${activeTour.index + 1} of ${activeTour.steps.length}`;
-    stepCount.style.cssText =
-      "font-size:12px;color:#64748b;margin:0 0 8px;letter-spacing:0.02em;";
 
     const title = document.createElement("h3");
+    title.className = "onboarding-title";
     title.textContent = step.title;
-    title.style.cssText = "margin:0 0 6px;font-size:16px;line-height:1.3;";
 
     const body = document.createElement("p");
+    body.className = "onboarding-body";
     body.textContent = step.body;
-    body.style.cssText =
-      "margin:0 0 16px;font-size:14px;line-height:1.5;color:#334155;";
 
     const actions = document.createElement("div");
-    actions.style.cssText =
-      "display:flex;justify-content:space-between;align-items:center;gap:10px;";
+    actions.className = "onboarding-actions";
 
     const skipBtn = document.createElement("button");
     skipBtn.type = "button";
+    skipBtn.className = "btn-link";
     skipBtn.textContent = "Skip tour";
-    skipBtn.style.cssText =
-      "background:none;border:none;color:#64748b;font-size:13px;cursor:pointer;padding:4px;text-decoration:underline;";
     skipBtn.addEventListener("click", finish);
 
     const navGroup = document.createElement("div");
-    navGroup.style.cssText = "display:flex;gap:8px;";
+    navGroup.className = "onboarding-nav";
 
     if (activeTour.index > 0) {
       const backBtn = document.createElement("button");
       backBtn.type = "button";
+      backBtn.className = "btn-secondary";
       backBtn.textContent = "Back";
-      backBtn.style.cssText =
-        "padding:6px 14px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:13px;";
       backBtn.addEventListener("click", back);
       navGroup.appendChild(backBtn);
     }
 
     const nextBtn = document.createElement("button");
     nextBtn.type = "button";
+    nextBtn.className = "btn-primary";
     nextBtn.textContent =
       activeTour.index === activeTour.steps.length - 1 ? "Done" : "Next";
-    nextBtn.style.cssText =
-      "padding:6px 16px;border-radius:6px;border:none;background:#2563eb;color:#fff;cursor:pointer;font-size:13px;font-weight:600;";
     nextBtn.addEventListener("click", next);
     navGroup.appendChild(nextBtn);
 
@@ -262,6 +325,8 @@
 
     window.addEventListener("resize", renderStep, { once: true });
     document.addEventListener("keydown", onKeydown, { once: true });
+    document.addEventListener("click", onGuardClick, true);
+    setPageInert(true);
 
     nextBtn.focus();
   }

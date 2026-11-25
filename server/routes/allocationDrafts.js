@@ -116,6 +116,20 @@ router.post("/auto-allocate", async (req, res) => {
     return res.status(400).json({ error: "organiserId is required" });
   }
 
+  // Super-organiser-only: one whole-school pass touches every course with
+  // an open slot, so it's reserved for the same account that can add or
+  // delete courses (same trust model — the caller passes their user id).
+  const { data: caller } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("id", organiserId)
+    .maybeSingle();
+  if (!caller || caller.role !== "super_organiser") {
+    return res
+      .status(403)
+      .json({ error: "Only the super-organiser can run auto-allocate" });
+  }
+
   const { data: courses, error: coursesError } = await supabase
     .from("courses")
     .select(
@@ -388,6 +402,353 @@ router.get("/:id", async (req, res) => {
     return res.status(500).json({ error: assignmentsError.message });
 
   res.json({ draft, assignments: await enrichAssignments(assignments) });
+});
+
+// GET /api/allocation-drafts/:id/compare — a dry run of publish. Runs the
+// exact same per-assignment checks POST /:id/publish runs (same order, same
+// reason strings) but writes nothing, so an organiser holding an old draft
+// can see which proposals would still land today — and which the world has
+// moved on from since the draft was proposed — before committing.
+//
+// Because publish applies assignments one at a time, a draft's own rows
+// interact: two proposals for the same course compete for the same last
+// slot, and two proposals for the same tutor stack towards their hour cap.
+// The simulation below mirrors that sequencing, so what compare says here is
+// what publish would actually do if run in the same moment.
+router.get("/:id/compare", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid draft id" });
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("allocation_drafts")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (draftError || !draft) {
+    return res.status(404).json({ error: "Draft not found" });
+  }
+
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("allocation_draft_assignments")
+    .select("*")
+    .eq("draft_id", id);
+  if (assignmentsError)
+    return res.status(500).json({ error: assignmentsError.message });
+
+  const tutorIds = [...new Set(assignments.map((a) => a.tutor_id))];
+  const courseIds = [...new Set(assignments.map((a) => a.course_id))];
+
+  const [
+    { data: courses, error: coursesError },
+    { data: tutors, error: tutorsError },
+    { data: applications, error: applicationsError },
+  ] = await Promise.all([
+    courseIds.length
+      ? supabase
+          .from("courses")
+          .select(
+            "id, course_code, course_name, tutors_needed, no_of_tutors_assigned, hours_per_week",
+          )
+          .in("id", courseIds)
+      : Promise.resolve({ data: [] }),
+    tutorIds.length
+      ? supabase
+          .from("tutors")
+          .select("id, name, email, weekly_hour_cap")
+          .in("id", tutorIds)
+      : Promise.resolve({ data: [] }),
+    tutorIds.length
+      ? supabase
+          .from("tutor_subject_preference")
+          .select("id, tutor_id, course_id, status, courses(hours_per_week)")
+          .in("tutor_id", tutorIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  if (coursesError)
+    return res.status(500).json({ error: coursesError.message });
+  if (tutorsError) return res.status(500).json({ error: tutorsError.message });
+  if (applicationsError)
+    return res.status(500).json({ error: applicationsError.message });
+
+  const courseById = new Map((courses || []).map((c) => [c.id, c]));
+  const tutorById = new Map((tutors || []).map((t) => [t.id, t]));
+  const applicationByTutorCourse = new Map(
+    (applications || []).map((app) => [
+      `${app.tutor_id}|${app.course_id}`,
+      app,
+    ]),
+  );
+
+  // Approved hours kept as per-course rows (not pre-summed) so each check can
+  // exclude the one course publish's own query excludes (.neq course_id).
+  const approvedRowsByTutor = new Map();
+  (applications || [])
+    .filter((app) => app.status === "approved")
+    .forEach((app) => {
+      if (!approvedRowsByTutor.has(app.tutor_id))
+        approvedRowsByTutor.set(app.tutor_id, []);
+      approvedRowsByTutor.get(app.tutor_id).push(app);
+    });
+
+  // Running state of the simulated publish: the course counts it would bump
+  // and the hours it would add to each tutor.
+  const assignedByCourse = new Map(
+    (courses || []).map((c) => [c.id, c.no_of_tutors_assigned ?? 0]),
+  );
+  const draftHoursByTutor = new Map();
+
+  const rows = assignments.map((assignment) => {
+    const application = applicationByTutorCourse.get(
+      `${assignment.tutor_id}|${assignment.course_id}`,
+    );
+
+    if (!application || application.status !== "pending") {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "no longer a pending application",
+        currentStatus: application?.status ?? null,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const course = courseById.get(assignment.course_id);
+    if (!course) {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "course not found",
+        currentStatus: application.status,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const next = (assignedByCourse.get(course.id) ?? 0) + 1;
+    if (next > (course.tutors_needed ?? 0)) {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "course is now full",
+        currentStatus: application.status,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const tutor = tutorById.get(assignment.tutor_id);
+    if (!tutor) {
+      return {
+        ...assignment,
+        willApply: false,
+        reason: "tutor not found",
+        currentStatus: application.status,
+        projectedHours: null,
+        cap: null,
+      };
+    }
+
+    const courseHours = course.hours_per_week || 0;
+    let projectedHours = null;
+    if (tutor.weekly_hour_cap != null) {
+      const currentAssignedHours = (approvedRowsByTutor.get(tutor.id) || [])
+        .filter((app) => app.course_id !== assignment.course_id)
+        .reduce((sum, app) => sum + (app.courses?.hours_per_week || 0), 0);
+      projectedHours =
+        currentAssignedHours +
+        (draftHoursByTutor.get(tutor.id) || 0) +
+        courseHours;
+      if (projectedHours > tutor.weekly_hour_cap) {
+        return {
+          ...assignment,
+          willApply: false,
+          reason: `would put the tutor at ${projectedHours}/${tutor.weekly_hour_cap} hrs/week, over their cap`,
+          currentStatus: application.status,
+          projectedHours,
+          cap: tutor.weekly_hour_cap,
+        };
+      }
+    }
+
+    // This one would land — advance the simulation the way publish would.
+    assignedByCourse.set(course.id, next);
+    draftHoursByTutor.set(
+      tutor.id,
+      (draftHoursByTutor.get(tutor.id) || 0) + courseHours,
+    );
+
+    return {
+      ...assignment,
+      willApply: true,
+      reason: null,
+      currentStatus: application.status,
+      projectedHours,
+      cap: tutor.weekly_hour_cap ?? null,
+    };
+  });
+
+  const willApply = rows.filter((r) => r.willApply).length;
+
+  res.json({
+    draft,
+    summary: { willApply, cannotApply: rows.length - willApply },
+    assignments: await enrichAssignments(rows),
+  });
+});
+
+// PATCH /api/allocation-drafts/:id — renames an open draft. The name is how
+// the organiser tells several candidate drafts apart while comparing them,
+// so it can only change while the draft is still open; once published, the
+// name is part of the allocation history record.
+router.patch("/:id", async (req, res) => {
+  const { name } = req.body ?? {};
+  if (typeof name !== "string" || !name.trim()) {
+    return res
+      .status(400)
+      .json({ error: "name is required and must not be blank" });
+  }
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid draft id" });
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("allocation_drafts")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (draftError || !draft) {
+    return res.status(404).json({ error: "Draft not found" });
+  }
+  if (draft.status !== "draft") {
+    return res
+      .status(409)
+      .json({ error: `This draft is already ${draft.status}` });
+  }
+
+  const { data: renamed, error: renameError } = await supabase
+    .from("allocation_drafts")
+    .update({ name: name.trim() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (renameError) return res.status(500).json({ error: renameError.message });
+
+  res.json({ draft: renamed });
+});
+
+// POST /api/allocation-drafts/:id/assignments/remove — permanently drops
+// the given picks from an open draft. Publish's excludeAssignmentIds is a
+// one-shot exclusion; this edits the draft itself, so a version an
+// organiser pared down while comparing candidates is still pared down when
+// they come back to it. Returns the draft's remaining assignments,
+// enriched, so the review UI can re-render without a second request.
+router.post("/:id/assignments/remove", async (req, res) => {
+  const { assignmentIds } = req.body ?? {};
+  if (!Array.isArray(assignmentIds) || assignmentIds.length === 0) {
+    return res.status(400).json({
+      error: "assignmentIds is required and must be a non-empty array",
+    });
+  }
+  const wanted = assignmentIds.map(Number);
+  if (wanted.some((n) => !Number.isInteger(n))) {
+    return res
+      .status(400)
+      .json({ error: "assignmentIds must be an array of numeric ids" });
+  }
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid draft id" });
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("allocation_drafts")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (draftError || !draft) {
+    return res.status(404).json({ error: "Draft not found" });
+  }
+  if (draft.status !== "draft") {
+    return res
+      .status(409)
+      .json({ error: `This draft is already ${draft.status}` });
+  }
+
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("allocation_draft_assignments")
+    .select("*")
+    .eq("draft_id", id);
+  if (assignmentsError) {
+    return res.status(500).json({ error: assignmentsError.message });
+  }
+
+  // Reject rather than silently ignore an id that isn't in this draft: if
+  // the UI is working from a stale view (a pick already removed in another
+  // tab), removing "the rest" would quietly delete rows the organiser
+  // believed were still there.
+  const known = new Set(assignments.map((a) => a.id));
+  if (wanted.some((wid) => !known.has(wid))) {
+    return res
+      .status(404)
+      .json({ error: "One or more of those picks are not part of this draft" });
+  }
+
+  const { error: removeError } = await supabase
+    .from("allocation_draft_assignments")
+    .delete()
+    .eq("draft_id", id)
+    .in("id", wanted);
+  if (removeError) return res.status(500).json({ error: removeError.message });
+
+  const remaining = assignments.filter((a) => !wanted.includes(a.id));
+  res.json({ draft, assignments: await enrichAssignments(remaining) });
+});
+
+// DELETE /api/allocation-drafts/:id — discards an open draft entirely.
+// Published/reverted drafts are history and can't be discarded (restore is
+// the way to undo a published one); an open draft is just a proposal with
+// no applied effect, so it's removed outright rather than tombstoned.
+router.delete("/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid draft id" });
+  }
+
+  const { data: draft, error: draftError } = await supabase
+    .from("allocation_drafts")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (draftError || !draft) {
+    return res.status(404).json({ error: "Draft not found" });
+  }
+  if (draft.status !== "draft") {
+    return res.status(409).json({
+      error: `Only an unpublished draft can be discarded (this one is ${draft.status})`,
+    });
+  }
+
+  const { error: assignmentsError } = await supabase
+    .from("allocation_draft_assignments")
+    .delete()
+    .eq("draft_id", id);
+  if (assignmentsError) {
+    return res.status(500).json({ error: assignmentsError.message });
+  }
+
+  const { error: deleteError } = await supabase
+    .from("allocation_drafts")
+    .delete()
+    .eq("id", id);
+  if (deleteError) return res.status(500).json({ error: deleteError.message });
+
+  res.status(204).end();
 });
 
 // POST /api/allocation-drafts/:id/publish

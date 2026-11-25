@@ -10,18 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - run: npm ci
-      - run: npm test -- --coverage
+      - run: npm test -- --coverage --maxWorkers=2
 
-      - name: Generate coverage badge
+      - name: Generate coverage badges (overall, server API, client UI)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/coverage/integrate-code-coverage'
-        run: npx --yes coverage-badges-cli --source coverage/coverage-summary.json --output coverage/coverage.svg --style flat
+        run: |
+          npx --yes coverage-badges-cli --source coverage/coverage-summary.json --output coverage/coverage.svg --style flat
+          node scripts/coverage-badges.js
 
-      - name: Publish badge to badges branch
+      - name: Publish badges to badges branch
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/coverage/integrate-code-coverage'
         run: |
           cd coverage
           git init -q -b badges
-          git add coverage.svg
-          git -c user.name=gitea-actions -c user.email=actions@local commit -qm "Update coverage badge"
+          git add coverage.svg server-api.svg client-ui.svg
+          git -c user.name=gitea-actions -c user.email=actions@local commit -qm "Update coverage badges"
           git push -q --force "https://${{ secrets.GITEA_TOKEN }}@sdp.ms.wits.ac.za/the-devden/Tutor-Management-System.git" badges

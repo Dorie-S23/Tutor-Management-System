@@ -1,4 +1,4 @@
-import { addScheduleClasses } from "./storage.js";
+import { addScheduleClasses, getCurrentUser } from "./storage.js";
 import {
   parseTimetablePdf,
   firstOccurrenceOnOrAfter,
@@ -13,6 +13,79 @@ const reviewSection = document.getElementById("timetable-review");
 const reviewBody = document.getElementById("timetable-review-body");
 const saveBtn = document.getElementById("save-timetable-btn");
 const cancelBtn = document.getElementById("cancel-timetable-btn");
+const fileNameEl = document.getElementById("timetable-file-name");
+const profileNoteEl = document.getElementById("timetable-profile-note");
+
+// Impossible typed dates must block the action — the mask surfaces the
+// field's own message; harnesses without the mask pass through.
+const ensureDateFieldValid = window.ensureDateFieldValid ?? (() => true);
+
+// The timetable PDF saved on the user's profile page (see
+// profile-timetable.js), if any. When there is one, Parse PDF uses it
+// without the user picking the file again; choosing a PDF here overrides it.
+let profileTimetable = null;
+
+function profileTimetableUrl() {
+  const user = getCurrentUser();
+  return user?.id
+    ? `/api/profile/${encodeURIComponent(user.id)}/timetable`
+    : null;
+}
+
+function describeProfileUpload(updatedAt) {
+  const date = updatedAt ? new Date(updatedAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return ` (uploaded ${date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })})`;
+}
+
+function renderProfileNote() {
+  if (!profileNoteEl) return;
+  const show = Boolean(profileTimetable) && !fileInput.files[0];
+  profileNoteEl.hidden = !show;
+  profileNoteEl.textContent = show
+    ? `Using the timetable saved on your profile${describeProfileUpload(profileTimetable.updatedAt)} — pick your dates and press Parse PDF, or choose a different PDF above.`
+    : "";
+}
+
+async function loadProfileTimetable() {
+  const url = profileTimetableUrl();
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    const body = await res.json().catch(() => ({}));
+    profileTimetable = res.ok && body.uploaded ? body : null;
+  } catch {
+    // No profile copy to offer — the file picker still works as before.
+    profileTimetable = null;
+  }
+  renderProfileNote();
+}
+
+async function fetchProfileTimetableFile() {
+  const res = await fetch(`${profileTimetableUrl()}/file`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(
+      body.error ||
+        "Couldn't load the timetable saved on your profile — choose the PDF instead.",
+    );
+  }
+  const blob = await res.blob();
+  return new File([blob], "timetable.pdf", { type: "application/pdf" });
+}
+
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files[0];
+  fileNameEl.hidden = !file;
+  fileNameEl.textContent = file ? `Selected: ${file.name}` : "";
+  renderProfileNote();
+});
+
+loadProfileTimetable();
 
 let parsedClasses = [];
 
@@ -80,11 +153,12 @@ function renderReview() {
 }
 
 parseBtn.addEventListener("click", async () => {
-  const file = fileInput.files[0];
-  if (!file) {
+  const chosenFile = fileInput.files[0];
+  if (!chosenFile && !profileTimetable) {
     setStatus("Choose a PDF file first.", true);
     return;
   }
+  if (!ensureDateFieldValid(semesterStartInput)) return;
   if (!semesterStartInput.value) {
     setStatus(
       'Pick a "classes start on" date first — the PDF has no calendar dates of its own.',
@@ -95,9 +169,15 @@ parseBtn.addEventListener("click", async () => {
 
   reviewSection.hidden = true;
   parseBtn.disabled = true;
-  setStatus("Reading PDF…");
+  parseBtn.classList.add("is-loading");
+  parseBtn.setAttribute("aria-busy", "true");
+  parseBtn.textContent = "Parsing…";
+  setStatus(
+    chosenFile ? "Reading PDF…" : "Loading the timetable from your profile…",
+  );
 
   try {
+    const file = chosenFile || (await fetchProfileTimetableFile());
     const classes = await parseTimetablePdf(file, (message) =>
       setStatus(message),
     );
@@ -123,11 +203,15 @@ parseBtn.addEventListener("click", async () => {
     setStatus(err.message || "Could not read that PDF.", true);
   } finally {
     parseBtn.disabled = false;
+    parseBtn.classList.remove("is-loading");
+    parseBtn.removeAttribute("aria-busy");
+    parseBtn.textContent = "Parse PDF";
   }
 });
 
-saveBtn.addEventListener("click", () => {
+saveBtn.addEventListener("click", async () => {
   const endDate = semesterEndInput.value;
+  if (!ensureDateFieldValid(semesterEndInput)) return;
   if (!endDate) {
     setStatus('Pick a "repeat weekly until" date first.', true);
     return;
@@ -143,17 +227,25 @@ saveBtn.addEventListener("click", () => {
     return;
   }
 
-  addScheduleClasses(
-    selected.map((cls) => ({
-      title: cls.title,
-      dayOfWeek: cls.dayOfWeek,
-      firstDate: cls.firstDate,
-      endDate,
-      startTime: cls.startTime,
-      endTime: cls.endTime,
-      venue: cls.venue,
-    })),
-  );
+  saveBtn.disabled = true;
+  try {
+    await addScheduleClasses(
+      selected.map((cls) => ({
+        title: cls.title,
+        dayOfWeek: cls.dayOfWeek,
+        firstDate: cls.firstDate,
+        endDate,
+        startTime: cls.startTime,
+        endTime: cls.endTime,
+        venue: cls.venue,
+      })),
+    );
+  } catch (err) {
+    setStatus(err.message || "Couldn't add those classes.", true);
+    return;
+  } finally {
+    saveBtn.disabled = false;
+  }
 
   setStatus(
     `Added ${selected.length} class${selected.length === 1 ? "" : "es"} to your calendar.`,

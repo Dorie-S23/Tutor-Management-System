@@ -1,0 +1,473 @@
+// timetable-import.js wires timetable.html's import flow: parse a chosen
+// PDF through timetable-parser.js, let the user review/edit the recognised
+// classes, then save them to the schedule. Its two imports are replaced
+// with stubs appended after the real source (later function declarations
+// win in the same eval scope) — pdf.js/Tesseract can't run here and
+// addScheduleClasses would hit the API — while all of the page's own
+// wiring, rendering, and validation runs for real inside jsdom, with the
+// //# sourceURL tag so Jest's v8 coverage attributes the lines back to the
+// real file.
+const fs = require("fs");
+const path = require("path");
+const { JSDOM } = require("jsdom");
+const { pathToFileURL } = require("url");
+
+const rawImportJs = fs.readFileSync(
+  path.join(__dirname, "timetable-import.js"),
+  "utf8",
+);
+const dateMaskJs = fs.readFileSync(
+  path.join(__dirname, "date-mask.js"),
+  "utf8",
+);
+
+const STUBS = `
+function addScheduleClasses(classes) {
+  window.__addedClasses = classes;
+}
+function getCurrentUser() {
+  return window.__user || null;
+}
+function parseTimetablePdf(file, onProgress) {
+  window.__parseCalls = (window.__parseCalls || 0) + 1;
+  window.__parsedFile = file;
+  if (window.__parseResult instanceof Error) {
+    return Promise.reject(window.__parseResult);
+  }
+  onProgress?.("Reading timetable…");
+  return Promise.resolve(window.__parseResult || []);
+}
+function firstOccurrenceOnOrAfter(startDateStr, dayOfWeek) {
+  window.__firstOccurrenceCalls = (window.__firstOccurrenceCalls || 0) + 1;
+  return window.__firstDate;
+}
+`;
+
+const PAGE = `
+  <input type="file" id="timetable-file">
+  <p id="timetable-file-name" hidden></p>
+  <p id="timetable-profile-note" hidden></p>
+  <input type="date" id="semester-start">
+  <input type="date" id="semester-end">
+  <button id="parse-timetable-btn"></button>
+  <p id="timetable-status" hidden></p>
+  <section id="timetable-review" hidden>
+    <table><tbody id="timetable-review-body"></tbody></table>
+  </section>
+  <button id="save-timetable-btn"></button>
+  <button id="cancel-timetable-btn"></button>
+`;
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const CLASS_A = {
+  title: "MATH2000",
+  dayName: "Monday",
+  dayOfWeek: 1,
+  startTime: "09:05",
+  endTime: "10:00",
+  venue: "WSS2",
+};
+
+const CLASS_B = {
+  title: "PHYS3000",
+  dayName: "Tuesday",
+  dayOfWeek: 2,
+  startTime: "11:00",
+  endTime: "12:00",
+  venue: "WSS1",
+};
+
+// `user` and `fetch` are installed before the page script runs, since it
+// checks for a profile timetable as soon as it loads.
+function loadImport({ withToast = true, user = null, fetch = null } = {}) {
+  const importJs = rawImportJs
+    .replace(/import\s*{[^}]*}\s*from\s*["']\.\/storage\.js["'];?/, "")
+    .replace(
+      /import\s*{[\s\S]*?}\s*from\s*["']\.\/timetable-parser\.js["'];?/,
+      "",
+    );
+
+  const dom = new JSDOM(
+    `<!doctype html><html><body>${withToast ? '<div id="toast"></div>' : ""}${PAGE}<script>${dateMaskJs}</script><script>${importJs}\n${STUBS}\n//# sourceURL=${pathToFileURL(path.join(__dirname, "timetable-import.js")).href}</script></body></html>`,
+    {
+      url: "http://localhost/timetable.html",
+      runScripts: "dangerously",
+      beforeParse(window) {
+        window.__user = user;
+        if (fetch) window.fetch = fetch;
+      },
+    },
+  );
+
+  return dom.window;
+}
+
+// jsdom's file inputs can't take a real file picker, so the one property
+// the page reads (files[0]) gets a stand-in that the stubbed parser ignores.
+function setFile(win) {
+  Object.defineProperty(
+    win.document.getElementById("timetable-file"),
+    "files",
+    { value: [{ name: "timetable.pdf" }] },
+  );
+}
+
+describe("timetable-import.js", () => {
+  test("asks for a file and a start date before parsing", () => {
+    const win = loadImport();
+    const doc = win.document;
+    const parseBtn = doc.getElementById("parse-timetable-btn");
+    const status = doc.getElementById("timetable-status");
+
+    parseBtn.click();
+    expect(status.textContent).toBe("Choose a PDF file first.");
+    expect(status.hidden).toBe(false);
+    expect(status.classList.contains("form-error")).toBe(true);
+
+    setFile(win);
+    parseBtn.click();
+    expect(status.textContent).toBe(
+      'Pick a "classes start on" date first — the PDF has no calendar dates of its own.',
+    );
+    expect(win.__parseCalls).toBeUndefined();
+  });
+
+  // A typed "32/13/2026" leaves the native value empty, so before this
+  // check Parse/Save only asked to "pick a date"; now the impossible date
+  // blocks the action with the field's own message.
+  test("impossible typed dates block parsing and saving", async () => {
+    const win = loadImport();
+    const doc = win.document;
+    win.__parseResult = [CLASS_A];
+    win.__firstDate = "2026-09-07";
+    setFile(win);
+
+    const typeInto = (id, raw) => {
+      const field = doc.getElementById(`${id}-typed`);
+      field.value = raw;
+      field.dispatchEvent(new win.Event("input", { bubbles: true }));
+      return field;
+    };
+
+    const startField = typeInto("semester-start", "32/13/2026");
+    doc.getElementById("parse-timetable-btn").click();
+    expect(win.__parseCalls).toBeUndefined();
+    expect(doc.activeElement).toBe(startField);
+
+    typeInto("semester-start", "01/09/2026");
+    doc.getElementById("parse-timetable-btn").click();
+    await flush();
+    expect(win.__parseCalls).toBe(1);
+
+    const status = doc.getElementById("timetable-status");
+    const endField = typeInto("semester-end", "29/02/2026");
+    const statusBefore = status.textContent;
+    doc.getElementById("save-timetable-btn").click();
+    expect(win.__addedClasses).toBeUndefined();
+    expect(status.textContent).toBe(statusBefore);
+    expect(doc.activeElement).toBe(endField);
+
+    typeInto("semester-end", "30/11/2026");
+    doc.getElementById("save-timetable-btn").click();
+    await flush();
+    expect(win.__addedClasses).toHaveLength(1);
+
+    win.close();
+  });
+
+  test("parses, reviews, edits, and adds a single class", async () => {
+    const win = loadImport();
+    const doc = win.document;
+    win.__parseResult = [CLASS_A];
+    // No usable jump date — the save path must fall back to renderCalendar.
+    win.__firstDate = undefined;
+    const jumpCalls = [];
+    win.jumpToCalendarDate = (date) => jumpCalls.push(date);
+    const renderCalls = [];
+    win.renderCalendar = () => renderCalls.push(1);
+
+    setFile(win);
+    doc.getElementById("semester-start").value = "2026-09-01";
+    doc.getElementById("parse-timetable-btn").click();
+    await flush();
+
+    const status = doc.getElementById("timetable-status");
+    const review = doc.getElementById("timetable-review");
+    expect(win.__parseCalls).toBe(1);
+    expect(win.__firstOccurrenceCalls).toBe(1);
+    expect(status.textContent).toBe(
+      "Found 1 class — check them below before adding.",
+    );
+    expect(status.classList.contains("form-error")).toBe(false);
+    expect(review.hidden).toBe(false);
+
+    const row = doc.querySelector("#timetable-review-body tr");
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    expect(checkbox.checked).toBe(true);
+    expect(row.children[1].textContent).toBe("Monday (from undefined)");
+    expect(row.children[2].textContent).toBe("09:05-10:00");
+
+    // Editing the inline title/venue inputs updates the parsed class.
+    const [titleInput, venueInput] = row.querySelectorAll('input[type="text"]');
+    titleInput.value = "MATH2000 EDITED";
+    titleInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+    venueInput.value = "NEW VENUE";
+    venueInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+
+    doc.getElementById("save-timetable-btn").click();
+    expect(status.textContent).toBe('Pick a "repeat weekly until" date first.');
+
+    doc.getElementById("semester-end").value = "2026-11-30";
+    doc.getElementById("save-timetable-btn").click();
+    await flush(); // the save waits on the server
+
+    expect(win.__addedClasses).toEqual([
+      {
+        title: "MATH2000 EDITED",
+        dayOfWeek: 1,
+        firstDate: undefined,
+        endDate: "2026-11-30",
+        startTime: "09:05",
+        endTime: "10:00",
+        venue: "NEW VENUE",
+      },
+    ]);
+    expect(status.textContent).toBe("Added 1 class to your calendar.");
+    const toast = doc.getElementById("toast");
+    expect(toast.textContent).toBe("Added 1 class to your calendar.");
+    expect(toast.classList.contains("show")).toBe(true);
+    expect(review.hidden).toBe(true);
+    expect(renderCalls).toHaveLength(1);
+    expect(jumpCalls).toHaveLength(0);
+
+    // Cancelling just hides the review section again.
+    review.hidden = false;
+    doc.getElementById("cancel-timetable-btn").click();
+    expect(review.hidden).toBe(true);
+
+    win.close();
+  });
+
+  test("requires a selection, adds several classes, and jumps to the calendar", async () => {
+    const win = loadImport({ withToast: false });
+    const doc = win.document;
+    win.__parseResult = [CLASS_A, CLASS_B];
+    win.__firstDate = "2026-09-07";
+    const jumpCalls = [];
+    win.jumpToCalendarDate = (date) => jumpCalls.push(date);
+
+    setFile(win);
+    doc.getElementById("semester-start").value = "2026-09-01";
+    doc.getElementById("parse-timetable-btn").click();
+    await flush();
+
+    const status = doc.getElementById("timetable-status");
+    expect(status.textContent).toBe(
+      "Found 2 classes — check them below before adding.",
+    );
+
+    const checkboxes = [
+      ...doc.querySelectorAll('#timetable-review-body input[type="checkbox"]'),
+    ];
+    expect(checkboxes).toHaveLength(2);
+
+    checkboxes.forEach((cb) => {
+      cb.checked = false;
+    });
+    doc.getElementById("semester-end").value = "2026-11-30";
+    doc.getElementById("save-timetable-btn").click();
+    expect(status.textContent).toBe("Select at least one class to add.");
+
+    checkboxes.forEach((cb) => {
+      cb.checked = true;
+    });
+    doc.getElementById("save-timetable-btn").click();
+    await flush(); // the save waits on the server
+
+    expect(win.__addedClasses).toHaveLength(2);
+    expect(win.__addedClasses[1].title).toBe("PHYS3000");
+    expect(status.textContent).toBe("Added 2 classes to your calendar.");
+    // Both classes picked the same earliest date — the page jumps there.
+    // (No toast element exists on this page; the save must still complete.)
+    expect(jumpCalls).toEqual(["2026-09-07"]);
+  });
+
+  test("reports when no classes could be recognised", async () => {
+    const win = loadImport();
+    const doc = win.document;
+    win.__parseResult = [];
+
+    setFile(win);
+    doc.getElementById("semester-start").value = "2026-09-01";
+    doc.getElementById("parse-timetable-btn").click();
+    await flush();
+
+    const status = doc.getElementById("timetable-status");
+    expect(status.textContent).toBe(
+      "No classes could be recognised in this PDF — you may need to add them manually.",
+    );
+    expect(status.classList.contains("form-error")).toBe(true);
+    expect(doc.getElementById("timetable-review").hidden).toBe(true);
+  });
+
+  test("surfaces parse failures and re-enables the button", async () => {
+    const win = loadImport();
+    const doc = win.document;
+    const parseBtn = doc.getElementById("parse-timetable-btn");
+    const status = doc.getElementById("timetable-status");
+
+    setFile(win);
+    doc.getElementById("semester-start").value = "2026-09-01";
+
+    win.__parseResult = new win.Error("boom");
+    parseBtn.click();
+    await flush();
+    expect(status.textContent).toBe("boom");
+    expect(status.classList.contains("form-error")).toBe(true);
+    expect(parseBtn.disabled).toBe(false);
+
+    // An error with no message falls back to the generic copy.
+    win.__parseResult = new win.Error("");
+    parseBtn.click();
+    await flush();
+    expect(status.textContent).toBe("Could not read that PDF.");
+  });
+
+  test("shows the chosen file name under the drop zone", () => {
+    const win = loadImport();
+    const doc = win.document;
+    const fileInput = doc.getElementById("timetable-file");
+    const fileName = doc.getElementById("timetable-file-name");
+
+    expect(fileName.hidden).toBe(true);
+    fileInput.dispatchEvent(new win.Event("change"));
+    expect(fileName.hidden).toBe(true);
+
+    setFile(win);
+    fileInput.dispatchEvent(new win.Event("change"));
+    expect(fileName.hidden).toBe(false);
+    expect(fileName.textContent).toBe("Selected: timetable.pdf");
+  });
+
+  test("marks the parse button busy while the AI reads the PDF", async () => {
+    const win = loadImport();
+    const doc = win.document;
+    const parseBtn = doc.getElementById("parse-timetable-btn");
+    win.__parseResult = [CLASS_A];
+
+    setFile(win);
+    doc.getElementById("semester-start").value = "2026-09-01";
+    parseBtn.click();
+
+    expect(parseBtn.disabled).toBe(true);
+    expect(parseBtn.classList.contains("is-loading")).toBe(true);
+    expect(parseBtn.getAttribute("aria-busy")).toBe("true");
+    expect(parseBtn.textContent).toBe("Parsing…");
+
+    await flush();
+
+    expect(parseBtn.disabled).toBe(false);
+    expect(parseBtn.classList.contains("is-loading")).toBe(false);
+    expect(parseBtn.hasAttribute("aria-busy")).toBe(false);
+    expect(parseBtn.textContent).toBe("Parse PDF");
+  });
+
+  describe("timetable saved on the profile", () => {
+    const PROFILE_STATUS = {
+      ok: true,
+      json: async () => ({
+        uploaded: true,
+        fileName: "timetable.pdf",
+        updatedAt: "2026-10-08T09:00:00.000Z",
+      }),
+    };
+
+    test("says it will use the profile copy until a file is chosen", async () => {
+      const fetchMock = jest.fn().mockResolvedValue(PROFILE_STATUS);
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      await flush();
+
+      const note = win.document.getElementById("timetable-profile-note");
+      expect(fetchMock).toHaveBeenCalledWith("/api/profile/tutor-1/timetable");
+      expect(note.hidden).toBe(false);
+      expect(note.textContent).toMatch(
+        /^Using the timetable saved on your profile \(uploaded .*2026\)/,
+      );
+
+      setFile(win);
+      win.document
+        .getElementById("timetable-file")
+        .dispatchEvent(new win.Event("change"));
+      expect(note.hidden).toBe(true);
+    });
+
+    test("parses the profile copy without a file being chosen", async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce(PROFILE_STATUS)
+        .mockResolvedValueOnce({
+          ok: true,
+          blob: async () => new win.Blob(["%PDF-1.4"]),
+        });
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      win.__parseResult = [CLASS_A];
+      win.__firstDate = "2026-09-07";
+      await flush();
+
+      win.document.getElementById("semester-start").value = "2026-09-01";
+      win.document.getElementById("parse-timetable-btn").click();
+      await flush();
+      await flush();
+
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        "/api/profile/tutor-1/timetable/file",
+      );
+      expect(win.__parseCalls).toBe(1);
+      expect(win.__parsedFile.name).toBe("timetable.pdf");
+      expect(win.__parsedFile.type).toBe("application/pdf");
+      expect(win.document.getElementById("timetable-review").hidden).toBe(
+        false,
+      );
+    });
+
+    test("shows the server error when the profile copy can't be loaded", async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValueOnce(PROFILE_STATUS)
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: "No timetable on file." }),
+        });
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      await flush();
+
+      win.document.getElementById("semester-start").value = "2026-09-01";
+      win.document.getElementById("parse-timetable-btn").click();
+      await flush();
+      await flush();
+
+      const status = win.document.getElementById("timetable-status");
+      expect(status.textContent).toBe("No timetable on file.");
+      expect(status.classList.contains("form-error")).toBe(true);
+      expect(win.__parseCalls).toBeUndefined();
+    });
+
+    test("falls back to asking for a file when nothing is on the profile", async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ uploaded: false }),
+      });
+      const win = loadImport({ user: { id: "tutor-1" }, fetch: fetchMock });
+      await flush();
+
+      expect(win.document.getElementById("timetable-profile-note").hidden).toBe(
+        true,
+      );
+      win.document.getElementById("parse-timetable-btn").click();
+      expect(win.document.getElementById("timetable-status").textContent).toBe(
+        "Choose a PDF file first.",
+      );
+    });
+  });
+});

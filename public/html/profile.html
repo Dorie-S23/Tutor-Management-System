@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/images/tutorx-logo-teal.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profile | TutorX</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/app.css" />
+    <script src="../js/theme.js"></script>
+    <script src="../js/nav-menu.js"></script>
+  </head>
+
+  <body data-theme="tutor" data-page-role="tutor">
+    <header class="app-navbar">
+      <a class="brand-mark" href="dashboard.html">
+        <span class="brand-mark-badge">
+          <img src="../images/txlogo.png" alt="" />
+        </span>
+        <span class="brand-mark-name">TutorX</span>
+      </a>
+
+      <nav class="tab-nav" aria-label="Main navigation">
+        <a href="dashboard.html">Dashboard</a>
+        <a href="log-hours.html">Log Hours</a>
+        <a href="calendar.html">Calendar</a>
+        <a href="timesheets.html">Timesheets</a>
+        <a href="modules.html">Module Application</a>
+        <a href="profile.html" aria-current="page">Profile</a>
+      </nav>
+
+      <div class="navbar-right">
+        <div class="notif-bell" id="notifBell">
+          <button
+            type="button"
+            id="notifBellBtn"
+            class="notif-bell-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-badge" id="notifBellBadge" hidden>0</span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown" hidden>
+            <div class="notif-dropdown-head">
+              <span>Notifications</span>
+              <button
+                type="button"
+                id="notifMarkAllBtn"
+                class="notif-mark-all-btn"
+              >
+                Mark all read
+              </button>
+            </div>
+            <ul class="notif-list" id="notifList"></ul>
+            <p class="notif-empty" id="notifEmpty" hidden>
+              No notifications yet.
+            </p>
+          </div>
+        </div>
+
+        <div class="user-pill">
+          <span id="user-name">Account</span>
+          <span class="role-badge" id="user-role-badge">Tutor</span>
+        </div>
+
+        <a href="#" id="logout-button" class="btn-logout">Log out</a>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <h1>My Profile</h1>
+          <p class="page-sub">Your personal details on record with CSAM.</p>
+        </div>
+      </div>
+
+      <section class="card profile-card" aria-label="Your details">
+        <div class="profile-banner" aria-hidden="true"></div>
+        <div class="profile-card-body">
+          <div class="profile-identity">
+            <span
+              class="profile-avatar"
+              id="profile-avatar-initials"
+              aria-hidden="true"
+            ></span>
+            <div class="profile-identity-text">
+              <h2 id="profile-display-name">Your name</h2>
+              <p class="profile-meta">
+                <span class="profile-role">Tutor</span>
+                <span id="profile-display-student-number"></span>
+              </p>
+            </div>
+          </div>
+
+          <p class="card-hint">
+            Keep these up to date — they're used on your timesheet claims and by
+            the tutoring team to reach you. Your email is tied to your login and
+            can't be changed here; ask an organiser if it needs updating.
+          </p>
+
+          <form id="profile-form">
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="profile-first-name">First name</label>
+                <input
+                  type="text"
+                  id="profile-first-name"
+                  autocomplete="given-name"
+                  required
+                />
+              </div>
+              <div class="form-field">
+                <label for="profile-last-name">Last name</label>
+                <input
+                  type="text"
+                  id="profile-last-name"
+                  autocomplete="family-name"
+                />
+              </div>
+              <div class="form-field">
+                <label for="profile-email">Email address</label>
+                <input type="email" id="profile-email" readonly />
+              </div>
+              <div class="form-field">
+                <label for="profile-student-number">Student number</label>
+                <input
+                  type="text"
+                  id="profile-student-number"
+                  maxlength="7"
+                  inputmode="numeric"
+                  required
+                />
+              </div>
+              <div class="form-field">
+                <label for="profile-cell-phone">Cell phone number</label>
+                <input
+                  type="tel"
+                  id="profile-cell-phone"
+                  autocomplete="tel"
+                  placeholder="e.g. 082 123 4567 or +27 82 123 4567"
+                />
+              </div>
+              <div class="form-actions">
+                <button
+                  type="submit"
+                  class="btn-primary"
+                  id="profile-save-btn"
+                  disabled
+                >
+                  Save profile
+                </button>
+              </div>
+            </div>
+            <p class="field-error" id="profile-error" hidden></p>
+          </form>
+        </div>
+      </section>
+
+      <section
+        class="card profile-timetable-card"
+        id="profile-timetable"
+        aria-labelledby="profile-timetable-heading"
+      >
+        <h2 id="profile-timetable-heading">My timetable</h2>
+        <p class="card-hint">
+          Keep a copy of your class timetable PDF here so it's always on hand.
+          To add the classes to your calendar, use Import timetable on the
+          calendar page. PDF only, up to 5&nbsp;MB.
+        </p>
+        <div class="transcript-panel__row">
+          <span
+            class="transcript-status"
+            id="profile-timetable-status"
+            aria-live="polite"
+          >
+            Checking&hellip;
+          </span>
+          <div class="transcript-panel__actions">
+            <button
+              class="btn-secondary"
+              id="profile-timetable-remove-btn"
+              type="button"
+              hidden
+            >
+              Remove
+            </button>
+            <button
+              class="btn-secondary"
+              id="profile-timetable-view-btn"
+              type="button"
+              hidden
+            >
+              View timetable
+            </button>
+            <button
+              class="btn-primary"
+              id="profile-timetable-upload-btn"
+              type="button"
+            >
+              Upload timetable
+            </button>
+          </div>
+        </div>
+        <input
+          type="file"
+          id="profile-timetable-input"
+          accept="application/pdf"
+          hidden
+        />
+        <p class="field-error" id="profile-timetable-error" hidden></p>
+      </section>
+
+      <section
+        class="card profile-transcript-card"
+        id="transcript-panel"
+        aria-labelledby="transcript-heading"
+      >
+        <h2 id="transcript-heading">My transcript</h2>
+        <p class="card-hint">
+          Keep your academic transcript on file here. It's the same transcript
+          organisers review when you apply, so you need one before you can
+          apply. PDF, PNG, or JPEG, up to 5&nbsp;MB.
+        </p>
+        <div class="transcript-panel__row">
+          <span
+            class="transcript-status"
+            id="transcript-status"
+            aria-live="polite"
+          >
+            Checking&hellip;
+          </span>
+          <div class="transcript-panel__actions">
+            <button
+              class="btn-secondary"
+              id="transcript-view-btn"
+              type="button"
+              hidden
+            >
+              View transcript
+            </button>
+            <button
+              class="btn-primary"
+              id="transcript-upload-btn"
+              type="button"
+            >
+              Upload transcript
+            </button>
+          </div>
+        </div>
+        <input
+          type="file"
+          id="transcript-input"
+          accept="application/pdf,image/png,image/jpeg"
+          hidden
+        />
+        <p class="field-error" id="transcript-error" hidden></p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="../js/user-badge.js"></script>
+    <script type="module" src="../js/profile.js"></script>
+    <script src="../js/notifications.js"></script>
+    <script src="../js/logout.js"></script>
+  </body>
+</html>
