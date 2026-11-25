@@ -1,12 +1,12 @@
 # Tutor Management System
 
-![tests](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/actions/workflows/test.yml/badge.svg?branch=main)
+[![tests](https://github.com/Dorie-S23/Tutor-Management-System/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/Dorie-S23/Tutor-Management-System/actions/workflows/test.yml)
 
-| Coverage Target | Badge                                                                                                                     |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Server API      | ![server api coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/server-api.svg?v=2) |
-| Client UI       | ![client ui coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/client-ui.svg?v=2)   |
-| Overall         | ![coverage](https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System/raw/branch/badges/coverage.svg?v=2)              |
+| Coverage Target | Badge                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Server API      | ![server api coverage](https://raw.githubusercontent.com/Dorie-S23/Tutor-Management-System/badges/server-api.svg) |
+| Client UI       | ![client ui coverage](https://raw.githubusercontent.com/Dorie-S23/Tutor-Management-System/badges/client-ui.svg)   |
+| Overall         | ![coverage](https://raw.githubusercontent.com/Dorie-S23/Tutor-Management-System/badges/coverage.svg)              |
 
 A web app for organising tutor allocations to courses — tracking which courses need tutors, matching tutors against courses, and flagging clashes (marks, timetable, hours remaining).
 

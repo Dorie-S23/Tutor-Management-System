@@ -1,7 +1,7 @@
 // Generates shields-style flat SVG coverage badges from jest's
 // coverage/coverage-summary.json — one per coverage target, so the README
 // can show the server API and the client UI separately. Self-hosted on the
-// repo's `badges` branch (see .gitea/workflows/test.yml), same as the
+// repo's `badges` branch (see .github/workflows/test.yml), same as the
 // overall badge — no third-party coverage service involved.
 //
 // Usage: node scripts/coverage-badges.js  (after `jest --coverage`)
