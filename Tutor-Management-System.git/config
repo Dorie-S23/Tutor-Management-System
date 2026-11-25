@@ -1,0 +1,11 @@
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = true
+	symlinks = false
+	ignorecase = true
+[remote "origin"]
+	url = https://sdp.ms.wits.ac.za/the-devden/Tutor-Management-System
+	tagOpt = --no-tags
+	fetch = +refs/*:refs/*
+	mirror = true
